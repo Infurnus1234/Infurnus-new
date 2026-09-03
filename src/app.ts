@@ -10,6 +10,15 @@ export function createApp(repository: UserRepository) {
 
   app.use(express.json());
 
+  app.get('/health', (_req, res) => {
+    res.json({
+      success: true,
+      data: {
+        status: 'ok',
+      },
+    });
+  });
+
   const controller = new UserController(new UserService(repository));
 
   app.use('/users', createUserRouter(controller));
