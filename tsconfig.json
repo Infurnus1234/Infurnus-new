@@ -3,6 +3,7 @@
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
+<<<<<<< HEAD
     "rootDir": "src",
     "outDir": "dist",
     "strict": true,
@@ -12,4 +13,29 @@
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist"]
+=======
+
+    "rootDir": "./src",
+    "outDir": "./dist",
+
+    "types": ["node"],
+
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+
+    "esModuleInterop": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "noUncheckedSideEffectImports": true,
+    "moduleDetection": "force",
+
+    "skipLibCheck": true
+  },
+  "include": ["src"]
+>>>>>>> 7d188e8 (chore: update project configuration)
 }
