@@ -72,7 +72,10 @@ describe('Users API', () => {
       email: 'bad-email',
     });
     expect(response.status).toBe(400);
-    expect(response.body.error).toEqual({ code: 'VALIDATION_ERROR', message: 'Request validation failed' });
+    expect(response.body.error).toEqual({
+      code: 'VALIDATION_ERROR',
+      message: 'Request validation failed',
+    });
   });
 
   it('rejects duplicate email', async () => {
@@ -87,14 +90,21 @@ describe('Users API', () => {
   });
 
   it('retrieves an existing user', async () => {
-    const response = await request(createApp(new InMemoryUserRepository())).get(`/users/${user.id}`);
+    const response = await request(createApp(new InMemoryUserRepository())).get(
+      `/users/${user.id}`,
+    );
     expect(response.status).toBe(200);
-    expect(response.body).toMatchObject({ success: true, data: { id: user.id, email: user.email } });
+    expect(response.body).toMatchObject({
+      success: true,
+      data: { id: user.id, email: user.email },
+    });
     expect(response.body.data.passwordHash).toBeUndefined();
   });
 
   it('rejects an invalid user ID', async () => {
-    const response = await request(createApp(new InMemoryUserRepository())).get('/users/not-a-uuid');
+    const response = await request(createApp(new InMemoryUserRepository())).get(
+      '/users/not-a-uuid',
+    );
     expect(response.status).toBe(400);
     expect(response.body.error.code).toBe('VALIDATION_ERROR');
   });

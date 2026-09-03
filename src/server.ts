@@ -1,9 +1,6 @@
 import { createApp } from './app.js';
 import { env } from './config/env.js';
-import {
-  checkDatabaseConnection,
-  pool,
-} from './infrastructure/database/postgres.js';
+import { checkDatabaseConnection, pool } from './infrastructure/database/postgres.js';
 import { PostgresUserRepository } from './modules/users/repositories/user.repository.js';
 
 async function startServer() {
