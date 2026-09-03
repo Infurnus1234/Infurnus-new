@@ -18,8 +18,8 @@ export interface CreateUserData {
 }
 
 export interface UpdateUserData {
-  firstName?: string | undefined;
-  lastName?: string | undefined;
-  email?: string | undefined;
-  phone?: string | undefined;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
 }
