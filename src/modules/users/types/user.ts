@@ -17,4 +17,9 @@ export interface CreateUserData {
   phone: string;
 }
 
-export type UpdateUserData = Partial<CreateUserData>;
+export interface UpdateUserData {
+  firstName?: string | undefined;
+  lastName?: string | undefined;
+  email?: string | undefined;
+  phone?: string | undefined;
+}
