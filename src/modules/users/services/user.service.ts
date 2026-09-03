@@ -1,6 +1,7 @@
 import { AppError } from '../../../common/errors/app-error.js';
 import type { CreateUserInput, UpdateUserInput } from '../schemas/user.schemas.js';
 import type { UserRepository } from '../repositories/user.repository.js';
+import type { UpdateUserData } from '../types/user.js';
 
 export class UserService {
   constructor(private readonly repository: UserRepository) {}
@@ -26,7 +27,13 @@ export class UserService {
 
   async updateUser(id: string, data: UpdateUserInput) {
     try {
-      const user = await this.repository.update(id, data);
+      const updateData: UpdateUserData = {};
+      if (data.firstName !== undefined) updateData.firstName = data.firstName;
+      if (data.lastName !== undefined) updateData.lastName = data.lastName;
+      if (data.email !== undefined) updateData.email = data.email;
+      if (data.phone !== undefined) updateData.phone = data.phone;
+
+      const user = await this.repository.update(id, updateData);
       if (!user) {
         throw new AppError('USER_NOT_FOUND', 'User not found', 404);
       }
