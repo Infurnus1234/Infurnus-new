@@ -18,7 +18,11 @@ export class PostgresUserRepository implements UserRepository {
                  email, phone, created_at AS "createdAt", updated_at AS "updatedAt"`,
       [data.firstName, data.lastName, data.email, data.phone],
     );
-    return result.rows[0];
+    const user = result.rows.at(0);
+    if (!user) {
+      throw new Error('User insert returned no row');
+    }
+    return user;
   }
 
   async findById(id: string): Promise<PublicUser | null> {
