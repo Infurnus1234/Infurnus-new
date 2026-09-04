@@ -2,11 +2,12 @@ import { createApp } from './app.js';
 import { env } from './config/env.js';
 import { checkDatabaseConnection, pool } from './infrastructure/database/postgres.js';
 import { PostgresUserRepository } from './modules/users/repositories/user.repository.js';
+import { PostgresPartnerRepository } from './modules/partners/repositories/partner.repository.js';
 
 async function startServer() {
   await checkDatabaseConnection();
 
-  const app = createApp(new PostgresUserRepository(pool));
+  const app = createApp(new PostgresUserRepository(pool), new PostgresPartnerRepository(pool));
 
   const server = app.listen(env.PORT, () => {
     console.log(`INFURNUS API listening on port ${env.PORT}`);

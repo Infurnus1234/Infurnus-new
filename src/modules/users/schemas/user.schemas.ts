@@ -39,6 +39,12 @@ export const userAddressParamsSchema = z
   .object({ id: z.string().uuid(), addressId: z.string().uuid() })
   .strict();
 
+export const userHistoryQuerySchema = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+  })
+  .strict();
+
 const addressFields = {
   label: z.string().trim().min(1).max(30),
   addressLine1: z.string().trim().min(1).max(255),
@@ -92,3 +98,4 @@ export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 export type CreateAddressInput = z.infer<typeof createAddressSchema>;
 export type UpdateAddressInput = z.infer<typeof updateAddressSchema>;
 export type UpdatePreferencesInput = z.infer<typeof updatePreferencesSchema>;
+export type UserHistoryQuery = z.infer<typeof userHistoryQuerySchema>;
