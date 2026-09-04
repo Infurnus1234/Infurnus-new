@@ -1,4 +1,4 @@
-import { Pool } from 'pg';
+import { Pool, type PoolClient } from 'pg';
 import { env } from '../../config/env.js';
 
 export const pool = new Pool({
@@ -13,6 +13,25 @@ export async function checkDatabaseConnection(): Promise<void> {
 
   try {
     await client.query('SELECT 1');
+  } finally {
+    client.release();
+  }
+}
+
+export async function withTransaction<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const result = await callback(client);
+
+    await client.query('COMMIT');
+
+    return result;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
   } finally {
     client.release();
   }
