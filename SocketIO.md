@@ -41,7 +41,7 @@ Customer App
      ┌─────┴─────┐
      ▼           ▼
 PostgreSQL     PostGIS
-````
+```
 
 Driver App follows the same architecture.
 
@@ -231,7 +231,7 @@ Location payload:
 ```json
 {
   "latitude": 28.6139,
-  "longitude": 77.2090,
+  "longitude": 77.209,
   "timestamp": "2026-09-05T12:00:00.000Z"
 }
 ```
@@ -436,9 +436,10 @@ Socket.IO does not directly implement ride business rules or database business l
 
 Authentication used by Socket.IO will be the existing INFURNUS Auth system.
 
-*Authentication is currently being implemented by Niranjan.*
+_Authentication is currently being implemented by Niranjan._
 
 Socket.IO will integrate with that authentication implementation.
 
 ```
+
 ```
