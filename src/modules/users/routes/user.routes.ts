@@ -11,5 +11,6 @@ export function createUserRouter(controller: UserController) {
   router.get('/:id/addresses', controller.getAddresses);
   router.get('/:id/preferences', controller.getPreferences);
   router.patch('/:id/preferences', controller.updatePreferences);
+  router.get('/:id/history', controller.getHistory);
   return router;
 }
