@@ -35,7 +35,9 @@ export const updateUserSchema = z
 
 export const userIdSchema = z.object({ id: z.string().uuid() }).strict();
 
-export const userAddressParamsSchema = z.object({ id: z.string().uuid(), addressId: z.string().uuid() }).strict();
+export const userAddressParamsSchema = z
+  .object({ id: z.string().uuid(), addressId: z.string().uuid() })
+  .strict();
 
 const addressFields = {
   label: z.string().trim().min(1).max(30),
@@ -50,11 +52,17 @@ const addressFields = {
   isDefault: z.boolean().optional(),
 };
 
-export const createAddressSchema = z.object(addressFields).strict().superRefine((value, context) => {
-  if ((value.latitude === undefined) !== (value.longitude === undefined)) {
-    context.addIssue({ code: 'custom', message: 'Latitude and longitude must be provided together' });
-  }
-});
+export const createAddressSchema = z
+  .object(addressFields)
+  .strict()
+  .superRefine((value, context) => {
+    if ((value.latitude === undefined) !== (value.longitude === undefined)) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Latitude and longitude must be provided together',
+      });
+    }
+  });
 
 export const updateAddressSchema = z
   .object(addressFields)
@@ -63,7 +71,10 @@ export const updateAddressSchema = z
   .refine((value) => Object.keys(value).length > 0, { message: 'At least one field is required' })
   .superRefine((value, context) => {
     if ((value.latitude === undefined) !== (value.longitude === undefined)) {
-      context.addIssue({ code: 'custom', message: 'Latitude and longitude must be provided together' });
+      context.addIssue({
+        code: 'custom',
+        message: 'Latitude and longitude must be provided together',
+      });
     }
   });
 

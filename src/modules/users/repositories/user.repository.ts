@@ -15,10 +15,17 @@ export interface UserRepository {
   findById(id: string): Promise<PublicUser | null>;
   update(id: string, data: UpdateUserData): Promise<PublicUser | null>;
   createAddress(userId: string, data: CreateAddressData): Promise<UserAddress>;
-  updateAddress(userId: string, addressId: string, data: UpdateAddressData): Promise<UserAddress | null>;
+  updateAddress(
+    userId: string,
+    addressId: string,
+    data: UpdateAddressData,
+  ): Promise<UserAddress | null>;
   findAddresses(userId: string): Promise<UserAddress[]>;
   findPreferences(userId: string): Promise<UserPreferences | null>;
-  updatePreferences(userId: string, data: UpdateUserPreferencesData): Promise<UserPreferences | null>;
+  updatePreferences(
+    userId: string,
+    data: UpdateUserPreferencesData,
+  ): Promise<UserPreferences | null>;
 }
 
 export class PostgresUserRepository implements UserRepository {
@@ -79,22 +86,44 @@ export class PostgresUserRepository implements UserRepository {
                  address_line_2 AS "addressLine2", city, state, postal_code AS "postalCode",
                  country, latitude, longitude, is_default AS "isDefault",
                  created_at AS "createdAt", updated_at AS "updatedAt"`,
-      [userId, data.label, data.addressLine1, data.addressLine2 ?? null, data.city, data.state, data.postalCode,
-        data.country ?? null, data.latitude ?? null, data.longitude ?? null, data.isDefault ?? false],
+      [
+        userId,
+        data.label,
+        data.addressLine1,
+        data.addressLine2 ?? null,
+        data.city,
+        data.state,
+        data.postalCode,
+        data.country ?? null,
+        data.latitude ?? null,
+        data.longitude ?? null,
+        data.isDefault ?? false,
+      ],
     );
     const address = result.rows.at(0);
     if (!address) throw new Error('Address insert returned no row');
     return address;
   }
 
-  async updateAddress(userId: string, addressId: string, data: UpdateAddressData): Promise<UserAddress | null> {
+  async updateAddress(
+    userId: string,
+    addressId: string,
+    data: UpdateAddressData,
+  ): Promise<UserAddress | null> {
     const columns: Record<string, string> = {
-      label: 'label', addressLine1: 'address_line_1', addressLine2: 'address_line_2', city: 'city',
-      state: 'state', postalCode: 'postal_code', country: 'country', latitude: 'latitude',
-      longitude: 'longitude', isDefault: 'is_default',
+      label: 'label',
+      addressLine1: 'address_line_1',
+      addressLine2: 'address_line_2',
+      city: 'city',
+      state: 'state',
+      postalCode: 'postal_code',
+      country: 'country',
+      latitude: 'latitude',
+      longitude: 'longitude',
+      isDefault: 'is_default',
     };
     const fields = Object.keys(data);
-    const values = Object.values(data).map((value) => value === undefined ? null : value);
+    const values = Object.values(data).map((value) => (value === undefined ? null : value));
     const assignments = fields.map((field, index) => `${columns[field]} = $${index + 1}`);
     const result = await this.pool.query<UserAddress>(
       `UPDATE user_addresses SET ${assignments.join(', ')}
@@ -126,11 +155,16 @@ export class PostgresUserRepository implements UserRepository {
               email_notifications_enabled AS "emailNotificationsEnabled",
               sms_notifications_enabled AS "smsNotificationsEnabled",
               created_at AS "createdAt", updated_at AS "updatedAt"
-       FROM user_preferences WHERE user_id = $1`, [userId]);
+       FROM user_preferences WHERE user_id = $1`,
+      [userId],
+    );
     return result.rows[0] ?? null;
   }
 
-  async updatePreferences(userId: string, data: UpdateUserPreferencesData): Promise<UserPreferences | null> {
+  async updatePreferences(
+    userId: string,
+    data: UpdateUserPreferencesData,
+  ): Promise<UserPreferences | null> {
     const columns: Record<string, string> = {
       pushNotificationsEnabled: 'push_notifications_enabled',
       emailNotificationsEnabled: 'email_notifications_enabled',
