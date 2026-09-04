@@ -6,5 +6,10 @@ export function createUserRouter(controller: UserController) {
   router.post('/', controller.create);
   router.get('/:id', controller.getById);
   router.patch('/:id', controller.update);
+  router.post('/:id/addresses', controller.createAddress);
+  router.patch('/:id/addresses/:addressId', controller.updateAddress);
+  router.get('/:id/addresses', controller.getAddresses);
+  router.get('/:id/preferences', controller.getPreferences);
+  router.patch('/:id/preferences', controller.updatePreferences);
   return router;
 }
