@@ -8,8 +8,16 @@ import { PartnerController } from './modules/partners/controllers/partner.contro
 import { PartnerService } from './modules/partners/services/partner.service.js';
 import { createPartnerRouter } from './modules/partners/routes/partner.routes.js';
 import type { PartnerRepository } from './modules/partners/repositories/partner.repository.js';
+import { VehicleController } from './modules/vehicles/controllers/vehicle.controller.js';
+import { VehicleService } from './modules/vehicles/services/vehicle.service.js';
+import { createVehicleRouter } from './modules/vehicles/routes/vehicle.routes.js';
+import type { VehicleRepository } from './modules/vehicles/repositories/vehicle.repository.js';
 
-export function createApp(repository?: UserRepository, partnerRepository?: PartnerRepository) {
+export function createApp(
+  repository?: UserRepository,
+  partnerRepository?: PartnerRepository,
+  vehicleRepository?: VehicleRepository,
+) {
   const app = express();
 
   app.use(express.json());
@@ -31,6 +39,11 @@ export function createApp(repository?: UserRepository, partnerRepository?: Partn
   if (partnerRepository) {
     const partnerController = new PartnerController(new PartnerService(partnerRepository));
     app.use('/partners', createPartnerRouter(partnerController));
+  }
+
+  if (vehicleRepository) {
+    const vehicleController = new VehicleController(new VehicleService(vehicleRepository));
+    app.use('/vehicles', createVehicleRouter(vehicleController));
   }
 
   app.use(errorMiddleware);
