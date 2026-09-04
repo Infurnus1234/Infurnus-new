@@ -8,11 +8,14 @@
     "dev": "tsx src/server.ts",
     "lint": "eslint .",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
+    "dotenv": "^17.4.2",
     "express": "^5.1.0",
-    "pg": "^8.16.3",
+    "pg": "^8.23.0",
     "zod": "^4.1.5"
   },
   "devDependencies": {
@@ -22,6 +25,7 @@
     "@types/pg": "^8.15.5",
     "@types/supertest": "^6.0.3",
     "eslint": "^9.34.0",
+    "prettier": "^3.9.6",
     "supertest": "^7.1.4",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2",
