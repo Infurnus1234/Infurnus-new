@@ -8,6 +8,7 @@ import type {
   UpdateAddressData,
   UpdateUserData,
   UserAddress,
+  UserHistoryEntry,
   UserPreferences,
   UpdateUserPreferencesData,
 } from '../types/user.js';
@@ -27,6 +28,7 @@ class InMemoryUserRepository implements UserRepository {
   private readonly users = new Map([[user.id, user]]);
   private readonly addresses = new Map<string, UserAddress>();
   private readonly preferences = new Map<string, UserPreferences>();
+  private readonly history: UserHistoryEntry[] = [];
 
   async create(data: CreateUserData) {
     if ([...this.users.values()].some((existing) => existing.email === data.email)) {
@@ -118,6 +120,10 @@ class InMemoryUserRepository implements UserRepository {
     };
     this.preferences.set(userId, updated);
     return updated;
+  }
+
+  async findHistory(userId: string, limit: number) {
+    return this.history.filter((entry) => entry.userId === userId).slice(0, limit);
   }
 }
 
@@ -227,5 +233,34 @@ describe('Users API', () => {
       .send({ smsNotificationsEnabled: false });
     expect(updated.status).toBe(200);
     expect(updated.body.data.smsNotificationsEnabled).toBe(false);
+  });
+
+  it('returns an empty history for an existing user', async () => {
+    const response = await request(createApp(new InMemoryUserRepository())).get(
+      `/users/${user.id}/history`,
+    );
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      success: true,
+      data: [],
+      message: 'User history retrieved',
+    });
+  });
+
+  it('rejects invalid and unknown history user IDs', async () => {
+    const app = createApp(new InMemoryUserRepository());
+    const invalid = await request(app).get('/users/not-a-uuid/history');
+    expect(invalid.status).toBe(400);
+    const missing = await request(app).get('/users/550e8400-e29b-41d4-a716-446655440001/history');
+    expect(missing.status).toBe(404);
+    expect(missing.body.error.code).toBe('USER_NOT_FOUND');
+  });
+
+  it('rejects an invalid history limit', async () => {
+    const response = await request(createApp(new InMemoryUserRepository())).get(
+      `/users/${user.id}/history?limit=0`,
+    );
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
   });
 });

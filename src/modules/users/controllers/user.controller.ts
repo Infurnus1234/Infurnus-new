@@ -4,6 +4,7 @@ import {
   createUserSchema,
   updateAddressSchema,
   updatePreferencesSchema,
+  userHistoryQuerySchema,
   userAddressParamsSchema,
   userIdSchema,
   updateUserSchema,
@@ -96,6 +97,17 @@ export class UserController {
         updatePreferencesSchema.parse(request.body),
       );
       response.json({ success: true, data: preferences, message: 'Preferences updated' });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getHistory = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      const { id } = userIdSchema.parse(request.params);
+      const { limit } = userHistoryQuerySchema.parse(request.query);
+      const history = await this.service.getHistory(id, limit);
+      response.json({ success: true, data: history, message: 'User history retrieved' });
     } catch (error) {
       next(error);
     }
