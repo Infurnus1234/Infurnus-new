@@ -6,6 +6,7 @@ import type {
   UpdateAddressData,
   UpdateUserData,
   UserAddress,
+  UserHistoryEntry,
   UserPreferences,
   UpdateUserPreferencesData,
 } from '../types/user.js';
@@ -26,6 +27,7 @@ export interface UserRepository {
     userId: string,
     data: UpdateUserPreferencesData,
   ): Promise<UserPreferences | null>;
+  findHistory(userId: string, limit: number): Promise<UserHistoryEntry[]>;
 }
 
 export class PostgresUserRepository implements UserRepository {
@@ -184,5 +186,19 @@ export class PostgresUserRepository implements UserRepository {
       [...values, userId],
     );
     return result.rows[0] ?? null;
+  }
+
+  async findHistory(userId: string, limit: number): Promise<UserHistoryEntry[]> {
+    const result = await this.pool.query<UserHistoryEntry>(
+      `SELECT id, user_id AS "userId", event_type AS "eventType",
+              entity_type AS "entityType", entity_id AS "entityId",
+              created_at AS "createdAt"
+       FROM user_history
+       WHERE user_id = $1
+       ORDER BY created_at DESC
+       LIMIT $2`,
+      [userId, limit],
+    );
+    return result.rows;
   }
 }

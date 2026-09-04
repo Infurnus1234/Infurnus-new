@@ -81,3 +81,12 @@ export interface UpdateUserPreferencesData {
   emailNotificationsEnabled?: boolean | undefined;
   smsNotificationsEnabled?: boolean | undefined;
 }
+
+export interface UserHistoryEntry {
+  id: string;
+  userId: string;
+  eventType: string;
+  entityType: string;
+  entityId: string | null;
+  createdAt: Date;
+}

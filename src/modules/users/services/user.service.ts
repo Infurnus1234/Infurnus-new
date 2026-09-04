@@ -99,6 +99,11 @@ export class UserService {
     await this.getUser(userId);
     return this.repository.updatePreferences(userId, data);
   }
+
+  async getHistory(userId: string, limit: number) {
+    await this.getUser(userId);
+    return this.repository.findHistory(userId, limit);
+  }
 }
 
 function isUniqueViolation(error: unknown): error is { code: string } {
