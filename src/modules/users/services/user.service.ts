@@ -85,12 +85,14 @@ export class UserService {
 
   async getPreferences(userId: string) {
     await this.getUser(userId);
-    return (await this.repository.findPreferences(userId)) ?? {
-      userId,
-      pushNotificationsEnabled: true,
-      emailNotificationsEnabled: true,
-      smsNotificationsEnabled: true,
-    };
+    return (
+      (await this.repository.findPreferences(userId)) ?? {
+        userId,
+        pushNotificationsEnabled: true,
+        emailNotificationsEnabled: true,
+        smsNotificationsEnabled: true,
+      }
+    );
   }
 
   async updatePreferences(userId: string, data: UpdatePreferencesInput) {

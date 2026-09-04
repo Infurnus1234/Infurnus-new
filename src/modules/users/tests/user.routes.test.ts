@@ -51,11 +51,20 @@ class InMemoryUserRepository implements UserRepository {
 
   async createAddress(userId: string, data: CreateAddressData) {
     const address: UserAddress = {
-      id: crypto.randomUUID(), userId, label: data.label, addressLine1: data.addressLine1,
-      addressLine2: data.addressLine2 ?? null, city: data.city, state: data.state,
-      postalCode: data.postalCode, country: data.country ?? 'India', latitude: data.latitude ?? null,
-      longitude: data.longitude ?? null, isDefault: data.isDefault ?? false,
-      createdAt: new Date(), updatedAt: new Date(),
+      id: crypto.randomUUID(),
+      userId,
+      label: data.label,
+      addressLine1: data.addressLine1,
+      addressLine2: data.addressLine2 ?? null,
+      city: data.city,
+      state: data.state,
+      postalCode: data.postalCode,
+      country: data.country ?? 'India',
+      latitude: data.latitude ?? null,
+      longitude: data.longitude ?? null,
+      isDefault: data.isDefault ?? false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     };
     this.addresses.set(address.id, address);
     return address;
@@ -92,13 +101,18 @@ class InMemoryUserRepository implements UserRepository {
 
   async updatePreferences(userId: string, data: UpdateUserPreferencesData) {
     const existing = this.preferences.get(userId) ?? {
-      userId, pushNotificationsEnabled: true, emailNotificationsEnabled: true,
-      smsNotificationsEnabled: true, createdAt: new Date(), updatedAt: new Date(),
+      userId,
+      pushNotificationsEnabled: true,
+      emailNotificationsEnabled: true,
+      smsNotificationsEnabled: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     };
     const updated: UserPreferences = {
       ...existing,
       pushNotificationsEnabled: data.pushNotificationsEnabled ?? existing.pushNotificationsEnabled,
-      emailNotificationsEnabled: data.emailNotificationsEnabled ?? existing.emailNotificationsEnabled,
+      emailNotificationsEnabled:
+        data.emailNotificationsEnabled ?? existing.emailNotificationsEnabled,
       smsNotificationsEnabled: data.smsNotificationsEnabled ?? existing.smsNotificationsEnabled,
       updatedAt: new Date(),
     };
@@ -188,12 +202,18 @@ describe('Users API', () => {
   it('creates, lists, and updates a user address', async () => {
     const app = createApp(new InMemoryUserRepository());
     const created = await request(app).post(`/users/${user.id}/addresses`).send({
-      label: 'Home', addressLine1: '1 Example Street', city: 'Bengaluru', state: 'Karnataka', postalCode: '560001',
+      label: 'Home',
+      addressLine1: '1 Example Street',
+      city: 'Bengaluru',
+      state: 'Karnataka',
+      postalCode: '560001',
     });
     expect(created.status).toBe(201);
     const addressId = created.body.data.id;
     expect((await request(app).get(`/users/${user.id}/addresses`)).body.data).toHaveLength(1);
-    const updated = await request(app).patch(`/users/${user.id}/addresses/${addressId}`).send({ isDefault: true });
+    const updated = await request(app)
+      .patch(`/users/${user.id}/addresses/${addressId}`)
+      .send({ isDefault: true });
     expect(updated.status).toBe(200);
     expect(updated.body.data.isDefault).toBe(true);
   });
@@ -202,7 +222,9 @@ describe('Users API', () => {
     const app = createApp(new InMemoryUserRepository());
     const initial = await request(app).get(`/users/${user.id}/preferences`);
     expect(initial.body.data.pushNotificationsEnabled).toBe(true);
-    const updated = await request(app).patch(`/users/${user.id}/preferences`).send({ smsNotificationsEnabled: false });
+    const updated = await request(app)
+      .patch(`/users/${user.id}/preferences`)
+      .send({ smsNotificationsEnabled: false });
     expect(updated.status).toBe(200);
     expect(updated.body.data.smsNotificationsEnabled).toBe(false);
   });

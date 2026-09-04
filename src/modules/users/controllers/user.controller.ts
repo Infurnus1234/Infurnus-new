@@ -57,7 +57,11 @@ export class UserController {
   updateAddress = async (request: Request, response: Response, next: NextFunction) => {
     try {
       const { id, addressId } = userAddressParamsSchema.parse(request.params);
-      const address = await this.service.updateAddress(id, addressId, updateAddressSchema.parse(request.body));
+      const address = await this.service.updateAddress(
+        id,
+        addressId,
+        updateAddressSchema.parse(request.body),
+      );
       response.json({ success: true, data: address, message: 'Address updated' });
     } catch (error) {
       next(error);
@@ -87,7 +91,10 @@ export class UserController {
   updatePreferences = async (request: Request, response: Response, next: NextFunction) => {
     try {
       const { id } = userIdSchema.parse(request.params);
-      const preferences = await this.service.updatePreferences(id, updatePreferencesSchema.parse(request.body));
+      const preferences = await this.service.updatePreferences(
+        id,
+        updatePreferencesSchema.parse(request.body),
+      );
       response.json({ success: true, data: preferences, message: 'Preferences updated' });
     } catch (error) {
       next(error);
