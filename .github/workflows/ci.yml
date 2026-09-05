@@ -14,6 +14,27 @@ jobs:
   quality:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: infurnus
+          POSTGRES_PASSWORD: infurnus_dev
+          POSTGRES_DB: infurnus
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U infurnus -d infurnus"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      DATABASE_URL: postgresql://infurnus:infurnus_dev@localhost:5432/infurnus
+      JWT_ACCESS_SECRET: ci-test-secret-at-least-32-characters-long
+      JWT_ACCESS_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 30d
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -29,6 +50,20 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Run database migrations
+        shell: bash
+        run: |
+          for migration in migrations/*.sql; do
+            echo "Running $migration"
+            PGPASSWORD=infurnus_dev psql \
+              -h localhost \
+              -p 5432 \
+              -U infurnus \
+              -d infurnus \
+              -v ON_ERROR_STOP=1 \
+              -f "$migration"
+          done
 
       - name: Typecheck
         run: npm run typecheck
