@@ -555,7 +555,7 @@ describe('Auth Controller', () => {
   // ==========================================================
 
   describe('logout', () => {
-    it('revokes the supplied refresh token, clears the cookie, and returns 204', async () => {
+    it('revokes the supplied refresh token, clears the cookies, and returns 204', async () => {
       const refreshToken = 'refresh-token';
 
       mocks.logout.mockResolvedValue(undefined);
@@ -578,9 +578,11 @@ describe('Auth Controller', () => {
 
       expect(mocks.logout).toHaveBeenCalledWith(refreshToken);
 
-      expect(clearCookie).toHaveBeenCalledTimes(1);
+      expect(clearCookie).toHaveBeenCalledTimes(2);
 
       expect(clearCookie).toHaveBeenCalledWith(env.AUTH_REFRESH_COOKIE_NAME, expect.any(Object));
+
+      expect(clearCookie).toHaveBeenCalledWith(env.AUTH_CSRF_COOKIE_NAME, expect.any(Object));
 
       expect(status).toHaveBeenCalledWith(204);
 
@@ -644,7 +646,7 @@ describe('Auth Controller', () => {
   // ==========================================================
 
   describe('logoutAll', () => {
-    it('revokes all sessions for the authenticated user, clears the cookie, and returns 204', async () => {
+    it('revokes all sessions for the authenticated user, clears the cookies, and returns 204', async () => {
       const userId = '550e8400-e29b-41d4-a716-446655440010';
 
       mocks.logoutAllForUser.mockResolvedValue(undefined);
@@ -668,9 +670,11 @@ describe('Auth Controller', () => {
 
       expect(mocks.logoutAllForUser).toHaveBeenCalledWith(userId);
 
-      expect(clearCookie).toHaveBeenCalledTimes(1);
+      expect(clearCookie).toHaveBeenCalledTimes(2);
 
       expect(clearCookie).toHaveBeenCalledWith(env.AUTH_REFRESH_COOKIE_NAME, expect.any(Object));
+
+      expect(clearCookie).toHaveBeenCalledWith(env.AUTH_CSRF_COOKIE_NAME, expect.any(Object));
 
       expect(status).toHaveBeenCalledWith(204);
 

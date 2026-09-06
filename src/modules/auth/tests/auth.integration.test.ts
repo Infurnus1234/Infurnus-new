@@ -119,6 +119,7 @@ describe.sequential('Auth integration', () => {
 
   const app = createApp(new PostgresUserRepository(pool), otpProvider, {
     enableAuthRateLimiting: false,
+    enableAuthCsrfProtection: false,
   });
 
   beforeAll(async () => {

@@ -28,6 +28,8 @@ import { SignupService } from '../services/signup.service.js';
 import { SignupVerificationService } from '../services/signup-verification.service.js';
 import { TokenService } from '../services/token.service.js';
 
+import { clearCsrfTokenCookie, setCsrfTokenCookie } from '../utils/csrf-cookie.js';
+import { generateCsrfToken } from '../utils/csrf.js';
 import { clearRefreshTokenCookie, setRefreshTokenCookie } from '../utils/refresh-cookie.js';
 
 // ============================================================
@@ -161,6 +163,7 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
       });
 
       setRefreshTokenCookie(res, refreshToken.refreshToken);
+      setCsrfTokenCookie(res, generateCsrfToken());
 
       res.status(200).json({
         success: true,
@@ -225,6 +228,7 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
       });
 
       setRefreshTokenCookie(res, refreshToken.refreshToken);
+      setCsrfTokenCookie(res, generateCsrfToken());
 
       res.status(200).json({
         success: true,
@@ -300,6 +304,7 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
       await logoutService.logout(rawRefreshToken);
 
       clearRefreshTokenCookie(res);
+      clearCsrfTokenCookie(res);
 
       res.status(204).send();
     } catch (error) {
@@ -320,6 +325,7 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
       await logoutService.logoutAllForUser(req.auth.userId);
 
       clearRefreshTokenCookie(res);
+      clearCsrfTokenCookie(res);
 
       res.status(204).send();
     } catch (error) {

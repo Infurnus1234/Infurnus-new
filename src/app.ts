@@ -1,16 +1,19 @@
 import cookieParser from 'cookie-parser';
+import cors from 'cors';
 import express from 'express';
+import helmet from 'helmet';
 
 import { errorMiddleware } from './common/middleware/error.middleware.js';
+import { env } from './config/env.js';
 
 import { createAuthController } from './modules/auth/controllers/auth.controller.js';
 import type { OtpProvider } from './modules/auth/providers/otp.provider.js';
 import { createAuthRouter } from './modules/auth/routes/auth.routes.js';
 
 import { PartnerController } from './modules/partners/controllers/partner.controller.js';
-import { PartnerService } from './modules/partners/services/partner.service.js';
 import type { PartnerRepository } from './modules/partners/repositories/partner.repository.js';
 import { createPartnerRouter } from './modules/partners/routes/partner.routes.js';
+import { PartnerService } from './modules/partners/services/partner.service.js';
 
 import { UserController } from './modules/users/controllers/user.controller.js';
 import type { UserRepository } from './modules/users/repositories/user.repository.js';
@@ -18,12 +21,13 @@ import { createUserRouter } from './modules/users/routes/user.routes.js';
 import { UserService } from './modules/users/services/user.service.js';
 
 import { VehicleController } from './modules/vehicles/controllers/vehicle.controller.js';
-import { VehicleService } from './modules/vehicles/services/vehicle.service.js';
 import type { VehicleRepository } from './modules/vehicles/repositories/vehicle.repository.js';
 import { createVehicleRouter } from './modules/vehicles/routes/vehicle.routes.js';
+import { VehicleService } from './modules/vehicles/services/vehicle.service.js';
 
 export interface AppOptions {
   enableAuthRateLimiting?: boolean;
+  enableAuthCsrfProtection?: boolean;
 }
 
 export function createApp(
@@ -44,6 +48,22 @@ export function createApp(
   third?: VehicleRepository | AppOptions,
 ) {
   const app = express();
+
+  app.use(helmet());
+
+  app.use(
+    cors({
+      origin: (origin, callback) => {
+        if (!origin || origin === env.CORS_ORIGIN) {
+          callback(null, true);
+          return;
+        }
+
+        callback(null, false);
+      },
+      credentials: env.CORS_CREDENTIALS,
+    }),
+  );
 
   app.use(express.json());
   app.use(cookieParser());
@@ -78,6 +98,7 @@ export function createApp(
 
   if (repository) {
     const controller = new UserController(new UserService(repository));
+
     app.use('/users', createUserRouter(controller));
   }
 
@@ -99,6 +120,7 @@ export function createApp(
     '/auth',
     createAuthRouter(authController, {
       enableRateLimiting: options.enableAuthRateLimiting ?? true,
+      enableCsrfProtection: options.enableAuthCsrfProtection ?? true,
     }),
   );
 
