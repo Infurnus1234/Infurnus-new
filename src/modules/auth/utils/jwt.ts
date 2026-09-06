@@ -1,8 +1,13 @@
 import { SignJWT, jwtVerify } from 'jose';
+
 import { env } from '../../../config/env.js';
 import type { AccessTokenPayload } from '../types/token.js';
 
-const secret = new TextEncoder().encode(env.JWT_ACCESS_SECRET);
+const currentSecret = new TextEncoder().encode(env.JWT_ACCESS_SECRET);
+
+const previousSecret = env.JWT_ACCESS_PREVIOUS_SECRET
+  ? new TextEncoder().encode(env.JWT_ACCESS_PREVIOUS_SECRET)
+  : undefined;
 
 export async function signAccessToken(payload: AccessTokenPayload): Promise<string> {
   return new SignJWT(payload)
@@ -10,10 +15,10 @@ export async function signAccessToken(payload: AccessTokenPayload): Promise<stri
     .setSubject(payload.sub)
     .setIssuedAt()
     .setExpirationTime(env.JWT_ACCESS_EXPIRES_IN)
-    .sign(secret);
+    .sign(currentSecret);
 }
 
-export async function verifyAccessToken(token: string): Promise<AccessTokenPayload> {
+async function verifyWithSecret(token: string, secret: Uint8Array): Promise<AccessTokenPayload> {
   const { payload } = await jwtVerify(token, secret, {
     algorithms: ['HS256'],
   });
@@ -31,4 +36,16 @@ export async function verifyAccessToken(token: string): Promise<AccessTokenPaylo
     role: payload.role,
     type: 'access',
   };
+}
+
+export async function verifyAccessToken(token: string): Promise<AccessTokenPayload> {
+  try {
+    return await verifyWithSecret(token, currentSecret);
+  } catch (currentSecretError) {
+    if (!previousSecret) {
+      throw currentSecretError;
+    }
+
+    return verifyWithSecret(token, previousSecret);
+  }
 }

@@ -62,7 +62,12 @@ async function createTestApp() {
 
   app.use(express.json());
 
-  app.use('/auth', createAuthRouter({} as AuthControllerDependencies));
+  app.use(
+    '/auth',
+    createAuthRouter({} as AuthControllerDependencies, {
+      enableCsrfProtection: false,
+    }),
+  );
 
   return app;
 }

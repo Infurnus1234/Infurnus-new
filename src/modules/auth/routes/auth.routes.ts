@@ -4,6 +4,8 @@ import type { AuthControllerDependencies } from '../controllers/auth.controller.
 import { createAuthHandlers } from '../controllers/auth.controller.js';
 
 import { requireAuth } from '../middleware/auth.middleware.js';
+import { requireCsrf } from '../middleware/csrf.middleware.js';
+
 import {
   authLoginRateLimiter,
   authLogoutRateLimiter,
@@ -15,6 +17,7 @@ import {
 
 export interface AuthRouterOptions {
   enableRateLimiting?: boolean;
+  enableCsrfProtection?: boolean;
 }
 
 export function createAuthRouter(
@@ -27,6 +30,7 @@ export function createAuthRouter(
     createAuthHandlers(dependencies);
 
   const enableRateLimiting = options.enableRateLimiting ?? true;
+  const enableCsrfProtection = options.enableCsrfProtection ?? true;
 
   router.post('/signup', ...(enableRateLimiting ? [authSignupRateLimiter] : []), signup);
 
@@ -44,14 +48,25 @@ export function createAuthRouter(
 
   router.post('/login', ...(enableRateLimiting ? [authLoginRateLimiter] : []), login);
 
-  router.post('/refresh', ...(enableRateLimiting ? [authRefreshRateLimiter] : []), refresh);
+  router.post(
+    '/refresh',
+    ...(enableRateLimiting ? [authRefreshRateLimiter] : []),
+    ...(enableCsrfProtection ? [requireCsrf] : []),
+    refresh,
+  );
 
-  router.post('/logout', ...(enableRateLimiting ? [authLogoutRateLimiter] : []), logout);
+  router.post(
+    '/logout',
+    ...(enableRateLimiting ? [authLogoutRateLimiter] : []),
+    ...(enableCsrfProtection ? [requireCsrf] : []),
+    logout,
+  );
 
   router.post(
     '/logout-all',
     ...(enableRateLimiting ? [authLogoutRateLimiter] : []),
     requireAuth,
+    ...(enableCsrfProtection ? [requireCsrf] : []),
     logoutAll,
   );
 
