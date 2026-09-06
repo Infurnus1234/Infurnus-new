@@ -1,8 +1,11 @@
+import { createServer } from 'node:http';
+
 import { createApp } from './app.js';
 import { env } from './config/env.js';
 import { checkDatabaseConnection, pool } from './infrastructure/database/postgres.js';
-import { PostgresUserRepository } from './modules/users/repositories/user.repository.js';
+import { createSocketServer } from './infrastructure/socket/socket.server.js';
 import { PostgresPartnerRepository } from './modules/partners/repositories/partner.repository.js';
+import { PostgresUserRepository } from './modules/users/repositories/user.repository.js';
 import { PostgresVehicleRepository } from './modules/vehicles/repositories/vehicle.repository.js';
 
 async function startServer() {
@@ -14,7 +17,14 @@ async function startServer() {
     new PostgresVehicleRepository(pool),
   );
 
-  const server = app.listen(env.PORT, () => {
+  const server = createServer(app);
+  const io = createSocketServer(server);
+
+  io.on('connection', (socket) => {
+    console.log(`Socket connected: ${socket.id}`);
+  });
+
+  server.listen(env.PORT, () => {
     console.log(`INFURNUS API listening on port ${env.PORT}`);
   });
 
