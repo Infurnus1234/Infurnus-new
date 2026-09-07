@@ -26,6 +26,8 @@ export const updatePartnerSchema = z
     message: 'At least one field is required',
   });
 
+export const updateAvailabilitySchema = z.object({ availabilityStatus }).strict();
+
 export const partnerListQuerySchema = z
   .object({
     approvalStatus: z.enum(['pending', 'under_review', 'approved', 'rejected']).optional(),
@@ -36,3 +38,4 @@ export const partnerListQuerySchema = z
 export type CreatePartnerInput = z.infer<typeof createPartnerSchema>;
 export type UpdatePartnerInput = z.infer<typeof updatePartnerSchema>;
 export type PartnerListQuery = z.infer<typeof partnerListQuerySchema>;
+export type UpdateAvailabilityInput = z.infer<typeof updateAvailabilitySchema>;
