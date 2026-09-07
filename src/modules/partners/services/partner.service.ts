@@ -5,11 +5,15 @@ import type {
   UpdatePartnerInput,
 } from '../schemas/partner.schemas.js';
 import type { PartnerRepository } from '../repositories/partner.repository.js';
+import type { AuthenticatedUser } from '../../auth/types/auth.js';
 
 export class PartnerService {
   constructor(private readonly repository: PartnerRepository) {}
 
-  async createPartner(data: CreatePartnerInput) {
+  async createPartner(data: CreatePartnerInput, actor: AuthenticatedUser) {
+    if (actor.role !== 'admin' && actor.role !== 'super_admin' && actor.userId !== data.userId) {
+      throw new AppError('FORBIDDEN', 'You do not have permission to create this partner', 403);
+    }
     try {
       return await this.repository.create(data);
     } catch (error) {
@@ -23,20 +27,37 @@ export class PartnerService {
     }
   }
 
-  async getPartner(id: string) {
+  async getPartner(id: string, actor: AuthenticatedUser) {
     const partner = await this.repository.findById(id);
     if (!partner) throw new AppError('PARTNER_NOT_FOUND', 'Partner not found', 404);
+    assertPartnerAccess(partner.userId, actor);
     return partner;
   }
 
-  async listPartners(filters: PartnerListQuery) {
+  async listPartners(filters: PartnerListQuery, actor: AuthenticatedUser) {
+    assertAdmin(actor);
     return this.repository.findAll(filters);
   }
 
-  async updatePartner(id: string, data: UpdatePartnerInput) {
+  async updatePartner(id: string, data: UpdatePartnerInput, actor: AuthenticatedUser) {
+    const existing = await this.repository.findById(id);
+    if (!existing) throw new AppError('PARTNER_NOT_FOUND', 'Partner not found', 404);
+    assertPartnerAccess(existing.userId, actor);
     const partner = await this.repository.update(id, data);
     if (!partner) throw new AppError('PARTNER_NOT_FOUND', 'Partner not found', 404);
     return partner;
+  }
+}
+
+function assertAdmin(actor: AuthenticatedUser) {
+  if (actor.role !== 'admin' && actor.role !== 'super_admin') {
+    throw new AppError('FORBIDDEN', 'You do not have permission to list partners', 403);
+  }
+}
+
+function assertPartnerAccess(userId: string, actor: AuthenticatedUser) {
+  if (actor.role !== 'admin' && actor.role !== 'super_admin' && actor.userId !== userId) {
+    throw new AppError('FORBIDDEN', 'You do not have permission to access this partner', 403);
   }
 }
 
