@@ -14,6 +14,10 @@ import { PartnerController } from './modules/partners/controllers/partner.contro
 import type { PartnerRepository } from './modules/partners/repositories/partner.repository.js';
 import { createPartnerRouter } from './modules/partners/routes/partner.routes.js';
 import { PartnerService } from './modules/partners/services/partner.service.js';
+import { PartnerDocumentController } from './modules/partners/controllers/partner-document.controller.js';
+import type { PartnerDocumentRepository } from './modules/partners/repositories/partner-document.repository.js';
+import { createPartnerDocumentRouter } from './modules/partners/routes/partner-document.routes.js';
+import { PartnerDocumentService } from './modules/partners/services/partner-document.service.js';
 
 import { UserController } from './modules/users/controllers/user.controller.js';
 import type { UserRepository } from './modules/users/repositories/user.repository.js';
@@ -24,6 +28,10 @@ import { VehicleController } from './modules/vehicles/controllers/vehicle.contro
 import type { VehicleRepository } from './modules/vehicles/repositories/vehicle.repository.js';
 import { createVehicleRouter } from './modules/vehicles/routes/vehicle.routes.js';
 import { VehicleService } from './modules/vehicles/services/vehicle.service.js';
+import { AdminController } from './modules/admin/controllers/admin.controller.js';
+import type { AdminRepository } from './modules/admin/repositories/admin.repository.js';
+import { createAdminRouter } from './modules/admin/routes/admin.routes.js';
+import { AdminService } from './modules/admin/services/admin.service.js';
 
 export interface AppOptions {
   enableAuthRateLimiting?: boolean;
@@ -34,6 +42,8 @@ export function createApp(
   repository?: UserRepository,
   partnerRepository?: PartnerRepository,
   vehicleRepository?: VehicleRepository,
+  partnerDocumentRepository?: PartnerDocumentRepository,
+  adminRepository?: AdminRepository,
 ): express.Express;
 
 export function createApp(
@@ -46,6 +56,8 @@ export function createApp(
   repository?: UserRepository,
   second?: PartnerRepository | OtpProvider,
   third?: VehicleRepository | AppOptions,
+  partnerDocumentRepository?: PartnerDocumentRepository,
+  adminRepository?: AdminRepository,
 ) {
   const app = express();
 
@@ -108,10 +120,22 @@ export function createApp(
     app.use('/partners', createPartnerRouter(partnerController));
   }
 
+  if (partnerDocumentRepository) {
+    const documentController = new PartnerDocumentController(
+      new PartnerDocumentService(partnerDocumentRepository),
+    );
+
+    app.use('/partners/:id/documents', createPartnerDocumentRouter(documentController));
+  }
+
   if (vehicleRepository) {
     const vehicleController = new VehicleController(new VehicleService(vehicleRepository));
 
     app.use('/vehicles', createVehicleRouter(vehicleController));
+  }
+
+  if (adminRepository) {
+    app.use('/admin', createAdminRouter(new AdminController(new AdminService(adminRepository))));
   }
 
   const authController = createAuthController(otpProvider);

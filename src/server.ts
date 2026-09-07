@@ -5,6 +5,8 @@ import { env } from './config/env.js';
 import { checkDatabaseConnection, pool } from './infrastructure/database/postgres.js';
 import { createSocketServer } from './infrastructure/socket/socket.server.js';
 import { PostgresPartnerRepository } from './modules/partners/repositories/partner.repository.js';
+import { PostgresPartnerDocumentRepository } from './modules/partners/repositories/partner-document.repository.js';
+import { PostgresAdminRepository } from './modules/admin/repositories/admin.repository.js';
 import { PostgresUserRepository } from './modules/users/repositories/user.repository.js';
 import { PostgresVehicleRepository } from './modules/vehicles/repositories/vehicle.repository.js';
 
@@ -15,6 +17,8 @@ async function startServer() {
     new PostgresUserRepository(pool),
     new PostgresPartnerRepository(pool),
     new PostgresVehicleRepository(pool),
+    new PostgresPartnerDocumentRepository(pool),
+    new PostgresAdminRepository(pool),
   );
 
   const server = createServer(app);
