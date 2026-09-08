@@ -32,6 +32,13 @@ import { AdminController } from './modules/admin/controllers/admin.controller.js
 import type { AdminRepository } from './modules/admin/repositories/admin.repository.js';
 import { createAdminRouter } from './modules/admin/routes/admin.routes.js';
 import { AdminService } from './modules/admin/services/admin.service.js';
+import { RideController } from './modules/rides/controllers/ride.controller.js';
+import type { RideRepository } from './modules/rides/repositories/ride.repository.js';
+import { createRideRouter } from './modules/rides/routes/ride.routes.js';
+import { RideService } from './modules/rides/services/ride.service.js';
+import { DriverController } from './modules/rides/controllers/driver.controller.js';
+import type { DriverRepository } from './modules/rides/repositories/driver.repository.js';
+import { DriverService } from './modules/rides/services/driver.service.js';
 
 export interface AppOptions {
   enableAuthRateLimiting?: boolean;
@@ -44,6 +51,8 @@ export function createApp(
   vehicleRepository?: VehicleRepository,
   partnerDocumentRepository?: PartnerDocumentRepository,
   adminRepository?: AdminRepository,
+  rideRepository?: RideRepository,
+  driverRepository?: DriverRepository,
 ): express.Express;
 
 export function createApp(
@@ -58,6 +67,8 @@ export function createApp(
   third?: VehicleRepository | AppOptions,
   partnerDocumentRepository?: PartnerDocumentRepository,
   adminRepository?: AdminRepository,
+  rideRepository?: RideRepository,
+  driverRepository?: DriverRepository,
 ) {
   const app = express();
 
@@ -136,6 +147,14 @@ export function createApp(
 
   if (adminRepository) {
     app.use('/admin', createAdminRouter(new AdminController(new AdminService(adminRepository))));
+  }
+
+  if (rideRepository) {
+    const rideService = new RideService(rideRepository, driverRepository);
+    const driverController = driverRepository
+      ? new DriverController(new DriverService(driverRepository), rideService)
+      : undefined;
+    app.use('/rides', createRideRouter(new RideController(rideService), driverController));
   }
 
   const authController = createAuthController(otpProvider);
