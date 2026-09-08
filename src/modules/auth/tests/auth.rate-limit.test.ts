@@ -47,6 +47,19 @@ const mockHandlers = {
   logoutAll: vi.fn((_req, res) => {
     res.status(204).send();
   }),
+
+  listSessions: vi.fn((_req, res) => {
+    res.status(200).json({
+      success: true,
+      data: {
+        sessions: [],
+      },
+    });
+  }),
+
+  revokeSession: vi.fn((_req, res) => {
+    res.status(204).send();
+  }),
 };
 
 vi.mock('../controllers/auth.controller.js', () => ({

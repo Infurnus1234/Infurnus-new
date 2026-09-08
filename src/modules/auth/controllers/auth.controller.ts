@@ -24,6 +24,7 @@ import { LoginService } from '../services/login.service.js';
 import { LogoutService } from '../services/logout.service.js';
 import { OtpResendService } from '../services/otp-resend.service.js';
 import { RefreshTokenService } from '../services/refresh-token.service.js';
+import { SessionService } from '../services/session.service.js';
 import { SignupService } from '../services/signup.service.js';
 import { SignupVerificationService } from '../services/signup-verification.service.js';
 import { TokenService } from '../services/token.service.js';
@@ -43,6 +44,7 @@ export interface AuthControllerDependencies {
   loginService: LoginService;
   refreshTokenService: RefreshTokenService;
   logoutService: LogoutService;
+  sessionService: SessionService;
   tokenService: TokenService;
   authUserRepository: PostgresAuthUserRepository;
 }
@@ -82,6 +84,8 @@ export function createAuthController(
 
   const logoutService = new LogoutService(refreshTokenRepository);
 
+  const sessionService = new SessionService(refreshTokenRepository);
+
   const tokenService = new TokenService();
 
   return {
@@ -91,6 +95,7 @@ export function createAuthController(
     loginService,
     refreshTokenService,
     logoutService,
+    sessionService,
     tokenService,
     authUserRepository,
   };
@@ -108,6 +113,7 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
     loginService,
     refreshTokenService,
     logoutService,
+    sessionService,
     tokenService,
     authUserRepository,
   } = dependencies;
@@ -333,6 +339,53 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
     }
   }
 
+  // ==========================================================
+  // GET /auth/sessions
+  // ==========================================================
+
+  async function listSessions(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.auth?.userId) {
+        throw new AppError('AUTHENTICATION_REQUIRED', 'Authentication required', 401);
+      }
+
+      const sessions = await sessionService.listActiveSessions(req.auth.userId);
+
+      res.status(200).json({
+        success: true,
+        data: {
+          sessions,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ==========================================================
+  // DELETE /auth/sessions/:sessionId
+  // ==========================================================
+
+  async function revokeSession(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.auth?.userId) {
+        throw new AppError('AUTHENTICATION_REQUIRED', 'Authentication required', 401);
+      }
+
+      const sessionId = req.params.sessionId;
+
+      if (typeof sessionId !== 'string' || !sessionId) {
+        throw new AppError('INVALID_SESSION', 'Invalid session', 400);
+      }
+
+      await sessionService.revokeSession(req.auth.userId, sessionId);
+
+      res.status(204).send();
+    } catch (error) {
+      next(error);
+    }
+  }
+
   return {
     signup,
     verifySignup,
@@ -341,6 +394,8 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
     refresh,
     logout,
     logoutAll,
+    listSessions,
+    revokeSession,
   };
 }
 
@@ -367,3 +422,7 @@ export const refresh = defaultAuthHandlers.refresh;
 export const logout = defaultAuthHandlers.logout;
 
 export const logoutAll = defaultAuthHandlers.logoutAll;
+
+export const listSessions = defaultAuthHandlers.listSessions;
+
+export const revokeSession = defaultAuthHandlers.revokeSession;

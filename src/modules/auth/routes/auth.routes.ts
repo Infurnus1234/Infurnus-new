@@ -26,13 +26,30 @@ export function createAuthRouter(
 ) {
   const router = Router();
 
-  const { signup, verifySignup, resendSignupOtp, login, refresh, logout, logoutAll } =
-    createAuthHandlers(dependencies);
+  const {
+    signup,
+    verifySignup,
+    resendSignupOtp,
+    login,
+    refresh,
+    logout,
+    logoutAll,
+    listSessions,
+    revokeSession,
+  } = createAuthHandlers(dependencies);
 
   const enableRateLimiting = options.enableRateLimiting ?? true;
   const enableCsrfProtection = options.enableCsrfProtection ?? true;
 
+  // ==========================================================
+  // POST /auth/signup
+  // ==========================================================
+
   router.post('/signup', ...(enableRateLimiting ? [authSignupRateLimiter] : []), signup);
+
+  // ==========================================================
+  // POST /auth/signup/verify
+  // ==========================================================
 
   router.post(
     '/signup/verify',
@@ -40,13 +57,25 @@ export function createAuthRouter(
     verifySignup,
   );
 
+  // ==========================================================
+  // POST /auth/signup/resend
+  // ==========================================================
+
   router.post(
     '/signup/resend',
     ...(enableRateLimiting ? [authOtpResendRateLimiter] : []),
     resendSignupOtp,
   );
 
+  // ==========================================================
+  // POST /auth/login
+  // ==========================================================
+
   router.post('/login', ...(enableRateLimiting ? [authLoginRateLimiter] : []), login);
+
+  // ==========================================================
+  // POST /auth/refresh
+  // ==========================================================
 
   router.post(
     '/refresh',
@@ -55,6 +84,10 @@ export function createAuthRouter(
     refresh,
   );
 
+  // ==========================================================
+  // POST /auth/logout
+  // ==========================================================
+
   router.post(
     '/logout',
     ...(enableRateLimiting ? [authLogoutRateLimiter] : []),
@@ -62,12 +95,34 @@ export function createAuthRouter(
     logout,
   );
 
+  // ==========================================================
+  // POST /auth/logout-all
+  // ==========================================================
+
   router.post(
     '/logout-all',
     ...(enableRateLimiting ? [authLogoutRateLimiter] : []),
     requireAuth,
     ...(enableCsrfProtection ? [requireCsrf] : []),
     logoutAll,
+  );
+
+  // ==========================================================
+  // GET /auth/sessions
+  // ==========================================================
+
+  router.get('/sessions', requireAuth, listSessions);
+
+  // ==========================================================
+  // DELETE /auth/sessions/:sessionId
+  // ==========================================================
+
+  router.delete(
+    '/sessions/:sessionId',
+    ...(enableRateLimiting ? [authLogoutRateLimiter] : []),
+    requireAuth,
+    ...(enableCsrfProtection ? [requireCsrf] : []),
+    revokeSession,
   );
 
   return router;

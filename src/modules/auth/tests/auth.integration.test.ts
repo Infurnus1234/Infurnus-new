@@ -1,5 +1,3 @@
-// auth.integration.test.ts
-
 import { randomUUID } from 'node:crypto';
 
 import request from 'supertest';
@@ -125,6 +123,65 @@ describe.sequential('Auth integration', () => {
   beforeAll(async () => {
     await pool.query('SELECT 1');
   });
+
+  async function createVerifiedUser(prefix: string): Promise<{
+    userId: string;
+    email: string;
+  }> {
+    const email = uniqueEmail(prefix);
+
+    const signupResponse = await request(app).post('/auth/signup').send({
+      firstName: 'Session',
+      lastName: 'Test',
+      email,
+      password: 'StrongPassword123!',
+      confirmPassword: 'StrongPassword123!',
+      role: 'customer',
+    });
+
+    expect(signupResponse.status).toBe(201);
+
+    const signupId = signupResponse.body.data.signupId;
+    const otp = otpProvider.getEmailOtp(email);
+
+    const verifyResponse = await request(app).post('/auth/signup/verify').send({
+      signupId,
+      otp,
+    });
+
+    expect(verifyResponse.status).toBe(200);
+
+    return {
+      userId: verifyResponse.body.data.userId,
+      email,
+    };
+  }
+
+  async function cleanupUser(userId: string): Promise<void> {
+    await pool.query(
+      `
+        DELETE FROM refresh_tokens
+        WHERE user_id = $1
+      `,
+      [userId],
+    );
+
+    await pool.query(
+      `
+        DELETE FROM user_credentials
+        WHERE user_id = $1
+      `,
+      [userId],
+    );
+
+    await pool.query(
+      `
+        DELETE FROM users
+        WHERE id = $1
+      `,
+      [userId],
+    );
+  }
 
   describe('signup', () => {
     it('creates a pending signup and completes signup verification', async () => {
@@ -272,29 +329,7 @@ describe.sequential('Auth integration', () => {
 
       expect(pendingAfterVerification.rows).toHaveLength(0);
 
-      await pool.query(
-        `
-          DELETE FROM refresh_tokens
-          WHERE user_id = $1
-        `,
-        [userId],
-      );
-
-      await pool.query(
-        `
-          DELETE FROM user_credentials
-          WHERE user_id = $1
-        `,
-        [userId],
-      );
-
-      await pool.query(
-        `
-          DELETE FROM users
-          WHERE id = $1
-        `,
-        [userId],
-      );
+      await cleanupUser(userId);
     });
 
     it('rejects an incorrect OTP', async () => {
@@ -511,29 +546,7 @@ describe.sequential('Auth integration', () => {
 
       expect(refreshCookie).toContain(`${env.AUTH_REFRESH_COOKIE_NAME}=`);
 
-      await pool.query(
-        `
-          DELETE FROM refresh_tokens
-          WHERE user_id = $1
-        `,
-        [userId],
-      );
-
-      await pool.query(
-        `
-          DELETE FROM user_credentials
-          WHERE user_id = $1
-        `,
-        [userId],
-      );
-
-      await pool.query(
-        `
-          DELETE FROM users
-          WHERE id = $1
-        `,
-        [userId],
-      );
+      await cleanupUser(userId);
     });
 
     it('rejects invalid credentials', async () => {
@@ -591,29 +604,7 @@ describe.sequential('Auth integration', () => {
       expect(response.status).toBe(401);
       expect(response.body.success).toBe(false);
 
-      await pool.query(
-        `
-          DELETE FROM refresh_tokens
-          WHERE user_id = $1
-        `,
-        [userId],
-      );
-
-      await pool.query(
-        `
-          DELETE FROM user_credentials
-          WHERE user_id = $1
-        `,
-        [userId],
-      );
-
-      await pool.query(
-        `
-          DELETE FROM users
-          WHERE id = $1
-        `,
-        [userId],
-      );
+      await cleanupUser(userId);
     });
 
     it('rejects a banned account', async () => {
@@ -659,29 +650,7 @@ describe.sequential('Auth integration', () => {
       expect(response.status).toBe(401);
       expect(response.body.success).toBe(false);
 
-      await pool.query(
-        `
-          DELETE FROM refresh_tokens
-          WHERE user_id = $1
-        `,
-        [userId],
-      );
-
-      await pool.query(
-        `
-          DELETE FROM user_credentials
-          WHERE user_id = $1
-        `,
-        [userId],
-      );
-
-      await pool.query(
-        `
-          DELETE FROM users
-          WHERE id = $1
-        `,
-        [userId],
-      );
+      await cleanupUser(userId);
     });
   });
 
@@ -798,29 +767,7 @@ describe.sequential('Auth integration', () => {
       expect(oldToken.replacedBy).toEqual(expect.any(String));
       expect(oldToken.familyId).toBe(originalToken.familyId);
 
-      await pool.query(
-        `
-          DELETE FROM refresh_tokens
-          WHERE user_id = $1
-        `,
-        [userId],
-      );
-
-      await pool.query(
-        `
-          DELETE FROM user_credentials
-          WHERE user_id = $1
-        `,
-        [userId],
-      );
-
-      await pool.query(
-        `
-          DELETE FROM users
-          WHERE id = $1
-        `,
-        [userId],
-      );
+      await cleanupUser(userId);
     });
 
     it('rejects refresh without a cookie', async () => {
@@ -933,29 +880,7 @@ describe.sequential('Auth integration', () => {
         expect(token.revokedAt).toBeInstanceOf(Date);
       }
 
-      await pool.query(
-        `
-          DELETE FROM refresh_tokens
-          WHERE user_id = $1
-        `,
-        [userId],
-      );
-
-      await pool.query(
-        `
-          DELETE FROM user_credentials
-          WHERE user_id = $1
-        `,
-        [userId],
-      );
-
-      await pool.query(
-        `
-          DELETE FROM users
-          WHERE id = $1
-        `,
-        [userId],
-      );
+      await cleanupUser(userId);
     });
 
     it('uses the current database role during refresh', async () => {
@@ -1008,29 +933,7 @@ describe.sequential('Auth integration', () => {
       expect(refreshResponse.body.success).toBe(true);
       expect(refreshResponse.body.data.accessToken).toEqual(expect.any(String));
 
-      await pool.query(
-        `
-          DELETE FROM refresh_tokens
-          WHERE user_id = $1
-        `,
-        [userId],
-      );
-
-      await pool.query(
-        `
-          DELETE FROM user_credentials
-          WHERE user_id = $1
-        `,
-        [userId],
-      );
-
-      await pool.query(
-        `
-          DELETE FROM users
-          WHERE id = $1
-        `,
-        [userId],
-      );
+      await cleanupUser(userId);
     });
 
     it('rejects refresh for a suspended account', async () => {
@@ -1082,29 +985,7 @@ describe.sequential('Auth integration', () => {
       expect(refreshResponse.status).toBe(401);
       expect(refreshResponse.body.success).toBe(false);
 
-      await pool.query(
-        `
-          DELETE FROM refresh_tokens
-          WHERE user_id = $1
-        `,
-        [userId],
-      );
-
-      await pool.query(
-        `
-          DELETE FROM user_credentials
-          WHERE user_id = $1
-        `,
-        [userId],
-      );
-
-      await pool.query(
-        `
-          DELETE FROM users
-          WHERE id = $1
-        `,
-        [userId],
-      );
+      await cleanupUser(userId);
     });
 
     it('rejects refresh for a banned account', async () => {
@@ -1156,29 +1037,517 @@ describe.sequential('Auth integration', () => {
       expect(refreshResponse.status).toBe(401);
       expect(refreshResponse.body.success).toBe(false);
 
-      await pool.query(
+      await cleanupUser(userId);
+    });
+  });
+
+  describe('sessions', () => {
+    it('lists only the authenticated user active sessions', async () => {
+      const { userId, email } = await createVerifiedUser('auth-sessions-list');
+
+      const loginResponse = await request(app).post('/auth/login').send({
+        email,
+        password: 'StrongPassword123!',
+      });
+
+      expect(loginResponse.status).toBe(200);
+
+      const accessToken = loginResponse.body.data.accessToken;
+
+      expect(accessToken).toEqual(expect.any(String));
+
+      const sessionResult = await pool.query<{
+        id: string;
+        userId: string;
+        tokenHash: string;
+        familyId: string;
+        replacedBy: string | null;
+        expiresAt: Date;
+        revokedAt: Date | null;
+      }>(
         `
-          DELETE FROM refresh_tokens
+          SELECT
+            id,
+            user_id AS "userId",
+            token_hash AS "tokenHash",
+            family_id AS "familyId",
+            replaced_by AS "replacedBy",
+            expires_at AS "expiresAt",
+            revoked_at AS "revokedAt"
+          FROM refresh_tokens
           WHERE user_id = $1
+          ORDER BY created_at DESC
+          LIMIT 1
         `,
         [userId],
       );
 
-      await pool.query(
-        `
-          DELETE FROM user_credentials
-          WHERE user_id = $1
-        `,
-        [userId],
+      expect(sessionResult.rows).toHaveLength(1);
+
+      const session = sessionResult.rows[0];
+
+      expect(session).toBeDefined();
+
+      if (!session) {
+        throw new Error('Expected refresh session to exist');
+      }
+
+      expect(session.userId).toBe(userId);
+      expect(session.tokenHash).toBeTruthy();
+      expect(session.familyId).toEqual(expect.any(String));
+      expect(session.replacedBy).toBeNull();
+      expect(session.expiresAt).toBeInstanceOf(Date);
+      expect(session.revokedAt).toBeNull();
+
+      const response = await request(app)
+        .get('/auth/sessions')
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+
+      expect(response.body.data.sessions).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: session.id,
+          }),
+        ]),
       );
 
-      await pool.query(
+      const returnedSession = response.body.data.sessions.find(
+        (item: { id: string }) => item.id === session.id,
+      );
+
+      expect(returnedSession).toBeDefined();
+
+      expect(returnedSession).not.toHaveProperty('tokenHash');
+      expect(returnedSession).not.toHaveProperty('token_hash');
+      expect(returnedSession).not.toHaveProperty('familyId');
+      expect(returnedSession).not.toHaveProperty('family_id');
+      expect(returnedSession).not.toHaveProperty('replacedBy');
+      expect(returnedSession).not.toHaveProperty('replaced_by');
+      expect(returnedSession).not.toHaveProperty('userId');
+      expect(returnedSession).not.toHaveProperty('createdAt');
+
+      await cleanupUser(userId);
+    });
+
+    it('rejects unauthenticated session listing', async () => {
+      const response = await request(app).get('/auth/sessions');
+
+      expect(response.status).toBe(401);
+      expect(response.body.success).toBe(false);
+    });
+
+    it('revokes only a session owned by the authenticated user', async () => {
+      const firstUser = await createVerifiedUser('auth-session-owner');
+      const secondUser = await createVerifiedUser('auth-session-other');
+
+      const firstLogin = await request(app).post('/auth/login').send({
+        email: firstUser.email,
+        password: 'StrongPassword123!',
+      });
+
+      expect(firstLogin.status).toBe(200);
+
+      const firstAccessToken = firstLogin.body.data.accessToken;
+
+      expect(firstAccessToken).toEqual(expect.any(String));
+
+      const secondLogin = await request(app).post('/auth/login').send({
+        email: secondUser.email,
+        password: 'StrongPassword123!',
+      });
+
+      expect(secondLogin.status).toBe(200);
+
+      const secondAccessToken = secondLogin.body.data.accessToken;
+
+      expect(secondAccessToken).toEqual(expect.any(String));
+
+      const firstSessionResult = await pool.query<{
+        id: string;
+        revokedAt: Date | null;
+      }>(
         `
-          DELETE FROM users
+          SELECT
+            id,
+            revoked_at AS "revokedAt"
+          FROM refresh_tokens
+          WHERE user_id = $1
+          ORDER BY created_at DESC
+          LIMIT 1
+        `,
+        [firstUser.userId],
+      );
+
+      const secondSessionResult = await pool.query<{
+        id: string;
+        revokedAt: Date | null;
+      }>(
+        `
+          SELECT
+            id,
+            revoked_at AS "revokedAt"
+          FROM refresh_tokens
+          WHERE user_id = $1
+          ORDER BY created_at DESC
+          LIMIT 1
+        `,
+        [secondUser.userId],
+      );
+
+      expect(firstSessionResult.rows).toHaveLength(1);
+      expect(secondSessionResult.rows).toHaveLength(1);
+
+      const firstSession = firstSessionResult.rows[0];
+      const secondSession = secondSessionResult.rows[0];
+
+      expect(firstSession).toBeDefined();
+      expect(secondSession).toBeDefined();
+
+      if (!firstSession || !secondSession) {
+        throw new Error('Expected both sessions to exist');
+      }
+
+      const firstRevokeResponse = await request(app)
+        .delete(`/auth/sessions/${firstSession.id}`)
+        .set('Authorization', `Bearer ${firstAccessToken}`);
+
+      expect(firstRevokeResponse.status).toBe(204);
+
+      const firstAfterRevoke = await pool.query<{
+        revokedAt: Date | null;
+      }>(
+        `
+          SELECT
+            revoked_at AS "revokedAt"
+          FROM refresh_tokens
           WHERE id = $1
         `,
+        [firstSession.id],
+      );
+
+      expect(firstAfterRevoke.rows).toHaveLength(1);
+
+      const firstRevoked = firstAfterRevoke.rows[0];
+
+      expect(firstRevoked).toBeDefined();
+
+      if (!firstRevoked) {
+        throw new Error('Expected first session to exist');
+      }
+
+      expect(firstRevoked.revokedAt).toBeInstanceOf(Date);
+
+      const secondAfterFirstRevoke = await pool.query<{
+        revokedAt: Date | null;
+      }>(
+        `
+          SELECT
+            revoked_at AS "revokedAt"
+          FROM refresh_tokens
+          WHERE id = $1
+        `,
+        [secondSession.id],
+      );
+
+      expect(secondAfterFirstRevoke.rows).toHaveLength(1);
+
+      const secondStillActive = secondAfterFirstRevoke.rows[0];
+
+      expect(secondStillActive).toBeDefined();
+
+      if (!secondStillActive) {
+        throw new Error('Expected second session to exist');
+      }
+
+      expect(secondStillActive.revokedAt).toBeNull();
+
+      const secondRevokeResponse = await request(app)
+        .delete(`/auth/sessions/${secondSession.id}`)
+        .set('Authorization', `Bearer ${secondAccessToken}`);
+
+      expect(secondRevokeResponse.status).toBe(204);
+
+      await cleanupUser(firstUser.userId);
+      await cleanupUser(secondUser.userId);
+    });
+
+    it('does not allow one user to revoke another user session', async () => {
+      const owner = await createVerifiedUser('auth-session-isolation-owner');
+      const attacker = await createVerifiedUser('auth-session-isolation-attacker');
+
+      const ownerLogin = await request(app).post('/auth/login').send({
+        email: owner.email,
+        password: 'StrongPassword123!',
+      });
+
+      expect(ownerLogin.status).toBe(200);
+
+      const attackerLogin = await request(app).post('/auth/login').send({
+        email: attacker.email,
+        password: 'StrongPassword123!',
+      });
+
+      expect(attackerLogin.status).toBe(200);
+
+      const attackerAccessToken = attackerLogin.body.data.accessToken;
+
+      expect(attackerAccessToken).toEqual(expect.any(String));
+
+      const ownerSessionResult = await pool.query<{
+        id: string;
+        revokedAt: Date | null;
+      }>(
+        `
+          SELECT
+            id,
+            revoked_at AS "revokedAt"
+          FROM refresh_tokens
+          WHERE user_id = $1
+          ORDER BY created_at DESC
+          LIMIT 1
+        `,
+        [owner.userId],
+      );
+
+      expect(ownerSessionResult.rows).toHaveLength(1);
+
+      const ownerSession = ownerSessionResult.rows[0];
+
+      expect(ownerSession).toBeDefined();
+
+      if (!ownerSession) {
+        throw new Error('Expected owner session to exist');
+      }
+
+      const response = await request(app)
+        .delete(`/auth/sessions/${ownerSession.id}`)
+        .set('Authorization', `Bearer ${attackerAccessToken}`);
+
+      expect(response.status).toBe(404);
+      expect(response.body.success).toBe(false);
+
+      const ownerAfterAttempt = await pool.query<{
+        revokedAt: Date | null;
+      }>(
+        `
+          SELECT
+            revoked_at AS "revokedAt"
+          FROM refresh_tokens
+          WHERE id = $1
+        `,
+        [ownerSession.id],
+      );
+
+      expect(ownerAfterAttempt.rows).toHaveLength(1);
+
+      const ownerSessionAfterAttempt = ownerAfterAttempt.rows[0];
+
+      expect(ownerSessionAfterAttempt).toBeDefined();
+
+      if (!ownerSessionAfterAttempt) {
+        throw new Error('Expected owner session to exist');
+      }
+
+      expect(ownerSessionAfterAttempt.revokedAt).toBeNull();
+
+      await cleanupUser(owner.userId);
+      await cleanupUser(attacker.userId);
+    });
+
+    it('returns 404 when revoking an already revoked session', async () => {
+      const { userId, email } = await createVerifiedUser('auth-session-repeat');
+
+      const loginResponse = await request(app).post('/auth/login').send({
+        email,
+        password: 'StrongPassword123!',
+      });
+
+      expect(loginResponse.status).toBe(200);
+
+      const accessToken = loginResponse.body.data.accessToken;
+
+      expect(accessToken).toEqual(expect.any(String));
+
+      const sessionResult = await pool.query<{
+        id: string;
+      }>(
+        `
+          SELECT id
+          FROM refresh_tokens
+          WHERE user_id = $1
+          ORDER BY created_at DESC
+          LIMIT 1
+        `,
         [userId],
       );
+
+      expect(sessionResult.rows).toHaveLength(1);
+
+      const session = sessionResult.rows[0];
+
+      expect(session).toBeDefined();
+
+      if (!session) {
+        throw new Error('Expected session to exist');
+      }
+
+      const firstResponse = await request(app)
+        .delete(`/auth/sessions/${session.id}`)
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(firstResponse.status).toBe(204);
+
+      const secondResponse = await request(app)
+        .delete(`/auth/sessions/${session.id}`)
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(secondResponse.status).toBe(404);
+      expect(secondResponse.body.success).toBe(false);
+
+      await cleanupUser(userId);
+    });
+
+    it('allows only one concurrent revoke for the same session', async () => {
+      const { userId, email } = await createVerifiedUser('auth-session-concurrency');
+
+      const loginResponse = await request(app).post('/auth/login').send({
+        email,
+        password: 'StrongPassword123!',
+      });
+
+      expect(loginResponse.status).toBe(200);
+
+      const accessToken = loginResponse.body.data.accessToken;
+
+      expect(accessToken).toEqual(expect.any(String));
+
+      const sessionResult = await pool.query<{
+        id: string;
+        revokedAt: Date | null;
+      }>(
+        `
+          SELECT
+            id,
+            revoked_at AS "revokedAt"
+          FROM refresh_tokens
+          WHERE user_id = $1
+          ORDER BY created_at DESC
+          LIMIT 1
+        `,
+        [userId],
+      );
+
+      expect(sessionResult.rows).toHaveLength(1);
+
+      const session = sessionResult.rows[0];
+
+      expect(session).toBeDefined();
+
+      if (!session) {
+        throw new Error('Expected session to exist');
+      }
+
+      expect(session.revokedAt).toBeNull();
+
+      const [responseA, responseB] = await Promise.all([
+        request(app)
+          .delete(`/auth/sessions/${session.id}`)
+          .set('Authorization', `Bearer ${accessToken}`),
+
+        request(app)
+          .delete(`/auth/sessions/${session.id}`)
+          .set('Authorization', `Bearer ${accessToken}`),
+      ]);
+
+      const statuses = [responseA.status, responseB.status].sort((a, b) => a - b);
+
+      expect(statuses).toEqual([204, 404]);
+
+      const revokedResult = await pool.query<{
+        revokedAt: Date | null;
+      }>(
+        `
+          SELECT
+            revoked_at AS "revokedAt"
+          FROM refresh_tokens
+          WHERE id = $1
+        `,
+        [session.id],
+      );
+
+      expect(revokedResult.rows).toHaveLength(1);
+
+      const revokedSession = revokedResult.rows[0];
+
+      expect(revokedSession).toBeDefined();
+
+      if (!revokedSession) {
+        throw new Error('Expected session to exist after concurrent revoke');
+      }
+
+      expect(revokedSession.revokedAt).toBeInstanceOf(Date);
+
+      await cleanupUser(userId);
+    });
+
+    it('removes a revoked session from the active session list', async () => {
+      const { userId, email } = await createVerifiedUser('auth-session-list-revoked');
+
+      const loginResponse = await request(app).post('/auth/login').send({
+        email,
+        password: 'StrongPassword123!',
+      });
+
+      expect(loginResponse.status).toBe(200);
+
+      const accessToken = loginResponse.body.data.accessToken;
+
+      expect(accessToken).toEqual(expect.any(String));
+
+      const sessionResult = await pool.query<{
+        id: string;
+      }>(
+        `
+          SELECT id
+          FROM refresh_tokens
+          WHERE user_id = $1
+          ORDER BY created_at DESC
+          LIMIT 1
+        `,
+        [userId],
+      );
+
+      expect(sessionResult.rows).toHaveLength(1);
+
+      const session = sessionResult.rows[0];
+
+      expect(session).toBeDefined();
+
+      if (!session) {
+        throw new Error('Expected session to exist');
+      }
+
+      const revokeResponse = await request(app)
+        .delete(`/auth/sessions/${session.id}`)
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(revokeResponse.status).toBe(204);
+
+      const listResponse = await request(app)
+        .get('/auth/sessions')
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(listResponse.status).toBe(200);
+      expect(listResponse.body.success).toBe(true);
+
+      const returnedIds = listResponse.body.data.sessions.map((item: { id: string }) => item.id);
+
+      expect(returnedIds).not.toContain(session.id);
+
+      await cleanupUser(userId);
     });
   });
 
@@ -1254,29 +1623,7 @@ describe.sequential('Auth integration', () => {
 
       expect(revokedToken.revokedAt).toBeInstanceOf(Date);
 
-      await pool.query(
-        `
-          DELETE FROM refresh_tokens
-          WHERE user_id = $1
-        `,
-        [userId],
-      );
-
-      await pool.query(
-        `
-          DELETE FROM user_credentials
-          WHERE user_id = $1
-        `,
-        [userId],
-      );
-
-      await pool.query(
-        `
-          DELETE FROM users
-          WHERE id = $1
-        `,
-        [userId],
-      );
+      await cleanupUser(userId);
     });
 
     it('rejects logout without a refresh cookie', async () => {
@@ -1336,29 +1683,7 @@ describe.sequential('Auth integration', () => {
       expect(refreshCookie).toContain('HttpOnly');
       expect(refreshCookie).toContain('SameSite');
 
-      await pool.query(
-        `
-          DELETE FROM refresh_tokens
-          WHERE user_id = $1
-        `,
-        [userId],
-      );
-
-      await pool.query(
-        `
-          DELETE FROM user_credentials
-          WHERE user_id = $1
-        `,
-        [userId],
-      );
-
-      await pool.query(
-        `
-          DELETE FROM users
-          WHERE id = $1
-        `,
-        [userId],
-      );
+      await cleanupUser(userId);
     });
   });
 

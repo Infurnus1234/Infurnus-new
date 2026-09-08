@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   rotate: vi.fn(),
   logout: vi.fn(),
   logoutAllForUser: vi.fn(),
+  listActiveSessions: vi.fn(),
+  revokeSession: vi.fn(),
   createAccessToken: vi.fn(),
   findIdentityById: vi.fn(),
 }));
@@ -87,6 +89,11 @@ function createHandlers() {
       logout: mocks.logout,
       logoutAllForUser: mocks.logoutAllForUser,
     } as unknown as AuthControllerDependencies['logoutService'],
+
+    sessionService: {
+      listActiveSessions: mocks.listActiveSessions,
+      revokeSession: mocks.revokeSession,
+    } as unknown as AuthControllerDependencies['sessionService'],
 
     tokenService: {
       createAccessToken: mocks.createAccessToken,
@@ -727,6 +734,247 @@ describe('Auth Controller', () => {
       expect(mocks.logoutAllForUser).toHaveBeenCalledWith(userId);
 
       expect(clearCookie).not.toHaveBeenCalled();
+
+      expect(next).toHaveBeenCalledTimes(1);
+
+      expect(next).toHaveBeenCalledWith(error);
+    });
+  });
+
+  // ==========================================================
+  // listSessions
+  // ==========================================================
+
+  describe('listSessions', () => {
+    it('returns active sessions for the authenticated user', async () => {
+      const userId = '550e8400-e29b-41d4-a716-446655440020';
+
+      const issuedAt = new Date('2026-09-08T10:00:00.000Z');
+      const expiresAt = new Date('2026-10-08T10:00:00.000Z');
+
+      const sessions = [
+        {
+          id: 'session-1',
+          issuedAt,
+          expiresAt,
+          revokedAt: null,
+          userAgent: 'Chrome',
+          ipAddress: '192.168.1.10',
+        },
+        {
+          id: 'session-2',
+          issuedAt,
+          expiresAt,
+          revokedAt: null,
+          userAgent: 'Safari',
+          ipAddress: '192.168.1.20',
+        },
+      ];
+
+      mocks.listActiveSessions.mockResolvedValue(sessions);
+
+      const req = createRequest({
+        auth: {
+          userId,
+          role: 'customer',
+        },
+      });
+
+      const { response, status, json } = createResponseMock();
+
+      const next = createNext();
+
+      await handlers.listSessions(req, response, next);
+
+      expect(next).not.toHaveBeenCalled();
+
+      expect(mocks.listActiveSessions).toHaveBeenCalledTimes(1);
+
+      expect(mocks.listActiveSessions).toHaveBeenCalledWith(userId);
+
+      expect(status).toHaveBeenCalledWith(200);
+
+      expect(json).toHaveBeenCalledWith({
+        success: true,
+        data: {
+          sessions,
+        },
+      });
+    });
+
+    it('rejects unauthenticated session listing', async () => {
+      const req = createRequest({
+        auth: undefined,
+      });
+
+      const { response } = createResponseMock();
+
+      const next = createNext();
+
+      await handlers.listSessions(req, response, next);
+
+      expect(mocks.listActiveSessions).not.toHaveBeenCalled();
+
+      expect(next).toHaveBeenCalledTimes(1);
+
+      expect(next).toHaveBeenCalledWith(
+        expect.objectContaining({
+          code: 'AUTHENTICATION_REQUIRED',
+          statusCode: 401,
+        }),
+      );
+    });
+
+    it('passes session listing errors to error middleware', async () => {
+      const userId = '550e8400-e29b-41d4-a716-446655440021';
+
+      const error = new Error('Session lookup failed');
+
+      mocks.listActiveSessions.mockRejectedValue(error);
+
+      const req = createRequest({
+        auth: {
+          userId,
+          role: 'customer',
+        },
+      });
+
+      const { response } = createResponseMock();
+
+      const next = createNext();
+
+      await handlers.listSessions(req, response, next);
+
+      expect(mocks.listActiveSessions).toHaveBeenCalledWith(userId);
+
+      expect(next).toHaveBeenCalledTimes(1);
+
+      expect(next).toHaveBeenCalledWith(error);
+    });
+  });
+
+  // ==========================================================
+  // revokeSession
+  // ==========================================================
+
+  describe('revokeSession', () => {
+    it('revokes the requested session and returns 204', async () => {
+      const userId = '550e8400-e29b-41d4-a716-446655440022';
+
+      const sessionId = '550e8400-e29b-41d4-a716-446655440023';
+
+      mocks.revokeSession.mockResolvedValue(undefined);
+
+      const req = createRequest({
+        auth: {
+          userId,
+          role: 'customer',
+        },
+        params: {
+          sessionId,
+        },
+      });
+
+      const { response, status, send } = createResponseMock();
+
+      const next = createNext();
+
+      await handlers.revokeSession(req, response, next);
+
+      expect(next).not.toHaveBeenCalled();
+
+      expect(mocks.revokeSession).toHaveBeenCalledTimes(1);
+
+      expect(mocks.revokeSession).toHaveBeenCalledWith(userId, sessionId);
+
+      expect(status).toHaveBeenCalledWith(204);
+
+      expect(send).toHaveBeenCalledWith();
+    });
+
+    it('rejects unauthenticated session revocation', async () => {
+      const sessionId = '550e8400-e29b-41d4-a716-446655440024';
+
+      const req = createRequest({
+        auth: undefined,
+        params: {
+          sessionId,
+        },
+      });
+
+      const { response } = createResponseMock();
+
+      const next = createNext();
+
+      await handlers.revokeSession(req, response, next);
+
+      expect(mocks.revokeSession).not.toHaveBeenCalled();
+
+      expect(next).toHaveBeenCalledTimes(1);
+
+      expect(next).toHaveBeenCalledWith(
+        expect.objectContaining({
+          code: 'AUTHENTICATION_REQUIRED',
+          statusCode: 401,
+        }),
+      );
+    });
+
+    it('rejects a missing session ID', async () => {
+      const userId = '550e8400-e29b-41d4-a716-446655440025';
+
+      const req = createRequest({
+        auth: {
+          userId,
+          role: 'customer',
+        },
+        params: {},
+      });
+
+      const { response } = createResponseMock();
+
+      const next = createNext();
+
+      await handlers.revokeSession(req, response, next);
+
+      expect(mocks.revokeSession).not.toHaveBeenCalled();
+
+      expect(next).toHaveBeenCalledTimes(1);
+
+      expect(next).toHaveBeenCalledWith(
+        expect.objectContaining({
+          code: 'INVALID_SESSION',
+          statusCode: 400,
+        }),
+      );
+    });
+
+    it('passes session revocation errors to error middleware', async () => {
+      const userId = '550e8400-e29b-41d4-a716-446655440026';
+
+      const sessionId = '550e8400-e29b-41d4-a716-446655440027';
+
+      const error = new Error('Session revocation failed');
+
+      mocks.revokeSession.mockRejectedValue(error);
+
+      const req = createRequest({
+        auth: {
+          userId,
+          role: 'customer',
+        },
+        params: {
+          sessionId,
+        },
+      });
+
+      const { response } = createResponseMock();
+
+      const next = createNext();
+
+      await handlers.revokeSession(req, response, next);
+
+      expect(mocks.revokeSession).toHaveBeenCalledWith(userId, sessionId);
 
       expect(next).toHaveBeenCalledTimes(1);
 
