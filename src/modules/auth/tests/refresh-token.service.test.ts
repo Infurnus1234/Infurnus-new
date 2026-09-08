@@ -18,6 +18,8 @@ function createRepositoryMock(): {
     revoke: vi.fn(),
     revokeFamily: vi.fn(),
     revokeAllForUser: vi.fn(),
+    listActiveSessionsForUser: vi.fn(),
+    revokeSessionForUser: vi.fn(),
     rotate,
   };
 

@@ -1,4 +1,7 @@
 import { pool, withTransaction } from '../../../infrastructure/database/postgres.js';
+
+import type { RefreshSessionRecord } from '../types/refresh-session.js';
+
 import type {
   CreateRefreshTokenData,
   RefreshTokenRecord,
@@ -15,6 +18,10 @@ export interface RefreshTokenRepository {
   revokeFamily(familyId: string): Promise<void>;
 
   revokeAllForUser(userId: string): Promise<void>;
+
+  listActiveSessionsForUser(userId: string): Promise<RefreshSessionRecord[]>;
+
+  revokeSessionForUser(userId: string, sessionId: string): Promise<RefreshSessionRecord | null>;
 
   rotate(
     oldTokenHash: string,
@@ -167,6 +174,71 @@ export class PostgresRefreshTokenRepository implements RefreshTokenRepository {
       `,
       [userId],
     );
+  }
+
+  // ============================================================
+  // List active sessions for a user
+  //
+  // Only safe session metadata is selected.
+  // token_hash and replaced_by are intentionally excluded.
+  // ============================================================
+
+  async listActiveSessionsForUser(userId: string): Promise<RefreshSessionRecord[]> {
+    const result = await pool.query<RefreshSessionRecord>(
+      `
+        SELECT
+          id,
+          user_id AS "userId",
+          family_id AS "familyId",
+          issued_at AS "issuedAt",
+          expires_at AS "expiresAt",
+          revoked_at AS "revokedAt",
+          user_agent AS "userAgent",
+          ip_address AS "ipAddress"
+        FROM refresh_tokens
+        WHERE user_id = $1
+          AND revoked_at IS NULL
+          AND expires_at > NOW()
+        ORDER BY issued_at DESC
+      `,
+      [userId],
+    );
+
+    return result.rows;
+  }
+
+  // ============================================================
+  // Revoke one session owned by a user
+  //
+  // userId is part of the UPDATE predicate so a user cannot
+  // revoke another user's session even if they know its ID.
+  // ============================================================
+
+  async revokeSessionForUser(
+    userId: string,
+    sessionId: string,
+  ): Promise<RefreshSessionRecord | null> {
+    const result = await pool.query<RefreshSessionRecord>(
+      `
+        UPDATE refresh_tokens
+        SET revoked_at = NOW()
+        WHERE id = $1
+          AND user_id = $2
+          AND revoked_at IS NULL
+        RETURNING
+          id,
+          user_id AS "userId",
+          family_id AS "familyId",
+          issued_at AS "issuedAt",
+          expires_at AS "expiresAt",
+          revoked_at AS "revokedAt",
+          user_agent AS "userAgent",
+          ip_address AS "ipAddress"
+      `,
+      [sessionId, userId],
+    );
+
+    return result.rows[0] ?? null;
   }
 
   // ============================================================

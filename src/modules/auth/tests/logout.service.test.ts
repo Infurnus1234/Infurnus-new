@@ -22,6 +22,8 @@ function createRepositoryMock(): {
     revoke,
     revokeFamily,
     revokeAllForUser,
+    listActiveSessionsForUser: vi.fn(),
+    revokeSessionForUser: vi.fn(),
     rotate: vi.fn(),
   };
 

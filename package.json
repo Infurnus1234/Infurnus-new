@@ -12,7 +12,9 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "migrate": "tsx src/infrastructure/database/run-migrations.ts",
+    "migrate:baseline": "tsx src/infrastructure/database/baseline-migrations.ts"
   },
   "dependencies": {
     "argon2": "^0.45.1",
