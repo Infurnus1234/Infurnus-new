@@ -9,6 +9,10 @@ import { PostgresPartnerDocumentRepository } from './modules/partners/repositori
 import { PostgresAdminRepository } from './modules/admin/repositories/admin.repository.js';
 import { PostgresUserRepository } from './modules/users/repositories/user.repository.js';
 import { PostgresVehicleRepository } from './modules/vehicles/repositories/vehicle.repository.js';
+import { PostgresRideRepository } from './modules/rides/repositories/ride.repository.js';
+import { PostgresDriverRepository } from './modules/rides/repositories/driver.repository.js';
+import { DriverService } from './modules/rides/services/driver.service.js';
+import { RideService } from './modules/rides/services/ride.service.js';
 
 async function startServer() {
   await checkDatabaseConnection();
@@ -19,10 +23,20 @@ async function startServer() {
     new PostgresVehicleRepository(pool),
     new PostgresPartnerDocumentRepository(pool),
     new PostgresAdminRepository(pool),
+    new PostgresRideRepository(pool),
+    new PostgresDriverRepository(pool),
   );
 
   const server = createServer(app);
-  const io = createSocketServer(server);
+  const rideRepository = new PostgresRideRepository(pool);
+  const driverRepository = new PostgresDriverRepository(pool);
+  const rideService = new RideService(rideRepository, driverRepository);
+  const driverService = new DriverService(driverRepository);
+  const io = createSocketServer(server, {
+    driverService,
+    rideRepository,
+    rideService,
+  });
 
   io.on('connection', (socket) => {
     console.log(`Socket connected: ${socket.id}`);
