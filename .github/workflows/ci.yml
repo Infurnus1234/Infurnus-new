@@ -16,11 +16,11 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16
+        image: postgis/postgis:16-3.4
         env:
           POSTGRES_USER: infurnus
-          POSTGRES_PASSWORD: infurnus_dev
           POSTGRES_DB: infurnus
+          POSTGRES_HOST_AUTH_METHOD: trust
         ports:
           - 5432:5432
         options: >-
@@ -30,7 +30,7 @@ jobs:
           --health-retries=5
 
     env:
-      DATABASE_URL: postgresql://infurnus:infurnus_dev@localhost:5432/infurnus
+      DATABASE_URL: postgresql://infurnus@localhost:5432/infurnus
       JWT_ACCESS_SECRET: ci-test-secret-at-least-32-characters-long
       JWT_ACCESS_PREVIOUS_SECRET: ci-previous-secret-at-least-32-characters-long
       JWT_ACCESS_EXPIRES_IN: 15m
@@ -57,7 +57,7 @@ jobs:
         run: |
           for migration in migrations/*.sql; do
             echo "Running $migration"
-            PGPASSWORD=infurnus_dev psql \
+            psql \
               -h localhost \
               -p 5432 \
               -U infurnus \
