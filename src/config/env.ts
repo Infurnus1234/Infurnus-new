@@ -62,6 +62,17 @@ const envSchema = z
       .default(15 * 60 * 1000),
     AUTH_REFRESH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(30),
 
+    DRIVER_LOCATION_STALE_SECONDS: z.coerce.number().int().positive().default(30),
+    DRIVER_SEARCH_RADIUS_METERS: z.coerce.number().positive().default(5000),
+    MAX_DRIVER_MATCH_CANDIDATES: z.coerce.number().int().positive().default(20),
+    GOOGLE_MAPS_API_KEY: z.string().min(1).optional(),
+    GOOGLE_ROUTE_RECALCULATION_INTERVAL_SECONDS: z.coerce.number().int().positive().default(30),
+    GOOGLE_ROUTE_RECALCULATION_DISTANCE_METERS: z.coerce.number().positive().default(500),
+    GOOGLE_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+    GOOGLE_MAX_RETRIES: z.coerce.number().int().min(0).max(3).default(2),
+    GOOGLE_PLACES_MIN_QUERY_LENGTH: z.coerce.number().int().min(1).default(3),
+    GOOGLE_PLACES_MIN_INTERVAL_MS: z.coerce.number().int().min(0).default(300),
+
     AUTH_LOGOUT_RATE_LIMIT_WINDOW_MS: z.coerce
       .number()
       .int()
