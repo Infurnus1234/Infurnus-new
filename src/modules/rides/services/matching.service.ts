@@ -17,8 +17,10 @@ export class MatchingService {
       env.MAX_DRIVER_MATCH_CANDIDATES,
       new Date(Date.now() - env.DRIVER_LOCATION_STALE_SECONDS * 1000),
     );
+
     if (candidates.length === 0) return null;
     if (!this.maps) return candidates[0] ?? null;
+
     const routes = await this.maps.calculateMatrix(
       candidates.map((candidate) => ({
         latitude: candidate.latitude,
@@ -26,9 +28,17 @@ export class MatchingService {
       })),
       pickup,
     );
+
     return (
       candidates
-        .map((candidate, index) => ({ candidate, route: routes[index] }))
+        .map((candidate) => ({
+          candidate,
+          route: routes.find(
+            (result) =>
+              result.origin.latitude === candidate.latitude &&
+              result.origin.longitude === candidate.longitude,
+          )?.route,
+        }))
         .sort(
           (left, right) =>
             (left.route?.durationSeconds ?? Number.MAX_SAFE_INTEGER) -

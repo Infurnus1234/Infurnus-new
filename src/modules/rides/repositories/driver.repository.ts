@@ -6,6 +6,7 @@ export interface DriverRepository {
   getAvailability(profileId: string): Promise<DriverAvailabilityStatus | null>;
   updateAvailability(profileId: string, status: DriverAvailabilityStatus): Promise<boolean>;
   setBusy(profileId: string, client?: PoolClient): Promise<boolean>;
+  releaseBusy(profileId: string, client?: PoolClient): Promise<boolean>;
   updateLocation(profileId: string, location: DriverLocation): Promise<boolean>;
   markStale(profileId: string): Promise<boolean>;
   findNearbyEligible(
@@ -56,6 +57,19 @@ export class PostgresDriverRepository implements DriverRepository {
     return result.rowCount === 1;
   }
 
+  async releaseBusy(profileId: string, client?: PoolClient): Promise<boolean> {
+    const executor = client ?? this.pool;
+    const result = await executor.query(
+      `UPDATE driver_profiles
+       SET availability_status = 'available'
+       WHERE id = $1
+         AND availability_status = 'busy'
+       RETURNING id`,
+      [profileId],
+    );
+    return result.rowCount === 1;
+  }
+
   async updateLocation(profileId: string, location: DriverLocation): Promise<boolean> {
     const executor: Pool | PoolClient = this.pool;
     const result = await executor.query(
@@ -63,7 +77,14 @@ export class PostgresDriverRepository implements DriverRepository {
        SET last_location = ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography,
            last_location_at = $4,
            availability_status = CASE
-             WHEN availability_status = 'stale' THEN 'available'::driver_availability_status
+             WHEN availability_status = 'stale'
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM rides
+                    WHERE assigned_driver_id = driver_profiles.id
+                      AND status NOT IN ('completed', 'cancelled')
+                  )
+               THEN 'available'::driver_availability_status
              ELSE availability_status
            END
        WHERE id = $1
@@ -114,6 +135,7 @@ export class PostgresDriverRepository implements DriverRepository {
          AND dp.last_location IS NOT NULL
          AND dp.last_location_at >= $5
          AND ST_DWithin(dp.last_location, pickup.point, $3)
+         AND active_ride.id IS NULL
        GROUP BY dp.id, dp.user_id, v.id, pickup.point
        ORDER BY ST_Distance(dp.last_location, pickup.point), dp.id
        LIMIT $4`,
