@@ -1,4 +1,6 @@
 import { createServer } from 'node:http';
+import { GoogleMapsProvider } from './modules/rides/providers/google.maps.provider.js';
+import { RouteRecalculationService } from './modules/rides/services/route-recalculation.service.js';
 
 import { createApp } from './app.js';
 import { env } from './config/env.js';
@@ -32,10 +34,14 @@ async function startServer() {
   const driverRepository = new PostgresDriverRepository(pool);
   const rideService = new RideService(rideRepository, driverRepository);
   const driverService = new DriverService(driverRepository);
+  const googleMapsProvider = new GoogleMapsProvider();
+  const routeRecalculationService = new RouteRecalculationService(googleMapsProvider);
+
   const io = createSocketServer(server, {
     driverService,
     rideRepository,
     rideService,
+    routeRecalculationService,
   });
 
   io.on('connection', (socket) => {

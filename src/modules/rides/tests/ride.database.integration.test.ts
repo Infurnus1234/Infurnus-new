@@ -155,4 +155,52 @@ describeDatabase('ride PostgreSQL integration', () => {
     ]);
     expect(final.rows[0]!.status).toBe('searching');
   });
+  it('does not restore a stale driver to available while an active ride exists', async () => {
+    await service.acceptRide(fixture.driverProfileId, fixture.rideIds[0]!);
+
+    await service.transitionRide(fixture.rideIds[0]!, 'driver_arriving', fixture.driverProfileId);
+
+    await service.transitionRide(fixture.rideIds[0]!, 'driver_arrived', fixture.driverProfileId);
+
+    await service.transitionRide(fixture.rideIds[0]!, 'in_progress', fixture.driverProfileId);
+
+    await pool.query(
+      `UPDATE driver_profiles
+       SET availability_status = 'stale'
+       WHERE id = $1`,
+      [fixture.driverProfileId],
+    );
+
+    const updated = await driverRepository.updateLocation(fixture.driverProfileId, {
+      latitude: 12.9717,
+      longitude: 77.5947,
+      recordedAt: new Date(Date.now() + 1000),
+    });
+
+    expect(updated).toBe(true);
+
+    const driver = await pool.query<{ availability_status: string }>(
+      `SELECT availability_status
+       FROM driver_profiles
+       WHERE id = $1`,
+      [fixture.driverProfileId],
+    );
+
+    expect(driver.rows[0]!.availability_status).toBe('stale');
+  });
+  it('excludes drivers with active rides from nearby eligibility', async () => {
+    await service.acceptRide(fixture.driverProfileId, fixture.rideIds[0]!);
+
+    const candidates = await driverRepository.findNearbyEligible(
+      12.9716,
+      77.5946,
+      5000,
+      10,
+      new Date(Date.now() - 60_000),
+    );
+
+    expect(
+      candidates.some((candidate) => candidate.driverProfileId === fixture.driverProfileId),
+    ).toBe(false);
+  });
 });
