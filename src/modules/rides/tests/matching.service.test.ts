@@ -39,26 +39,49 @@ function driverRepository() {
 describe('MatchingService', () => {
   it('uses the first bounded PostGIS candidate without a map provider', async () => {
     const repo = driverRepository();
+
     await expect(
-      new MatchingService(repo).findBestDriver({ latitude: 12, longitude: 77 }),
+      new MatchingService(repo).findBestDriver({
+        latitude: 12,
+        longitude: 77,
+      }),
     ).resolves.toEqual(candidates[0]);
+
     expect(repo.findNearbyEligible).toHaveBeenCalledTimes(1);
   });
 
   it('uses route duration after spatial reduction', async () => {
     const repo = driverRepository();
+
     const maps: MapProvider = {
       calculateRoute: vi.fn(),
       calculateMatrix: vi.fn().mockResolvedValue([
-        { distanceMeters: 200, durationSeconds: 100 },
-        { distanceMeters: 100, durationSeconds: 50 },
+        {
+          origin: { latitude: 12.1, longitude: 77.1 },
+          route: {
+            distanceMeters: 200,
+            durationSeconds: 100,
+          },
+        },
+        {
+          origin: { latitude: 12.2, longitude: 77.2 },
+          route: {
+            distanceMeters: 100,
+            durationSeconds: 50,
+          },
+        },
       ]),
       geocode: vi.fn(),
       places: vi.fn(),
     };
+
     await expect(
-      new MatchingService(repo, maps).findBestDriver({ latitude: 12, longitude: 77 }),
+      new MatchingService(repo, maps).findBestDriver({
+        latitude: 12,
+        longitude: 77,
+      }),
     ).resolves.toEqual(candidates[1]);
+
     expect(maps.calculateMatrix).toHaveBeenCalledWith(
       [
         { latitude: 12.1, longitude: 77.1 },
@@ -68,6 +91,36 @@ describe('MatchingService', () => {
     );
   });
 
+  it('keeps Google matrix routes aligned with their candidate origins', async () => {
+    const repo = driverRepository();
+
+    const maps: MapProvider = {
+      calculateRoute: vi.fn(),
+      calculateMatrix: vi.fn().mockResolvedValue([
+        {
+          origin: { latitude: 12.1, longitude: 77.1 },
+          route: null,
+        },
+        {
+          origin: { latitude: 12.2, longitude: 77.2 },
+          route: {
+            distanceMeters: 100,
+            durationSeconds: 50,
+          },
+        },
+      ]),
+      geocode: vi.fn(),
+      places: vi.fn(),
+    };
+
+    await expect(
+      new MatchingService(repo, maps).findBestDriver({
+        latitude: 12,
+        longitude: 77,
+      }),
+    ).resolves.toEqual(candidates[1]);
+  });
+
   it('falls back to deterministic spatial ranking when routing fails', async () => {
     const maps: MapProvider = {
       calculateRoute: vi.fn(),
@@ -75,16 +128,25 @@ describe('MatchingService', () => {
       geocode: vi.fn(),
       places: vi.fn(),
     };
+
     await expect(
-      new MatchingService(driverRepository(), maps).findBestDriver({ latitude: 12, longitude: 77 }),
+      new MatchingService(driverRepository(), maps).findBestDriver({
+        latitude: 12,
+        longitude: 77,
+      }),
     ).resolves.toEqual(candidates[1]);
   });
 
   it('returns no match for an empty eligible candidate set', async () => {
     const repo = driverRepository();
+
     vi.mocked(repo.findNearbyEligible).mockResolvedValue([]);
+
     await expect(
-      new MatchingService(repo).findBestDriver({ latitude: 12, longitude: 77 }),
+      new MatchingService(repo).findBestDriver({
+        latitude: 12,
+        longitude: 77,
+      }),
     ).resolves.toBeNull();
   });
 });

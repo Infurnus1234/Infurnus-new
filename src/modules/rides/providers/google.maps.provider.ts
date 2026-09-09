@@ -1,5 +1,11 @@
 import { env } from '../../../config/env.js';
-import type { Coordinates, MapProvider, PlaceSuggestion, RouteResult } from './map.provider.js';
+import type {
+  Coordinates,
+  MapProvider,
+  MatrixRouteResult,
+  PlaceSuggestion,
+  RouteResult,
+} from './map.provider.js';
 
 interface GoogleResponse {
   status?: string;
@@ -41,20 +47,33 @@ export class GoogleMapsProvider implements MapProvider {
         key: this.apiKey,
       },
     );
+
     const leg = response?.routes?.[0]?.legs?.[0];
+
     if (!leg?.distance?.value || !leg.duration?.value) return null;
+
     const route: RouteResult = {
       distanceMeters: leg.distance.value,
       durationSeconds: leg.duration.value,
     };
+
     const encodedPolyline = response?.routes?.[0]?.overview_polyline?.points;
-    if (encodedPolyline) route.encodedPolyline = encodedPolyline;
+
+    if (encodedPolyline) {
+      route.encodedPolyline = encodedPolyline;
+    }
+
     return route;
   }
 
-  async calculateMatrix(origins: Coordinates[], destination: Coordinates): Promise<RouteResult[]> {
+  async calculateMatrix(
+    origins: Coordinates[],
+    destination: Coordinates,
+  ): Promise<MatrixRouteResult[]> {
     const boundedOrigins = origins.slice(0, env.MAX_DRIVER_MATCH_CANDIDATES);
+
     if (boundedOrigins.length === 0) return [];
+
     const response = await this.request<GoogleResponse>(
       'https://maps.googleapis.com/maps/api/distancematrix/json',
       {
@@ -63,15 +82,31 @@ export class GoogleMapsProvider implements MapProvider {
         key: this.apiKey,
       },
     );
-    const elements = response?.rows?.flatMap((row) => row.elements ?? []) ?? [];
-    return elements
-      .filter(
-        (element) => element.status === 'OK' && element.distance?.value && element.duration?.value,
-      )
-      .map((element) => ({
-        distanceMeters: element.distance!.value!,
-        durationSeconds: element.duration!.value!,
-      }));
+
+    const elements = response?.rows?.[0]?.elements ?? [];
+
+    return boundedOrigins.map((origin, index) => {
+      const element = elements[index];
+
+      if (
+        element?.status !== 'OK' ||
+        typeof element.distance?.value !== 'number' ||
+        typeof element.duration?.value !== 'number'
+      ) {
+        return {
+          origin,
+          route: null,
+        };
+      }
+
+      return {
+        origin,
+        route: {
+          distanceMeters: element.distance.value,
+          durationSeconds: element.duration.value,
+        },
+      };
+    });
   }
 
   async geocode(address: string): Promise<Coordinates | null> {
@@ -82,24 +117,48 @@ export class GoogleMapsProvider implements MapProvider {
         key: this.apiKey,
       },
     );
+
     const location = response?.results?.[0]?.geometry?.location;
-    if (typeof location?.lat !== 'number' || typeof location.lng !== 'number') return null;
-    return { latitude: location.lat, longitude: location.lng };
+
+    if (typeof location?.lat !== 'number' || typeof location.lng !== 'number') {
+      return null;
+    }
+
+    return {
+      latitude: location.lat,
+      longitude: location.lng,
+    };
   }
 
   async places(query: string): Promise<PlaceSuggestion[]> {
-    if (query.trim().length < env.GOOGLE_PLACES_MIN_QUERY_LENGTH) return [];
-    if (this.now() - this.lastPlacesRequestAt < env.GOOGLE_PLACES_MIN_INTERVAL_MS) return [];
+    if (query.trim().length < env.GOOGLE_PLACES_MIN_QUERY_LENGTH) {
+      return [];
+    }
+
+    if (this.now() - this.lastPlacesRequestAt < env.GOOGLE_PLACES_MIN_INTERVAL_MS) {
+      return [];
+    }
+
     this.lastPlacesRequestAt = this.now();
+
     const response = await this.request<GoogleResponse>(
       'https://maps.googleapis.com/maps/api/place/autocomplete/json',
-      { input: query.trim(), key: this.apiKey },
+      {
+        input: query.trim(),
+        key: this.apiKey,
+      },
     );
+
     return (response?.predictions ?? [])
       .slice(0, 5)
       .flatMap((prediction) =>
         prediction.place_id && prediction.description
-          ? [{ placeId: prediction.place_id, description: prediction.description }]
+          ? [
+              {
+                placeId: prediction.place_id,
+                description: prediction.description,
+              },
+            ]
           : [],
       );
   }
@@ -109,20 +168,37 @@ export class GoogleMapsProvider implements MapProvider {
     parameters: Record<string, string | undefined>,
   ): Promise<T | null> {
     if (!this.apiKey) return null;
+
     const requestUrl = `${url}?${new URLSearchParams(
       Object.entries(parameters).filter(
         (entry): entry is [string, string] => typeof entry[1] === 'string',
       ),
     )}`;
+
     for (let attempt = 0; attempt <= env.GOOGLE_MAX_RETRIES; attempt += 1) {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), env.GOOGLE_REQUEST_TIMEOUT_MS);
+      const timeout = setTimeout(
+        () => controller.abort(),
+        env.GOOGLE_REQUEST_TIMEOUT_MS,
+      );
+
       try {
-        const response = await this.fetcher(requestUrl, { signal: controller.signal });
-        if (response.ok) return (await response.json()) as T;
-        if (response.status < 500 && response.status !== 429) return null;
+        const response = await this.fetcher(requestUrl, {
+          signal: controller.signal,
+        });
+
+        if (response.ok) {
+          return (await response.json()) as T;
+        }
+
+        if (response.status < 500 && response.status !== 429) {
+          return null;
+        }
+
         if (attempt < env.GOOGLE_MAX_RETRIES) {
-          await new Promise((resolve) => setTimeout(resolve, Math.min(50 * 2 ** attempt, 500)));
+          await new Promise((resolve) =>
+            setTimeout(resolve, Math.min(50 * 2 ** attempt, 500)),
+          );
         }
       } catch (error) {
         this.logger('google_maps_request_failed', {
@@ -130,14 +206,22 @@ export class GoogleMapsProvider implements MapProvider {
           attempt,
           reason: error instanceof Error ? error.name : 'unknown',
         });
+
         if (attempt < env.GOOGLE_MAX_RETRIES) {
-          await new Promise((resolve) => setTimeout(resolve, Math.min(50 * 2 ** attempt, 500)));
+          await new Promise((resolve) =>
+            setTimeout(resolve, Math.min(50 * 2 ** attempt, 500)),
+          );
         }
       } finally {
         clearTimeout(timeout);
       }
     }
-    this.logger('google_maps_request_exhausted', { url, retries: env.GOOGLE_MAX_RETRIES });
+
+    this.logger('google_maps_request_exhausted', {
+      url,
+      retries: env.GOOGLE_MAX_RETRIES,
+    });
+
     return null;
   }
 }

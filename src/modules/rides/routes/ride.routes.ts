@@ -11,6 +11,7 @@ export function createRideRouter(controller: RideController, driverController?: 
     router.patch('/driver/availability', requireRoles('driver'), driverController.availability);
     router.post('/driver/location', requireRoles('driver'), driverController.location);
     router.post('/:id/accept', requireRoles('driver'), driverController.accept);
+    router.post('/:id/complete', requireRoles('driver'), driverController.complete);
     router.post('/:id/status', requireRoles('driver'), driverController.transition);
   }
   router.post('/', controller.create);

@@ -45,6 +45,17 @@ export class DriverController {
     }
   };
 
+  complete = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = rideIdSchema.parse(req.params);
+      const profileId = await this.driverService.profileForUser(req.auth!.userId);
+      const ride = await this.rideService.completeRide(id, profileId);
+      res.json({ success: true, data: ride, message: 'Ride completed' });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   transition = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { id } = rideIdSchema.parse(req.params);

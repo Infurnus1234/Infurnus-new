@@ -66,6 +66,10 @@ describeLoad('controlled ride load benchmark', () => {
       rideRepository: rideRepository as never,
       driverService: driverService as never,
       rideService: rideService as never,
+      routeRecalculationService: {
+        shouldRecalculate: () => false,
+        calculate: async () => null,
+      } as never,
     });
     await new Promise<void>((resolve) => httpServer?.listen(0, '127.0.0.1', () => resolve()));
     const address = httpServer.address();

@@ -44,6 +44,12 @@ describe('ride Socket.IO reconnect integration', () => {
       isAssignedDriver: vi.fn().mockResolvedValue(false),
     };
     const dependencies = {
+      routeRecalculationService: {
+        provider: {} as never,
+        clock: Date.now,
+        shouldRecalculate: () => false,
+        calculate: async () => null,
+      } as never,
       rideRepository: rideRepository as unknown as RideRepository,
       driverService: {} as never,
       rideService: {} as never,

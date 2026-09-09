@@ -9,6 +9,11 @@ export interface RouteResult {
   encodedPolyline?: string;
 }
 
+export interface MatrixRouteResult {
+  origin: Coordinates;
+  route: RouteResult | null;
+}
+
 export interface PlaceSuggestion {
   placeId: string;
   description: string;
@@ -16,7 +21,10 @@ export interface PlaceSuggestion {
 
 export interface MapProvider {
   calculateRoute(origin: Coordinates, destination: Coordinates): Promise<RouteResult | null>;
-  calculateMatrix(origins: Coordinates[], destination: Coordinates): Promise<RouteResult[]>;
+  calculateMatrix(
+    origins: Coordinates[],
+    destination: Coordinates,
+  ): Promise<MatrixRouteResult[]>;
   geocode(address: string): Promise<Coordinates | null>;
   places(query: string): Promise<PlaceSuggestion[]>;
 }
