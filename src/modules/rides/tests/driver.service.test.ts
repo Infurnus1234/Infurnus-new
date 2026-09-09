@@ -12,6 +12,7 @@ function repository(overrides: Partial<DriverRepository> = {}): DriverRepository
     getAvailability: vi.fn().mockResolvedValue('unavailable'),
     updateAvailability: vi.fn().mockResolvedValue(true),
     setBusy: vi.fn().mockResolvedValue(true),
+    releaseBusy: vi.fn().mockResolvedValue(true),
     updateLocation: vi.fn().mockResolvedValue(true),
     markStale: vi.fn().mockResolvedValue(true),
     findNearbyEligible: vi.fn().mockResolvedValue([]),

@@ -3,6 +3,19 @@ import { env } from '../../../config/env.js';
 import type { CreateRideInput, ListRidesInput } from '../schemas/ride.schemas.js';
 import type { Ride } from '../types/ride.js';
 
+export interface RouteMetadata {
+  lastCalculatedAt: number | null;
+  lastOrigin: {
+    latitude: number;
+    longitude: number;
+  } | null;
+  route: {
+    distanceMeters: number;
+    durationSeconds: number;
+    encodedPolyline?: string;
+  } | null;
+}
+
 export interface RideRepository {
   create(customerId: string, input: CreateRideInput): Promise<Ride>;
   findByIdForCustomer(id: string, customerId: string): Promise<Ride | null>;
@@ -15,8 +28,15 @@ export interface RideRepository {
     assignedDriverId?: string,
     client?: PoolClient,
   ): Promise<Ride | null>;
+  complete(id: string, assignedDriverId: string, client: PoolClient): Promise<Ride | null>;
   isParticipant(id: string, userId: string): Promise<boolean>;
   isAssignedDriver(id: string, userId: string): Promise<boolean>;
+  getRouteMetadata(id: string): Promise<RouteMetadata | null>;
+  getDestination(id: string): Promise<{
+    latitude: number;
+    longitude: number;
+  } | null>;
+  updateRouteMetadata(id: string, metadata: RouteMetadata): Promise<boolean>;
 }
 
 const projection = `
@@ -35,7 +55,10 @@ function mapRide(row: Record<string, unknown>): Ride {
     customerId: row.customerId as string,
     assignedDriverId: row.assignedDriverId as string | null,
     assignedVehicleId: row.assignedVehicleId as string | null,
-    pickup: { latitude: row.pickupLatitude as number, longitude: row.pickupLongitude as number },
+    pickup: {
+      latitude: row.pickupLatitude as number,
+      longitude: row.pickupLongitude as number,
+    },
     destination: {
       latitude: row.destinationLatitude as number,
       longitude: row.destinationLongitude as number,
@@ -58,8 +81,13 @@ export class PostgresRideRepository implements RideRepository {
     const result = await this.pool.query(
       `INSERT INTO rides
        (customer_id, pickup_location, destination_location, pickup_address, destination_address)
-       VALUES ($1, ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography,
-          ST_SetSRID(ST_MakePoint($4, $5), 4326)::geography, $6, $7)
+       VALUES (
+         $1,
+         ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography,
+         ST_SetSRID(ST_MakePoint($4, $5), 4326)::geography,
+         $6,
+         $7
+       )
        RETURNING ${projection}`,
       [
         customerId,
@@ -71,25 +99,34 @@ export class PostgresRideRepository implements RideRepository {
         input.destinationAddress ?? null,
       ],
     );
+
     return mapRide(result.rows[0]);
   }
 
   async findByIdForCustomer(id: string, customerId: string): Promise<Ride | null> {
     const result = await this.pool.query(
-      `SELECT ${projection} FROM rides WHERE id = $1 AND customer_id = $2`,
+      `SELECT ${projection}
+       FROM rides
+       WHERE id = $1
+         AND customer_id = $2`,
       [id, customerId],
     );
+
     return result.rows[0] ? mapRide(result.rows[0]) : null;
   }
 
   async listForCustomer(customerId: string, query: ListRidesInput): Promise<Ride[]> {
     const result = await this.pool.query(
-      `SELECT ${projection} FROM rides
-       WHERE customer_id = $1 AND ($2::ride_status IS NULL OR status = $2)
+      `SELECT ${projection}
+       FROM rides
+       WHERE customer_id = $1
+         AND ($2::ride_status IS NULL OR status = $2)
          AND ($3::timestamptz IS NULL OR created_at < $3)
-       ORDER BY created_at DESC, id DESC LIMIT $4`,
+       ORDER BY created_at DESC, id DESC
+       LIMIT $4`,
       [customerId, query.status ?? null, query.cursor ?? null, query.limit],
     );
+
     return result.rows.map(mapRide);
   }
 
@@ -100,41 +137,66 @@ export class PostgresRideRepository implements RideRepository {
     client: PoolClient | Pool = this.pool,
   ): Promise<Ride | null> {
     const result = await client.query(
-      `UPDATE rides SET status = 'cancelled', cancellation_reason = $3, cancelled_at = NOW()
-       WHERE id = $1 AND customer_id = $2
-         AND status IN ('requested', 'searching', 'driver_assigned', 'driver_arriving', 'driver_arrived')
+      `UPDATE rides
+       SET status = 'cancelled',
+           cancellation_reason = $3,
+           cancelled_at = NOW()
+       WHERE id = $1
+         AND customer_id = $2
+         AND status IN (
+           'requested',
+           'searching',
+           'driver_assigned',
+           'driver_arriving',
+           'driver_arrived'
+         )
        RETURNING ${projection}`,
       [id, customerId, reason],
     );
+
     return result.rows[0] ? mapRide(result.rows[0]) : null;
   }
 
-  async accept(id: string, driverProfileId: string, client: PoolClient | Pool = this.pool) {
+  async accept(
+    id: string,
+    driverProfileId: string,
+    client: PoolClient | Pool = this.pool,
+  ): Promise<Ride | null> {
     const result = await client.query(
       `UPDATE rides r
        SET assigned_driver_id = $2,
            assigned_vehicle_id = (
-             SELECT v.id FROM vehicles v
-             WHERE v.driver_profile_id = $2 AND v.is_active = TRUE
-             ORDER BY v.id LIMIT 1
+             SELECT v.id
+             FROM vehicles v
+             WHERE v.driver_profile_id = $2
+               AND v.is_active = TRUE
+             ORDER BY v.id
+             LIMIT 1
            ),
            status = 'driver_assigned'
-       WHERE r.id = $1 AND r.status = 'searching'
+       WHERE r.id = $1
+         AND r.status = 'searching'
          AND EXISTS (
-           SELECT 1 FROM driver_profiles dp
+           SELECT 1
+           FROM driver_profiles dp
            JOIN users u ON u.id = dp.user_id
-           WHERE dp.id = $2 AND u.status = 'active'
+           WHERE dp.id = $2
+             AND u.status = 'active'
              AND dp.verification_status = 'approved'
              AND dp.availability_status = 'available'
-             AND dp.last_location_at >= NOW() - ($3::int * INTERVAL '1 second')
+             AND dp.last_location_at >= NOW() -
+               ($3::int * INTERVAL '1 second')
          )
          AND EXISTS (
-           SELECT 1 FROM vehicles v
-           WHERE v.driver_profile_id = $2 AND v.is_active = TRUE
+           SELECT 1
+           FROM vehicles v
+           WHERE v.driver_profile_id = $2
+             AND v.is_active = TRUE
          )
        RETURNING ${projection}`,
       [id, driverProfileId, env.DRIVER_LOCATION_STALE_SECONDS],
     );
+
     return result.rows[0] ? mapRide(result.rows[0]) : null;
   }
 
@@ -143,33 +205,106 @@ export class PostgresRideRepository implements RideRepository {
     status: Ride['status'],
     assignedDriverId?: string,
     client: PoolClient | Pool = this.pool,
-  ) {
+  ): Promise<Ride | null> {
     const result = await client.query(
-      `UPDATE rides SET status = $2::ride_status
-       WHERE id = $1 AND ($3::uuid IS NULL OR assigned_driver_id = $3)
+      `UPDATE rides
+       SET status = $2::ride_status
+       WHERE id = $1
+         AND ($3::uuid IS NULL OR assigned_driver_id = $3)
        RETURNING ${projection}`,
       [id, status, assignedDriverId ?? null],
     );
+
+    return result.rows[0] ? mapRide(result.rows[0]) : null;
+  }
+
+  async complete(id: string, assignedDriverId: string, client: PoolClient): Promise<Ride | null> {
+    const result = await client.query(
+      `UPDATE rides
+       SET status = 'completed',
+           completed_at = NOW()
+       WHERE id = $1
+         AND assigned_driver_id = $2
+         AND status = 'in_progress'
+       RETURNING ${projection}`,
+      [id, assignedDriverId],
+    );
+
     return result.rows[0] ? mapRide(result.rows[0]) : null;
   }
 
   async isParticipant(id: string, userId: string): Promise<boolean> {
     const result = await this.pool.query(
-      `SELECT 1 FROM rides r
-       LEFT JOIN driver_profiles dp ON dp.id = r.assigned_driver_id
-       WHERE r.id = $1 AND (r.customer_id = $2 OR dp.user_id = $2)`,
+      `SELECT 1
+       FROM rides r
+       LEFT JOIN driver_profiles dp
+         ON dp.id = r.assigned_driver_id
+       WHERE r.id = $1
+         AND (r.customer_id = $2 OR dp.user_id = $2)`,
       [id, userId],
     );
+
     return result.rowCount === 1;
   }
 
   async isAssignedDriver(id: string, userId: string): Promise<boolean> {
     const result = await this.pool.query(
-      `SELECT 1 FROM rides r
-       JOIN driver_profiles dp ON dp.id = r.assigned_driver_id
-       WHERE r.id = $1 AND dp.user_id = $2`,
+      `SELECT 1
+       FROM rides r
+       JOIN driver_profiles dp
+         ON dp.id = r.assigned_driver_id
+       WHERE r.id = $1
+         AND dp.user_id = $2`,
       [id, userId],
     );
+
+    return result.rowCount === 1;
+  }
+
+  async getRouteMetadata(id: string): Promise<RouteMetadata | null> {
+    const result = await this.pool.query(
+      `SELECT route_metadata AS "routeMetadata"
+       FROM rides
+       WHERE id = $1`,
+      [id],
+    );
+
+    if (!result.rows[0]?.routeMetadata) {
+      return null;
+    }
+
+    return result.rows[0].routeMetadata as RouteMetadata;
+  }
+
+  async getDestination(id: string): Promise<{ latitude: number; longitude: number } | null> {
+    const result = await this.pool.query(
+      `SELECT
+         ST_Y(destination_location::geometry) AS latitude,
+         ST_X(destination_location::geometry) AS longitude
+       FROM rides
+       WHERE id = $1`,
+      [id],
+    );
+
+    if (!result.rows[0]) {
+      return null;
+    }
+
+    return {
+      latitude: Number(result.rows[0].latitude),
+      longitude: Number(result.rows[0].longitude),
+    };
+  }
+
+  async updateRouteMetadata(id: string, metadata: RouteMetadata): Promise<boolean> {
+    const result = await this.pool.query(
+      `UPDATE rides
+       SET route_metadata = $2::jsonb,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [id, JSON.stringify(metadata)],
+    );
+
     return result.rowCount === 1;
   }
 }

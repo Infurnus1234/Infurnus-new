@@ -68,7 +68,49 @@ export class RideService {
     }
   }
 
+  async completeRide(id: string, driverProfileId: string) {
+    return withTransaction(async (client) => {
+      const ride = await this.repository.complete(id, driverProfileId, client);
+
+      if (!ride) {
+        throw new AppError(
+          'RIDE_COMPLETION_CONFLICT',
+          'Ride cannot be completed in its current state',
+          409,
+        );
+      }
+
+      if (!this.driverRepository) {
+        throw new AppError(
+          'DRIVER_REPOSITORY_UNAVAILABLE',
+          'Driver repository is unavailable',
+          500,
+        );
+      }
+
+      const released = await this.driverRepository.releaseBusy(driverProfileId, client);
+
+      if (!released) {
+        throw new AppError('DRIVER_RELEASE_CONFLICT', 'Assigned driver could not be released', 409);
+      }
+
+      return ride;
+    });
+  }
+
   async transitionRide(id: string, status: RideStatus, assignedDriverId?: string) {
+    if (status === 'completed') {
+      if (!assignedDriverId) {
+        throw new AppError(
+          'RIDE_TRANSITION_CONFLICT',
+          'Assigned driver is required to complete a ride',
+          409,
+        );
+      }
+
+      return this.completeRide(id, assignedDriverId);
+    }
+
     try {
       const ride = await this.repository.transition(id, status, assignedDriverId);
       if (!ride) throw new AppError('RIDE_NOT_FOUND', 'Ride not found', 404);
