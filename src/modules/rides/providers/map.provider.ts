@@ -21,10 +21,7 @@ export interface PlaceSuggestion {
 
 export interface MapProvider {
   calculateRoute(origin: Coordinates, destination: Coordinates): Promise<RouteResult | null>;
-  calculateMatrix(
-    origins: Coordinates[],
-    destination: Coordinates,
-  ): Promise<MatrixRouteResult[]>;
+  calculateMatrix(origins: Coordinates[], destination: Coordinates): Promise<MatrixRouteResult[]>;
   geocode(address: string): Promise<Coordinates | null>;
   places(query: string): Promise<PlaceSuggestion[]>;
 }

@@ -35,14 +35,14 @@ async function startServer() {
   const rideService = new RideService(rideRepository, driverRepository);
   const driverService = new DriverService(driverRepository);
   const googleMapsProvider = new GoogleMapsProvider();
-const routeRecalculationService = new RouteRecalculationService(googleMapsProvider);
+  const routeRecalculationService = new RouteRecalculationService(googleMapsProvider);
 
-const io = createSocketServer(server, {
-  driverService,
-  rideRepository,
-  rideService,
-  routeRecalculationService,
-});
+  const io = createSocketServer(server, {
+    driverService,
+    rideRepository,
+    rideService,
+    routeRecalculationService,
+  });
 
   io.on('connection', (socket) => {
     console.log(`Socket connected: ${socket.id}`);
