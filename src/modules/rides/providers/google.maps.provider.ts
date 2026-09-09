@@ -149,18 +149,16 @@ export class GoogleMapsProvider implements MapProvider {
       },
     );
 
-    return (response?.predictions ?? [])
-      .slice(0, 5)
-      .flatMap((prediction) =>
-        prediction.place_id && prediction.description
-          ? [
-              {
-                placeId: prediction.place_id,
-                description: prediction.description,
-              },
-            ]
-          : [],
-      );
+    return (response?.predictions ?? []).slice(0, 5).flatMap((prediction) =>
+      prediction.place_id && prediction.description
+        ? [
+            {
+              placeId: prediction.place_id,
+              description: prediction.description,
+            },
+          ]
+        : [],
+    );
   }
 
   private async request<T>(
@@ -177,10 +175,7 @@ export class GoogleMapsProvider implements MapProvider {
 
     for (let attempt = 0; attempt <= env.GOOGLE_MAX_RETRIES; attempt += 1) {
       const controller = new AbortController();
-      const timeout = setTimeout(
-        () => controller.abort(),
-        env.GOOGLE_REQUEST_TIMEOUT_MS,
-      );
+      const timeout = setTimeout(() => controller.abort(), env.GOOGLE_REQUEST_TIMEOUT_MS);
 
       try {
         const response = await this.fetcher(requestUrl, {
@@ -196,9 +191,7 @@ export class GoogleMapsProvider implements MapProvider {
         }
 
         if (attempt < env.GOOGLE_MAX_RETRIES) {
-          await new Promise((resolve) =>
-            setTimeout(resolve, Math.min(50 * 2 ** attempt, 500)),
-          );
+          await new Promise((resolve) => setTimeout(resolve, Math.min(50 * 2 ** attempt, 500)));
         }
       } catch (error) {
         this.logger('google_maps_request_failed', {
@@ -208,9 +201,7 @@ export class GoogleMapsProvider implements MapProvider {
         });
 
         if (attempt < env.GOOGLE_MAX_RETRIES) {
-          await new Promise((resolve) =>
-            setTimeout(resolve, Math.min(50 * 2 ** attempt, 500)),
-          );
+          await new Promise((resolve) => setTimeout(resolve, Math.min(50 * 2 ** attempt, 500)));
         }
       } finally {
         clearTimeout(timeout);

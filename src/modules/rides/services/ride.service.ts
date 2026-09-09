@@ -91,11 +91,7 @@ export class RideService {
       const released = await this.driverRepository.releaseBusy(driverProfileId, client);
 
       if (!released) {
-        throw new AppError(
-          'DRIVER_RELEASE_CONFLICT',
-          'Assigned driver could not be released',
-          409,
-        );
+        throw new AppError('DRIVER_RELEASE_CONFLICT', 'Assigned driver could not be released', 409);
       }
 
       return ride;

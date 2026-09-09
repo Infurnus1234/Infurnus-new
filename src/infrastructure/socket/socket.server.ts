@@ -20,10 +20,7 @@ export interface RideSocketDependencies {
 
 interface SocketAck {
   (response: { success: true; data?: unknown }): void;
-  (response: {
-    success: false;
-    error: { code: string; message: string };
-  }): void;
+  (response: { success: false; error: { code: string; message: string } }): void;
 }
 
 export function createSocketServer(
@@ -54,22 +51,13 @@ export function createSocketServer(
         try {
           if (
             typeof rideId !== 'string' ||
-            !(await rideDependencies.rideRepository.isParticipant(
-              rideId,
-              userId!,
-            ))
+            !(await rideDependencies.rideRepository.isParticipant(rideId, userId!))
           ) {
             throw new Error('Ride room authorization failed');
           }
 
-          await joinAuthorizedRideRoom(
-            socket,
-            rideId,
-            (participantId, participantRideId) =>
-              rideDependencies.rideRepository.isParticipant(
-                participantRideId,
-                participantId,
-              ),
+          await joinAuthorizedRideRoom(socket, rideId, (participantId, participantRideId) =>
+            rideDependencies.rideRepository.isParticipant(participantRideId, participantId),
           );
 
           ack?.({
@@ -95,191 +83,154 @@ export function createSocketServer(
         ack?.({ success: true });
       });
 
-      socket.on(
-        'driver:location',
-        async (payload: unknown, ack?: SocketAck) => {
-          try {
-            if (
-              socket.data.auth?.role !== 'driver' ||
-              typeof payload !== 'object' ||
-              payload === null
-            ) {
-              throw new Error('Driver authorization failed');
-            }
+      socket.on('driver:location', async (payload: unknown, ack?: SocketAck) => {
+        try {
+          if (
+            socket.data.auth?.role !== 'driver' ||
+            typeof payload !== 'object' ||
+            payload === null
+          ) {
+            throw new Error('Driver authorization failed');
+          }
 
-            const { rideId, ...locationPayload } =
-              payload as Record<string, unknown>;
+          const { rideId, ...locationPayload } = payload as Record<string, unknown>;
 
-            if (
-              typeof rideId !== 'string' ||
-              !(await rideDependencies.rideRepository.isAssignedDriver(
-                rideId,
-                userId!,
-              ))
-            ) {
-              throw new Error('Driver ride authorization failed');
-            }
+          if (
+            typeof rideId !== 'string' ||
+            !(await rideDependencies.rideRepository.isAssignedDriver(rideId, userId!))
+          ) {
+            throw new Error('Driver ride authorization failed');
+          }
 
-            const location =
-              driverLocationSchema.parse(locationPayload);
+          const location = driverLocationSchema.parse(locationPayload);
 
-            await rideDependencies.driverService.updateLocation(
-              userId!,
+          await rideDependencies.driverService.updateLocation(userId!, location);
+
+          io.to(rideRoom(rideId)).emit('ride:driver_location_updated', {
+            rideId,
+            location,
+          });
+
+          const routeMetadata = await rideDependencies.rideRepository.getRouteMetadata(rideId);
+
+          const destination = await rideDependencies.rideRepository.getDestination(rideId);
+
+          if (destination) {
+            const shouldRecalculate = rideDependencies.routeRecalculationService.shouldRecalculate(
+              routeMetadata?.lastCalculatedAt ?? null,
+              routeMetadata?.lastOrigin ?? null,
               location,
             );
 
-            io.to(rideRoom(rideId)).emit(
-              'ride:driver_location_updated',
-              {
-                rideId,
+            if (shouldRecalculate) {
+              const route = await rideDependencies.routeRecalculationService.calculate(
                 location,
-              },
-            );
+                destination,
+              );
 
-            const routeMetadata =
-              await rideDependencies.rideRepository.getRouteMetadata(rideId);
+              if (route) {
+                const metadata = {
+                  lastCalculatedAt: Date.now(),
+                  lastOrigin: location,
+                  route,
+                };
 
-            const destination =
-              await rideDependencies.rideRepository.getDestination(rideId);
-
-            if (destination) {
-              const shouldRecalculate =
-                rideDependencies.routeRecalculationService.shouldRecalculate(
-                  routeMetadata?.lastCalculatedAt ?? null,
-                  routeMetadata?.lastOrigin ?? null,
-                  location,
+                const updated = await rideDependencies.rideRepository.updateRouteMetadata(
+                  rideId,
+                  metadata,
                 );
 
-              if (shouldRecalculate) {
-                const route =
-                  await rideDependencies.routeRecalculationService.calculate(
-                    location,
-                    destination,
-                  );
-
-                if (route) {
-                  const metadata = {
-                    lastCalculatedAt: Date.now(),
-                    lastOrigin: location,
+                if (updated) {
+                  io.to(rideRoom(rideId)).emit('ride:route_updated', {
+                    rideId,
                     route,
-                  };
-
-                  const updated =
-                    await rideDependencies.rideRepository.updateRouteMetadata(
-                      rideId,
-                      metadata,
-                    );
-
-                  if (updated) {
-                    io.to(rideRoom(rideId)).emit('ride:route_updated', {
-                      rideId,
-                      route,
-                    });
-                  }
+                  });
                 }
               }
             }
-
-            ack?.({ success: true });
-          } catch {
-            ack?.({
-              success: false,
-              error: {
-                code: 'DRIVER_LOCATION_FORBIDDEN',
-                message: 'Driver location update denied',
-              },
-            });
           }
-        },
-      );
 
-      socket.on(
-        'driver:accept',
-        async (rideId: unknown, ack?: SocketAck) => {
-          try {
-            if (
-              socket.data.auth?.role !== 'driver' ||
-              typeof rideId !== 'string'
-            ) {
-              throw new Error('Driver authorization failed');
-            }
+          ack?.({ success: true });
+        } catch {
+          ack?.({
+            success: false,
+            error: {
+              code: 'DRIVER_LOCATION_FORBIDDEN',
+              message: 'Driver location update denied',
+            },
+          });
+        }
+      });
 
-            const profileId =
-              await rideDependencies.driverService.profileForUser(userId!);
-
-            const ride = await rideDependencies.rideService.acceptRide(
-              profileId,
-              rideId,
-            );
-
-            io.to(rideRoom(rideId)).emit('ride:driver_assigned', {
-              ride,
-            });
-
-            ack?.({ success: true, data: ride });
-          } catch {
-            ack?.({
-              success: false,
-              error: {
-                code: 'RIDE_ACCEPTANCE_CONFLICT',
-                message: 'Ride acceptance denied',
-              },
-            });
+      socket.on('driver:accept', async (rideId: unknown, ack?: SocketAck) => {
+        try {
+          if (socket.data.auth?.role !== 'driver' || typeof rideId !== 'string') {
+            throw new Error('Driver authorization failed');
           }
-        },
-      );
 
-      socket.on(
-        'ride:status',
-        async (payload: unknown, ack?: SocketAck) => {
-          try {
-            if (
-              socket.data.auth?.role !== 'driver' ||
-              typeof payload !== 'object' ||
-              payload === null
-            ) {
-              throw new Error('Driver authorization failed');
-            }
+          const profileId = await rideDependencies.driverService.profileForUser(userId!);
 
-            const { rideId, status } =
-              payload as Record<string, unknown>;
+          const ride = await rideDependencies.rideService.acceptRide(profileId, rideId);
 
-            if (typeof rideId !== 'string') {
-              throw new Error('Ride identifier required');
-            }
+          io.to(rideRoom(rideId)).emit('ride:driver_assigned', {
+            ride,
+          });
 
-            const profileId =
-              await rideDependencies.driverService.profileForUser(userId!);
+          ack?.({ success: true, data: ride });
+        } catch {
+          ack?.({
+            success: false,
+            error: {
+              code: 'RIDE_ACCEPTANCE_CONFLICT',
+              message: 'Ride acceptance denied',
+            },
+          });
+        }
+      });
 
-            const ride =
-              await rideDependencies.rideService.transitionRide(
-                rideId,
-                rideStatusSchema.parse(status),
-                profileId,
-              );
-
-            io.to(rideRoom(rideId)).emit('ride:lifecycle_updated', {
-              ride,
-            });
-
-            ack?.({ success: true, data: ride });
-          } catch {
-            ack?.({
-              success: false,
-              error: {
-                code: 'RIDE_TRANSITION_CONFLICT',
-                message: 'Ride transition denied',
-              },
-            });
+      socket.on('ride:status', async (payload: unknown, ack?: SocketAck) => {
+        try {
+          if (
+            socket.data.auth?.role !== 'driver' ||
+            typeof payload !== 'object' ||
+            payload === null
+          ) {
+            throw new Error('Driver authorization failed');
           }
-        },
-      );
+
+          const { rideId, status } = payload as Record<string, unknown>;
+
+          if (typeof rideId !== 'string') {
+            throw new Error('Ride identifier required');
+          }
+
+          const profileId = await rideDependencies.driverService.profileForUser(userId!);
+
+          const ride = await rideDependencies.rideService.transitionRide(
+            rideId,
+            rideStatusSchema.parse(status),
+            profileId,
+          );
+
+          io.to(rideRoom(rideId)).emit('ride:lifecycle_updated', {
+            ride,
+          });
+
+          ack?.({ success: true, data: ride });
+        } catch {
+          ack?.({
+            success: false,
+            error: {
+              code: 'RIDE_TRANSITION_CONFLICT',
+              message: 'Ride transition denied',
+            },
+          });
+        }
+      });
 
       socket.on('disconnect', () => {
         if (socket.data.auth?.role === 'driver') {
-          void rideDependencies.driverService.markDisconnected(
-            socket.data.auth.userId,
-          );
+          void rideDependencies.driverService.markDisconnected(socket.data.auth.userId);
         }
       });
     });

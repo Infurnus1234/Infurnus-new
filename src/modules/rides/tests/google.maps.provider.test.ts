@@ -11,10 +11,7 @@ describe('GoogleMapsProvider', () => {
     const provider = new GoogleMapsProvider(undefined, fetcher);
 
     await expect(
-      provider.calculateRoute(
-        { latitude: 12, longitude: 77 },
-        { latitude: 13, longitude: 78 },
-      ),
+      provider.calculateRoute({ latitude: 12, longitude: 77 }, { latitude: 13, longitude: 78 }),
     ).resolves.toBeNull();
 
     expect(fetcher).not.toHaveBeenCalled();
@@ -37,18 +34,10 @@ describe('GoogleMapsProvider', () => {
     );
 
     const logger = vi.fn();
-    const provider = new GoogleMapsProvider(
-      'server-only-key',
-      fetcher,
-      Date.now,
-      logger,
-    );
+    const provider = new GoogleMapsProvider('server-only-key', fetcher, Date.now, logger);
 
     await expect(
-      provider.calculateRoute(
-        { latitude: 12, longitude: 77 },
-        { latitude: 13, longitude: 78 },
-      ),
+      provider.calculateRoute({ latitude: 12, longitude: 77 }, { latitude: 13, longitude: 78 }),
     ).resolves.toMatchObject({
       distanceMeters: 1200,
       durationSeconds: 90,
@@ -65,21 +54,16 @@ describe('GoogleMapsProvider', () => {
     const provider = new GoogleMapsProvider('key', fetcher);
 
     await provider.calculateMatrix(
-      Array.from(
-        { length: 100 },
-        (_, index) => ({
-          latitude: index,
-          longitude: index,
-        }),
-      ),
+      Array.from({ length: 100 }, (_, index) => ({
+        latitude: index,
+        longitude: index,
+      })),
       { latitude: 12, longitude: 77 },
     );
 
     const url = String(fetcher.mock.calls[0]?.[0]);
 
-    expect(
-      (new URL(url).searchParams.get('origins') ?? '').split('|'),
-    ).toHaveLength(20);
+    expect((new URL(url).searchParams.get('origins') ?? '').split('|')).toHaveLength(20);
   });
 
   it('preserves route matrix positions when a Google element fails', async () => {
@@ -159,11 +143,7 @@ describe('GoogleMapsProvider', () => {
       }),
     );
 
-    const provider = new GoogleMapsProvider(
-      'key',
-      fetcher,
-      () => 1000,
-    );
+    const provider = new GoogleMapsProvider('key', fetcher, () => 1000);
 
     await expect(provider.places('ab')).resolves.toEqual([]);
     await expect(provider.places('Bengaluru')).resolves.toHaveLength(5);
@@ -172,17 +152,11 @@ describe('GoogleMapsProvider', () => {
   });
 
   it('does not repeat Places calls inside the configured interval', async () => {
-    const fetcher = vi.fn().mockResolvedValue(
-      response({ predictions: [] }),
-    );
+    const fetcher = vi.fn().mockResolvedValue(response({ predictions: [] }));
 
     let clock = 1000;
 
-    const provider = new GoogleMapsProvider(
-      'key',
-      fetcher,
-      () => clock,
-    );
+    const provider = new GoogleMapsProvider('key', fetcher, () => clock);
 
     await provider.places('Bengaluru');
 
@@ -194,23 +168,17 @@ describe('GoogleMapsProvider', () => {
   });
 
   it('retries transient failures and then returns a safe fallback', async () => {
-    const fetcher = vi.fn().mockResolvedValue(
-      response({}, false, 503),
-    );
+    const fetcher = vi.fn().mockResolvedValue(response({}, false, 503));
 
     const provider = new GoogleMapsProvider('key', fetcher);
 
-    await expect(
-      provider.geocode('Bengaluru'),
-    ).resolves.toBeNull();
+    await expect(provider.geocode('Bengaluru')).resolves.toBeNull();
 
     expect(fetcher.mock.calls.length).toBeGreaterThan(1);
   });
 
   it('does not retry permanent client failures', async () => {
-    const fetcher = vi.fn().mockResolvedValue(
-      response({}, false, 400),
-    );
+    const fetcher = vi.fn().mockResolvedValue(response({}, false, 400));
 
     const provider = new GoogleMapsProvider('key', fetcher);
 

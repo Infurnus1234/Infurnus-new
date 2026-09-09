@@ -20,28 +20,15 @@ export interface RideRepository {
   create(customerId: string, input: CreateRideInput): Promise<Ride>;
   findByIdForCustomer(id: string, customerId: string): Promise<Ride | null>;
   listForCustomer(customerId: string, query: ListRidesInput): Promise<Ride[]>;
-  cancel(
-    id: string,
-    customerId: string,
-    reason: string,
-    client?: PoolClient,
-  ): Promise<Ride | null>;
-  accept(
-    id: string,
-    driverProfileId: string,
-    client?: PoolClient,
-  ): Promise<Ride | null>;
+  cancel(id: string, customerId: string, reason: string, client?: PoolClient): Promise<Ride | null>;
+  accept(id: string, driverProfileId: string, client?: PoolClient): Promise<Ride | null>;
   transition(
     id: string,
     status: Ride['status'],
     assignedDriverId?: string,
     client?: PoolClient,
   ): Promise<Ride | null>;
-  complete(
-    id: string,
-    assignedDriverId: string,
-    client: PoolClient,
-  ): Promise<Ride | null>;
+  complete(id: string, assignedDriverId: string, client: PoolClient): Promise<Ride | null>;
   isParticipant(id: string, userId: string): Promise<boolean>;
   isAssignedDriver(id: string, userId: string): Promise<boolean>;
   getRouteMetadata(id: string): Promise<RouteMetadata | null>;
@@ -116,10 +103,7 @@ export class PostgresRideRepository implements RideRepository {
     return mapRide(result.rows[0]);
   }
 
-  async findByIdForCustomer(
-    id: string,
-    customerId: string,
-  ): Promise<Ride | null> {
+  async findByIdForCustomer(id: string, customerId: string): Promise<Ride | null> {
     const result = await this.pool.query(
       `SELECT ${projection}
        FROM rides
@@ -131,10 +115,7 @@ export class PostgresRideRepository implements RideRepository {
     return result.rows[0] ? mapRide(result.rows[0]) : null;
   }
 
-  async listForCustomer(
-    customerId: string,
-    query: ListRidesInput,
-  ): Promise<Ride[]> {
+  async listForCustomer(customerId: string, query: ListRidesInput): Promise<Ride[]> {
     const result = await this.pool.query(
       `SELECT ${projection}
        FROM rides
@@ -143,12 +124,7 @@ export class PostgresRideRepository implements RideRepository {
          AND ($3::timestamptz IS NULL OR created_at < $3)
        ORDER BY created_at DESC, id DESC
        LIMIT $4`,
-      [
-        customerId,
-        query.status ?? null,
-        query.cursor ?? null,
-        query.limit,
-      ],
+      [customerId, query.status ?? null, query.cursor ?? null, query.limit],
     );
 
     return result.rows.map(mapRide);
@@ -242,11 +218,7 @@ export class PostgresRideRepository implements RideRepository {
     return result.rows[0] ? mapRide(result.rows[0]) : null;
   }
 
-  async complete(
-    id: string,
-    assignedDriverId: string,
-    client: PoolClient,
-  ): Promise<Ride | null> {
+  async complete(id: string, assignedDriverId: string, client: PoolClient): Promise<Ride | null> {
     const result = await client.query(
       `UPDATE rides
        SET status = 'completed',
@@ -304,9 +276,7 @@ export class PostgresRideRepository implements RideRepository {
     return result.rows[0].routeMetadata as RouteMetadata;
   }
 
-  async getDestination(
-    id: string,
-  ): Promise<{ latitude: number; longitude: number } | null> {
+  async getDestination(id: string): Promise<{ latitude: number; longitude: number } | null> {
     const result = await this.pool.query(
       `SELECT
          ST_Y(destination_location::geometry) AS latitude,
@@ -326,10 +296,7 @@ export class PostgresRideRepository implements RideRepository {
     };
   }
 
-  async updateRouteMetadata(
-    id: string,
-    metadata: RouteMetadata,
-  ): Promise<boolean> {
+  async updateRouteMetadata(id: string, metadata: RouteMetadata): Promise<boolean> {
     const result = await this.pool.query(
       `UPDATE rides
        SET route_metadata = $2::jsonb,
