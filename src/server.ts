@@ -13,6 +13,7 @@ import { PostgresUserRepository } from './modules/users/repositories/user.reposi
 import { PostgresVehicleRepository } from './modules/vehicles/repositories/vehicle.repository.js';
 import { PostgresRideRepository } from './modules/rides/repositories/ride.repository.js';
 import { PostgresDriverRepository } from './modules/rides/repositories/driver.repository.js';
+import { PostgresRentalRepository } from './modules/rentals/repositories/rental.repository.js';
 import { DriverService } from './modules/rides/services/driver.service.js';
 import { RideService } from './modules/rides/services/ride.service.js';
 
@@ -27,6 +28,7 @@ async function startServer() {
     new PostgresAdminRepository(pool),
     new PostgresRideRepository(pool),
     new PostgresDriverRepository(pool),
+    new PostgresRentalRepository(pool),
   );
 
   const server = createServer(app);
