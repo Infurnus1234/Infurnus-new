@@ -50,7 +50,7 @@ try {
     `);
     const checksRow = checks.rows[0]!;
     if (
-      checksRow.migrationCount !== '9' ||
+      checksRow.migrationCount !== '14' ||
       !checksRow.rides ||
       checksRow.postgis !== 'postgis' ||
       !checksRow.rideIndex ||
