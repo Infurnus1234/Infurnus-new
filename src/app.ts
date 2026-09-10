@@ -39,6 +39,10 @@ import { RideService } from './modules/rides/services/ride.service.js';
 import { DriverController } from './modules/rides/controllers/driver.controller.js';
 import type { DriverRepository } from './modules/rides/repositories/driver.repository.js';
 import { DriverService } from './modules/rides/services/driver.service.js';
+import { RentalController } from './modules/rentals/controllers/rental.controller.js';
+import type { RentalRepository } from './modules/rentals/repositories/rental.repository.js';
+import { createRentalRouter } from './modules/rentals/routes/rental.routes.js';
+import { RentalService } from './modules/rentals/services/rental.service.js';
 
 export interface AppOptions {
   enableAuthRateLimiting?: boolean;
@@ -53,6 +57,7 @@ export function createApp(
   adminRepository?: AdminRepository,
   rideRepository?: RideRepository,
   driverRepository?: DriverRepository,
+  rentalRepository?: RentalRepository,
 ): express.Express;
 
 export function createApp(
@@ -69,6 +74,7 @@ export function createApp(
   adminRepository?: AdminRepository,
   rideRepository?: RideRepository,
   driverRepository?: DriverRepository,
+  rentalRepository?: RentalRepository,
 ) {
   const app = express();
 
@@ -155,6 +161,11 @@ export function createApp(
       ? new DriverController(new DriverService(driverRepository), rideService)
       : undefined;
     app.use('/rides', createRideRouter(new RideController(rideService), driverController));
+  }
+
+  if (rentalRepository) {
+    const rentalController = new RentalController(new RentalService(rentalRepository));
+    app.use('/rentals', createRentalRouter(rentalController));
   }
 
   const authController = createAuthController(otpProvider);
