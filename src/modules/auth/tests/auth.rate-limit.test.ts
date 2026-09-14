@@ -33,6 +33,28 @@ const mockHandlers = {
     });
   }),
 
+  // ----------------------------------------------------------
+  // POST /auth/login/verify
+  // ----------------------------------------------------------
+
+  verifyLogin: vi.fn((_req, res) => {
+    res.status(200).json({
+      success: true,
+      data: { status: 'login-verify-ok' },
+    });
+  }),
+
+  // ----------------------------------------------------------
+  // POST /auth/login/resend
+  // ----------------------------------------------------------
+
+  resendLoginOtp: vi.fn((_req, res) => {
+    res.status(200).json({
+      success: true,
+      data: { status: 'login-resend-ok' },
+    });
+  }),
+
   refresh: vi.fn((_req, res) => {
     res.status(200).json({
       success: true,
@@ -105,6 +127,7 @@ describe('Auth route rate limiting', () => {
     );
 
     expect(responses.filter((response) => response.status === 201)).toHaveLength(5);
+
     expect(responses.filter((response) => response.status === 429)).toHaveLength(1);
 
     expect(responses.find((response) => response.status === 429)?.body).toEqual({
@@ -129,6 +152,7 @@ describe('Auth route rate limiting', () => {
     );
 
     expect(responses.filter((response) => response.status === 200)).toHaveLength(10);
+
     expect(responses.filter((response) => response.status === 429)).toHaveLength(1);
   });
 
@@ -144,6 +168,7 @@ describe('Auth route rate limiting', () => {
     );
 
     expect(responses.filter((response) => response.status === 200)).toHaveLength(5);
+
     expect(responses.filter((response) => response.status === 429)).toHaveLength(1);
   });
 
@@ -160,6 +185,7 @@ describe('Auth route rate limiting', () => {
     );
 
     expect(responses.filter((response) => response.status === 200)).toHaveLength(10);
+
     expect(responses.filter((response) => response.status === 429)).toHaveLength(1);
   });
 
@@ -175,6 +201,7 @@ describe('Auth route rate limiting', () => {
     );
 
     expect(responses.filter((response) => response.status === 200)).toHaveLength(30);
+
     expect(responses.filter((response) => response.status === 429)).toHaveLength(1);
   });
 
@@ -190,6 +217,7 @@ describe('Auth route rate limiting', () => {
     );
 
     expect(responses.filter((response) => response.status === 204)).toHaveLength(30);
+
     expect(responses.filter((response) => response.status === 429)).toHaveLength(1);
   });
 
@@ -203,6 +231,7 @@ describe('Auth route rate limiting', () => {
     );
 
     expect(responses.filter((response) => response.status === 401)).toHaveLength(30);
+
     expect(responses.filter((response) => response.status === 429)).toHaveLength(1);
   });
 
@@ -215,6 +244,7 @@ describe('Auth route rate limiting', () => {
     });
 
     expect(response.status).toBe(200);
+
     expect(mockHandlers.login).toHaveBeenCalledTimes(1);
   });
 });

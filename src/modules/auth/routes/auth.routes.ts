@@ -4,6 +4,7 @@ import type { AuthControllerDependencies } from '../controllers/auth.controller.
 import { createAuthHandlers } from '../controllers/auth.controller.js';
 
 import { requireAuth } from '../middleware/auth.middleware.js';
+
 import { requireCsrf } from '../middleware/csrf.middleware.js';
 
 import {
@@ -30,7 +31,11 @@ export function createAuthRouter(
     signup,
     verifySignup,
     resendSignupOtp,
+
     login,
+    verifyLogin,
+    resendLoginOtp,
+
     refresh,
     logout,
     logoutAll,
@@ -39,6 +44,7 @@ export function createAuthRouter(
   } = createAuthHandlers(dependencies);
 
   const enableRateLimiting = options.enableRateLimiting ?? true;
+
   const enableCsrfProtection = options.enableCsrfProtection ?? true;
 
   // ==========================================================
@@ -72,6 +78,29 @@ export function createAuthRouter(
   // ==========================================================
 
   router.post('/login', ...(enableRateLimiting ? [authLoginRateLimiter] : []), login);
+
+  // ==========================================================
+  // POST /auth/login/verify
+  //
+  // Authentication is completed here after successful
+  // OTP verification.
+  // ==========================================================
+
+  router.post(
+    '/login/verify',
+    ...(enableRateLimiting ? [authOtpVerifyRateLimiter] : []),
+    verifyLogin,
+  );
+
+  // ==========================================================
+  // POST /auth/login/resend
+  // ==========================================================
+
+  router.post(
+    '/login/resend',
+    ...(enableRateLimiting ? [authOtpResendRateLimiter] : []),
+    resendLoginOtp,
+  );
 
   // ==========================================================
   // POST /auth/refresh

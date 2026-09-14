@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "migrate": "tsx scripts/migrate.ts",
+    "migrate": "tsx src/infrastructure/database/run-migrations.ts",
     "test:migrations": "tsx scripts/test-migrations.ts",
     "dev": "tsx src/server.ts",
     "lint": "eslint .",
@@ -13,10 +13,10 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "migrate": "tsx src/infrastructure/database/run-migrations.ts",
     "migrate:baseline": "tsx src/infrastructure/database/baseline-migrations.ts"
   },
   "dependencies": {
+    "@sendmator/node": "^0.0.4",
     "argon2": "^0.45.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",

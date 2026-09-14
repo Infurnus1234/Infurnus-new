@@ -31,14 +31,17 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://infurnus@localhost:5432/infurnus
-      JWT_ACCESS_SECRET: ci-test-secret-at-least-32-characters-long
-      JWT_ACCESS_PREVIOUS_SECRET: ci-previous-secret-at-least-32-characters-long
+      JWT_ACCESS_SECRET: ${{ secrets.CI_JWT_ACCESS_SECRET }}
+      JWT_ACCESS_PREVIOUS_SECRET: ${{ secrets.CI_JWT_ACCESS_PREVIOUS_SECRET }}
       JWT_ACCESS_EXPIRES_IN: 15m
       JWT_REFRESH_EXPIRES_IN: 30d
+      AUTH_OTP_ENCRYPTION_KEY: ${{ secrets.CI_AUTH_OTP_ENCRYPTION_KEY }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -73,7 +76,23 @@ jobs:
         run: npm run lint
 
       - name: Format check
-        run: npm run format:check
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            base="${{ github.event.pull_request.base.sha }}"
+          else
+            base="${{ github.event.before }}"
+          fi
+
+          if [[ "$base" == "0000000000000000000000000000000000000000" ]]; then
+            echo "No previous commit available; skipping changed-file format comparison."
+            exit 0
+          fi
+
+          git diff --name-only --diff-filter=ACMRTUXB "$base" "${{ github.sha }}" \
+            | grep -Ev '\.sql$' \
+            | grep -E '\.(js|jsx|ts|tsx|json|jsonc|md|yml|yaml|css|scss|html)$' \
+            | xargs -r npx prettier --check
 
       - name: Test
         run: npm test

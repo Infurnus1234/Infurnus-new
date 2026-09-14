@@ -1,16 +1,30 @@
 import { Router } from 'express';
+
+import { requireAuth } from '../../auth/middleware/auth.middleware.js';
 import type { UserController } from '../controllers/user.controller.js';
+import { requireSelf } from '../middleware/user-access.middleware.js';
 
 export function createUserRouter(controller: UserController) {
   const router = Router();
-  router.post('/', controller.create);
-  router.get('/:id', controller.getById);
-  router.patch('/:id', controller.update);
-  router.post('/:id/addresses', controller.createAddress);
-  router.patch('/:id/addresses/:addressId', controller.updateAddress);
-  router.get('/:id/addresses', controller.getAddresses);
-  router.get('/:id/preferences', controller.getPreferences);
-  router.patch('/:id/preferences', controller.updatePreferences);
-  router.get('/:id/history', controller.getHistory);
+
+  // User profile
+  router.get('/:id', requireAuth, requireSelf, controller.getById);
+  router.patch('/:id', requireAuth, requireSelf, controller.update);
+
+  // User addresses
+  router.post('/:id/addresses', requireAuth, requireSelf, controller.createAddress);
+
+  router.patch('/:id/addresses/:addressId', requireAuth, requireSelf, controller.updateAddress);
+
+  router.get('/:id/addresses', requireAuth, requireSelf, controller.getAddresses);
+
+  // User preferences
+  router.get('/:id/preferences', requireAuth, requireSelf, controller.getPreferences);
+
+  router.patch('/:id/preferences', requireAuth, requireSelf, controller.updatePreferences);
+
+  // User history
+  router.get('/:id/history', requireAuth, requireSelf, controller.getHistory);
+
   return router;
 }

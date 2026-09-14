@@ -10,28 +10,54 @@ import type { CreatePendingSignupData, PendingSignup } from '../types/signup.js'
 export interface PendingSignupRepository {
   create(data: CreatePendingSignupData): Promise<PendingSignup>;
 
+  /**
+   * Returns the pending signup without exposing the provider
+   * session token.
+   *
+   * The session token is sensitive provider credential material
+   * and must only be loaded by getOtpProviderSession().
+   */
   findById(id: string): Promise<PendingSignup | null>;
 
+  /**
+   * Returns the pending signup without exposing the provider
+   * session token.
+   */
   findByContact(contactType: string, contactValue: string): Promise<PendingSignup | null>;
 
-  incrementOtpAttempts(id: string): Promise<void>;
-
-  markOtpVerified(id: string): Promise<void>;
+  /**
+   * Loads the provider session credential only for operations
+   * that actually need to communicate with the OTP provider.
+   */
+  getOtpProviderSession(id: string): Promise<{
+    provider: string;
+    sessionId: string;
+    sessionToken: string;
+    expiresAt: Date;
+    verifiedAt: Date | null;
+  } | null>;
 
   /**
-   * Atomically replaces the OTP only when the resend cooldown
-   * has elapsed.
+   * Atomically claims the OTP resend cooldown slot.
    *
-   * Returns true when the row was updated.
-   * Returns false when the cooldown prevented the update or
-   * the signup is no longer eligible for resend.
+   * This prevents concurrent resend requests from both passing
+   * the cooldown check.
    */
-  resendOtpIfCooldownElapsed(
+  claimOtpResend(
     id: string,
-    otpHash: string,
-    otpExpiresAt: Date,
     cooldownSeconds: number,
-  ): Promise<boolean>;
+  ): Promise<{
+    provider: string;
+    sessionId: string;
+    sessionToken: string;
+    expiresAt: Date;
+  } | null>;
+
+  /**
+   * Updates the provider-reported expiry after a successful
+   * provider resend.
+   */
+  updateOtpProviderExpiry(id: string, expiresAt: Date): Promise<boolean>;
 
   deleteById(id: string): Promise<void>;
 }
@@ -52,6 +78,7 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
           INSERT INTO pending_signups (
             first_name,
             last_name,
+            email,
             contact_type,
             contact_value,
             password_hash,
@@ -59,7 +86,12 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
             otp_hash,
             otp_expires_at,
             otp_attempts,
-            last_otp_sent_at
+            otp_verified_at,
+            last_otp_sent_at,
+            otp_provider,
+            otp_provider_session_id,
+            otp_provider_session_token,
+            otp_provider_expires_at
           )
           VALUES (
             $1,
@@ -69,14 +101,21 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
             $5,
             $6,
             $7,
-            $8,
+            NULL,
+            NULL,
             0,
-            NOW()
+            NULL,
+            NOW(),
+            $8,
+            $9,
+            $10,
+            $11
           )
           RETURNING
             id,
             first_name AS "firstName",
             last_name AS "lastName",
+            email,
             contact_type AS "contactType",
             contact_value AS "contactValue",
             password_hash AS "passwordHash",
@@ -86,18 +125,25 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
             otp_attempts AS "otpAttempts",
             otp_verified_at AS "otpVerifiedAt",
             last_otp_sent_at AS "lastOtpSentAt",
+            otp_provider AS "otpProvider",
+            otp_provider_session_id AS "otpProviderSessionId",
+            otp_provider_session_token AS "otpProviderSessionToken",
+            otp_provider_expires_at AS "otpProviderExpiresAt",
             created_at AS "createdAt",
             updated_at AS "updatedAt"
         `,
         [
           data.firstName,
           data.lastName,
+          data.email,
           data.contactType,
           data.contactValue,
           data.passwordHash,
           data.role,
-          data.otpHash,
-          data.otpExpiresAt,
+          data.otpProvider,
+          data.otpProviderSessionId,
+          data.otpProviderSessionToken,
+          data.otpProviderExpiresAt,
         ],
       );
 
@@ -137,6 +183,7 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
           id,
           first_name AS "firstName",
           last_name AS "lastName",
+          email,
           contact_type AS "contactType",
           contact_value AS "contactValue",
           password_hash AS "passwordHash",
@@ -146,6 +193,9 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
           otp_attempts AS "otpAttempts",
           otp_verified_at AS "otpVerifiedAt",
           last_otp_sent_at AS "lastOtpSentAt",
+          otp_provider AS "otpProvider",
+          otp_provider_session_id AS "otpProviderSessionId",
+          otp_provider_expires_at AS "otpProviderExpiresAt",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
         FROM pending_signups
@@ -169,6 +219,7 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
           id,
           first_name AS "firstName",
           last_name AS "lastName",
+          email,
           contact_type AS "contactType",
           contact_value AS "contactValue",
           password_hash AS "passwordHash",
@@ -178,6 +229,9 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
           otp_attempts AS "otpAttempts",
           otp_verified_at AS "otpVerifiedAt",
           last_otp_sent_at AS "lastOtpSentAt",
+          otp_provider AS "otpProvider",
+          otp_provider_session_id AS "otpProviderSessionId",
+          otp_provider_expires_at AS "otpProviderExpiresAt",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
         FROM pending_signups
@@ -192,63 +246,105 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
   }
 
   // ----------------------------------------------------------
-  // Increment OTP attempts
+  // Get OTP provider session
   // ----------------------------------------------------------
 
-  async incrementOtpAttempts(id: string): Promise<void> {
-    await pool.query(
+  async getOtpProviderSession(id: string): Promise<{
+    provider: string;
+    sessionId: string;
+    sessionToken: string;
+    expiresAt: Date;
+    verifiedAt: Date | null;
+  } | null> {
+    const result = await pool.query<{
+      provider: string;
+      sessionId: string;
+      sessionToken: string;
+      expiresAt: Date;
+      verifiedAt: Date | null;
+    }>(
       `
-        UPDATE pending_signups
-        SET
-          otp_attempts = otp_attempts + 1
+        SELECT
+          otp_provider AS "provider",
+          otp_provider_session_id AS "sessionId",
+          otp_provider_session_token AS "sessionToken",
+          otp_provider_expires_at AS "expiresAt",
+          otp_verified_at AS "verifiedAt"
+        FROM pending_signups
         WHERE id = $1
-          AND otp_verified_at IS NULL
+          AND otp_provider IS NOT NULL
+          AND otp_provider_session_id IS NOT NULL
+          AND otp_provider_session_token IS NOT NULL
+          AND otp_provider_expires_at IS NOT NULL
+        LIMIT 1
       `,
       [id],
     );
+
+    return result.rows[0] ?? null;
   }
 
   // ----------------------------------------------------------
-  // Mark OTP verified
+  // Atomically claim OTP resend
   // ----------------------------------------------------------
 
-  async markOtpVerified(id: string): Promise<void> {
-    await pool.query(
-      `
-        UPDATE pending_signups
-        SET
-          otp_verified_at = NOW()
-        WHERE id = $1
-          AND otp_verified_at IS NULL
-      `,
-      [id],
-    );
-  }
-
-  // ----------------------------------------------------------
-  // Atomic OTP resend with cooldown
-  // ----------------------------------------------------------
-
-  async resendOtpIfCooldownElapsed(
+  async claimOtpResend(
     id: string,
-    otpHash: string,
-    otpExpiresAt: Date,
     cooldownSeconds: number,
-  ): Promise<boolean> {
+  ): Promise<{
+    provider: string;
+    sessionId: string;
+    sessionToken: string;
+    expiresAt: Date;
+  } | null> {
+    const result = await pool.query<{
+      provider: string;
+      sessionId: string;
+      sessionToken: string;
+      expiresAt: Date;
+    }>(
+      `
+        UPDATE pending_signups
+        SET
+          last_otp_sent_at = NOW()
+        WHERE id = $1
+          AND otp_verified_at IS NULL
+          AND otp_provider IS NOT NULL
+          AND otp_provider_session_id IS NOT NULL
+          AND otp_provider_session_token IS NOT NULL
+          AND otp_provider_expires_at IS NOT NULL
+          AND last_otp_sent_at <=
+              NOW() -
+              ($2::integer * INTERVAL '1 second')
+        RETURNING
+          otp_provider AS "provider",
+          otp_provider_session_id AS "sessionId",
+          otp_provider_session_token AS "sessionToken",
+          otp_provider_expires_at AS "expiresAt"
+      `,
+      [id, cooldownSeconds],
+    );
+
+    return result.rows[0] ?? null;
+  }
+
+  // ----------------------------------------------------------
+  // Update provider expiry
+  // ----------------------------------------------------------
+
+  async updateOtpProviderExpiry(id: string, expiresAt: Date): Promise<boolean> {
     const result = await pool.query(
       `
         UPDATE pending_signups
         SET
-          otp_hash = $2,
-          otp_expires_at = $3,
-          otp_attempts = 0,
-          last_otp_sent_at = NOW()
+          otp_provider_expires_at = $2
         WHERE id = $1
           AND otp_verified_at IS NULL
-          AND last_otp_sent_at <=
-              NOW() - ($4 * INTERVAL '1 second')
+          AND otp_provider IS NOT NULL
+          AND otp_provider_session_id IS NOT NULL
+          AND otp_provider_session_token IS NOT NULL
       `,
-      [id, otpHash, otpExpiresAt, cooldownSeconds],
+      [id, expiresAt],
     );
 
     return result.rowCount === 1;
