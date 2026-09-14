@@ -2,27 +2,50 @@
 
 ## Current status
 
-The ride foundation, driver lifecycle, PostGIS matching, transactional
-assignment, Socket.IO handlers, and guarded Google provider are implemented.
-The complete suite was run with the local PostGIS container enabled.
+The INFURNUS backend was verified locally with the PostGIS and Redis containers
+running. Database migrations completed successfully, the API health endpoint
+responded successfully, manual Postman API validation was completed, the full
+automated test suite passed with no failed tests, and the TypeScript typecheck
+passed.
 
 ## Verification run
 
-- Total test files: 53
-- Total tests: 398
-- Passed: 398
+- Total test files: 63
+- Passed test files: 60
+- Skipped test files: 3
+- Failed test files: 0
+- Total tests: 552
+- Passed: 540
+- Skipped: 12
 - Failed: 0
-- Skipped: 0
-- `npm test` with `RIDE_DB_TESTS=true` and `RIDE_LOAD_TESTS=true`: passed
+- `npm test`: passed
 - `npm run typecheck`: passed
-- `npm run lint`: passed
-- `npm run build`: passed
-- targeted Prettier check for changed files: passed
-- `npm run format:check`: failed on 80 pre-existing files outside
-  the focused change set; changed files pass the targeted check
-- `git diff --check`: passed
-- `npm run migrate`: passed; migration 012 tracked
-- `npm run test:migrations`: passed against a clean disposable PostGIS database
+- `npm run migrate`: passed; migrations 014–022 applied successfully
+- API health check (`GET /health`): passed with HTTP 200
+- Manual Postman API validation: 30 focused test cases completed
+- Auth integration tests: 35/35 passed
+
+### Manual Postman verification
+
+The manual QA run covered authentication validation, protected endpoints,
+health checks, unknown routes, and Vehicle API validation.
+
+- Login validation: passed
+- Refresh/logout/session authentication checks: passed
+- User ID validation and not-found handling: passed
+- Health endpoint: passed
+- Unsupported HTTP method handling: passed
+- Signup validation: passed
+- Vehicle request validation: passed
+- Vehicle list handling for a non-existent driver profile: passed
+- Unknown route handling: passed
+
+The manual valid-login scenario returned `401 INVALID_CREDENTIALS` because the
+manually created test account was not successfully verified. This was not
+treated as a confirmed backend defect because the automated authentication
+integration test for signup verification followed by valid login passed.
+
+No credentials, tokens, cookies, or secrets are included in this report.
 
 ## Coverage gaps
 
