@@ -28,17 +28,21 @@ import { VehicleController } from './modules/vehicles/controllers/vehicle.contro
 import type { VehicleRepository } from './modules/vehicles/repositories/vehicle.repository.js';
 import { createVehicleRouter } from './modules/vehicles/routes/vehicle.routes.js';
 import { VehicleService } from './modules/vehicles/services/vehicle.service.js';
+
 import { AdminController } from './modules/admin/controllers/admin.controller.js';
 import type { AdminRepository } from './modules/admin/repositories/admin.repository.js';
 import { createAdminRouter } from './modules/admin/routes/admin.routes.js';
 import { AdminService } from './modules/admin/services/admin.service.js';
+
 import { RideController } from './modules/rides/controllers/ride.controller.js';
 import type { RideRepository } from './modules/rides/repositories/ride.repository.js';
 import { createRideRouter } from './modules/rides/routes/ride.routes.js';
 import { RideService } from './modules/rides/services/ride.service.js';
+
 import { DriverController } from './modules/rides/controllers/driver.controller.js';
 import type { DriverRepository } from './modules/rides/repositories/driver.repository.js';
 import { DriverService } from './modules/rides/services/driver.service.js';
+
 import { RentalController } from './modules/rentals/controllers/rental.controller.js';
 import type { RentalRepository } from './modules/rentals/repositories/rental.repository.js';
 import { createRentalRouter } from './modules/rentals/routes/rental.routes.js';
@@ -49,6 +53,10 @@ export interface AppOptions {
   enableAuthCsrfProtection?: boolean;
 }
 
+// ============================================================
+// Production repository composition
+// ============================================================
+
 export function createApp(
   repository?: UserRepository,
   partnerRepository?: PartnerRepository,
@@ -58,7 +66,16 @@ export function createApp(
   rideRepository?: RideRepository,
   driverRepository?: DriverRepository,
   rentalRepository?: RentalRepository,
+  authOtpProvider?: OtpProvider,
 ): express.Express;
+
+// ============================================================
+// Auth-focused/test composition
+//
+// Preserves the existing:
+// createApp(repository, otpProvider, options)
+// contract.
+// ============================================================
 
 export function createApp(
   repository: UserRepository,
@@ -75,6 +92,7 @@ export function createApp(
   rideRepository?: RideRepository,
   driverRepository?: DriverRepository,
   rentalRepository?: RentalRepository,
+  authOtpProvider?: OtpProvider,
 ) {
   const app = express();
 
@@ -108,16 +126,30 @@ export function createApp(
 
   let partnerRepository: PartnerRepository | undefined;
   let vehicleRepository: VehicleRepository | undefined;
-  let otpProvider: OtpProvider | undefined;
+
+  // If the dedicated production auth provider is supplied,
+  // it always takes precedence.
+  let otpProvider: OtpProvider | undefined = authOtpProvider;
+
   let options: AppOptions = {};
 
-  if (second && 'sendEmailOtp' in second) {
+  // ==========================================================
+  // Backward-compatible auth/test overload detection
+  //
+  // createApp(repository, otpProvider, options)
+  // ==========================================================
+
+  if (second && 'verifySmsOtp' in second) {
     otpProvider = second;
 
     if (third && !('create' in third)) {
       options = third;
     }
   } else {
+    // ========================================================
+    // Production repository composition
+    // ========================================================
+
     partnerRepository = second;
 
     if (third && 'create' in third) {
@@ -125,17 +157,29 @@ export function createApp(
     }
   }
 
+  // ==========================================================
+  // Users
+  // ==========================================================
+
   if (repository) {
     const controller = new UserController(new UserService(repository));
 
     app.use('/users', createUserRouter(controller));
   }
 
+  // ==========================================================
+  // Partners
+  // ==========================================================
+
   if (partnerRepository) {
     const partnerController = new PartnerController(new PartnerService(partnerRepository));
 
     app.use('/partners', createPartnerRouter(partnerController));
   }
+
+  // ==========================================================
+  // Partner documents
+  // ==========================================================
 
   if (partnerDocumentRepository) {
     const documentController = new PartnerDocumentController(
@@ -145,28 +189,51 @@ export function createApp(
     app.use('/partners/:id/documents', createPartnerDocumentRouter(documentController));
   }
 
+  // ==========================================================
+  // Vehicles
+  // ==========================================================
+
   if (vehicleRepository) {
     const vehicleController = new VehicleController(new VehicleService(vehicleRepository));
 
     app.use('/vehicles', createVehicleRouter(vehicleController));
   }
 
+  // ==========================================================
+  // Admin
+  // ==========================================================
+
   if (adminRepository) {
     app.use('/admin', createAdminRouter(new AdminController(new AdminService(adminRepository))));
   }
 
+  // ==========================================================
+  // Rides
+  // ==========================================================
+
   if (rideRepository) {
     const rideService = new RideService(rideRepository, driverRepository);
+
     const driverController = driverRepository
       ? new DriverController(new DriverService(driverRepository), rideService)
       : undefined;
+
     app.use('/rides', createRideRouter(new RideController(rideService), driverController));
   }
 
+  // ==========================================================
+  // Rentals
+  // ==========================================================
+
   if (rentalRepository) {
     const rentalController = new RentalController(new RentalService(rentalRepository));
+
     app.use('/rentals', createRentalRouter(rentalController));
   }
+
+  // ==========================================================
+  // Authentication
+  // ==========================================================
 
   const authController = createAuthController(otpProvider);
 
@@ -177,6 +244,10 @@ export function createApp(
       enableCsrfProtection: options.enableAuthCsrfProtection ?? true,
     }),
   );
+
+  // ==========================================================
+  // Error middleware
+  // ==========================================================
 
   app.use(errorMiddleware);
 

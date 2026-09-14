@@ -11,6 +11,12 @@ const passwordSchema = z
 
 // ============================================================
 // Signup
+//
+// Business rules:
+// - Phone number is mandatory.
+// - Email is optional.
+// - Phone is the primary verification channel.
+// - Signup requires phone OTP verification.
 // ============================================================
 
 export const signupSchema = z
@@ -38,8 +44,7 @@ export const signupSchema = z
       .string()
       .trim()
       .min(7, 'Invalid phone number')
-      .max(20, 'Phone number must not exceed 20 characters')
-      .optional(),
+      .max(20, 'Phone number must not exceed 20 characters'),
 
     password: passwordSchema,
 
@@ -48,22 +53,6 @@ export const signupSchema = z
     role: z.enum(['customer', 'driver']).default('customer'),
   })
   .superRefine((data, ctx) => {
-    if (!data.email && !data.phone) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['email'],
-        message: 'Email or phone number is required',
-      });
-    }
-
-    if (data.email && data.phone) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['email'],
-        message: 'Provide either email or phone number, not both',
-      });
-    }
-
     if (data.password !== data.confirmPassword) {
       ctx.addIssue({
         code: 'custom',
@@ -93,6 +82,9 @@ export const resendSignupOtpSchema = z.object({
 
 // ============================================================
 // Login
+//
+// Login continues to support either email or phone.
+// This is intentionally separate from signup rules.
 // ============================================================
 
 export const loginSchema = z
@@ -133,3 +125,21 @@ export const loginSchema = z
       });
     }
   });
+
+// ============================================================
+// Login OTP verification
+// ============================================================
+
+export const verifyLoginOtpSchema = z.object({
+  challengeId: z.string().uuid('Invalid login challenge ID'),
+
+  otp: z.string().regex(/^\d{6}$/, 'OTP must be 6 digits'),
+});
+
+// ============================================================
+// Login OTP resend
+// ============================================================
+
+export const resendLoginOtpSchema = z.object({
+  challengeId: z.string().uuid('Invalid login challenge ID'),
+});

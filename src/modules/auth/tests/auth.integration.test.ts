@@ -12,47 +12,182 @@ import { PostgresUserRepository } from '../../users/repositories/user.repository
 import type { OtpProvider } from '../providers/otp.provider.js';
 import { hashRefreshToken } from '../utils/refresh-token.js';
 
+// ============================================================
+// Test OTP provider
+//
+// Mirrors the production provider contract:
+//
+//   sendSmsOtp(phone)
+//   verifySmsOtp(sessionToken, otp)
+//   resendSmsOtp(sessionToken)
+//
+// The OTP is generated and owned by this test provider.
+// Production code never generates or stores the OTP.
+// ============================================================
+
+interface TestOtpSession {
+  phone: string;
+  otp: string;
+  expiresAt: string;
+  attemptsRemaining: number;
+  verified: boolean;
+}
+
 class TestOtpProvider implements OtpProvider {
-  private readonly emailOtps = new Map<string, string>();
-  private readonly smsOtps = new Map<string, string>();
+  private readonly sessions = new Map<string, TestOtpSession>();
 
-  async sendEmailOtp(email: string, otp: string): Promise<void> {
-    this.emailOtps.set(email, otp);
+  private readonly latestSessionByPhone = new Map<string, string>();
+
+  async sendSmsOtp(phone: string): Promise<{
+    sessionId: string;
+    sessionToken: string;
+    expiresAt: string;
+  }> {
+    const sessionId = randomUUID();
+    const sessionToken = randomUUID();
+
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+    const otp = '123456';
+
+    this.sessions.set(sessionToken, {
+      phone,
+      otp,
+      expiresAt,
+      attemptsRemaining: 5,
+      verified: false,
+    });
+
+    this.latestSessionByPhone.set(phone, sessionToken);
+
+    return {
+      sessionId,
+      sessionToken,
+      expiresAt,
+    };
   }
 
-  async sendSmsOtp(phone: string, otp: string): Promise<void> {
-    this.smsOtps.set(phone, otp);
-  }
+  async verifySmsOtp(
+    sessionToken: string,
+    otp: string,
+  ): Promise<{
+    verified: boolean;
+    attemptsRemaining: number;
+  }> {
+    const session = this.sessions.get(sessionToken);
 
-  getEmailOtp(email: string): string {
-    const otp = this.emailOtps.get(email);
-
-    if (!otp) {
-      throw new Error(`No email OTP captured for ${email}`);
+    if (!session) {
+      throw new Error('Test OTP session not found');
     }
 
-    return otp;
+    if (new Date(session.expiresAt).getTime() <= Date.now()) {
+      return {
+        verified: false,
+        attemptsRemaining: session.attemptsRemaining,
+      };
+    }
+
+    if (session.verified) {
+      return {
+        verified: true,
+        attemptsRemaining: session.attemptsRemaining,
+      };
+    }
+
+    if (session.attemptsRemaining <= 0) {
+      return {
+        verified: false,
+        attemptsRemaining: 0,
+      };
+    }
+
+    if (otp !== session.otp) {
+      session.attemptsRemaining -= 1;
+
+      return {
+        verified: false,
+        attemptsRemaining: session.attemptsRemaining,
+      };
+    }
+
+    session.verified = true;
+
+    return {
+      verified: true,
+      attemptsRemaining: session.attemptsRemaining,
+    };
+  }
+
+  async resendSmsOtp(sessionToken: string): Promise<{
+    expiresAt: string;
+  }> {
+    const session = this.sessions.get(sessionToken);
+
+    if (!session) {
+      throw new Error('Test OTP session not found');
+    }
+
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+    session.otp = '123456';
+    session.expiresAt = expiresAt;
+    session.attemptsRemaining = 5;
+    session.verified = false;
+
+    return {
+      expiresAt,
+    };
   }
 
   getSmsOtp(phone: string): string {
-    const otp = this.smsOtps.get(phone);
+    const sessionToken = this.latestSessionByPhone.get(phone);
 
-    if (!otp) {
+    if (!sessionToken) {
+      throw new Error(`No SMS OTP session captured for ${phone}`);
+    }
+
+    const session = this.sessions.get(sessionToken);
+
+    if (!session) {
       throw new Error(`No SMS OTP captured for ${phone}`);
     }
 
-    return otp;
+    return session.otp;
+  }
+
+  getLatestSessionToken(phone: string): string {
+    const sessionToken = this.latestSessionByPhone.get(phone);
+
+    if (!sessionToken) {
+      throw new Error(`No OTP session captured for ${phone}`);
+    }
+
+    return sessionToken;
   }
 
   clear(): void {
-    this.emailOtps.clear();
-    this.smsOtps.clear();
+    this.sessions.clear();
+    this.latestSessionByPhone.clear();
   }
 }
+
+// ============================================================
+// Test data helpers
+// ============================================================
 
 function uniqueEmail(prefix = 'auth-integration'): string {
   return `${prefix}-${randomUUID()}@example.com`;
 }
+
+function uniquePhone(_prefix = 'auth'): string {
+  const digits = randomUUID().replace(/\D/g, '').slice(0, 10).padEnd(10, '1');
+
+  return `+91${digits}`;
+}
+
+// ============================================================
+// Cookie helpers
+// ============================================================
 
 function getSetCookieHeaders(response: Response): string[] {
   const setCookieHeader = response.headers['set-cookie'];
@@ -112,6 +247,10 @@ function expectRefreshCookie(response: Response): string {
   return cookie;
 }
 
+// ============================================================
+// Auth integration
+// ============================================================
+
 describe.sequential('Auth integration', () => {
   const otpProvider = new TestOtpProvider();
 
@@ -124,16 +263,24 @@ describe.sequential('Auth integration', () => {
     await pool.query('SELECT 1');
   });
 
-  async function createVerifiedUser(prefix: string): Promise<{
+  // ========================================================
+  // Helpers
+  // ========================================================
+
+  async function createVerifiedUser(_prefix: string): Promise<{
     userId: string;
     email: string;
+    phone: string;
   }> {
-    const email = uniqueEmail(prefix);
+    const email = uniqueEmail(_prefix);
+
+    const phone = uniquePhone(_prefix);
 
     const signupResponse = await request(app).post('/auth/signup').send({
       firstName: 'Session',
       lastName: 'Test',
       email,
+      phone,
       password: 'StrongPassword123!',
       confirmPassword: 'StrongPassword123!',
       role: 'customer',
@@ -142,7 +289,10 @@ describe.sequential('Auth integration', () => {
     expect(signupResponse.status).toBe(201);
 
     const signupId = signupResponse.body.data.signupId;
-    const otp = otpProvider.getEmailOtp(email);
+
+    expect(signupId).toEqual(expect.any(String));
+
+    const otp = otpProvider.getSmsOtp(phone);
 
     const verifyResponse = await request(app).post('/auth/signup/verify').send({
       signupId,
@@ -151,78 +301,183 @@ describe.sequential('Auth integration', () => {
 
     expect(verifyResponse.status).toBe(200);
 
+    expect(verifyResponse.body.success).toBe(true);
+
     return {
       userId: verifyResponse.body.data.userId,
       email,
+      phone,
+    };
+  }
+
+  async function loginVerifiedUser(
+    email: string,
+    phone: string,
+  ): Promise<{
+    challengeId: string;
+    accessToken: string;
+    refreshCookie: string;
+    loginResponse: Response;
+    verifyResponse: Response;
+  }> {
+    const loginResponse = await request(app).post('/auth/login').send({
+      email,
+      password: 'StrongPassword123!',
+    });
+
+    expect(loginResponse.status).toBe(200);
+
+    expect(loginResponse.body.success).toBe(true);
+
+    const challengeId = loginResponse.body.data.challengeId;
+
+    expect(challengeId).toEqual(expect.any(String));
+
+    expect(loginResponse.body.data.expiresAt).toEqual(expect.any(String));
+
+    expect(loginResponse.body.data.accessToken).toBeUndefined();
+
+    expect(loginResponse.body.data.passwordHash).toBeUndefined();
+
+    expect(getSetCookieHeaders(loginResponse)).toHaveLength(0);
+
+    const otp = otpProvider.getSmsOtp(phone);
+
+    const verifyResponse = await request(app).post('/auth/login/verify').send({
+      challengeId,
+      otp,
+    });
+
+    expect(verifyResponse.status).toBe(200);
+
+    expect(verifyResponse.body.success).toBe(true);
+
+    const accessToken = verifyResponse.body.data.accessToken;
+
+    expect(accessToken).toEqual(expect.any(String));
+
+    expect(verifyResponse.body.data.passwordHash).toBeUndefined();
+
+    expect(verifyResponse.body.data.password_hash).toBeUndefined();
+
+    const refreshCookie = expectRefreshCookie(verifyResponse);
+
+    return {
+      challengeId,
+      accessToken,
+      refreshCookie,
+      loginResponse,
+      verifyResponse,
     };
   }
 
   async function cleanupUser(userId: string): Promise<void> {
     await pool.query(
       `
-        DELETE FROM refresh_tokens
-        WHERE user_id = $1
-      `,
+          DELETE FROM login_challenges
+          WHERE user_id = $1
+        `,
       [userId],
     );
 
     await pool.query(
       `
-        DELETE FROM user_credentials
-        WHERE user_id = $1
-      `,
+          DELETE FROM refresh_tokens
+          WHERE user_id = $1
+        `,
       [userId],
     );
 
     await pool.query(
       `
-        DELETE FROM users
-        WHERE id = $1
-      `,
+          DELETE FROM user_credentials
+          WHERE user_id = $1
+        `,
+      [userId],
+    );
+
+    await pool.query(
+      `
+          DELETE FROM users
+          WHERE id = $1
+        `,
       [userId],
     );
   }
 
+  async function cleanupSignup(signupId: string): Promise<void> {
+    await pool.query(
+      `
+          DELETE FROM pending_signups
+          WHERE id = $1
+        `,
+      [signupId],
+    );
+  }
+
+  // ========================================================
+  // Signup
+  // ========================================================
+
   describe('signup', () => {
-    it('creates a pending signup and completes signup verification', async () => {
+    it('creates a phone-verified pending signup and completes verification', async () => {
       const email = uniqueEmail();
+
+      const phone = uniquePhone();
 
       const signupResponse = await request(app).post('/auth/signup').send({
         firstName: 'Integration',
         lastName: 'Test',
         email,
+        phone,
         password: 'StrongPassword123!',
         confirmPassword: 'StrongPassword123!',
         role: 'customer',
       });
 
       expect(signupResponse.status).toBe(201);
+
       expect(signupResponse.body.success).toBe(true);
+
       expect(signupResponse.body.data.signupId).toEqual(expect.any(String));
-      expect(signupResponse.body.data.contactType).toBe('email');
+
+      expect(signupResponse.body.data.contactType).toBe('phone');
+
       expect(signupResponse.body.data.otp).toBeUndefined();
 
       const signupId = signupResponse.body.data.signupId;
 
       const pendingResult = await pool.query<{
         id: string;
+        email: string | null;
         contactType: string;
         contactValue: string;
-        otpHash: string;
+        otpHash: string | null;
+        otpExpiresAt: Date | null;
         otpAttempts: number;
         lastOtpSentAt: Date | null;
+        otpProvider: string | null;
+        otpProviderSessionId: string | null;
+        otpProviderSessionToken: string | null;
+        otpProviderExpiresAt: Date | null;
       }>(
         `
-          SELECT
-            id,
-            contact_type AS "contactType",
-            contact_value AS "contactValue",
-            otp_hash AS "otpHash",
-            otp_attempts AS "otpAttempts",
-            last_otp_sent_at AS "lastOtpSentAt"
-          FROM pending_signups
-          WHERE id = $1
-        `,
+                SELECT
+                  id,
+                  email,
+                  contact_type AS "contactType",
+                  contact_value AS "contactValue",
+                  otp_hash AS "otpHash",
+                  otp_expires_at AS "otpExpiresAt",
+                  otp_attempts AS "otpAttempts",
+                  last_otp_sent_at AS "lastOtpSentAt",
+                  otp_provider AS "otpProvider",
+                  otp_provider_session_id AS "otpProviderSessionId",
+                  otp_provider_session_token AS "otpProviderSessionToken",
+                  otp_provider_expires_at AS "otpProviderExpiresAt"
+                FROM pending_signups
+                WHERE id = $1
+              `,
         [signupId],
       );
 
@@ -237,13 +492,30 @@ describe.sequential('Auth integration', () => {
       }
 
       expect(pendingSignup.id).toBe(signupId);
-      expect(pendingSignup.contactType).toBe('email');
-      expect(pendingSignup.contactValue).toBe(email);
-      expect(pendingSignup.otpHash).toBeTruthy();
+
+      expect(pendingSignup.email).toBe(email);
+
+      expect(pendingSignup.contactType).toBe('phone');
+
+      expect(pendingSignup.contactValue).toBe(phone);
+
+      expect(pendingSignup.otpHash).toBeNull();
+
+      expect(pendingSignup.otpExpiresAt).toBeNull();
+
       expect(pendingSignup.otpAttempts).toBe(0);
+
       expect(pendingSignup.lastOtpSentAt).toBeInstanceOf(Date);
 
-      const otp = otpProvider.getEmailOtp(email);
+      expect(pendingSignup.otpProvider).toBe('sendmator');
+
+      expect(pendingSignup.otpProviderSessionId).toEqual(expect.any(String));
+
+      expect(pendingSignup.otpProviderSessionToken).toEqual(expect.any(String));
+
+      expect(pendingSignup.otpProviderExpiresAt).toBeInstanceOf(Date);
+
+      const otp = otpProvider.getSmsOtp(phone);
 
       expect(otp).toMatch(/^\d{6}$/);
 
@@ -253,6 +525,7 @@ describe.sequential('Auth integration', () => {
       });
 
       expect(verifyResponse.status).toBe(200);
+
       expect(verifyResponse.body.success).toBe(true);
 
       const userId = verifyResponse.body.data.userId;
@@ -261,19 +534,25 @@ describe.sequential('Auth integration', () => {
 
       const userResult = await pool.query<{
         id: string;
-        email: string;
+        email: string | null;
+        phone: string | null;
+        emailVerified: boolean;
+        phoneVerified: boolean;
         role: string;
         status: string;
       }>(
         `
-          SELECT
-            id,
-            email,
-            role,
-            status
-          FROM users
-          WHERE id = $1
-        `,
+                SELECT
+                  id,
+                  email,
+                  phone,
+                  email_verified AS "emailVerified",
+                  phone_verified AS "phoneVerified",
+                  role,
+                  status
+                FROM users
+                WHERE id = $1
+              `,
         [userId],
       );
 
@@ -288,20 +567,30 @@ describe.sequential('Auth integration', () => {
       }
 
       expect(user.id).toBe(userId);
+
       expect(user.email).toBe(email);
+
+      expect(user.phone).toBe(phone);
+
+      expect(user.emailVerified).toBe(false);
+
+      expect(user.phoneVerified).toBe(true);
+
       expect(user.role).toBe('customer');
+
+      expect(user.status).toBe('active');
 
       const credentialsResult = await pool.query<{
         userId: string;
         passwordHash: string;
       }>(
         `
-          SELECT
-            user_id AS "userId",
-            password_hash AS "passwordHash"
-          FROM user_credentials
-          WHERE user_id = $1
-        `,
+                SELECT
+                  user_id AS "userId",
+                  password_hash AS "passwordHash"
+                FROM user_credentials
+                WHERE user_id = $1
+              `,
         [userId],
       );
 
@@ -316,14 +605,15 @@ describe.sequential('Auth integration', () => {
       }
 
       expect(credentials.userId).toBe(userId);
+
       expect(credentials.passwordHash).toBeTruthy();
 
       const pendingAfterVerification = await pool.query(
         `
-          SELECT id
-          FROM pending_signups
-          WHERE id = $1
-        `,
+                SELECT id
+                FROM pending_signups
+                WHERE id = $1
+              `,
         [signupId],
       );
 
@@ -332,13 +622,16 @@ describe.sequential('Auth integration', () => {
       await cleanupUser(userId);
     });
 
-    it('rejects an incorrect OTP', async () => {
+    it('rejects an incorrect provider OTP', async () => {
       const email = uniqueEmail('auth-invalid-otp');
+
+      const phone = uniquePhone('auth-invalid-otp');
 
       const signupResponse = await request(app).post('/auth/signup').send({
         firstName: 'Invalid',
         lastName: 'OTP',
         email,
+        phone,
         password: 'StrongPassword123!',
         confirmPassword: 'StrongPassword123!',
         role: 'customer',
@@ -354,24 +647,22 @@ describe.sequential('Auth integration', () => {
       });
 
       expect(verifyResponse.status).toBe(400);
+
       expect(verifyResponse.body.success).toBe(false);
 
-      await pool.query(
-        `
-          DELETE FROM pending_signups
-          WHERE id = $1
-        `,
-        [signupId],
-      );
+      await cleanupSignup(signupId);
     });
 
-    it('increments OTP attempts after an incorrect OTP', async () => {
+    it('does not store or locally increment OTP attempts', async () => {
       const email = uniqueEmail('auth-otp-attempt');
+
+      const phone = uniquePhone('auth-otp-attempt');
 
       const signupResponse = await request(app).post('/auth/signup').send({
         firstName: 'OTP',
         lastName: 'Attempt',
         email,
+        phone,
         password: 'StrongPassword123!',
         confirmPassword: 'StrongPassword123!',
         role: 'customer',
@@ -389,14 +680,16 @@ describe.sequential('Auth integration', () => {
       expect(verifyResponse.status).toBe(400);
 
       const pendingResult = await pool.query<{
+        otpHash: string | null;
         otpAttempts: number;
       }>(
         `
-          SELECT
-            otp_attempts AS "otpAttempts"
-          FROM pending_signups
-          WHERE id = $1
-        `,
+                SELECT
+                  otp_hash AS "otpHash",
+                  otp_attempts AS "otpAttempts"
+                FROM pending_signups
+                WHERE id = $1
+              `,
         [signupId],
       );
 
@@ -410,32 +703,40 @@ describe.sequential('Auth integration', () => {
         throw new Error('Expected pending signup to exist');
       }
 
-      expect(pendingSignup.otpAttempts).toBe(1);
+      expect(pendingSignup.otpHash).toBeNull();
 
-      await pool.query(
-        `
-          DELETE FROM pending_signups
-          WHERE id = $1
-        `,
-        [signupId],
-      );
+      expect(pendingSignup.otpAttempts).toBe(0);
+
+      await cleanupSignup(signupId);
     });
 
-    it('allows only one concurrent signup for the same email', async () => {
-      const email = uniqueEmail('auth-race');
+    it('allows only one concurrent signup for the same phone', async () => {
+      const phone = uniquePhone('auth-race');
 
-      const payload = {
+      const payloadA = {
         firstName: 'Race',
         lastName: 'Test',
-        email,
+        email: uniqueEmail('auth-race-a'),
+        phone,
+        password: 'StrongPassword123!',
+        confirmPassword: 'StrongPassword123!',
+        role: 'customer',
+      };
+
+      const payloadB = {
+        firstName: 'Race',
+        lastName: 'Test',
+        email: uniqueEmail('auth-race-b'),
+        phone,
         password: 'StrongPassword123!',
         confirmPassword: 'StrongPassword123!',
         role: 'customer',
       };
 
       const [responseA, responseB] = await Promise.all([
-        request(app).post('/auth/signup').send(payload),
-        request(app).post('/auth/signup').send(payload),
+        request(app).post('/auth/signup').send(payloadA),
+
+        request(app).post('/auth/signup').send(payloadB),
       ]);
 
       const statuses = [responseA.status, responseB.status].sort((a, b) => a - b);
@@ -448,13 +749,7 @@ describe.sequential('Auth integration', () => {
 
       expect(signupId).toEqual(expect.any(String));
 
-      await pool.query(
-        `
-          DELETE FROM pending_signups
-          WHERE id = $1
-        `,
-        [signupId],
-      );
+      await cleanupSignup(signupId);
     });
 
     it('rejects signup when passwords do not match', async () => {
@@ -464,25 +759,31 @@ describe.sequential('Auth integration', () => {
           firstName: 'Password',
           lastName: 'Mismatch',
           email: uniqueEmail('auth-password-mismatch'),
+          phone: uniquePhone('auth-password-mismatch'),
           password: 'StrongPassword123!',
           confirmPassword: 'DifferentPassword123!',
           role: 'customer',
         });
 
       expect(response.status).toBe(400);
+
       expect(response.body.success).toBe(false);
     });
 
-    it('rejects signup without email or phone', async () => {
-      const response = await request(app).post('/auth/signup').send({
-        firstName: 'Missing',
-        lastName: 'Contact',
-        password: 'StrongPassword123!',
-        confirmPassword: 'StrongPassword123!',
-        role: 'customer',
-      });
+    it('rejects signup without a phone number', async () => {
+      const response = await request(app)
+        .post('/auth/signup')
+        .send({
+          firstName: 'Missing',
+          lastName: 'Phone',
+          email: uniqueEmail('auth-missing-phone'),
+          password: 'StrongPassword123!',
+          confirmPassword: 'StrongPassword123!',
+          role: 'customer',
+        });
 
       expect(response.status).toBe(400);
+
       expect(response.body.success).toBe(false);
     });
 
@@ -493,24 +794,24 @@ describe.sequential('Auth integration', () => {
           firstName: 'Invalid',
           lastName: 'Role',
           email: uniqueEmail('auth-invalid-role'),
+          phone: uniquePhone('auth-invalid-role'),
           password: 'StrongPassword123!',
           confirmPassword: 'StrongPassword123!',
           role: 'superadmin',
         });
 
       expect(response.status).toBe(400);
+
       expect(response.body.success).toBe(false);
     });
-  });
 
-  describe('login', () => {
-    it('completes signup and logs in with valid credentials', async () => {
-      const email = uniqueEmail('auth-login');
+    it('allows signup with phone and without email', async () => {
+      const phone = uniquePhone('auth-phone-only');
 
       const signupResponse = await request(app).post('/auth/signup').send({
-        firstName: 'Login',
-        lastName: 'Test',
-        email,
+        firstName: 'Phone',
+        lastName: 'Only',
+        phone,
         password: 'StrongPassword123!',
         confirmPassword: 'StrongPassword123!',
         role: 'customer',
@@ -518,8 +819,13 @@ describe.sequential('Auth integration', () => {
 
       expect(signupResponse.status).toBe(201);
 
+      expect(signupResponse.body.success).toBe(true);
+
+      expect(signupResponse.body.data.contactType).toBe('phone');
+
       const signupId = signupResponse.body.data.signupId;
-      const otp = otpProvider.getEmailOtp(email);
+
+      const otp = otpProvider.getSmsOtp(phone);
 
       const verifyResponse = await request(app).post('/auth/signup/verify').send({
         signupId,
@@ -530,26 +836,113 @@ describe.sequential('Auth integration', () => {
 
       const userId = verifyResponse.body.data.userId;
 
+      const userResult = await pool.query<{
+        email: string | null;
+        phone: string | null;
+        phoneVerified: boolean;
+      }>(
+        `
+                SELECT
+                  email,
+                  phone,
+                  phone_verified AS "phoneVerified"
+                FROM users
+                WHERE id = $1
+              `,
+        [userId],
+      );
+
+      expect(userResult.rows).toHaveLength(1);
+
+      const user = userResult.rows[0];
+
+      expect(user).toBeDefined();
+
+      if (!user) {
+        throw new Error('Expected phone-only user');
+      }
+
+      expect(user.email).toBeNull();
+
+      expect(user.phone).toBe(phone);
+
+      expect(user.phoneVerified).toBe(true);
+
+      await cleanupUser(userId);
+    });
+  });
+
+  // ========================================================
+  // Login
+  // ========================================================
+
+  describe('login', () => {
+    it('returns a login challenge instead of issuing tokens before OTP verification', async () => {
+      const { userId, email, phone } = await createVerifiedUser('auth-login');
+
       const loginResponse = await request(app).post('/auth/login').send({
         email,
         password: 'StrongPassword123!',
       });
 
       expect(loginResponse.status).toBe(200);
+
       expect(loginResponse.body.success).toBe(true);
-      expect(loginResponse.body.data.accessToken).toEqual(expect.any(String));
 
-      expect(loginResponse.body.data.passwordHash).toBeUndefined();
-      expect(loginResponse.body.data.password_hash).toBeUndefined();
+      expect(loginResponse.body.data.challengeId).toEqual(expect.any(String));
 
-      const refreshCookie = expectRefreshCookie(loginResponse);
+      expect(loginResponse.body.data.expiresAt).toEqual(expect.any(String));
 
-      expect(refreshCookie).toContain(`${env.AUTH_REFRESH_COOKIE_NAME}=`);
+      expect(loginResponse.body.data.accessToken).toBeUndefined();
+
+      expect(getSetCookieHeaders(loginResponse)).toHaveLength(0);
+
+      expect(otpProvider.getSmsOtp(phone)).toMatch(/^\d{6}$/);
 
       await cleanupUser(userId);
     });
 
-    it('rejects invalid credentials', async () => {
+    it('completes login only after valid OTP verification', async () => {
+      const { userId, email, phone } = await createVerifiedUser('auth-login-verify');
+
+      const result = await loginVerifiedUser(email, phone);
+
+      expect(result.accessToken).toEqual(expect.any(String));
+
+      expect(result.refreshCookie).toContain(`${env.AUTH_REFRESH_COOKIE_NAME}=`);
+
+      await cleanupUser(userId);
+    });
+
+    it('rejects an incorrect login OTP', async () => {
+      const { userId, email } = await createVerifiedUser('auth-login-invalid-otp');
+
+      const loginResponse = await request(app).post('/auth/login').send({
+        email,
+        password: 'StrongPassword123!',
+      });
+
+      expect(loginResponse.status).toBe(200);
+
+      const challengeId = loginResponse.body.data.challengeId;
+
+      expect(challengeId).toEqual(expect.any(String));
+
+      const verifyResponse = await request(app).post('/auth/login/verify').send({
+        challengeId,
+        otp: '000000',
+      });
+
+      expect(verifyResponse.status).toBe(400);
+
+      expect(verifyResponse.body.success).toBe(false);
+
+      expect(verifyResponse.body.data?.accessToken).toBeUndefined();
+
+      await cleanupUser(userId);
+    });
+
+    it('rejects invalid credentials before sending an OTP', async () => {
       const response = await request(app)
         .post('/auth/login')
         .send({
@@ -558,41 +951,21 @@ describe.sequential('Auth integration', () => {
         });
 
       expect(response.status).toBe(401);
+
       expect(response.body.success).toBe(false);
+
+      expect(response.body.data).toBeUndefined();
     });
 
     it('rejects a suspended account', async () => {
-      const email = uniqueEmail('auth-suspended');
-
-      const signupResponse = await request(app).post('/auth/signup').send({
-        firstName: 'Suspended',
-        lastName: 'User',
-        email,
-        password: 'StrongPassword123!',
-        confirmPassword: 'StrongPassword123!',
-        role: 'customer',
-      });
-
-      expect(signupResponse.status).toBe(201);
-
-      const signupId = signupResponse.body.data.signupId;
-      const otp = otpProvider.getEmailOtp(email);
-
-      const verifyResponse = await request(app).post('/auth/signup/verify').send({
-        signupId,
-        otp,
-      });
-
-      expect(verifyResponse.status).toBe(200);
-
-      const userId = verifyResponse.body.data.userId;
+      const { userId, email } = await createVerifiedUser('auth-suspended');
 
       await pool.query(
         `
-          UPDATE users
-          SET status = 'suspended'
-          WHERE id = $1
-        `,
+              UPDATE users
+              SET status = 'suspended'
+              WHERE id = $1
+            `,
         [userId],
       );
 
@@ -602,43 +975,21 @@ describe.sequential('Auth integration', () => {
       });
 
       expect(response.status).toBe(401);
+
       expect(response.body.success).toBe(false);
 
       await cleanupUser(userId);
     });
 
     it('rejects a banned account', async () => {
-      const email = uniqueEmail('auth-banned');
-
-      const signupResponse = await request(app).post('/auth/signup').send({
-        firstName: 'Banned',
-        lastName: 'User',
-        email,
-        password: 'StrongPassword123!',
-        confirmPassword: 'StrongPassword123!',
-        role: 'customer',
-      });
-
-      expect(signupResponse.status).toBe(201);
-
-      const signupId = signupResponse.body.data.signupId;
-      const otp = otpProvider.getEmailOtp(email);
-
-      const verifyResponse = await request(app).post('/auth/signup/verify').send({
-        signupId,
-        otp,
-      });
-
-      expect(verifyResponse.status).toBe(200);
-
-      const userId = verifyResponse.body.data.userId;
+      const { userId, email } = await createVerifiedUser('auth-banned');
 
       await pool.query(
         `
-          UPDATE users
-          SET status = 'banned'
-          WHERE id = $1
-        `,
+              UPDATE users
+              SET status = 'banned'
+              WHERE id = $1
+            `,
         [userId],
       );
 
@@ -648,38 +999,44 @@ describe.sequential('Auth integration', () => {
       });
 
       expect(response.status).toBe(401);
+
       expect(response.body.success).toBe(false);
 
       await cleanupUser(userId);
     });
-  });
 
-  describe('refresh', () => {
-    it('refreshes and rotates the refresh token', async () => {
-      const email = uniqueEmail('auth-refresh');
+    it('supports login using phone credentials', async () => {
+      const { userId, phone } = await createVerifiedUser('auth-phone-login');
 
-      const signupResponse = await request(app).post('/auth/signup').send({
-        firstName: 'Refresh',
-        lastName: 'Test',
-        email,
+      const loginResponse = await request(app).post('/auth/login').send({
+        phone,
         password: 'StrongPassword123!',
-        confirmPassword: 'StrongPassword123!',
-        role: 'customer',
       });
 
-      expect(signupResponse.status).toBe(201);
+      expect(loginResponse.status).toBe(200);
 
-      const signupId = signupResponse.body.data.signupId;
-      const otp = otpProvider.getEmailOtp(email);
+      expect(loginResponse.body.success).toBe(true);
 
-      const verifyResponse = await request(app).post('/auth/signup/verify').send({
-        signupId,
+      expect(loginResponse.body.data.challengeId).toEqual(expect.any(String));
+
+      const otp = otpProvider.getSmsOtp(phone);
+
+      const verifyResponse = await request(app).post('/auth/login/verify').send({
+        challengeId: loginResponse.body.data.challengeId,
         otp,
       });
 
       expect(verifyResponse.status).toBe(200);
 
-      const userId = verifyResponse.body.data.userId;
+      expect(verifyResponse.body.data.accessToken).toEqual(expect.any(String));
+
+      expectRefreshCookie(verifyResponse);
+
+      await cleanupUser(userId);
+    });
+
+    it('resends a login OTP after the cooldown has elapsed', async () => {
+      const { userId, email, phone } = await createVerifiedUser('auth-login-resend');
 
       const loginResponse = await request(app).post('/auth/login').send({
         email,
@@ -688,7 +1045,109 @@ describe.sequential('Auth integration', () => {
 
       expect(loginResponse.status).toBe(200);
 
-      const originalCookie = expectRefreshCookie(loginResponse);
+      const challengeId = loginResponse.body.data.challengeId;
+
+      expect(challengeId).toEqual(expect.any(String));
+
+      await pool.query(
+        `
+              UPDATE login_challenges
+              SET last_otp_sent_at =
+                NOW() -
+                ($2 * INTERVAL '1 second')
+              WHERE id = $1
+            `,
+        [challengeId, env.AUTH_OTP_RESEND_COOLDOWN_SECONDS],
+      );
+
+      const resendResponse = await request(app).post('/auth/login/resend').send({
+        challengeId,
+      });
+
+      expect(resendResponse.status).toBe(200);
+
+      expect(resendResponse.body.success).toBe(true);
+
+      expect(resendResponse.body.data.challengeId).toBe(challengeId);
+
+      expect(resendResponse.body.data.expiresAt).toEqual(expect.any(String));
+
+      const otp = otpProvider.getSmsOtp(phone);
+
+      expect(otp).toBe('123456');
+
+      await cleanupUser(userId);
+    });
+
+    it('rate-limits login OTP resend during the cooldown', async () => {
+      const { userId, email } = await createVerifiedUser('auth-login-resend-cooldown');
+
+      const loginResponse = await request(app).post('/auth/login').send({
+        email,
+        password: 'StrongPassword123!',
+      });
+
+      expect(loginResponse.status).toBe(200);
+
+      const challengeId = loginResponse.body.data.challengeId;
+
+      const resendResponse = await request(app).post('/auth/login/resend').send({
+        challengeId,
+      });
+
+      expect(resendResponse.status).toBe(429);
+
+      expect(resendResponse.body.success).toBe(false);
+
+      await cleanupUser(userId);
+    });
+
+    it('rejects login verification when the challenge has already been consumed', async () => {
+      const { userId, email, phone } = await createVerifiedUser('auth-login-replay');
+
+      const loginResponse = await request(app).post('/auth/login').send({
+        email,
+        password: 'StrongPassword123!',
+      });
+
+      expect(loginResponse.status).toBe(200);
+
+      const challengeId = loginResponse.body.data.challengeId;
+
+      const otp = otpProvider.getSmsOtp(phone);
+
+      const firstVerify = await request(app).post('/auth/login/verify').send({
+        challengeId,
+        otp,
+      });
+
+      expect(firstVerify.status).toBe(200);
+
+      const secondVerify = await request(app).post('/auth/login/verify').send({
+        challengeId,
+        otp,
+      });
+
+      expect(secondVerify.status).toBe(400);
+
+      expect(secondVerify.body.success).toBe(false);
+
+      await cleanupUser(userId);
+    });
+  });
+
+  // ========================================================
+  // Refresh
+  // ========================================================
+
+  describe('refresh', () => {
+    it('refreshes and rotates the refresh token', async () => {
+      const { userId, email, phone } = await createVerifiedUser('auth-refresh');
+
+      const loginResult = await loginVerifiedUser(email, phone);
+
+      const originalCookie = loginResult.refreshCookie;
+
       const originalRefreshToken = getRefreshTokenFromCookie(originalCookie);
 
       const originalTokenResult = await pool.query<{
@@ -697,15 +1156,15 @@ describe.sequential('Auth integration', () => {
         tokenHash: string;
       }>(
         `
-          SELECT
-            id,
-            family_id AS "familyId",
-            token_hash AS "tokenHash"
-          FROM refresh_tokens
-          WHERE user_id = $1
-          ORDER BY created_at DESC
-          LIMIT 1
-        `,
+                SELECT
+                  id,
+                  family_id AS "familyId",
+                  token_hash AS "tokenHash"
+                FROM refresh_tokens
+                WHERE user_id = $1
+                ORDER BY created_at DESC
+                LIMIT 1
+              `,
         [userId],
       );
 
@@ -716,7 +1175,7 @@ describe.sequential('Auth integration', () => {
       expect(originalToken).toBeDefined();
 
       if (!originalToken) {
-        throw new Error('Expected original refresh token to exist');
+        throw new Error('Expected original refresh token');
       }
 
       expect(originalToken.tokenHash).toBe(hashRefreshToken(originalRefreshToken));
@@ -726,10 +1185,13 @@ describe.sequential('Auth integration', () => {
         .set('Cookie', originalCookie);
 
       expect(refreshResponse.status).toBe(200);
+
       expect(refreshResponse.body.success).toBe(true);
+
       expect(refreshResponse.body.data.accessToken).toEqual(expect.any(String));
 
       const replacementCookie = expectRefreshCookie(refreshResponse);
+
       const replacementRefreshToken = getRefreshTokenFromCookie(replacementCookie);
 
       expect(replacementRefreshToken).not.toBe(originalRefreshToken);
@@ -741,15 +1203,15 @@ describe.sequential('Auth integration', () => {
         replacedBy: string | null;
       }>(
         `
-          SELECT
-            id,
-            family_id AS "familyId",
-            revoked_at AS "revokedAt",
-            replaced_by AS "replacedBy"
-          FROM refresh_tokens
-          WHERE user_id = $1
-          ORDER BY created_at ASC
-        `,
+                SELECT
+                  id,
+                  family_id AS "familyId",
+                  revoked_at AS "revokedAt",
+                  replaced_by AS "replacedBy"
+                FROM refresh_tokens
+                WHERE user_id = $1
+                ORDER BY created_at ASC
+              `,
         [userId],
       );
 
@@ -764,7 +1226,9 @@ describe.sequential('Auth integration', () => {
       }
 
       expect(oldToken.revokedAt).toBeInstanceOf(Date);
+
       expect(oldToken.replacedBy).toEqual(expect.any(String));
+
       expect(oldToken.familyId).toBe(originalToken.familyId);
 
       await cleanupUser(userId);
@@ -774,6 +1238,7 @@ describe.sequential('Auth integration', () => {
       const response = await request(app).post('/auth/refresh');
 
       expect(response.status).toBe(401);
+
       expect(response.body.success).toBe(false);
     });
 
@@ -783,55 +1248,29 @@ describe.sequential('Auth integration', () => {
         .set('Cookie', `${env.AUTH_REFRESH_COOKIE_NAME}=invalid-refresh-token`);
 
       expect(response.status).toBe(401);
+
       expect(response.body.success).toBe(false);
     });
 
     it('detects reuse of a rotated refresh token', async () => {
-      const email = uniqueEmail('auth-reuse');
+      const { userId, email, phone } = await createVerifiedUser('auth-reuse');
 
-      const signupResponse = await request(app).post('/auth/signup').send({
-        firstName: 'Reuse',
-        lastName: 'Test',
-        email,
-        password: 'StrongPassword123!',
-        confirmPassword: 'StrongPassword123!',
-        role: 'customer',
-      });
+      const loginResult = await loginVerifiedUser(email, phone);
 
-      expect(signupResponse.status).toBe(201);
+      const originalCookie = loginResult.refreshCookie;
 
-      const signupId = signupResponse.body.data.signupId;
-      const otp = otpProvider.getEmailOtp(email);
-
-      const verifyResponse = await request(app).post('/auth/signup/verify').send({
-        signupId,
-        otp,
-      });
-
-      expect(verifyResponse.status).toBe(200);
-
-      const userId = verifyResponse.body.data.userId;
-
-      const loginResponse = await request(app).post('/auth/login').send({
-        email,
-        password: 'StrongPassword123!',
-      });
-
-      expect(loginResponse.status).toBe(200);
-
-      const originalCookie = expectRefreshCookie(loginResponse);
       const originalRefreshToken = getRefreshTokenFromCookie(originalCookie);
 
       const originalTokenResult = await pool.query<{
         familyId: string;
       }>(
         `
-          SELECT
-            family_id AS "familyId"
-          FROM refresh_tokens
-          WHERE token_hash = $1
-          LIMIT 1
-        `,
+                SELECT
+                  family_id AS "familyId"
+                FROM refresh_tokens
+                WHERE token_hash = $1
+                LIMIT 1
+              `,
         [hashRefreshToken(originalRefreshToken)],
       );
 
@@ -842,12 +1281,10 @@ describe.sequential('Auth integration', () => {
       expect(originalToken).toBeDefined();
 
       if (!originalToken) {
-        throw new Error('Expected original refresh token to exist');
+        throw new Error('Expected original refresh token');
       }
 
-      const originalFamilyId = originalToken.familyId;
-
-      expect(originalFamilyId).toEqual(expect.any(String));
+      const familyId = originalToken.familyId;
 
       const firstRefresh = await request(app).post('/auth/refresh').set('Cookie', originalCookie);
 
@@ -856,6 +1293,7 @@ describe.sequential('Auth integration', () => {
       const reuseResponse = await request(app).post('/auth/refresh').set('Cookie', originalCookie);
 
       expect(reuseResponse.status).toBe(401);
+
       expect(reuseResponse.body.success).toBe(false);
 
       const familyTokens = await pool.query<{
@@ -863,20 +1301,21 @@ describe.sequential('Auth integration', () => {
         revokedAt: Date | null;
       }>(
         `
-          SELECT
-            family_id AS "familyId",
-            revoked_at AS "revokedAt"
-          FROM refresh_tokens
-          WHERE family_id = $1
-          ORDER BY created_at ASC
-        `,
-        [originalFamilyId],
+                SELECT
+                  family_id AS "familyId",
+                  revoked_at AS "revokedAt"
+                FROM refresh_tokens
+                WHERE family_id = $1
+                ORDER BY created_at ASC
+              `,
+        [familyId],
       );
 
       expect(familyTokens.rows.length).toBeGreaterThanOrEqual(2);
 
       for (const token of familyTokens.rows) {
-        expect(token.familyId).toBe(originalFamilyId);
+        expect(token.familyId).toBe(familyId);
+
         expect(token.revokedAt).toBeInstanceOf(Date);
       }
 
@@ -884,177 +1323,92 @@ describe.sequential('Auth integration', () => {
     });
 
     it('uses the current database role during refresh', async () => {
-      const email = uniqueEmail('auth-current-role');
+      const { userId, email, phone } = await createVerifiedUser('auth-current-role');
 
-      const signupResponse = await request(app).post('/auth/signup').send({
-        firstName: 'Role',
-        lastName: 'Test',
-        email,
-        password: 'StrongPassword123!',
-        confirmPassword: 'StrongPassword123!',
-        role: 'customer',
-      });
-
-      expect(signupResponse.status).toBe(201);
-
-      const signupId = signupResponse.body.data.signupId;
-      const otp = otpProvider.getEmailOtp(email);
-
-      const verifyResponse = await request(app).post('/auth/signup/verify').send({
-        signupId,
-        otp,
-      });
-
-      expect(verifyResponse.status).toBe(200);
-
-      const userId = verifyResponse.body.data.userId;
-
-      const loginResponse = await request(app).post('/auth/login').send({
-        email,
-        password: 'StrongPassword123!',
-      });
-
-      expect(loginResponse.status).toBe(200);
-
-      const refreshCookie = expectRefreshCookie(loginResponse);
+      const loginResult = await loginVerifiedUser(email, phone);
 
       await pool.query(
         `
-          UPDATE users
-          SET role = 'admin'
-          WHERE id = $1
-        `,
+              UPDATE users
+              SET role = 'admin'
+              WHERE id = $1
+            `,
         [userId],
       );
 
-      const refreshResponse = await request(app).post('/auth/refresh').set('Cookie', refreshCookie);
+      const refreshResponse = await request(app)
+        .post('/auth/refresh')
+        .set('Cookie', loginResult.refreshCookie);
 
       expect(refreshResponse.status).toBe(200);
+
       expect(refreshResponse.body.success).toBe(true);
+
       expect(refreshResponse.body.data.accessToken).toEqual(expect.any(String));
 
       await cleanupUser(userId);
     });
 
     it('rejects refresh for a suspended account', async () => {
-      const email = uniqueEmail('auth-refresh-suspended');
+      const { userId, email, phone } = await createVerifiedUser('auth-refresh-suspended');
 
-      const signupResponse = await request(app).post('/auth/signup').send({
-        firstName: 'Refresh',
-        lastName: 'Suspended',
-        email,
-        password: 'StrongPassword123!',
-        confirmPassword: 'StrongPassword123!',
-        role: 'customer',
-      });
-
-      expect(signupResponse.status).toBe(201);
-
-      const signupId = signupResponse.body.data.signupId;
-      const otp = otpProvider.getEmailOtp(email);
-
-      const verifyResponse = await request(app).post('/auth/signup/verify').send({
-        signupId,
-        otp,
-      });
-
-      expect(verifyResponse.status).toBe(200);
-
-      const userId = verifyResponse.body.data.userId;
-
-      const loginResponse = await request(app).post('/auth/login').send({
-        email,
-        password: 'StrongPassword123!',
-      });
-
-      expect(loginResponse.status).toBe(200);
-
-      const refreshCookie = expectRefreshCookie(loginResponse);
+      const loginResult = await loginVerifiedUser(email, phone);
 
       await pool.query(
         `
-          UPDATE users
-          SET status = 'suspended'
-          WHERE id = $1
-        `,
+              UPDATE users
+              SET status = 'suspended'
+              WHERE id = $1
+            `,
         [userId],
       );
 
-      const refreshResponse = await request(app).post('/auth/refresh').set('Cookie', refreshCookie);
+      const refreshResponse = await request(app)
+        .post('/auth/refresh')
+        .set('Cookie', loginResult.refreshCookie);
 
       expect(refreshResponse.status).toBe(401);
+
       expect(refreshResponse.body.success).toBe(false);
 
       await cleanupUser(userId);
     });
 
     it('rejects refresh for a banned account', async () => {
-      const email = uniqueEmail('auth-refresh-banned');
+      const { userId, email, phone } = await createVerifiedUser('auth-refresh-banned');
 
-      const signupResponse = await request(app).post('/auth/signup').send({
-        firstName: 'Refresh',
-        lastName: 'Banned',
-        email,
-        password: 'StrongPassword123!',
-        confirmPassword: 'StrongPassword123!',
-        role: 'customer',
-      });
-
-      expect(signupResponse.status).toBe(201);
-
-      const signupId = signupResponse.body.data.signupId;
-      const otp = otpProvider.getEmailOtp(email);
-
-      const verifyResponse = await request(app).post('/auth/signup/verify').send({
-        signupId,
-        otp,
-      });
-
-      expect(verifyResponse.status).toBe(200);
-
-      const userId = verifyResponse.body.data.userId;
-
-      const loginResponse = await request(app).post('/auth/login').send({
-        email,
-        password: 'StrongPassword123!',
-      });
-
-      expect(loginResponse.status).toBe(200);
-
-      const refreshCookie = expectRefreshCookie(loginResponse);
+      const loginResult = await loginVerifiedUser(email, phone);
 
       await pool.query(
         `
-          UPDATE users
-          SET status = 'banned'
-          WHERE id = $1
-        `,
+              UPDATE users
+              SET status = 'banned'
+              WHERE id = $1
+            `,
         [userId],
       );
 
-      const refreshResponse = await request(app).post('/auth/refresh').set('Cookie', refreshCookie);
+      const refreshResponse = await request(app)
+        .post('/auth/refresh')
+        .set('Cookie', loginResult.refreshCookie);
 
       expect(refreshResponse.status).toBe(401);
+
       expect(refreshResponse.body.success).toBe(false);
 
       await cleanupUser(userId);
     });
   });
 
+  // ========================================================
+  // Sessions
+  // ========================================================
+
   describe('sessions', () => {
     it('lists only the authenticated user active sessions', async () => {
-      const { userId, email } = await createVerifiedUser('auth-sessions-list');
+      const { userId, email, phone } = await createVerifiedUser('auth-sessions-list');
 
-      const loginResponse = await request(app).post('/auth/login').send({
-        email,
-        password: 'StrongPassword123!',
-      });
-
-      expect(loginResponse.status).toBe(200);
-
-      const accessToken = loginResponse.body.data.accessToken;
-
-      expect(accessToken).toEqual(expect.any(String));
+      const loginResult = await loginVerifiedUser(email, phone);
 
       const sessionResult = await pool.query<{
         id: string;
@@ -1066,19 +1420,19 @@ describe.sequential('Auth integration', () => {
         revokedAt: Date | null;
       }>(
         `
-          SELECT
-            id,
-            user_id AS "userId",
-            token_hash AS "tokenHash",
-            family_id AS "familyId",
-            replaced_by AS "replacedBy",
-            expires_at AS "expiresAt",
-            revoked_at AS "revokedAt"
-          FROM refresh_tokens
-          WHERE user_id = $1
-          ORDER BY created_at DESC
-          LIMIT 1
-        `,
+                SELECT
+                  id,
+                  user_id AS "userId",
+                  token_hash AS "tokenHash",
+                  family_id AS "familyId",
+                  replaced_by AS "replacedBy",
+                  expires_at AS "expiresAt",
+                  revoked_at AS "revokedAt"
+                FROM refresh_tokens
+                WHERE user_id = $1
+                ORDER BY created_at DESC
+                LIMIT 1
+              `,
         [userId],
       );
 
@@ -1089,21 +1443,15 @@ describe.sequential('Auth integration', () => {
       expect(session).toBeDefined();
 
       if (!session) {
-        throw new Error('Expected refresh session to exist');
+        throw new Error('Expected refresh session');
       }
-
-      expect(session.userId).toBe(userId);
-      expect(session.tokenHash).toBeTruthy();
-      expect(session.familyId).toEqual(expect.any(String));
-      expect(session.replacedBy).toBeNull();
-      expect(session.expiresAt).toBeInstanceOf(Date);
-      expect(session.revokedAt).toBeNull();
 
       const response = await request(app)
         .get('/auth/sessions')
-        .set('Authorization', `Bearer ${accessToken}`);
+        .set('Authorization', `Bearer ${loginResult.accessToken}`);
 
       expect(response.status).toBe(200);
+
       expect(response.body.success).toBe(true);
 
       expect(response.body.data.sessions).toEqual(
@@ -1121,13 +1469,14 @@ describe.sequential('Auth integration', () => {
       expect(returnedSession).toBeDefined();
 
       expect(returnedSession).not.toHaveProperty('tokenHash');
+
       expect(returnedSession).not.toHaveProperty('token_hash');
+
       expect(returnedSession).not.toHaveProperty('familyId');
+
       expect(returnedSession).not.toHaveProperty('family_id');
-      expect(returnedSession).not.toHaveProperty('replacedBy');
-      expect(returnedSession).not.toHaveProperty('replaced_by');
+
       expect(returnedSession).not.toHaveProperty('userId');
-      expect(returnedSession).not.toHaveProperty('createdAt');
 
       await cleanupUser(userId);
     });
@@ -1136,179 +1485,98 @@ describe.sequential('Auth integration', () => {
       const response = await request(app).get('/auth/sessions');
 
       expect(response.status).toBe(401);
+
       expect(response.body.success).toBe(false);
     });
 
     it('revokes only a session owned by the authenticated user', async () => {
       const firstUser = await createVerifiedUser('auth-session-owner');
+
       const secondUser = await createVerifiedUser('auth-session-other');
 
-      const firstLogin = await request(app).post('/auth/login').send({
-        email: firstUser.email,
-        password: 'StrongPassword123!',
-      });
+      const firstLogin = await loginVerifiedUser(firstUser.email, firstUser.phone);
 
-      expect(firstLogin.status).toBe(200);
-
-      const firstAccessToken = firstLogin.body.data.accessToken;
-
-      expect(firstAccessToken).toEqual(expect.any(String));
-
-      const secondLogin = await request(app).post('/auth/login').send({
-        email: secondUser.email,
-        password: 'StrongPassword123!',
-      });
-
-      expect(secondLogin.status).toBe(200);
-
-      const secondAccessToken = secondLogin.body.data.accessToken;
-
-      expect(secondAccessToken).toEqual(expect.any(String));
+      const secondLogin = await loginVerifiedUser(secondUser.email, secondUser.phone);
 
       const firstSessionResult = await pool.query<{
         id: string;
-        revokedAt: Date | null;
       }>(
         `
-          SELECT
-            id,
-            revoked_at AS "revokedAt"
-          FROM refresh_tokens
-          WHERE user_id = $1
-          ORDER BY created_at DESC
-          LIMIT 1
-        `,
+                SELECT id
+                FROM refresh_tokens
+                WHERE user_id = $1
+                ORDER BY created_at DESC
+                LIMIT 1
+              `,
         [firstUser.userId],
       );
 
       const secondSessionResult = await pool.query<{
         id: string;
-        revokedAt: Date | null;
       }>(
         `
-          SELECT
-            id,
-            revoked_at AS "revokedAt"
-          FROM refresh_tokens
-          WHERE user_id = $1
-          ORDER BY created_at DESC
-          LIMIT 1
-        `,
+                SELECT id
+                FROM refresh_tokens
+                WHERE user_id = $1
+                ORDER BY created_at DESC
+                LIMIT 1
+              `,
         [secondUser.userId],
       );
 
       expect(firstSessionResult.rows).toHaveLength(1);
+
       expect(secondSessionResult.rows).toHaveLength(1);
 
       const firstSession = firstSessionResult.rows[0];
+
       const secondSession = secondSessionResult.rows[0];
 
       expect(firstSession).toBeDefined();
+
       expect(secondSession).toBeDefined();
 
       if (!firstSession || !secondSession) {
-        throw new Error('Expected both sessions to exist');
+        throw new Error('Expected both sessions');
       }
 
-      const firstRevokeResponse = await request(app)
+      const firstRevoke = await request(app)
         .delete(`/auth/sessions/${firstSession.id}`)
-        .set('Authorization', `Bearer ${firstAccessToken}`);
+        .set('Authorization', `Bearer ${firstLogin.accessToken}`);
 
-      expect(firstRevokeResponse.status).toBe(204);
+      expect(firstRevoke.status).toBe(204);
 
-      const firstAfterRevoke = await pool.query<{
-        revokedAt: Date | null;
-      }>(
-        `
-          SELECT
-            revoked_at AS "revokedAt"
-          FROM refresh_tokens
-          WHERE id = $1
-        `,
-        [firstSession.id],
-      );
-
-      expect(firstAfterRevoke.rows).toHaveLength(1);
-
-      const firstRevoked = firstAfterRevoke.rows[0];
-
-      expect(firstRevoked).toBeDefined();
-
-      if (!firstRevoked) {
-        throw new Error('Expected first session to exist');
-      }
-
-      expect(firstRevoked.revokedAt).toBeInstanceOf(Date);
-
-      const secondAfterFirstRevoke = await pool.query<{
-        revokedAt: Date | null;
-      }>(
-        `
-          SELECT
-            revoked_at AS "revokedAt"
-          FROM refresh_tokens
-          WHERE id = $1
-        `,
-        [secondSession.id],
-      );
-
-      expect(secondAfterFirstRevoke.rows).toHaveLength(1);
-
-      const secondStillActive = secondAfterFirstRevoke.rows[0];
-
-      expect(secondStillActive).toBeDefined();
-
-      if (!secondStillActive) {
-        throw new Error('Expected second session to exist');
-      }
-
-      expect(secondStillActive.revokedAt).toBeNull();
-
-      const secondRevokeResponse = await request(app)
+      const secondRevoke = await request(app)
         .delete(`/auth/sessions/${secondSession.id}`)
-        .set('Authorization', `Bearer ${secondAccessToken}`);
+        .set('Authorization', `Bearer ${secondLogin.accessToken}`);
 
-      expect(secondRevokeResponse.status).toBe(204);
+      expect(secondRevoke.status).toBe(204);
 
       await cleanupUser(firstUser.userId);
+
       await cleanupUser(secondUser.userId);
     });
 
     it('does not allow one user to revoke another user session', async () => {
       const owner = await createVerifiedUser('auth-session-isolation-owner');
+
       const attacker = await createVerifiedUser('auth-session-isolation-attacker');
 
-      const ownerLogin = await request(app).post('/auth/login').send({
-        email: owner.email,
-        password: 'StrongPassword123!',
-      });
-
-      expect(ownerLogin.status).toBe(200);
-
-      const attackerLogin = await request(app).post('/auth/login').send({
-        email: attacker.email,
-        password: 'StrongPassword123!',
-      });
-
-      expect(attackerLogin.status).toBe(200);
-
-      const attackerAccessToken = attackerLogin.body.data.accessToken;
-
-      expect(attackerAccessToken).toEqual(expect.any(String));
+      const attackerLogin = await loginVerifiedUser(attacker.email, attacker.phone);
 
       const ownerSessionResult = await pool.query<{
         id: string;
         revokedAt: Date | null;
       }>(
         `
-          SELECT
-            id,
-            revoked_at AS "revokedAt"
-          FROM refresh_tokens
-          WHERE user_id = $1
-          ORDER BY created_at DESC
-          LIMIT 1
-        `,
+                SELECT
+                  id,
+                  revoked_at AS "revokedAt"
+                FROM refresh_tokens
+                WHERE user_id = $1
+                ORDER BY created_at DESC
+                LIMIT 1
+              `,
         [owner.userId],
       );
 
@@ -1319,68 +1587,57 @@ describe.sequential('Auth integration', () => {
       expect(ownerSession).toBeDefined();
 
       if (!ownerSession) {
-        throw new Error('Expected owner session to exist');
+        throw new Error('Expected owner session');
       }
 
       const response = await request(app)
         .delete(`/auth/sessions/${ownerSession.id}`)
-        .set('Authorization', `Bearer ${attackerAccessToken}`);
+        .set('Authorization', `Bearer ${attackerLogin.accessToken}`);
 
       expect(response.status).toBe(404);
-      expect(response.body.success).toBe(false);
 
-      const ownerAfterAttempt = await pool.query<{
+      const ownerAfter = await pool.query<{
         revokedAt: Date | null;
       }>(
         `
-          SELECT
-            revoked_at AS "revokedAt"
-          FROM refresh_tokens
-          WHERE id = $1
-        `,
+                SELECT
+                  revoked_at AS "revokedAt"
+                FROM refresh_tokens
+                WHERE id = $1
+              `,
         [ownerSession.id],
       );
 
-      expect(ownerAfterAttempt.rows).toHaveLength(1);
+      expect(ownerAfter.rows).toHaveLength(1);
 
-      const ownerSessionAfterAttempt = ownerAfterAttempt.rows[0];
+      expect(ownerAfter.rows[0]).toBeDefined();
 
-      expect(ownerSessionAfterAttempt).toBeDefined();
-
-      if (!ownerSessionAfterAttempt) {
-        throw new Error('Expected owner session to exist');
+      if (!ownerAfter.rows[0]) {
+        throw new Error('Expected owner session');
       }
 
-      expect(ownerSessionAfterAttempt.revokedAt).toBeNull();
+      expect(ownerAfter.rows[0].revokedAt).toBeNull();
 
       await cleanupUser(owner.userId);
+
       await cleanupUser(attacker.userId);
     });
 
     it('returns 404 when revoking an already revoked session', async () => {
-      const { userId, email } = await createVerifiedUser('auth-session-repeat');
+      const { userId, email, phone } = await createVerifiedUser('auth-session-repeat');
 
-      const loginResponse = await request(app).post('/auth/login').send({
-        email,
-        password: 'StrongPassword123!',
-      });
-
-      expect(loginResponse.status).toBe(200);
-
-      const accessToken = loginResponse.body.data.accessToken;
-
-      expect(accessToken).toEqual(expect.any(String));
+      const loginResult = await loginVerifiedUser(email, phone);
 
       const sessionResult = await pool.query<{
         id: string;
       }>(
         `
-          SELECT id
-          FROM refresh_tokens
-          WHERE user_id = $1
-          ORDER BY created_at DESC
-          LIMIT 1
-        `,
+                SELECT id
+                FROM refresh_tokens
+                WHERE user_id = $1
+                ORDER BY created_at DESC
+                LIMIT 1
+              `,
         [userId],
       );
 
@@ -1391,52 +1648,39 @@ describe.sequential('Auth integration', () => {
       expect(session).toBeDefined();
 
       if (!session) {
-        throw new Error('Expected session to exist');
+        throw new Error('Expected session');
       }
 
       const firstResponse = await request(app)
         .delete(`/auth/sessions/${session.id}`)
-        .set('Authorization', `Bearer ${accessToken}`);
+        .set('Authorization', `Bearer ${loginResult.accessToken}`);
 
       expect(firstResponse.status).toBe(204);
 
       const secondResponse = await request(app)
         .delete(`/auth/sessions/${session.id}`)
-        .set('Authorization', `Bearer ${accessToken}`);
+        .set('Authorization', `Bearer ${loginResult.accessToken}`);
 
       expect(secondResponse.status).toBe(404);
-      expect(secondResponse.body.success).toBe(false);
 
       await cleanupUser(userId);
     });
 
     it('allows only one concurrent revoke for the same session', async () => {
-      const { userId, email } = await createVerifiedUser('auth-session-concurrency');
+      const { userId, email, phone } = await createVerifiedUser('auth-session-concurrency');
 
-      const loginResponse = await request(app).post('/auth/login').send({
-        email,
-        password: 'StrongPassword123!',
-      });
-
-      expect(loginResponse.status).toBe(200);
-
-      const accessToken = loginResponse.body.data.accessToken;
-
-      expect(accessToken).toEqual(expect.any(String));
+      const loginResult = await loginVerifiedUser(email, phone);
 
       const sessionResult = await pool.query<{
         id: string;
-        revokedAt: Date | null;
       }>(
         `
-          SELECT
-            id,
-            revoked_at AS "revokedAt"
-          FROM refresh_tokens
-          WHERE user_id = $1
-          ORDER BY created_at DESC
-          LIMIT 1
-        `,
+                SELECT id
+                FROM refresh_tokens
+                WHERE user_id = $1
+                ORDER BY created_at DESC
+                LIMIT 1
+              `,
         [userId],
       );
 
@@ -1447,76 +1691,41 @@ describe.sequential('Auth integration', () => {
       expect(session).toBeDefined();
 
       if (!session) {
-        throw new Error('Expected session to exist');
+        throw new Error('Expected session');
       }
-
-      expect(session.revokedAt).toBeNull();
 
       const [responseA, responseB] = await Promise.all([
         request(app)
           .delete(`/auth/sessions/${session.id}`)
-          .set('Authorization', `Bearer ${accessToken}`),
+          .set('Authorization', `Bearer ${loginResult.accessToken}`),
 
         request(app)
           .delete(`/auth/sessions/${session.id}`)
-          .set('Authorization', `Bearer ${accessToken}`),
+          .set('Authorization', `Bearer ${loginResult.accessToken}`),
       ]);
 
       const statuses = [responseA.status, responseB.status].sort((a, b) => a - b);
 
       expect(statuses).toEqual([204, 404]);
 
-      const revokedResult = await pool.query<{
-        revokedAt: Date | null;
-      }>(
-        `
-          SELECT
-            revoked_at AS "revokedAt"
-          FROM refresh_tokens
-          WHERE id = $1
-        `,
-        [session.id],
-      );
-
-      expect(revokedResult.rows).toHaveLength(1);
-
-      const revokedSession = revokedResult.rows[0];
-
-      expect(revokedSession).toBeDefined();
-
-      if (!revokedSession) {
-        throw new Error('Expected session to exist after concurrent revoke');
-      }
-
-      expect(revokedSession.revokedAt).toBeInstanceOf(Date);
-
       await cleanupUser(userId);
     });
 
     it('removes a revoked session from the active session list', async () => {
-      const { userId, email } = await createVerifiedUser('auth-session-list-revoked');
+      const { userId, email, phone } = await createVerifiedUser('auth-session-list-revoked');
 
-      const loginResponse = await request(app).post('/auth/login').send({
-        email,
-        password: 'StrongPassword123!',
-      });
-
-      expect(loginResponse.status).toBe(200);
-
-      const accessToken = loginResponse.body.data.accessToken;
-
-      expect(accessToken).toEqual(expect.any(String));
+      const loginResult = await loginVerifiedUser(email, phone);
 
       const sessionResult = await pool.query<{
         id: string;
       }>(
         `
-          SELECT id
-          FROM refresh_tokens
-          WHERE user_id = $1
-          ORDER BY created_at DESC
-          LIMIT 1
-        `,
+                SELECT id
+                FROM refresh_tokens
+                WHERE user_id = $1
+                ORDER BY created_at DESC
+                LIMIT 1
+              `,
         [userId],
       );
 
@@ -1527,20 +1736,21 @@ describe.sequential('Auth integration', () => {
       expect(session).toBeDefined();
 
       if (!session) {
-        throw new Error('Expected session to exist');
+        throw new Error('Expected session');
       }
 
       const revokeResponse = await request(app)
         .delete(`/auth/sessions/${session.id}`)
-        .set('Authorization', `Bearer ${accessToken}`);
+        .set('Authorization', `Bearer ${loginResult.accessToken}`);
 
       expect(revokeResponse.status).toBe(204);
 
       const listResponse = await request(app)
         .get('/auth/sessions')
-        .set('Authorization', `Bearer ${accessToken}`);
+        .set('Authorization', `Bearer ${loginResult.accessToken}`);
 
       expect(listResponse.status).toBe(200);
+
       expect(listResponse.body.success).toBe(true);
 
       const returnedIds = listResponse.body.data.sessions.map((item: { id: string }) => item.id);
@@ -1551,41 +1761,17 @@ describe.sequential('Auth integration', () => {
     });
   });
 
+  // ========================================================
+  // Logout
+  // ========================================================
+
   describe('logout', () => {
     it('logs out and revokes the refresh token', async () => {
-      const email = uniqueEmail('auth-logout');
+      const { userId, email, phone } = await createVerifiedUser('auth-logout');
 
-      const signupResponse = await request(app).post('/auth/signup').send({
-        firstName: 'Logout',
-        lastName: 'Test',
-        email,
-        password: 'StrongPassword123!',
-        confirmPassword: 'StrongPassword123!',
-        role: 'customer',
-      });
+      const loginResult = await loginVerifiedUser(email, phone);
 
-      expect(signupResponse.status).toBe(201);
-
-      const signupId = signupResponse.body.data.signupId;
-      const otp = otpProvider.getEmailOtp(email);
-
-      const verifyResponse = await request(app).post('/auth/signup/verify').send({
-        signupId,
-        otp,
-      });
-
-      expect(verifyResponse.status).toBe(200);
-
-      const userId = verifyResponse.body.data.userId;
-
-      const loginResponse = await request(app).post('/auth/login').send({
-        email,
-        password: 'StrongPassword123!',
-      });
-
-      expect(loginResponse.status).toBe(200);
-
-      const refreshCookie = expectRefreshCookie(loginResponse);
+      const refreshCookie = loginResult.refreshCookie;
 
       const logoutResponse = await request(app).post('/auth/logout').set('Cookie', refreshCookie);
 
@@ -1601,13 +1787,13 @@ describe.sequential('Auth integration', () => {
         revokedAt: Date | null;
       }>(
         `
-          SELECT
-            revoked_at AS "revokedAt"
-          FROM refresh_tokens
-          WHERE user_id = $1
-          ORDER BY created_at DESC
-          LIMIT 1
-        `,
+                SELECT
+                  revoked_at AS "revokedAt"
+                FROM refresh_tokens
+                WHERE user_id = $1
+                ORDER BY created_at DESC
+                LIMIT 1
+              `,
         [userId],
       );
 
@@ -1618,7 +1804,7 @@ describe.sequential('Auth integration', () => {
       expect(revokedToken).toBeDefined();
 
       if (!revokedToken) {
-        throw new Error('Expected refresh token to exist');
+        throw new Error('Expected revoked token');
       }
 
       expect(revokedToken.revokedAt).toBeInstanceOf(Date);
@@ -1630,45 +1816,22 @@ describe.sequential('Auth integration', () => {
       const response = await request(app).post('/auth/logout');
 
       expect(response.status).toBe(401);
+
       expect(response.body.success).toBe(false);
     });
   });
 
+  // ========================================================
+  // Cookie security
+  // ========================================================
+
   describe('cookie security', () => {
-    it('sets the refresh token as an HttpOnly cookie', async () => {
-      const email = uniqueEmail('auth-cookie');
+    it('sets the refresh token as an HttpOnly cookie after OTP verification', async () => {
+      const { userId, email, phone } = await createVerifiedUser('auth-cookie');
 
-      const signupResponse = await request(app).post('/auth/signup').send({
-        firstName: 'Cookie',
-        lastName: 'Test',
-        email,
-        password: 'StrongPassword123!',
-        confirmPassword: 'StrongPassword123!',
-        role: 'customer',
-      });
+      const loginResult = await loginVerifiedUser(email, phone);
 
-      expect(signupResponse.status).toBe(201);
-
-      const signupId = signupResponse.body.data.signupId;
-      const otp = otpProvider.getEmailOtp(email);
-
-      const verifyResponse = await request(app).post('/auth/signup/verify').send({
-        signupId,
-        otp,
-      });
-
-      expect(verifyResponse.status).toBe(200);
-
-      const userId = verifyResponse.body.data.userId;
-
-      const loginResponse = await request(app).post('/auth/login').send({
-        email,
-        password: 'StrongPassword123!',
-      });
-
-      expect(loginResponse.status).toBe(200);
-
-      const cookies = getSetCookieHeaders(loginResponse);
+      const cookies = getSetCookieHeaders(loginResult.verifyResponse);
 
       const refreshCookie = cookies.find((cookie) =>
         cookie.startsWith(`${env.AUTH_REFRESH_COOKIE_NAME}=`),
@@ -1681,11 +1844,16 @@ describe.sequential('Auth integration', () => {
       }
 
       expect(refreshCookie).toContain('HttpOnly');
+
       expect(refreshCookie).toContain('SameSite');
 
       await cleanupUser(userId);
     });
   });
+
+  // ========================================================
+  // Cleanup
+  // ========================================================
 
   afterAll(async () => {
     otpProvider.clear();

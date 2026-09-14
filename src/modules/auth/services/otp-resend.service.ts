@@ -1,34 +1,16 @@
 import { AppError } from '../../../common/errors/app-error.js';
-
-import { generateOtp, hashOtp } from '../utils/otp.js';
+import { decryptSecret } from '../../../common/crypto/encryption.js';
 
 import type { OtpProvider } from '../providers/otp.provider.js';
 import type { PendingSignupRepository } from '../repositories/pending-signup.repository.js';
 
-// ============================================================
-// Configuration
-// ============================================================
-
-const OTP_EXPIRY_MINUTES = 10;
-const OTP_RESEND_COOLDOWN_SECONDS = 60;
-
-// ============================================================
-// Input / Result types
-// ============================================================
-
-export interface ResendOtpInput {
+export interface OtpResendResult {
   signupId: string;
-}
-
-export interface ResendOtpResult {
-  signupId: string;
-  contactType: 'email' | 'phone';
+  contactType: 'phone';
   expiresAt: Date;
 }
 
-// ============================================================
-// OTP Resend Service
-// ============================================================
+const OTP_RESEND_COOLDOWN_SECONDS = 60;
 
 export class OtpResendService {
   constructor(
@@ -36,91 +18,129 @@ export class OtpResendService {
     private readonly otpProvider: OtpProvider,
   ) {}
 
-  async resend(input: ResendOtpInput): Promise<ResendOtpResult> {
+  async resend(signupId: string): Promise<OtpResendResult> {
     // --------------------------------------------------------
     // Validate signup ID
     // --------------------------------------------------------
 
-    if (!input.signupId) {
-      throw new AppError('INVALID_SIGNUP', 'Invalid signup ID', 400);
+    if (!signupId) {
+      throw new AppError('INVALID_SIGNUP', 'Invalid signup', 400);
     }
 
     // --------------------------------------------------------
-    // Find pending signup
+    // Load pending signup
     //
-    // We need the contact information for OTP delivery and
-    // to distinguish invalid/verified signup from cooldown.
+    // This projection does not expose the provider
+    // session token.
     // --------------------------------------------------------
 
-    const signup = await this.repository.findById(input.signupId);
+    const signup = await this.repository.findById(signupId);
 
     if (!signup) {
-      throw new AppError('INVALID_SIGNUP', 'Signup not found', 400);
+      throw new AppError('INVALID_SIGNUP', 'Invalid or expired signup', 400);
     }
 
     // --------------------------------------------------------
-    // Prevent resend after successful verification
+    // Prevent resend after verification
     // --------------------------------------------------------
 
     if (signup.otpVerifiedAt) {
-      throw new AppError('OTP_ALREADY_VERIFIED', 'Signup OTP has already been verified', 400);
+      throw new AppError('OTP_ALREADY_VERIFIED', 'OTP has already been verified', 400);
     }
 
     // --------------------------------------------------------
-    // Generate new OTP
+    // Signup OTP is phone-only
     // --------------------------------------------------------
 
-    const otp = generateOtp();
-    const otpHash = hashOtp(otp);
-
-    const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+    if (signup.contactType !== 'phone') {
+      throw new AppError('INVALID_SIGNUP', 'Phone verification is required', 400);
+    }
 
     // --------------------------------------------------------
-    // Atomically enforce cooldown + replace OTP
+    // Atomically claim resend slot
     //
-    // The database performs the cooldown check and update
-    // as one atomic operation.
-    //
-    // This prevents two concurrent resend requests from
+    // Prevents concurrent resend requests from
     // both passing the cooldown check.
     // --------------------------------------------------------
 
-    const updated = await this.repository.resendOtpIfCooldownElapsed(
-      signup.id,
-      otpHash,
-      expiresAt,
+    const providerSession = await this.repository.claimOtpResend(
+      signupId,
       OTP_RESEND_COOLDOWN_SECONDS,
     );
 
-    if (!updated) {
-      // ------------------------------------------------------
-      // The signup still exists, so the failed update means
-      // the cooldown was won by another concurrent request.
-      // ------------------------------------------------------
-
+    if (!providerSession) {
       throw new AppError('OTP_RESEND_TOO_SOON', 'Please wait before requesting another OTP', 429);
     }
 
     // --------------------------------------------------------
-    // Deliver OTP
+    // Decrypt provider credential
     //
-    // The OTP is never returned in the API response
-    // and must never be logged.
+    // The repository stores the session token encrypted.
+    // Never send the encrypted value to Sendmator.
     // --------------------------------------------------------
 
-    if (signup.contactType === 'email') {
-      await this.otpProvider.sendEmailOtp(signup.contactValue, otp);
-    } else {
-      await this.otpProvider.sendSmsOtp(signup.contactValue, otp);
+    let providerSessionToken: string;
+
+    try {
+      providerSessionToken = decryptSecret(providerSession.sessionToken);
+    } catch {
+      throw new AppError(
+        'OTP_PROVIDER_SESSION_INVALID',
+        'OTP verification session is invalid',
+        500,
+      );
     }
 
     // --------------------------------------------------------
-    // Return safe response
+    // Ask Sendmator to resend using the existing
+    // provider session.
     // --------------------------------------------------------
 
+    const response = await this.otpProvider.resendSmsOtp(providerSessionToken);
+
+    if (!response.expiresAt) {
+      throw new AppError(
+        'OTP_PROVIDER_INVALID_RESPONSE',
+        'OTP provider returned an invalid expiry time',
+        502,
+      );
+    }
+
+    const expiresAt = new Date(response.expiresAt);
+
+    if (Number.isNaN(expiresAt.getTime())) {
+      throw new AppError(
+        'OTP_PROVIDER_INVALID_RESPONSE',
+        'OTP provider returned an invalid expiry time',
+        502,
+      );
+    }
+
+    if (expiresAt.getTime() <= Date.now()) {
+      throw new AppError(
+        'OTP_PROVIDER_INVALID_RESPONSE',
+        'OTP provider returned an expired session',
+        502,
+      );
+    }
+
+    // --------------------------------------------------------
+    // Persist provider-reported expiry.
+    // --------------------------------------------------------
+
+    const updated = await this.repository.updateOtpProviderExpiry(signupId, expiresAt);
+
+    if (!updated) {
+      throw new AppError(
+        'OTP_RESEND_UPDATE_FAILED',
+        'Failed to update OTP verification session',
+        500,
+      );
+    }
+
     return {
-      signupId: signup.id,
-      contactType: signup.contactType,
+      signupId,
+      contactType: 'phone',
       expiresAt,
     };
   }

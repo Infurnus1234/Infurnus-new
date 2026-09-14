@@ -2,11 +2,13 @@ import type { NextFunction, Request, Response } from 'express';
 
 import { AppError } from '../../../common/errors/app-error.js';
 import { env } from '../../../config/env.js';
+import { pool } from '../../../infrastructure/database/postgres.js';
 
 import { DevOtpProvider } from '../providers/dev-otp.provider.js';
 import type { OtpProvider } from '../providers/otp.provider.js';
 
 import { PostgresAuthUserRepository } from '../repositories/auth-user.repository.js';
+import { PostgresLoginChallengeRepository } from '../repositories/login-challenge.repository.js';
 import { PostgresLoginRepository } from '../repositories/login.repository.js';
 import { PostgresPendingSignupRepository } from '../repositories/pending-signup.repository.js';
 import { PostgresRefreshTokenRepository } from '../repositories/refresh-token.repository.js';
@@ -15,12 +17,16 @@ import { PostgresSignupUserRepository } from '../repositories/signup-user.reposi
 
 import {
   loginSchema,
+  resendLoginOtpSchema,
   resendSignupOtpSchema,
   signupSchema,
+  verifyLoginOtpSchema,
   verifySignupOtpSchema,
 } from '../schemas/auth.schemas.js';
 
+import { LoginResendService } from '../services/login-resend.service.js';
 import { LoginService } from '../services/login.service.js';
+import { LoginVerificationService } from '../services/login-verification.service.js';
 import { LogoutService } from '../services/logout.service.js';
 import { OtpResendService } from '../services/otp-resend.service.js';
 import { RefreshTokenService } from '../services/refresh-token.service.js';
@@ -41,7 +47,11 @@ export interface AuthControllerDependencies {
   signupService: SignupService;
   signupVerificationService: SignupVerificationService;
   otpResendService: OtpResendService;
+
   loginService: LoginService;
+  loginVerificationService: LoginVerificationService;
+  loginResendService: LoginResendService;
+
   refreshTokenService: RefreshTokenService;
   logoutService: LogoutService;
   sessionService: SessionService;
@@ -66,6 +76,8 @@ export function createAuthController(
 
   const loginRepository = new PostgresLoginRepository();
 
+  const loginChallengeRepository = new PostgresLoginChallengeRepository(pool);
+
   const authUserRepository = new PostgresAuthUserRepository();
 
   const signupService = new SignupService(
@@ -74,11 +86,27 @@ export function createAuthController(
     signupUserRepository,
   );
 
-  const signupVerificationService = new SignupVerificationService(signupCompletionRepository);
+  const signupVerificationService = new SignupVerificationService(
+    pendingSignupRepository,
+    signupCompletionRepository,
+    otpProvider,
+  );
 
   const otpResendService = new OtpResendService(pendingSignupRepository, otpProvider);
 
-  const loginService = new LoginService(loginRepository);
+  const loginService = new LoginService(loginRepository, loginChallengeRepository, otpProvider);
+
+  const loginVerificationService = new LoginVerificationService(
+    loginChallengeRepository,
+    authUserRepository,
+    otpProvider,
+  );
+
+  const loginResendService = new LoginResendService(
+    loginChallengeRepository,
+    otpProvider,
+    env.AUTH_OTP_RESEND_COOLDOWN_SECONDS,
+  );
 
   const refreshTokenService = new RefreshTokenService(refreshTokenRepository);
 
@@ -92,7 +120,11 @@ export function createAuthController(
     signupService,
     signupVerificationService,
     otpResendService,
+
     loginService,
+    loginVerificationService,
+    loginResendService,
+
     refreshTokenService,
     logoutService,
     sessionService,
@@ -110,7 +142,11 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
     signupService,
     signupVerificationService,
     otpResendService,
+
     loginService,
+    loginVerificationService,
+    loginResendService,
+
     refreshTokenService,
     logoutService,
     sessionService,
@@ -126,13 +162,23 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
     try {
       const input = signupSchema.parse(req.body);
 
+      // ------------------------------------------------------
+      // Phone is mandatory for signup.
+      // ------------------------------------------------------
+
+      const phone = input.phone;
+
+      if (typeof phone !== 'string' || !phone.trim()) {
+        throw new AppError('INVALID_SIGNUP_CONTACT', 'Phone number is required', 400);
+      }
+
       const result = await signupService.signup({
         firstName: input.firstName,
         lastName: input.lastName,
+        phone,
         password: input.password,
         role: input.role,
         ...(input.email !== undefined ? { email: input.email } : {}),
-        ...(input.phone !== undefined ? { phone: input.phone } : {}),
       });
 
       res.status(201).json({
@@ -169,6 +215,7 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
       });
 
       setRefreshTokenCookie(res, refreshToken.refreshToken);
+
       setCsrfTokenCookie(res, generateCsrfToken());
 
       res.status(200).json({
@@ -192,9 +239,7 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
     try {
       const input = resendSignupOtpSchema.parse(req.body);
 
-      const result = await otpResendService.resend({
-        signupId: input.signupId,
-      });
+      const result = await otpResendService.resend(input.signupId);
 
       res.status(200).json({
         success: true,
@@ -223,6 +268,50 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
         ...(input.phone !== undefined ? { phone: input.phone } : {}),
       });
 
+      /*
+       * Password authentication has succeeded,
+       * but the login is NOT authenticated yet.
+       *
+       * No access token.
+       * No refresh token.
+       * No refresh-token cookie.
+       * No CSRF cookie.
+       *
+       * Authentication completes only after
+       * successful OTP verification.
+       */
+      res.status(200).json({
+        success: true,
+        data: {
+          challengeId: result.challengeId,
+          expiresAt: result.expiresAt,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ==========================================================
+  // POST /auth/login/verify
+  // ==========================================================
+
+  async function verifyLogin(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const input = verifyLoginOtpSchema.parse(req.body);
+
+      const result = await loginVerificationService.verify(input.challengeId, input.otp);
+
+      /*
+       * Login OTP verification has succeeded.
+       *
+       * The verification service has already:
+       * - verified the provider OTP
+       * - atomically consumed the challenge
+       * - re-checked the current account status
+       *
+       * Only now may authentication tokens be issued.
+       */
       const accessToken = await tokenService.createAccessToken({
         userId: result.userId,
         role: result.role,
@@ -234,6 +323,7 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
       });
 
       setRefreshTokenCookie(res, refreshToken.refreshToken);
+
       setCsrfTokenCookie(res, generateCsrfToken());
 
       res.status(200).json({
@@ -242,6 +332,28 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
           userId: result.userId,
           accessToken,
           expiresAt: refreshToken.expiresAt,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ==========================================================
+  // POST /auth/login/resend
+  // ==========================================================
+
+  async function resendLoginOtp(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const input = resendLoginOtpSchema.parse(req.body);
+
+      const result = await loginResendService.resend(input.challengeId);
+
+      res.status(200).json({
+        success: true,
+        data: {
+          challengeId: input.challengeId,
+          expiresAt: result.expiresAt,
         },
       });
     } catch (error) {
@@ -390,7 +502,11 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
     signup,
     verifySignup,
     resendSignupOtp,
+
     login,
+    verifyLogin,
+    resendLoginOtp,
+
     refresh,
     logout,
     logoutAll,
@@ -401,8 +517,6 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
 
 // ============================================================
 // Default controller / handlers
-//
-// Kept for existing imports and unit tests.
 // ============================================================
 
 export const defaultAuthController = createAuthController();
@@ -416,6 +530,10 @@ export const verifySignup = defaultAuthHandlers.verifySignup;
 export const resendSignupOtp = defaultAuthHandlers.resendSignupOtp;
 
 export const login = defaultAuthHandlers.login;
+
+export const verifyLogin = defaultAuthHandlers.verifyLogin;
+
+export const resendLoginOtp = defaultAuthHandlers.resendLoginOtp;
 
 export const refresh = defaultAuthHandlers.refresh;
 

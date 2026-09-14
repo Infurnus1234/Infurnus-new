@@ -1,10 +1,18 @@
 import { withTransaction } from '../../../infrastructure/database/postgres.js';
 
+// ============================================================
+// Completed user
+// ============================================================
+
 export interface CompletedSignupUser {
   id: string;
   role: string;
   status: string;
 }
+
+// ============================================================
+// Signup completion result
+// ============================================================
 
 export type SignupCompletionResult =
   | {
@@ -16,44 +24,53 @@ export type SignupCompletionResult =
     }
   | {
       status: 'already_verified';
-    }
-  | {
-      status: 'expired';
-    }
-  | {
-      status: 'attempts_exceeded';
-    }
-  | {
-      status: 'invalid_otp';
     };
 
-const MAX_OTP_ATTEMPTS = 5;
+// ============================================================
+// Repository contract
+// ============================================================
 
 export interface SignupCompletionRepository {
-  verifyAndComplete(signupId: string, otpHash: string): Promise<SignupCompletionResult>;
+  /**
+   * Atomically completes a signup that has already been
+   * verified by the external OTP provider.
+   *
+   * This method does NOT verify the OTP.
+   *
+   * Responsibilities:
+   * - lock pending signup
+   * - prevent duplicate completion
+   * - mark provider verification locally
+   * - create users row
+   * - create password credentials
+   * - delete pending signup
+   */
+  completeVerifiedSignup(signupId: string): Promise<SignupCompletionResult>;
 }
 
+// ============================================================
+// PostgreSQL implementation
+// ============================================================
+
 export class PostgresSignupCompletionRepository implements SignupCompletionRepository {
-  async verifyAndComplete(signupId: string, otpHash: string): Promise<SignupCompletionResult> {
+  async completeVerifiedSignup(signupId: string): Promise<SignupCompletionResult> {
     return withTransaction(async (client) => {
-      // ========================================================
-      // Lock the pending signup.
+      // ======================================================
+      // Lock pending signup
       //
-      // This prevents two concurrent OTP verification requests
-      // from completing the same signup simultaneously.
-      // ========================================================
+      // This prevents two concurrent completion requests from
+      // creating two users from the same pending signup.
+      // ======================================================
 
       const pendingResult = await client.query<{
         id: string;
         firstName: string;
         lastName: string;
+        email: string | null;
         contactType: 'email' | 'phone';
         contactValue: string;
         passwordHash: string;
         role: string;
-        otpHash: string;
-        otpExpiresAt: Date;
-        otpAttempts: number;
         otpVerifiedAt: Date | null;
       }>(
         `
@@ -61,13 +78,11 @@ export class PostgresSignupCompletionRepository implements SignupCompletionRepos
             id,
             first_name AS "firstName",
             last_name AS "lastName",
+            email,
             contact_type AS "contactType",
             contact_value AS "contactValue",
             password_hash AS "passwordHash",
             role,
-            otp_hash AS "otpHash",
-            otp_expires_at AS "otpExpiresAt",
-            otp_attempts AS "otpAttempts",
             otp_verified_at AS "otpVerifiedAt"
           FROM pending_signups
           WHERE id = $1
@@ -78,15 +93,22 @@ export class PostgresSignupCompletionRepository implements SignupCompletionRepos
 
       const pendingSignup = pendingResult.rows[0];
 
+      // ======================================================
+      // Pending signup no longer exists.
+      //
+      // This can happen if another successful transaction
+      // already completed and deleted it.
+      // ======================================================
+
       if (!pendingSignup) {
         return {
           status: 'not_found',
         };
       }
 
-      // ========================================================
-      // Prevent re-verification.
-      // ========================================================
+      // ======================================================
+      // Prevent duplicate verification/completion.
+      // ======================================================
 
       if (pendingSignup.otpVerifiedAt) {
         return {
@@ -94,71 +116,33 @@ export class PostgresSignupCompletionRepository implements SignupCompletionRepos
         };
       }
 
-      // ========================================================
-      // Check OTP expiry.
-      // ========================================================
-
-      if (pendingSignup.otpExpiresAt.getTime() <= Date.now()) {
-        return {
-          status: 'expired',
-        };
-      }
-
-      // ========================================================
-      // Check maximum attempts.
-      // ========================================================
-
-      if (pendingSignup.otpAttempts >= MAX_OTP_ATTEMPTS) {
-        return {
-          status: 'attempts_exceeded',
-        };
-      }
-
-      // ========================================================
-      // Compare hashes.
+      // ======================================================
+      // Mark provider verification locally.
       //
-      // Raw OTP is never stored or queried.
-      // ========================================================
-
-      if (pendingSignup.otpHash !== otpHash) {
-        await client.query(
-          `
-            UPDATE pending_signups
-            SET otp_attempts = otp_attempts + 1
-            WHERE id = $1
-          `,
-          [signupId],
-        );
-
-        return {
-          status: 'invalid_otp',
-        };
-      }
-
-      // ========================================================
-      // Mark OTP verified.
-      // ========================================================
+      // The actual OTP verification has already happened
+      // through the OTP provider before this method is called.
+      // ======================================================
 
       await client.query(
         `
           UPDATE pending_signups
           SET otp_verified_at = NOW()
           WHERE id = $1
+            AND otp_verified_at IS NULL
         `,
         [signupId],
       );
 
-      // ========================================================
-      // Create the actual user.
+      // ======================================================
+      // Create actual user.
       //
-      // Email signup:
-      //   email = contact_value
-      //   phone = NULL
-      //
-      // Phone signup:
-      //   email = NULL
-      //   phone = contact_value
-      // ========================================================
+      // New signup rules:
+      // - phone is mandatory
+      // - phone is the primary verification channel
+      // - email is optional
+      // - phone is verified after successful phone OTP
+      // - optional email is NOT automatically verified
+      // ======================================================
 
       const userResult = await client.query<CompletedSignupUser>(
         `
@@ -175,22 +159,10 @@ export class PostgresSignupCompletionRepository implements SignupCompletionRepos
           VALUES (
             $1,
             $2,
-            CASE
-              WHEN $3 = 'email' THEN $4
-              ELSE NULL
-            END,
-            CASE
-              WHEN $3 = 'phone' THEN $4
-              ELSE NULL
-            END,
-            CASE
-              WHEN $3 = 'email' THEN TRUE
-              ELSE FALSE
-            END,
-            CASE
-              WHEN $3 = 'phone' THEN TRUE
-              ELSE FALSE
-            END,
+            $3,
+            $4,
+            FALSE,
+            TRUE,
             $5,
             'active'
           )
@@ -202,7 +174,7 @@ export class PostgresSignupCompletionRepository implements SignupCompletionRepos
         [
           pendingSignup.firstName,
           pendingSignup.lastName,
-          pendingSignup.contactType,
+          pendingSignup.email,
           pendingSignup.contactValue,
           pendingSignup.role,
         ],
@@ -214,11 +186,11 @@ export class PostgresSignupCompletionRepository implements SignupCompletionRepos
         throw new Error('Failed to create user during signup completion');
       }
 
-      // ========================================================
+      // ======================================================
       // Create password credentials.
       //
       // passwordHash is already an Argon2 hash.
-      // ========================================================
+      // ======================================================
 
       await client.query(
         `
@@ -231,12 +203,12 @@ export class PostgresSignupCompletionRepository implements SignupCompletionRepos
         [user.id, pendingSignup.passwordHash],
       );
 
-      // ========================================================
-      // Remove pending signup.
+      // ======================================================
+      // Delete pending signup.
       //
-      // After successful completion, this temporary record is
-      // no longer needed.
-      // ========================================================
+      // The temporary signup state is no longer needed after
+      // the user and credentials have been created.
+      // ======================================================
 
       await client.query(
         `
@@ -246,10 +218,10 @@ export class PostgresSignupCompletionRepository implements SignupCompletionRepos
         [signupId],
       );
 
-      // ========================================================
-      // Transaction commits automatically when this callback
-      // returns successfully.
-      // ========================================================
+      // ======================================================
+      // Transaction commits automatically when the callback
+      // completes successfully.
+      // ======================================================
 
       return {
         status: 'completed',

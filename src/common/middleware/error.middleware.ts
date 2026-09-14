@@ -1,5 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
+
 import { ZodError } from 'zod';
+
 import { AppError } from '../errors/app-error.js';
 
 export function errorMiddleware(err: unknown, _req: Request, res: Response, _next: NextFunction) {
@@ -11,6 +13,7 @@ export function errorMiddleware(err: unknown, _req: Request, res: Response, _nex
         message: 'Request validation failed',
       },
     });
+
     return;
   }
 
@@ -22,7 +25,24 @@ export function errorMiddleware(err: unknown, _req: Request, res: Response, _nex
         message: err.message,
       },
     });
+
     return;
+  }
+
+  // ----------------------------------------------------------
+  // Server-side diagnostic logging.
+  //
+  // Never expose the raw error to the API client.
+  // ----------------------------------------------------------
+
+  console.error('Unhandled application error:', err);
+
+  if (err instanceof Error) {
+    console.error('Error name:', err.name);
+
+    console.error('Error message:', err.message);
+
+    console.error('Error stack:', err.stack);
   }
 
   res.status(500).json({

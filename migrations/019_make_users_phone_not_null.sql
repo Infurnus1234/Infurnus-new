@@ -1,0 +1,6 @@
+BEGIN;
+
+ALTER TABLE users
+    ALTER COLUMN phone SET NOT NULL;
+
+COMMIT;

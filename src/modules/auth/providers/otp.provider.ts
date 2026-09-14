@@ -1,5 +1,19 @@
 export interface OtpProvider {
-  sendEmailOtp(email: string, otp: string): Promise<void>;
+  sendSmsOtp(phone: string): Promise<{
+    sessionId: string;
+    sessionToken: string;
+    expiresAt: string;
+  }>;
 
-  sendSmsOtp(phone: string, otp: string): Promise<void>;
+  verifySmsOtp(
+    sessionToken: string,
+    otp: string,
+  ): Promise<{
+    verified: boolean;
+    attemptsRemaining: number;
+  }>;
+
+  resendSmsOtp(sessionToken: string): Promise<{
+    expiresAt: string;
+  }>;
 }

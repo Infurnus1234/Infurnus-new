@@ -67,6 +67,49 @@ const mockHandlers = {
     });
   }),
 
+  // ----------------------------------------------------------
+  // POST /auth/login/verify
+  //
+  // Required by createAuthRouter so the router can be
+  // constructed successfully in this test.
+  // ----------------------------------------------------------
+
+  verifyLogin: vi.fn((_req, res) => {
+    res.cookie('infurnus_refresh_token', refreshToken, {
+      httpOnly: true,
+      secure: false,
+      sameSite: 'strict',
+      path: '/auth',
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        userId: 'user-id',
+        accessToken: 'access-token',
+        expiresAt: new Date().toISOString(),
+      },
+    });
+  }),
+
+  // ----------------------------------------------------------
+  // POST /auth/login/resend
+  //
+  // Required by createAuthRouter so the router can be
+  // constructed successfully in this test.
+  // ----------------------------------------------------------
+
+  resendLoginOtp: vi.fn((_req, res) => {
+    res.status(200).json({
+      success: true,
+      data: {
+        challengeId: 'challenge-id',
+        expiresAt: new Date().toISOString(),
+      },
+    });
+  }),
+
   refresh: vi.fn((_req, res) => {
     res.cookie('infurnus_refresh_token', 'rotated-refresh-token', {
       httpOnly: true,
@@ -166,8 +209,11 @@ describe('Auth cookie strategy', () => {
     const cookieHeader = getCookieHeader(response);
 
     expect(cookieHeader).toContain('infurnus_refresh_token=');
+
     expect(cookieHeader).toContain('HttpOnly');
+
     expect(cookieHeader).toContain('SameSite=Strict');
+
     expect(cookieHeader).toContain('Path=/auth');
   });
 
@@ -186,8 +232,11 @@ describe('Auth cookie strategy', () => {
     const cookieHeader = getCookieHeader(response);
 
     expect(cookieHeader).toContain('infurnus_refresh_token=');
+
     expect(cookieHeader).toContain('HttpOnly');
+
     expect(cookieHeader).toContain('SameSite=Strict');
+
     expect(cookieHeader).toContain('Path=/auth');
   });
 
@@ -200,6 +249,7 @@ describe('Auth cookie strategy', () => {
     });
 
     expect(response.status).toBe(200);
+
     expect(response.body.data).not.toHaveProperty('refreshToken');
   });
 
@@ -223,6 +273,7 @@ describe('Auth cookie strategy', () => {
       .set('Cookie', [`infurnus_refresh_token=${refreshToken}`]);
 
     expect(response.status).toBe(200);
+
     expect(response.body.data.refreshToken).toBeUndefined();
   });
 
@@ -238,9 +289,13 @@ describe('Auth cookie strategy', () => {
     const cookieHeader = getCookieHeader(response);
 
     expect(cookieHeader).toContain('infurnus_refresh_token=');
+
     expect(cookieHeader).toContain('Expires=Thu, 01 Jan 1970 00:00:00 GMT');
+
     expect(cookieHeader).toContain('HttpOnly');
+
     expect(cookieHeader).toContain('SameSite=Strict');
+
     expect(cookieHeader).toContain('Path=/auth');
   });
 });

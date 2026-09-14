@@ -11,20 +11,26 @@ const envSchema = z
     CORS_CREDENTIALS: z.coerce.boolean().default(true),
 
     JWT_ACCESS_SECRET: z.string().min(32, 'JWT_ACCESS_SECRET must be at least 32 characters'),
+
     JWT_ACCESS_PREVIOUS_SECRET: z
       .string()
       .min(32, 'JWT_ACCESS_PREVIOUS_SECRET must be at least 32 characters')
       .optional(),
+
     JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),
 
     JWT_REFRESH_EXPIRES_IN: z.string().default('30d'),
 
     AUTH_REFRESH_COOKIE_NAME: z.string().min(1).default('infurnus_refresh_token'),
+
     AUTH_REFRESH_COOKIE_SECURE: z.coerce.boolean().default(false),
+
     AUTH_REFRESH_COOKIE_SAME_SITE: z.enum(['strict', 'lax', 'none']).default('strict'),
 
     AUTH_CSRF_COOKIE_NAME: z.string().min(1).default('infurnus_csrf_token'),
+
     AUTH_CSRF_COOKIE_SECURE: z.coerce.boolean().default(false),
+
     AUTH_CSRF_COOKIE_SAME_SITE: z.enum(['strict', 'lax', 'none']).default('strict'),
 
     AUTH_LOGIN_RATE_LIMIT_WINDOW_MS: z.coerce
@@ -32,6 +38,7 @@ const envSchema = z
       .int()
       .positive()
       .default(15 * 60 * 1000),
+
     AUTH_LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
 
     AUTH_SIGNUP_RATE_LIMIT_WINDOW_MS: z.coerce
@@ -39,6 +46,7 @@ const envSchema = z
       .int()
       .positive()
       .default(15 * 60 * 1000),
+
     AUTH_SIGNUP_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
 
     AUTH_OTP_VERIFY_RATE_LIMIT_WINDOW_MS: z.coerce
@@ -46,6 +54,7 @@ const envSchema = z
       .int()
       .positive()
       .default(10 * 60 * 1000),
+
     AUTH_OTP_VERIFY_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
 
     AUTH_OTP_RESEND_RATE_LIMIT_WINDOW_MS: z.coerce
@@ -53,24 +62,37 @@ const envSchema = z
       .int()
       .positive()
       .default(10 * 60 * 1000),
+
     AUTH_OTP_RESEND_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
+
+    AUTH_OTP_RESEND_COOLDOWN_SECONDS: z.coerce.number().int().positive().default(60),
 
     AUTH_REFRESH_RATE_LIMIT_WINDOW_MS: z.coerce
       .number()
       .int()
       .positive()
       .default(15 * 60 * 1000),
+
     AUTH_REFRESH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(30),
 
     DRIVER_LOCATION_STALE_SECONDS: z.coerce.number().int().positive().default(30),
+
     DRIVER_SEARCH_RADIUS_METERS: z.coerce.number().positive().default(5000),
+
     MAX_DRIVER_MATCH_CANDIDATES: z.coerce.number().int().positive().default(20),
+
     GOOGLE_MAPS_API_KEY: z.string().min(1).optional(),
+
     GOOGLE_ROUTE_RECALCULATION_INTERVAL_SECONDS: z.coerce.number().int().positive().default(30),
+
     GOOGLE_ROUTE_RECALCULATION_DISTANCE_METERS: z.coerce.number().positive().default(500),
+
     GOOGLE_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+
     GOOGLE_MAX_RETRIES: z.coerce.number().int().min(0).max(3).default(2),
+
     GOOGLE_PLACES_MIN_QUERY_LENGTH: z.coerce.number().int().min(1).default(3),
+
     GOOGLE_PLACES_MIN_INTERVAL_MS: z.coerce.number().int().min(0).default(300),
 
     AUTH_LOGOUT_RATE_LIMIT_WINDOW_MS: z.coerce
@@ -78,7 +100,36 @@ const envSchema = z
       .int()
       .positive()
       .default(15 * 60 * 1000),
+
     AUTH_LOGOUT_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(30),
+
+    // ============================================================
+    // Sendmator
+    // ============================================================
+
+    SENDMATOR_API_KEY: z.string().min(1, 'SENDMATOR_API_KEY must not be empty').optional(),
+
+    // ============================================================
+    // Authentication challenge encryption
+    // ============================================================
+
+    AUTH_OTP_ENCRYPTION_KEY: z
+      .string()
+      .min(1, 'AUTH_OTP_ENCRYPTION_KEY is required')
+      .refine(
+        (value) => {
+          try {
+            const decoded = Buffer.from(value, 'base64');
+
+            return decoded.length === 32;
+          } catch {
+            return false;
+          }
+        },
+        {
+          message: 'AUTH_OTP_ENCRYPTION_KEY must be a base64-encoded 32-byte key',
+        },
+      ),
   })
   .superRefine((config, ctx) => {
     if (config.AUTH_REFRESH_COOKIE_SAME_SITE === 'none' && !config.AUTH_REFRESH_COOKIE_SECURE) {

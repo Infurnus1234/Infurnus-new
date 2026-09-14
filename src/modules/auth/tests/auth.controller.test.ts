@@ -13,11 +13,21 @@ import {
 // ============================================================
 
 const mocks = vi.hoisted(() => ({
+  signup: vi.fn(),
+  verifySignup: vi.fn(),
+  resendSignupOtp: vi.fn(),
+
+  login: vi.fn(),
+  verifyLogin: vi.fn(),
+  resendLoginOtp: vi.fn(),
+
+  createRefreshToken: vi.fn(),
   rotate: vi.fn(),
   logout: vi.fn(),
   logoutAllForUser: vi.fn(),
   listActiveSessions: vi.fn(),
   revokeSession: vi.fn(),
+
   createAccessToken: vi.fn(),
   findIdentityById: vi.fn(),
 }));
@@ -76,12 +86,32 @@ function createNext(): NextFunction {
 
 function createHandlers() {
   const dependencies = {
-    signupService: {} as AuthControllerDependencies['signupService'],
-    signupVerificationService: {} as AuthControllerDependencies['signupVerificationService'],
-    otpResendService: {} as AuthControllerDependencies['otpResendService'],
-    loginService: {} as AuthControllerDependencies['loginService'],
+    signupService: {
+      signup: mocks.signup,
+    } as unknown as AuthControllerDependencies['signupService'],
+
+    signupVerificationService: {
+      verify: mocks.verifySignup,
+    } as unknown as AuthControllerDependencies['signupVerificationService'],
+
+    otpResendService: {
+      resend: mocks.resendSignupOtp,
+    } as unknown as AuthControllerDependencies['otpResendService'],
+
+    loginService: {
+      authenticate: mocks.login,
+    } as unknown as AuthControllerDependencies['loginService'],
+
+    loginVerificationService: {
+      verify: mocks.verifyLogin,
+    } as unknown as AuthControllerDependencies['loginVerificationService'],
+
+    loginResendService: {
+      resend: mocks.resendLoginOtp,
+    } as unknown as AuthControllerDependencies['loginResendService'],
 
     refreshTokenService: {
+      create: mocks.createRefreshToken,
       rotate: mocks.rotate,
     } as unknown as AuthControllerDependencies['refreshTokenService'],
 
@@ -118,6 +148,592 @@ describe('Auth Controller', () => {
     vi.clearAllMocks();
 
     handlers = createHandlers();
+  });
+
+  // ==========================================================
+  // login
+  // ==========================================================
+
+  describe('login', () => {
+    it('creates an OTP login challenge and does not issue tokens', async () => {
+      const challengeId = '550e8400-e29b-41d4-a716-446655440100';
+
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+      mocks.login.mockResolvedValue({
+        challengeId,
+        expiresAt,
+      });
+
+      const req = createRequest({
+        body: {
+          email: 'customer@example.com',
+          password: 'StrongPassword123!',
+        },
+      });
+
+      const { response, status, json, cookie } = createResponseMock();
+
+      const next = createNext();
+
+      await handlers.login(req, response, next);
+
+      expect(next).not.toHaveBeenCalled();
+
+      expect(mocks.login).toHaveBeenCalledTimes(1);
+
+      expect(mocks.login).toHaveBeenCalledWith({
+        email: 'customer@example.com',
+        password: 'StrongPassword123!',
+      });
+
+      expect(cookie).not.toHaveBeenCalled();
+
+      expect(status).toHaveBeenCalledWith(200);
+
+      expect(json).toHaveBeenCalledWith({
+        success: true,
+        data: {
+          challengeId,
+          expiresAt,
+        },
+      });
+    });
+
+    it('supports phone-based login challenge creation', async () => {
+      const challengeId = '550e8400-e29b-41d4-a716-446655440101';
+
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+      mocks.login.mockResolvedValue({
+        challengeId,
+        expiresAt,
+      });
+
+      const req = createRequest({
+        body: {
+          phone: '+919876543210',
+          password: 'StrongPassword123!',
+        },
+      });
+
+      const { response, status, json } = createResponseMock();
+
+      const next = createNext();
+
+      await handlers.login(req, response, next);
+
+      expect(next).not.toHaveBeenCalled();
+
+      expect(mocks.login).toHaveBeenCalledWith({
+        phone: '+919876543210',
+        password: 'StrongPassword123!',
+      });
+
+      expect(status).toHaveBeenCalledWith(200);
+
+      expect(json).toHaveBeenCalledWith({
+        success: true,
+        data: {
+          challengeId,
+          expiresAt,
+        },
+      });
+    });
+
+    it('does not expose an access token or refresh cookie before OTP verification', async () => {
+      const challengeId = '550e8400-e29b-41d4-a716-446655440102';
+
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+      mocks.login.mockResolvedValue({
+        challengeId,
+        expiresAt,
+      });
+
+      const req = createRequest({
+        body: {
+          email: 'customer@example.com',
+          password: 'StrongPassword123!',
+        },
+      });
+
+      const { response, json, cookie } = createResponseMock();
+
+      const next = createNext();
+
+      await handlers.login(req, response, next);
+
+      const payload = json.mock.calls[0]?.[0] as {
+        success: boolean;
+        data: Record<string, unknown>;
+      };
+
+      expect(payload.success).toBe(true);
+
+      expect(payload.data.accessToken).toBeUndefined();
+
+      expect(payload.data.refreshToken).toBeUndefined();
+
+      expect(payload.data.passwordHash).toBeUndefined();
+
+      expect(cookie).not.toHaveBeenCalled();
+
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    it('passes login service errors to error middleware', async () => {
+      const error = new Error('Login failed');
+
+      mocks.login.mockRejectedValue(error);
+
+      const req = createRequest({
+        body: {
+          email: 'customer@example.com',
+          password: 'StrongPassword123!',
+        },
+      });
+
+      const { response, cookie } = createResponseMock();
+
+      const next = createNext();
+
+      await handlers.login(req, response, next);
+
+      expect(mocks.login).toHaveBeenCalledTimes(1);
+
+      expect(next).toHaveBeenCalledTimes(1);
+
+      expect(next).toHaveBeenCalledWith(error);
+
+      expect(cookie).not.toHaveBeenCalled();
+    });
+  });
+
+  // ==========================================================
+  // verifyLogin
+  // ==========================================================
+
+  describe('verifyLogin', () => {
+    it('verifies the login OTP, creates tokens, and sets refresh/CSRF cookies', async () => {
+      const challengeId = '550e8400-e29b-41d4-a716-446655440110';
+
+      const userId = '550e8400-e29b-41d4-a716-446655440111';
+
+      const role = 'customer';
+
+      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+      mocks.verifyLogin.mockResolvedValue({
+        userId,
+        role,
+      });
+
+      mocks.createAccessToken.mockResolvedValue('access-token');
+
+      mocks.createRefreshToken.mockResolvedValue({
+        refreshToken: 'refresh-token',
+        refreshTokenId: 'refresh-token-id',
+        familyId: 'family-id',
+        userId,
+        expiresAt,
+      });
+
+      const req = createRequest({
+        body: {
+          challengeId,
+          otp: '123456',
+        },
+      });
+
+      const { response, status, json, cookie } = createResponseMock();
+
+      const next = createNext();
+
+      await handlers.verifyLogin(req, response, next);
+
+      expect(next).not.toHaveBeenCalled();
+
+      expect(mocks.verifyLogin).toHaveBeenCalledTimes(1);
+
+      expect(mocks.verifyLogin).toHaveBeenCalledWith(challengeId, '123456');
+
+      expect(mocks.createAccessToken).toHaveBeenCalledTimes(1);
+
+      expect(mocks.createAccessToken).toHaveBeenCalledWith({
+        userId,
+        role,
+      });
+
+      expect(mocks.createRefreshToken).toHaveBeenCalledTimes(1);
+
+      expect(mocks.createRefreshToken).toHaveBeenCalledWith(userId, {
+        userAgent: 'Mozilla/5.0',
+        ipAddress: '127.0.0.1',
+      });
+
+      expect(mocks.rotate).not.toHaveBeenCalled();
+
+      expect(cookie).toHaveBeenCalledTimes(2);
+
+      expect(cookie).toHaveBeenCalledWith(
+        env.AUTH_REFRESH_COOKIE_NAME,
+        'refresh-token',
+        expect.any(Object),
+      );
+
+      expect(cookie).toHaveBeenCalledWith(
+        env.AUTH_CSRF_COOKIE_NAME,
+        expect.any(String),
+        expect.any(Object),
+      );
+
+      expect(status).toHaveBeenCalledWith(200);
+
+      expect(json).toHaveBeenCalledWith({
+        success: true,
+        data: {
+          userId,
+          accessToken: 'access-token',
+          expiresAt,
+        },
+      });
+    });
+
+    it('passes the request user-agent and IP address into refresh-token creation', async () => {
+      const challengeId = '550e8400-e29b-41d4-a716-446655440112';
+
+      const userId = '550e8400-e29b-41d4-a716-446655440113';
+
+      const getHeader = vi.fn((header: string): string | undefined => {
+        if (header.toLowerCase() === 'user-agent') {
+          return 'Test-Agent';
+        }
+
+        return undefined;
+      }) as unknown as Request['get'];
+
+      mocks.verifyLogin.mockResolvedValue({
+        userId,
+        role: 'driver',
+      });
+
+      mocks.createAccessToken.mockResolvedValue('driver-access-token');
+
+      mocks.createRefreshToken.mockResolvedValue({
+        refreshToken: 'driver-refresh-token',
+        refreshTokenId: 'refresh-token-id',
+        familyId: 'family-id',
+        userId,
+        expiresAt: new Date(),
+      });
+
+      const req = createRequest({
+        body: {
+          challengeId,
+          otp: '123456',
+        },
+        ip: '192.168.1.10',
+        get: getHeader,
+      });
+
+      const { response } = createResponseMock();
+
+      const next = createNext();
+
+      await handlers.verifyLogin(req, response, next);
+
+      expect(mocks.createRefreshToken).toHaveBeenCalledTimes(1);
+
+      expect(mocks.createRefreshToken).toHaveBeenCalledWith(userId, {
+        userAgent: 'Test-Agent',
+        ipAddress: '192.168.1.10',
+      });
+
+      expect(mocks.rotate).not.toHaveBeenCalled();
+
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    it('uses the current role returned by login verification', async () => {
+      const challengeId = '550e8400-e29b-41d4-a716-446655440114';
+
+      const userId = '550e8400-e29b-41d4-a716-446655440115';
+
+      mocks.verifyLogin.mockResolvedValue({
+        userId,
+        role: 'driver',
+      });
+
+      mocks.createAccessToken.mockResolvedValue('driver-access-token');
+
+      mocks.createRefreshToken.mockResolvedValue({
+        refreshToken: 'driver-refresh-token',
+        refreshTokenId: 'refresh-token-id',
+        familyId: 'family-id',
+        userId,
+        expiresAt: new Date(),
+      });
+
+      const req = createRequest({
+        body: {
+          challengeId,
+          otp: '123456',
+        },
+      });
+
+      const { response } = createResponseMock();
+
+      const next = createNext();
+
+      await handlers.verifyLogin(req, response, next);
+
+      expect(mocks.createAccessToken).toHaveBeenCalledWith({
+        userId,
+        role: 'driver',
+      });
+
+      expect(mocks.createRefreshToken).toHaveBeenCalledWith(userId, {
+        userAgent: 'Mozilla/5.0',
+        ipAddress: '127.0.0.1',
+      });
+
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    it('does not create tokens when OTP verification fails', async () => {
+      const error = new Error('Invalid OTP');
+
+      mocks.verifyLogin.mockRejectedValue(error);
+
+      const req = createRequest({
+        body: {
+          challengeId: '550e8400-e29b-41d4-a716-446655440116',
+          otp: '000000',
+        },
+      });
+
+      const { response, cookie } = createResponseMock();
+
+      const next = createNext();
+
+      await handlers.verifyLogin(req, response, next);
+
+      expect(mocks.verifyLogin).toHaveBeenCalledTimes(1);
+
+      expect(mocks.createAccessToken).not.toHaveBeenCalled();
+
+      expect(mocks.createRefreshToken).not.toHaveBeenCalled();
+
+      expect(mocks.rotate).not.toHaveBeenCalled();
+
+      expect(cookie).not.toHaveBeenCalled();
+
+      expect(next).toHaveBeenCalledTimes(1);
+
+      expect(next).toHaveBeenCalledWith(error);
+    });
+
+    it('passes refresh-token creation errors to error middleware', async () => {
+      const challengeId = '550e8400-e29b-41d4-a716-446655440117';
+
+      const userId = '550e8400-e29b-41d4-a716-446655440118';
+
+      const error = new Error('Refresh token creation failed');
+
+      mocks.verifyLogin.mockResolvedValue({
+        userId,
+        role: 'customer',
+      });
+
+      mocks.createAccessToken.mockResolvedValue('access-token');
+
+      mocks.createRefreshToken.mockRejectedValue(error);
+
+      const req = createRequest({
+        body: {
+          challengeId,
+          otp: '123456',
+        },
+      });
+
+      const { response, cookie } = createResponseMock();
+
+      const next = createNext();
+
+      await handlers.verifyLogin(req, response, next);
+
+      expect(mocks.verifyLogin).toHaveBeenCalledWith(challengeId, '123456');
+
+      expect(mocks.createAccessToken).toHaveBeenCalledWith({
+        userId,
+        role: 'customer',
+      });
+
+      expect(mocks.createRefreshToken).toHaveBeenCalledTimes(1);
+
+      expect(mocks.rotate).not.toHaveBeenCalled();
+
+      expect(cookie).not.toHaveBeenCalled();
+
+      expect(next).toHaveBeenCalledTimes(1);
+
+      expect(next).toHaveBeenCalledWith(error);
+    });
+
+    it('passes access-token creation errors to error middleware', async () => {
+      const challengeId = '550e8400-e29b-41d4-a716-446655440119';
+
+      const userId = '550e8400-e29b-41d4-a716-446655440120';
+
+      const error = new Error('Access token creation failed');
+
+      mocks.verifyLogin.mockResolvedValue({
+        userId,
+        role: 'customer',
+      });
+
+      mocks.createAccessToken.mockRejectedValue(error);
+
+      const req = createRequest({
+        body: {
+          challengeId,
+          otp: '123456',
+        },
+      });
+
+      const { response, cookie } = createResponseMock();
+
+      const next = createNext();
+
+      await handlers.verifyLogin(req, response, next);
+
+      expect(mocks.verifyLogin).toHaveBeenCalledTimes(1);
+
+      expect(mocks.createAccessToken).toHaveBeenCalledWith({
+        userId,
+        role: 'customer',
+      });
+
+      expect(mocks.createRefreshToken).not.toHaveBeenCalled();
+
+      expect(mocks.rotate).not.toHaveBeenCalled();
+
+      expect(cookie).not.toHaveBeenCalled();
+
+      expect(next).toHaveBeenCalledTimes(1);
+
+      expect(next).toHaveBeenCalledWith(error);
+    });
+  });
+
+  // ==========================================================
+  // resendLoginOtp
+  // ==========================================================
+
+  describe('resendLoginOtp', () => {
+    it('resends the login OTP and returns the updated expiry', async () => {
+      const challengeId = '550e8400-e29b-41d4-a716-446655440130';
+
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+      mocks.resendLoginOtp.mockResolvedValue({
+        expiresAt,
+      });
+
+      const req = createRequest({
+        body: {
+          challengeId,
+        },
+      });
+
+      const { response, status, json, cookie } = createResponseMock();
+
+      const next = createNext();
+
+      await handlers.resendLoginOtp(req, response, next);
+
+      expect(next).not.toHaveBeenCalled();
+
+      expect(mocks.resendLoginOtp).toHaveBeenCalledTimes(1);
+
+      expect(mocks.resendLoginOtp).toHaveBeenCalledWith(challengeId);
+
+      expect(cookie).not.toHaveBeenCalled();
+
+      expect(status).toHaveBeenCalledWith(200);
+
+      expect(json).toHaveBeenCalledWith({
+        success: true,
+        data: {
+          challengeId,
+          expiresAt,
+        },
+      });
+    });
+
+    it('does not issue access or refresh tokens during OTP resend', async () => {
+      const challengeId = '550e8400-e29b-41d4-a716-446655440131';
+
+      mocks.resendLoginOtp.mockResolvedValue({
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      });
+
+      const req = createRequest({
+        body: {
+          challengeId,
+        },
+      });
+
+      const { response, json, cookie } = createResponseMock();
+
+      const next = createNext();
+
+      await handlers.resendLoginOtp(req, response, next);
+
+      const payload = json.mock.calls[0]?.[0] as {
+        success: boolean;
+        data: Record<string, unknown>;
+      };
+
+      expect(payload.success).toBe(true);
+
+      expect(payload.data.accessToken).toBeUndefined();
+
+      expect(payload.data.refreshToken).toBeUndefined();
+
+      expect(cookie).not.toHaveBeenCalled();
+
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    it('passes resend service errors to error middleware', async () => {
+      const challengeId = '550e8400-e29b-41d4-a716-446655440132';
+
+      const error = new Error('OTP resend failed');
+
+      mocks.resendLoginOtp.mockRejectedValue(error);
+
+      const req = createRequest({
+        body: {
+          challengeId,
+        },
+      });
+
+      const { response, cookie } = createResponseMock();
+
+      const next = createNext();
+
+      await handlers.resendLoginOtp(req, response, next);
+
+      expect(mocks.resendLoginOtp).toHaveBeenCalledWith(challengeId);
+
+      expect(cookie).not.toHaveBeenCalled();
+
+      expect(next).toHaveBeenCalledTimes(1);
+
+      expect(next).toHaveBeenCalledWith(error);
+    });
   });
 
   // ==========================================================
@@ -750,6 +1366,7 @@ describe('Auth Controller', () => {
       const userId = '550e8400-e29b-41d4-a716-446655440020';
 
       const issuedAt = new Date('2026-09-08T10:00:00.000Z');
+
       const expiresAt = new Date('2026-10-08T10:00:00.000Z');
 
       const sessions = [
