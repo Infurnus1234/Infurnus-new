@@ -11,6 +11,7 @@ class CustomerHomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(userProvider);
+    final rideState = ref.watch(rideProvider);
     
     return Scaffold(
       backgroundColor: Colors.white,
@@ -51,13 +52,18 @@ class CustomerHomeScreen extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (rideState.errorMessage != null)
+                    _buildErrorBanner(rideState.errorMessage!),
                   Text(
-                    'Good Morning, ${user?.name ?? "User"}',
+                    'Good Morning, ${user?.firstName ?? "User"}',
                     style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 20),
                   _buildSearchBox(context, ref),
                   const SizedBox(height: 30),
+                  if (_isRideActive(rideState.status))
+                    _buildActiveRideCard(context, rideState),
+                  const SizedBox(height: 10),
                   _buildServiceCategories(context),
                   const SizedBox(height: 30),
                   _buildPromoCard(),
@@ -184,5 +190,105 @@ class CustomerHomeScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  bool _isRideActive(RideStatus status) {
+    return status == RideStatus.searching ||
+        status == RideStatus.matched ||
+        status == RideStatus.arrived ||
+        status == RideStatus.active;
+  }
+
+  Widget _buildErrorBanner(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 20),
+      decoration: BoxDecoration(
+        color: Colors.red[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.red[200]!),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline, color: Colors.red),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(color: Colors.red, fontSize: 14),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActiveRideCard(BuildContext context, RideState state) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(color: AppColors.cardShadow, blurRadius: 10, offset: Offset(0, 4))
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.directions_car, color: AppColors.primaryGreen),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _getStatusText(state.status),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                    if (state.currentRide != null)
+                      Text(
+                        'To: ${state.currentRide?.destinationAddress ?? "Destination"}',
+                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: () => context.push('/ride-booking'),
+                icon: const Icon(Icons.chevron_right),
+              ),
+            ],
+          ),
+          if (state.status == RideStatus.searching)
+            const Padding(
+              padding: EdgeInsets.only(top: 12),
+              child: LinearProgressIndicator(
+                backgroundColor: AppColors.divider,
+                valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryGreen),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  String _getStatusText(RideStatus status) {
+    switch (status) {
+      case RideStatus.searching:
+        return 'Finding your driver...';
+      case RideStatus.matched:
+        return 'Driver matched';
+      case RideStatus.arrived:
+        return 'Driver arrived';
+      case RideStatus.active:
+        return 'Ride in progress';
+      default:
+        return 'Active Ride';
+    }
   }
 }
