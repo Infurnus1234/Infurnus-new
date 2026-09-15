@@ -32,7 +32,7 @@ Future<bool>? _refreshFuture;
 final dioProvider = Provider<Dio>((ref) {
   final dio = Dio(
     BaseOptions(
-      baseUrl: EnvConfig.dev.baseUrl,
+      baseUrl: envConfigProvider.baseUrl,
       connectTimeout: const Duration(seconds: 15),
       receiveTimeout: const Duration(seconds: 15),
       headers: const {

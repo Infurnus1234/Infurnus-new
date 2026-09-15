@@ -94,8 +94,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 isLoading: authState.status == AuthStatus.loading,
                 onPressed: () {
                   if (_phoneController.text.isNotEmpty && _passwordController.text.isNotEmpty) {
+                    // Sanitize phone: remove all non-digits except +
+                    final phone = _phoneController.text.trim().replaceAll(RegExp(r'[^\d+]'), '');
                     final request = LoginRequest(
-                      phone: _phoneController.text,
+                      phone: phone,
                       password: _passwordController.text,
                     );
                     ref.read(authProvider.notifier).login(request);

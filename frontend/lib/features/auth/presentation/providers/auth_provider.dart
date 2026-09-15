@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/services/socket_service.dart';
 import '../../../../core/storage/secure_storage.dart';
@@ -49,7 +50,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
     if (token != null && userId != null) {
       try {
         final publicUser = await ref.read(getUserProfileUseCaseProvider).execute(userId);
-        // We might need to store the role in secure storage too or derive it
         final role = await ref.read(secureStorageProvider).read(key: 'user_role') ?? 'customer';
         ref.read(userProvider.notifier).setUser(publicUser.toEntity(role));
         ref.read(socketServiceProvider).connect(token);
@@ -71,7 +71,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         signupId: response.signupId,
       );
     } catch (e) {
-      state = state.copyWith(status: AuthStatus.unauthenticated, errorMessage: e.toString());
+      final message = _parseError(e);
+      state = state.copyWith(status: AuthStatus.unauthenticated, errorMessage: message);
     }
   }
 
@@ -83,7 +84,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         final response = await ref.read(verifySignupOtpUseCaseProvider).execute(request);
         await _handleAuthSuccess(response);
       } catch (e) {
-        state = state.copyWith(status: AuthStatus.otpRequired, errorMessage: e.toString());
+        final message = _parseError(e);
+        state = state.copyWith(status: AuthStatus.otpRequired, errorMessage: message);
       }
     } else if (state.loginChallengeId != null) {
       state = state.copyWith(status: AuthStatus.loading);
@@ -92,7 +94,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         final response = await ref.read(verifyLoginOtpUseCaseProvider).execute(request);
         await _handleAuthSuccess(response);
       } catch (e) {
-        state = state.copyWith(status: AuthStatus.otpRequired, errorMessage: e.toString());
+        final message = _parseError(e);
+        state = state.copyWith(status: AuthStatus.otpRequired, errorMessage: message);
       }
     }
   }
@@ -106,8 +109,20 @@ class AuthNotifier extends StateNotifier<AuthState> {
         loginChallengeId: response.challengeId,
       );
     } catch (e) {
-      state = state.copyWith(status: AuthStatus.unauthenticated, errorMessage: e.toString());
+      final message = _parseError(e);
+      state = state.copyWith(status: AuthStatus.unauthenticated, errorMessage: message);
     }
+  }
+
+  String _parseError(dynamic e) {
+    if (e is DioException) {
+      final data = e.response?.data;
+      if (data is Map && data['error'] != null) {
+        return data['error']['message'] ?? 'An error occurred';
+      }
+      return e.message ?? e.toString();
+    }
+    return e.toString();
   }
 
   Future<void> resendOtp() async {
@@ -134,8 +149,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
     
     final publicUser = await ref.read(getUserProfileUseCaseProvider).execute(response.userId);
     
-    // Role handling - in a real app, role comes from the profile or token.
-    // Defaulting to 'customer' if not available in the current DTO.
     const role = 'customer';
     await ref.read(secureStorageProvider).write(key: 'user_role', value: role);
 
