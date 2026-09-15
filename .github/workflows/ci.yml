@@ -78,21 +78,22 @@ jobs:
       - name: Format check
         shell: bash
         run: |
+          set +o pipefail
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             base="${{ github.event.pull_request.base.sha }}"
           else
             base="${{ github.event.before }}"
           fi
 
-          if [[ "$base" == "0000000000000000000000000000000000000000" ]]; then
-            echo "No previous commit available; skipping changed-file format comparison."
-            exit 0
+          if [[ "$base" == "0000000000000000000000000000000000000000" || -z "$base" ]]; then
+            echo "No previous commit available; checking all files."
+            npm run format:check
+          else
+            git diff --name-only --diff-filter=ACMRTUXB "$base" "${{ github.sha }}" \
+              | grep -Ev '\.sql$' \
+              | grep -E '\.(js|jsx|ts|tsx|json|jsonc|md|yml|yaml|css|scss|html)$' \
+              | xargs -r npx prettier --check
           fi
-
-          git diff --name-only --diff-filter=ACMRTUXB "$base" "${{ github.sha }}" \
-            | grep -Ev '\.sql$' \
-            | grep -E '\.(js|jsx|ts|tsx|json|jsonc|md|yml|yaml|css|scss|html)$' \
-            | xargs -r npx prettier --check
 
       - name: Test
         run: npm test

@@ -37,9 +37,7 @@ async function startServer() {
   // OTP provider
   // ==========================================================
 
-  const otpProvider = env.SENDMATOR_API_KEY
-    ? new SendmatorOtpProvider()
-    : new DevOtpProvider();
+  const otpProvider = env.SENDMATOR_API_KEY ? new SendmatorOtpProvider() : new DevOtpProvider();
 
   // ==========================================================
   // Repositories
