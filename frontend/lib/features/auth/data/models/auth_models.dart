@@ -115,6 +115,50 @@ class LoginRequest {
       };
 }
 
+class LoginChallengeResponse {
+  final String challengeId;
+  final String expiresAt;
+
+  LoginChallengeResponse({
+    required this.challengeId,
+    required this.expiresAt,
+  });
+
+  factory LoginChallengeResponse.fromJson(Map<String, dynamic> json) {
+    return LoginChallengeResponse(
+      challengeId: json['challengeId'] as String,
+      expiresAt: json['expiresAt'] as String,
+    );
+  }
+}
+
+class VerifyLoginRequest {
+  final String challengeId;
+  final String otp;
+
+  VerifyLoginRequest({
+    required this.challengeId,
+    required this.otp,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'challengeId': challengeId,
+        'otp': otp,
+      };
+}
+
+class ResendLoginRequest {
+  final String challengeId;
+
+  ResendLoginRequest({
+    required this.challengeId,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'challengeId': challengeId,
+      };
+}
+
 class PublicUser {
   final String id;
   final String firstName;

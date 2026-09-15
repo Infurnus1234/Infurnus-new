@@ -29,10 +29,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
 
-    // Listen for auth status changes to navigate to home
+    // Listen for auth status changes to navigate
     ref.listen(authProvider, (previous, next) {
       if (next.status == AuthStatus.authenticated) {
         context.go('/customer-home');
+      } else if (next.status == AuthStatus.otpRequired) {
+        context.push('/otp');
       }
     });
 

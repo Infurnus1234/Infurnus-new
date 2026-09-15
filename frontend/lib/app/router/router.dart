@@ -13,6 +13,11 @@ import '../../features/customer/presentation/screens/wallet_screen.dart';
 import '../../features/driver/presentation/screens/driver_dashboard_screen.dart';
 import '../../features/driver/presentation/screens/driver_onboarding_screen.dart';
 import '../../features/driver/presentation/screens/driver_ride_request_screen.dart';
+import '../../features/driver/presentation/screens/driver_financials_screen.dart';
+import '../../features/driver/presentation/screens/driver_profile_screen.dart';
+import '../../features/driver/presentation/screens/driver_documents_screen.dart';
+import '../../features/driver/presentation/screens/driver_vehicles_screen.dart';
+import '../../features/driver/presentation/screens/driver_notifications_screen.dart';
 import '../../features/customer/presentation/screens/rentals_screen.dart';
 import '../../features/customer/presentation/screens/logistics_screen.dart';
 import '../../features/ai_assistant/presentation/screens/ai_assistant_screen.dart';
@@ -70,6 +75,26 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/driver-ride-request',
         builder: (context, state) => const DriverRideRequestScreen(),
+      ),
+      GoRoute(
+        path: '/driver-financials',
+        builder: (context, state) => const DriverFinancialsScreen(),
+      ),
+      GoRoute(
+        path: '/driver-profile',
+        builder: (context, state) => const DriverProfileScreen(),
+      ),
+      GoRoute(
+        path: '/driver-documents',
+        builder: (context, state) => const DriverDocumentsScreen(),
+      ),
+      GoRoute(
+        path: '/driver-vehicles',
+        builder: (context, state) => const DriverVehiclesScreen(),
+      ),
+      GoRoute(
+        path: '/driver-notifications',
+        builder: (context, state) => const DriverNotificationsScreen(),
       ),
       GoRoute(
         path: '/rentals',

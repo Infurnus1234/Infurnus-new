@@ -6,6 +6,7 @@ import '../datasources/driver_remote_data_source.dart';
 import '../models/partner_model.dart';
 import '../models/partner_document_model.dart';
 import '../models/vehicle_model.dart';
+import '../../../auth/data/models/user_preferences_model.dart';
 import '../../../customer/data/models/ride_model.dart';
 
 class DriverRepositoryImpl implements DriverRepository {
@@ -61,6 +62,17 @@ class DriverRepositoryImpl implements DriverRepository {
   Future<PartnerDocumentModel> addDocument(String partnerId, Map<String, dynamic> data) async {
     try {
       return await remoteDataSource.addDocument(partnerId, data);
+    } on DioException catch (e) {
+      throw _handleDioException(e);
+    } catch (e) {
+      throw ServerFailure(e.toString());
+    }
+  }
+
+  @override
+  Future<PartnerDocumentModel> updateDocument(String partnerId, String documentId, Map<String, dynamic> data) async {
+    try {
+      return await remoteDataSource.updateDocument(partnerId, documentId, data);
     } on DioException catch (e) {
       throw _handleDioException(e);
     } catch (e) {
@@ -149,6 +161,61 @@ class DriverRepositoryImpl implements DriverRepository {
   Future<VehicleModel> getVehicle(String id) async {
     try {
       return await remoteDataSource.getVehicle(id);
+    } on DioException catch (e) {
+      throw _handleDioException(e);
+    } catch (e) {
+      throw ServerFailure(e.toString());
+    }
+  }
+
+  @override
+  Future<VehicleModel> updateVehicle(String id, Map<String, dynamic> data) async {
+    try {
+      return await remoteDataSource.updateVehicle(id, data);
+    } on DioException catch (e) {
+      throw _handleDioException(e);
+    } catch (e) {
+      throw ServerFailure(e.toString());
+    }
+  }
+
+  @override
+  Future<VehicleModel> deactivateVehicle(String id) async {
+    try {
+      return await remoteDataSource.deactivateVehicle(id);
+    } on DioException catch (e) {
+      throw _handleDioException(e);
+    } catch (e) {
+      throw ServerFailure(e.toString());
+    }
+  }
+
+  @override
+  Future<UserPreferencesModel> getUserPreferences(String userId) async {
+    try {
+      return await remoteDataSource.getUserPreferences(userId);
+    } on DioException catch (e) {
+      throw _handleDioException(e);
+    } catch (e) {
+      throw ServerFailure(e.toString());
+    }
+  }
+
+  @override
+  Future<UserPreferencesModel> updateUserPreferences(String userId, Map<String, dynamic> data) async {
+    try {
+      return await remoteDataSource.updateUserPreferences(userId, data);
+    } on DioException catch (e) {
+      throw _handleDioException(e);
+    } catch (e) {
+      throw ServerFailure(e.toString());
+    }
+  }
+
+  @override
+  Future<List<UserHistoryModel>> getUserHistory(String userId, {int limit = 20}) async {
+    try {
+      return await remoteDataSource.getUserHistory(userId, limit: limit);
     } on DioException catch (e) {
       throw _handleDioException(e);
     } catch (e) {
