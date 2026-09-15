@@ -24,6 +24,7 @@ import { RideService } from './modules/rides/services/ride.service.js';
 import { PostgresRentalRepository } from './modules/rentals/repositories/rental.repository.js';
 
 import { SendmatorOtpProvider } from './modules/auth/providers/sendmator-otp.provider.js';
+import { DevOtpProvider } from './modules/auth/providers/dev-otp.provider.js';
 
 async function startServer() {
   // ==========================================================
@@ -34,13 +35,11 @@ async function startServer() {
 
   // ==========================================================
   // OTP provider
-  //
-  // Production server explicitly uses Sendmator.
-  // This prevents DevOtpProvider from being selected
-  // accidentally through the AuthController default.
   // ==========================================================
 
-  const otpProvider = new SendmatorOtpProvider();
+  const otpProvider = env.SENDMATOR_API_KEY
+    ? new SendmatorOtpProvider()
+    : new DevOtpProvider();
 
   // ==========================================================
   // Repositories

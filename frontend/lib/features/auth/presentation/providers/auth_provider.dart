@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/services/socket_service.dart';
 import '../../../../core/storage/secure_storage.dart';
 import '../../data/models/auth_models.dart';
 import 'auth_use_case_providers.dart';
@@ -10,14 +11,26 @@ class AuthState {
   final AuthStatus status;
   final String? errorMessage;
   final String? signupId;
+  final String? loginChallengeId;
 
-  AuthState({required this.status, this.errorMessage, this.signupId});
+  AuthState({
+    required this.status,
+    this.errorMessage,
+    this.signupId,
+    this.loginChallengeId,
+  });
 
-  AuthState copyWith({AuthStatus? status, String? errorMessage, String? signupId}) {
+  AuthState copyWith({
+    AuthStatus? status,
+    String? errorMessage,
+    String? signupId,
+    String? loginChallengeId,
+  }) {
     return AuthState(
       status: status ?? this.status,
       errorMessage: errorMessage ?? this.errorMessage,
       signupId: signupId ?? this.signupId,
+      loginChallengeId: loginChallengeId ?? this.loginChallengeId,
     );
   }
 }
@@ -39,6 +52,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         // We might need to store the role in secure storage too or derive it
         final role = await ref.read(secureStorageProvider).read(key: 'user_role') ?? 'customer';
         ref.read(userProvider.notifier).setUser(publicUser.toEntity(role));
+        ref.read(socketServiceProvider).connect(token);
         state = state.copyWith(status: AuthStatus.authenticated);
       } catch (e) {
         state = state.copyWith(status: AuthStatus.unauthenticated);
@@ -62,16 +76,24 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> verifyOtp(String otp) async {
-    if (state.signupId == null) return;
-    
-    state = state.copyWith(status: AuthStatus.loading);
-    try {
-      final request = VerifySignupRequest(signupId: state.signupId!, otp: otp);
-      final response = await ref.read(verifySignupOtpUseCaseProvider).execute(request);
-      
-      await _handleAuthSuccess(response);
-    } catch (e) {
-      state = state.copyWith(status: AuthStatus.otpRequired, errorMessage: e.toString());
+    if (state.signupId != null) {
+      state = state.copyWith(status: AuthStatus.loading);
+      try {
+        final request = VerifySignupRequest(signupId: state.signupId!, otp: otp);
+        final response = await ref.read(verifySignupOtpUseCaseProvider).execute(request);
+        await _handleAuthSuccess(response);
+      } catch (e) {
+        state = state.copyWith(status: AuthStatus.otpRequired, errorMessage: e.toString());
+      }
+    } else if (state.loginChallengeId != null) {
+      state = state.copyWith(status: AuthStatus.loading);
+      try {
+        final request = VerifyLoginRequest(challengeId: state.loginChallengeId!, otp: otp);
+        final response = await ref.read(verifyLoginOtpUseCaseProvider).execute(request);
+        await _handleAuthSuccess(response);
+      } catch (e) {
+        state = state.copyWith(status: AuthStatus.otpRequired, errorMessage: e.toString());
+      }
     }
   }
 
@@ -79,9 +101,30 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(status: AuthStatus.loading);
     try {
       final response = await ref.read(loginUseCaseProvider).execute(request);
-      await _handleAuthSuccess(response);
+      state = state.copyWith(
+        status: AuthStatus.otpRequired,
+        loginChallengeId: response.challengeId,
+      );
     } catch (e) {
       state = state.copyWith(status: AuthStatus.unauthenticated, errorMessage: e.toString());
+    }
+  }
+
+  Future<void> resendOtp() async {
+    if (state.signupId != null) {
+      try {
+        final request = ResendSignupRequest(signupId: state.signupId!);
+        await ref.read(resendSignupOtpUseCaseProvider).execute(request);
+      } catch (e) {
+        state = state.copyWith(errorMessage: e.toString());
+      }
+    } else if (state.loginChallengeId != null) {
+      try {
+        final request = ResendLoginRequest(challengeId: state.loginChallengeId!);
+        await ref.read(resendLoginOtpUseCaseProvider).execute(request);
+      } catch (e) {
+        state = state.copyWith(errorMessage: e.toString());
+      }
     }
   }
 
@@ -97,6 +140,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await ref.read(secureStorageProvider).write(key: 'user_role', value: role);
 
     ref.read(userProvider.notifier).setUser(publicUser.toEntity(role));
+    ref.read(socketServiceProvider).connect(response.accessToken);
     state = state.copyWith(status: AuthStatus.authenticated);
   }
 
@@ -107,6 +151,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await ref.read(secureStorageProvider).delete(key: 'auth_token');
       await ref.read(secureStorageProvider).delete(key: 'user_id');
       await ref.read(secureStorageProvider).delete(key: 'user_role');
+      ref.read(socketServiceProvider).disconnect();
       ref.read(userProvider.notifier).logout();
       state = state.copyWith(status: AuthStatus.unauthenticated, signupId: null);
     }

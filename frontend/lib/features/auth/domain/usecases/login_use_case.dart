@@ -6,7 +6,7 @@ class LoginUseCase {
 
   LoginUseCase(this.repository);
 
-  Future<AuthResponse> execute(LoginRequest request) {
+  Future<LoginChallengeResponse> execute(LoginRequest request) {
     return repository.login(request);
   }
 }

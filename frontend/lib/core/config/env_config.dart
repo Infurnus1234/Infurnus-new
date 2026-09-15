@@ -1,4 +1,4 @@
-enum Environment { dev, staging, prod }
+﻿enum Environment { dev, staging, prod }
 
 class EnvConfig {
   final String baseUrl;
@@ -12,8 +12,8 @@ class EnvConfig {
   });
 
   static const EnvConfig dev = EnvConfig(
-    baseUrl: 'http://10.0.2.2:3000',
-    socketUrl: 'http://10.0.2.2:3000',
+    baseUrl: 'http://192.168.0.163:3001',
+    socketUrl: 'http://192.168.0.163:3001',
     environment: Environment.dev,
   );
 
@@ -25,3 +25,4 @@ class EnvConfig {
 }
 
 final envConfigProvider = EnvConfig.dev;
+

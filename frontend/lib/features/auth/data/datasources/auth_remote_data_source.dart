@@ -5,7 +5,9 @@ abstract class AuthRemoteDataSource {
   Future<SignupResponse> signup(SignupRequest request);
   Future<AuthResponse> verifySignup(VerifySignupRequest request);
   Future<SignupResponse> resendSignupOtp(ResendSignupRequest request);
-  Future<AuthResponse> login(LoginRequest request);
+  Future<LoginChallengeResponse> login(LoginRequest request);
+  Future<AuthResponse> verifyLogin(VerifyLoginRequest request);
+  Future<LoginChallengeResponse> resendLoginOtp(ResendLoginRequest request);
   Future<AuthResponse> refreshToken();
   Future<void> logout();
   Future<PublicUser> getUserProfile(String userId);
@@ -19,7 +21,6 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   @override
   Future<SignupResponse> signup(SignupRequest request) async {
     final response = await _dio.post('/auth/signup', data: request.toJson());
-    // Assuming backend returns { success: true, data: { signupId, ... } }
     return SignupResponse.fromJson(response.data['data']);
   }
 
@@ -36,9 +37,21 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   }
 
   @override
-  Future<AuthResponse> login(LoginRequest request) async {
+  Future<LoginChallengeResponse> login(LoginRequest request) async {
     final response = await _dio.post('/auth/login', data: request.toJson());
+    return LoginChallengeResponse.fromJson(response.data['data']);
+  }
+
+  @override
+  Future<AuthResponse> verifyLogin(VerifyLoginRequest request) async {
+    final response = await _dio.post('/auth/login/verify', data: request.toJson());
     return AuthResponse.fromJson(response.data['data']);
+  }
+
+  @override
+  Future<LoginChallengeResponse> resendLoginOtp(ResendLoginRequest request) async {
+    final response = await _dio.post('/auth/login/resend', data: request.toJson());
+    return LoginChallengeResponse.fromJson(response.data['data']);
   }
 
   @override
