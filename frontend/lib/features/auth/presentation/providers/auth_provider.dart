@@ -165,14 +165,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> login(LoginRequest request, [String channel = 'phone']) async {
     if (_isProcessing) {
-      debugPrint('[AUTH] login BLOCKED - already processing');
       return;
     }
     _isProcessing = true;
 
-    final notifierId = identityHashCode(this);
-    debugPrint('[AUTH] [$notifierId] Email login START - channel: $channel');
-    
     state = state.copyWith(
       status: AuthStatus.loading, 
       loginChannel: channel,
@@ -184,11 +180,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
         status: AuthStatus.otpRequired,
         loginChallengeId: response.challengeId,
       );
-      debugPrint('[AUTH] [$notifierId] Email login END - SUCCESS');
     } catch (e) {
       final message = _parseError(e);
       state = state.copyWith(status: AuthStatus.unauthenticated, errorMessage: message);
-      debugPrint('[AUTH] [$notifierId] Email login END - ERROR: $message');
     } finally {
       _isProcessing = false;
     }
