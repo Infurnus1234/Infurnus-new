@@ -110,8 +110,9 @@ vi.mock('../controllers/auth.controller.js', () => ({
 }));
 
 vi.mock('../../../config/env.js', async (importOriginal) => {
-  const actual = await importOriginal<any>();
+  const actual = await importOriginal<typeof import('../../../config/env.js')>();
   return {
+    ...actual,
     env: {
       ...actual.env,
       AUTH_RATE_LIMIT_ENABLED: true,
