@@ -47,12 +47,15 @@ class AuthState {
 
 class AuthNotifier extends StateNotifier<AuthState> {
   final Ref ref;
+  bool _isProcessing = false;
 
   AuthNotifier(this.ref) : super(AuthState(status: AuthStatus.initial)) {
     checkAuthStatus();
   }
 
   Future<void> checkAuthStatus() async {
+    if (_isProcessing) return;
+    _isProcessing = true;
     debugPrint('AuthNotifier: Checking auth status...');
     try {
       final token = await ref.read(secureStorageProvider).read(key: 'auth_token').timeout(
@@ -99,10 +102,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (e) {
       debugPrint('AuthNotifier: Fatal error in checkAuthStatus: $e');
       state = state.copyWith(status: AuthStatus.unauthenticated, errorMessage: e.toString());
+    } finally {
+      _isProcessing = false;
     }
   }
 
   Future<void> signup(SignupRequest request) async {
+    if (_isProcessing) {
+      debugPrint('[AUTH] Signup BLOCKED - already processing');
+      return;
+    }
+    _isProcessing = true;
     state = state.copyWith(status: AuthStatus.loading, contactValue: request.phone ?? request.email);
     try {
       final response = await ref.read(signupUseCaseProvider).execute(request);
@@ -113,10 +123,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (e) {
       final message = _parseError(e);
       state = state.copyWith(status: AuthStatus.unauthenticated, errorMessage: message);
+    } finally {
+      _isProcessing = false;
     }
   }
 
   Future<void> verifyOtp(String otp) async {
+    if (_isProcessing) {
+      debugPrint('[AUTH] OTP Verify BLOCKED - already processing');
+      return;
+    }
+    _isProcessing = true;
     if (state.signupId != null) {
       state = state.copyWith(status: AuthStatus.loading);
       try {
@@ -126,6 +143,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       } catch (e) {
         final message = _parseError(e);
         state = state.copyWith(status: AuthStatus.otpRequired, errorMessage: message);
+      } finally {
+        _isProcessing = false;
       }
     } else if (state.loginChallengeId != null) {
       state = state.copyWith(status: AuthStatus.loading);
@@ -136,11 +155,24 @@ class AuthNotifier extends StateNotifier<AuthState> {
       } catch (e) {
         final message = _parseError(e);
         state = state.copyWith(status: AuthStatus.otpRequired, errorMessage: message);
+      } finally {
+        _isProcessing = false;
       }
+    } else {
+      _isProcessing = false;
     }
   }
 
   Future<void> login(LoginRequest request, [String channel = 'phone']) async {
+    if (_isProcessing) {
+      debugPrint('[AUTH] login BLOCKED - already processing');
+      return;
+    }
+    _isProcessing = true;
+
+    final notifierId = identityHashCode(this);
+    debugPrint('[AUTH] [$notifierId] Email login START - channel: $channel');
+    
     state = state.copyWith(
       status: AuthStatus.loading, 
       loginChannel: channel,
@@ -152,9 +184,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
         status: AuthStatus.otpRequired,
         loginChallengeId: response.challengeId,
       );
+      debugPrint('[AUTH] [$notifierId] Email login END - SUCCESS');
     } catch (e) {
       final message = _parseError(e);
       state = state.copyWith(status: AuthStatus.unauthenticated, errorMessage: message);
+      debugPrint('[AUTH] [$notifierId] Email login END - ERROR: $message');
+    } finally {
+      _isProcessing = false;
     }
   }
 
