@@ -122,4 +122,42 @@ describe('Vehicles API', () => {
     expect(missing.status).toBe(404);
     expect(missing.body.error.code).toBe('DRIVER_PROFILE_NOT_FOUND');
   });
+  it('rejects an invalid vehicle ID', async () => {
+    const app = createApp(undefined, undefined, new InMemoryVehicleRepository());
+
+    const response = await request(app).get('/vehicles/not-a-valid-uuid');
+
+    expect(response.status).toBe(400);
+  });
+
+  it('returns 404 for a nonexistent vehicle', async () => {
+    const app = createApp(undefined, undefined, new InMemoryVehicleRepository());
+
+    const response = await request(app).get(
+      '/vehicles/950e8400-e29b-41d4-a716-446655440000',
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.body.error.code).toBe('VEHICLE_NOT_FOUND');
+  });
+
+  it('rejects an empty vehicle update', async () => {
+    const app = createApp(undefined, undefined, new InMemoryVehicleRepository());
+
+    const response = await request(app)
+      .patch(`/vehicles/${vehicle.id}`)
+      .send({});
+
+    expect(response.status).toBe(400);
+  });
+
+  it('rejects unexpected vehicle fields', async () => {
+    const app = createApp(undefined, undefined, new InMemoryVehicleRepository());
+
+    const response = await request(app)
+      .patch(`/vehicles/${vehicle.id}`)
+      .send({ make: 'Honda', passwordHash: 'unexpected' });
+
+    expect(response.status).toBe(400);
+  });
 });
