@@ -13,17 +13,13 @@
  * All monetary values are represented as integer minor units (paise).
  */
 
-export const COUPON_CURRENCY = "INR" as const;
+export const COUPON_CURRENCY = 'INR' as const;
 
 export type CouponCurrency = typeof COUPON_CURRENCY;
 
-export const COUPON_DISCOUNT_TYPES = [
-  "PERCENTAGE",
-  "FIXED",
-] as const;
+export const COUPON_DISCOUNT_TYPES = ['PERCENTAGE', 'FIXED'] as const;
 
-export type CouponDiscountType =
-  (typeof COUPON_DISCOUNT_TYPES)[number];
+export type CouponDiscountType = (typeof COUPON_DISCOUNT_TYPES)[number];
 
 /**
  * Coupon definition stored in the database.

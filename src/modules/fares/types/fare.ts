@@ -9,7 +9,7 @@
  * and other pricing adjustments will be added in later phases.
  */
 
-export const FARE_CURRENCY = "INR" as const;
+export const FARE_CURRENCY = 'INR' as const;
 
 export type FareCurrency = typeof FARE_CURRENCY;
 

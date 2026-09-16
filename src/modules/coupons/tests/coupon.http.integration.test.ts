@@ -65,13 +65,11 @@ describe('Coupon HTTP integration', () => {
     it('rejects unauthenticated requests', async () => {
       const { app, redeem } = createTestApp();
 
-      const response = await request(app)
-        .post('/coupons/redeem')
-        .send({
-          couponCode: 'SAVE10',
-          rideId,
-          fareAmount: 10000,
-        });
+      const response = await request(app).post('/coupons/redeem').send({
+        couponCode: 'SAVE10',
+        rideId,
+        fareAmount: 10000,
+      });
 
       expect(response.status).toBe(401);
       expect(response.body.success).toBe(false);

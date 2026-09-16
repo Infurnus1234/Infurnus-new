@@ -10,10 +10,7 @@ const describeDatabase = databaseEnabled ? describe : describe.skip;
 
 const couponRepository = new PostgresCouponRepository(pool);
 const calculator = new CouponCalculatorService();
-const service = new CouponRedemptionService(
-  couponRepository,
-  calculator,
-);
+const service = new CouponRedemptionService(couponRepository, calculator);
 
 interface Fixture {
   couponId: string;
@@ -140,13 +137,9 @@ describeDatabase('coupon PostgreSQL concurrency integration', () => {
       ),
     );
 
-    const successful = results.filter(
-      (result) => result.status === 'fulfilled',
-    );
+    const successful = results.filter((result) => result.status === 'fulfilled');
 
-    const failed = results.filter(
-      (result) => result.status === 'rejected',
-    );
+    const failed = results.filter((result) => result.status === 'rejected');
 
     expect(successful).toHaveLength(1);
     expect(failed).toHaveLength(9);

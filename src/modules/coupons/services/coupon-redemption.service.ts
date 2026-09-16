@@ -1,7 +1,7 @@
-import { withTransaction } from "../../../infrastructure/database/postgres.js";
-import type { CouponRepository } from "../repositories/coupon.repository.js";
-import { CouponCalculatorService } from "./coupon-calculator.service.js";
-import type { CouponRedemption } from "../types/coupon.js";
+import { withTransaction } from '../../../infrastructure/database/postgres.js';
+import type { CouponRepository } from '../repositories/coupon.repository.js';
+import { CouponCalculatorService } from './coupon-calculator.service.js';
+import type { CouponRedemption } from '../types/coupon.js';
 
 export interface RedeemCouponInput {
   couponCode: string;
@@ -16,9 +16,7 @@ export class CouponRedemptionService {
     private readonly couponCalculator: CouponCalculatorService,
   ) {}
 
-  async redeem(
-    input: RedeemCouponInput,
-  ): Promise<CouponRedemption> {
+  async redeem(input: RedeemCouponInput): Promise<CouponRedemption> {
     return withTransaction(async (client) => {
       /*
        * Lock the coupon row before checking usage.
@@ -27,52 +25,35 @@ export class CouponRedemptionService {
        * same coupon and prevents two requests from both observing
        * the same remaining usage capacity.
        */
-      const coupon =
-        await this.couponRepository.findByCodeForUpdate(
-          input.couponCode,
-          client,
-        );
+      const coupon = await this.couponRepository.findByCodeForUpdate(input.couponCode, client);
 
       if (!coupon) {
-        throw new Error("Coupon not found");
+        throw new Error('Coupon not found');
       }
 
       /*
        * Usage limits are checked inside the transaction after
        * acquiring the coupon row lock.
        */
-      if (
-        coupon.usageLimit !== null &&
-        coupon.usageCount >= coupon.usageLimit
-      ) {
-        throw new Error("Coupon usage limit reached");
+      if (coupon.usageLimit !== null && coupon.usageCount >= coupon.usageLimit) {
+        throw new Error('Coupon usage limit reached');
       }
 
-      const userRedemptionCount =
-        await this.couponRepository.countUserRedemptions(
-          coupon.id,
-          input.userId,
-          client,
-        );
+      const userRedemptionCount = await this.couponRepository.countUserRedemptions(
+        coupon.id,
+        input.userId,
+        client,
+      );
 
-      if (
-        coupon.perUserLimit !== null &&
-        userRedemptionCount >= coupon.perUserLimit
-      ) {
-        throw new Error(
-          "Coupon per-user usage limit reached",
-        );
+      if (coupon.perUserLimit !== null && userRedemptionCount >= coupon.perUserLimit) {
+        throw new Error('Coupon per-user usage limit reached');
       }
 
       /*
        * Pure financial calculation remains isolated from
        * database state.
        */
-      const calculation =
-        this.couponCalculator.calculate(
-          input.fareAmount,
-          coupon,
-        );
+      const calculation = this.couponCalculator.calculate(input.fareAmount, coupon);
 
       /*
        * Increment the usage counter only after all validation
@@ -81,14 +62,10 @@ export class CouponRedemptionService {
        * The database condition provides a second protection
        * against exceeding the configured global usage limit.
        */
-      const usageIncremented =
-        await this.couponRepository.incrementUsage(
-          coupon.id,
-          client,
-        );
+      const usageIncremented = await this.couponRepository.incrementUsage(coupon.id, client);
 
       if (!usageIncremented) {
-        throw new Error("Coupon usage limit reached");
+        throw new Error('Coupon usage limit reached');
       }
 
       /*
@@ -102,11 +79,9 @@ export class CouponRedemptionService {
           couponCode: coupon.code,
           discountType: coupon.discountType,
           discountValue: coupon.discountValue,
-          fareBeforeDiscount:
-            calculation.fareBeforeDiscount,
+          fareBeforeDiscount: calculation.fareBeforeDiscount,
           discountAmount: calculation.discountAmount,
-          fareAfterDiscount:
-            calculation.fareAfterDiscount,
+          fareAfterDiscount: calculation.fareAfterDiscount,
         },
         client,
       );

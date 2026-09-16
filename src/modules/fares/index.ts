@@ -1,14 +1,8 @@
-export {
-  DEFAULT_FARE_PRICING,
-} from "./config/fare.config.js";
+export { DEFAULT_FARE_PRICING } from './config/fare.config.js';
 
-export {
-  FareCalculatorService,
-} from "./services/fare-calculator.service.js";
+export { FareCalculatorService } from './services/fare-calculator.service.js';
 
-export {
-  FARE_CURRENCY,
-} from "./types/fare.js";
+export { FARE_CURRENCY } from './types/fare.js';
 
 export type {
   FareCalculationInput,
@@ -16,4 +10,4 @@ export type {
   FareBreakdown,
   FareCurrency,
   FarePricingConfig,
-} from "./types/fare.js";
+} from './types/fare.js';

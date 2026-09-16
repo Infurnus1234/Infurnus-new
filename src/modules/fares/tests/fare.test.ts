@@ -6,11 +6,7 @@ import { FareController } from '../controllers/fare.controller.js';
 import { FareCalculatorService } from '../services/fare-calculator.service.js';
 import { FareEstimateService } from '../services/fare-estimate.service.js';
 
-import type {
-  Coordinates,
-  MapProvider,
-  RouteResult,
-} from '../../rides/providers/map.provider.js';
+import type { Coordinates, MapProvider, RouteResult } from '../../rides/providers/map.provider.js';
 
 import type { FarePricingConfig } from '../types/fare.js';
 
@@ -302,9 +298,9 @@ describe('INFURNUS Fare Module', () => {
     it('throws when the map provider cannot calculate a route', async () => {
       const { service, calculateRoute } = createService(null);
 
-      await expect(
-        service.estimate(origin, destination),
-      ).rejects.toThrow('Route could not be calculated');
+      await expect(service.estimate(origin, destination)).rejects.toThrow(
+        'Route could not be calculated',
+      );
 
       expect(calculateRoute).toHaveBeenCalledOnce();
     });
@@ -326,9 +322,9 @@ describe('INFURNUS Fare Module', () => {
     it('does not calculate a fare when route calculation fails', async () => {
       const { service } = createService(null);
 
-      await expect(
-        service.estimate(origin, destination),
-      ).rejects.toThrow('Route could not be calculated');
+      await expect(service.estimate(origin, destination)).rejects.toThrow(
+        'Route could not be calculated',
+      );
     });
 
     it('does not require a polyline to calculate the fare', async () => {
@@ -397,10 +393,7 @@ describe('INFURNUS Fare Module', () => {
       await controller.estimate(req, res, next);
 
       expect(estimate).toHaveBeenCalledOnce();
-      expect(estimate).toHaveBeenCalledWith(
-        validBody.pickup,
-        validBody.destination,
-      );
+      expect(estimate).toHaveBeenCalledWith(validBody.pickup, validBody.destination);
 
       expect(res.json).toHaveBeenCalledWith({
         success: true,

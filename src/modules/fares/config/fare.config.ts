@@ -1,4 +1,4 @@
-import type { FarePricingConfig } from "../types/fare.js";
+import type { FarePricingConfig } from '../types/fare.js';
 
 /**
  * INFURNUS Fare Pricing — v1
@@ -20,6 +20,6 @@ export const DEFAULT_FARE_PRICING: Readonly<FarePricingConfig> = {
   baseFare: 500, // ₹5.00
   distanceRatePerKm: 1200, // ₹12.00 / km
   timeRatePerMinute: 200, // ₹2.00 / minute
-  currency: "INR",
-  pricingVersion: "v1",
+  currency: 'INR',
+  pricingVersion: 'v1',
 };

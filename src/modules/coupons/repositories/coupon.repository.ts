@@ -1,29 +1,15 @@
-import type { Pool, PoolClient } from "pg";
+import type { Pool, PoolClient } from 'pg';
 
-import type {
-  Coupon,
-  CouponDiscountType,
-  CouponRedemption,
-} from "../types/coupon.js";
+import type { Coupon, CouponDiscountType, CouponRedemption } from '../types/coupon.js';
 
 export interface CouponRepository {
   findByCode(code: string): Promise<Coupon | null>;
 
-  findByCodeForUpdate(
-    code: string,
-    client: PoolClient,
-  ): Promise<Coupon | null>;
+  findByCodeForUpdate(code: string, client: PoolClient): Promise<Coupon | null>;
 
-  countUserRedemptions(
-    couponId: string,
-    userId: string,
-    client: PoolClient,
-  ): Promise<number>;
+  countUserRedemptions(couponId: string, userId: string, client: PoolClient): Promise<number>;
 
-  incrementUsage(
-    couponId: string,
-    client: PoolClient,
-  ): Promise<boolean>;
+  incrementUsage(couponId: string, client: PoolClient): Promise<boolean>;
 
   createRedemption(
     input: CreateCouponRedemptionInput,
@@ -81,24 +67,12 @@ function mapCoupon(row: Record<string, unknown>): Coupon {
     code: row.code as string,
     discountType: row.discountType as CouponDiscountType,
     discountValue: Number(row.discountValue),
-    maxDiscountAmount:
-      row.maxDiscountAmount === null
-        ? null
-        : Number(row.maxDiscountAmount),
+    maxDiscountAmount: row.maxDiscountAmount === null ? null : Number(row.maxDiscountAmount),
     minFareAmount: Number(row.minFareAmount),
-    usageLimit:
-      row.usageLimit === null
-        ? null
-        : Number(row.usageLimit),
-    perUserLimit:
-      row.perUserLimit === null
-        ? null
-        : Number(row.perUserLimit),
+    usageLimit: row.usageLimit === null ? null : Number(row.usageLimit),
+    perUserLimit: row.perUserLimit === null ? null : Number(row.perUserLimit),
     startsAt: row.startsAt as Date,
-    expiresAt:
-      row.expiresAt === null
-        ? null
-        : (row.expiresAt as Date),
+    expiresAt: row.expiresAt === null ? null : (row.expiresAt as Date),
     isActive: row.isActive as boolean,
     usageCount: Number(row.usageCount),
     createdAt: row.createdAt as Date,
@@ -106,17 +80,14 @@ function mapCoupon(row: Record<string, unknown>): Coupon {
   };
 }
 
-function mapRedemption(
-  row: Record<string, unknown>,
-): CouponRedemption {
+function mapRedemption(row: Record<string, unknown>): CouponRedemption {
   return {
     id: row.id as string,
     couponId: row.couponId as string,
     userId: row.userId as string,
     rideId: row.rideId as string,
     couponCode: row.couponCode as string,
-    discountType:
-      row.discountType as CouponDiscountType,
+    discountType: row.discountType as CouponDiscountType,
     discountValue: Number(row.discountValue),
     fareBeforeDiscount: Number(row.fareBeforeDiscount),
     discountAmount: Number(row.discountAmount),
@@ -130,9 +101,7 @@ function normalizeCouponCode(code: string): string {
   return code.trim().toUpperCase();
 }
 
-export class PostgresCouponRepository
-  implements CouponRepository
-{
+export class PostgresCouponRepository implements CouponRepository {
   constructor(private readonly pool: Pool) {}
 
   async findByCode(code: string): Promise<Coupon | null> {
@@ -145,15 +114,10 @@ export class PostgresCouponRepository
       [normalizedCode],
     );
 
-    return result.rows[0]
-      ? mapCoupon(result.rows[0])
-      : null;
+    return result.rows[0] ? mapCoupon(result.rows[0]) : null;
   }
 
-  async findByCodeForUpdate(
-    code: string,
-    client: PoolClient,
-  ): Promise<Coupon | null> {
+  async findByCodeForUpdate(code: string, client: PoolClient): Promise<Coupon | null> {
     const normalizedCode = normalizeCouponCode(code);
 
     const result = await client.query(
@@ -164,9 +128,7 @@ export class PostgresCouponRepository
       [normalizedCode],
     );
 
-    return result.rows[0]
-      ? mapCoupon(result.rows[0])
-      : null;
+    return result.rows[0] ? mapCoupon(result.rows[0]) : null;
   }
 
   async countUserRedemptions(
@@ -185,10 +147,7 @@ export class PostgresCouponRepository
     return Number(result.rows[0]?.count ?? 0);
   }
 
-  async incrementUsage(
-    couponId: string,
-    client: PoolClient,
-  ): Promise<boolean> {
+  async incrementUsage(couponId: string, client: PoolClient): Promise<boolean> {
     const result = await client.query(
       `UPDATE coupons
        SET usage_count = usage_count + 1
