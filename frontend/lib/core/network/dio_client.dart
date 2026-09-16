@@ -46,6 +46,8 @@ final dioProvider = Provider<Dio>((ref) {
   dio.interceptors.add(
     InterceptorsWrapper(
       onRequest: (options, handler) async {
+        debugPrint('Dio: Requesting ${options.method} ${options.uri}');
+        debugPrint('Dio: Base URL is ${options.baseUrl}');
         // 1. Ensure CookieJar is attached before any request
         if (!dio.interceptors.any((i) => i is CookieManager)) {
           try {
