@@ -134,14 +134,38 @@ export class PostgresSignupCompletionRepository implements SignupCompletionRepos
       );
 
       // ======================================================
-      // Create actual user.
+      // Determine verified contact.
       //
-      // New signup rules:
-      // - phone is mandatory
-      // - phone is the primary verification channel
-      // - email is optional
-      // - phone is verified after successful phone OTP
-      // - optional email is NOT automatically verified
+      // Rules:
+      //
+      // 1. Phone signup:
+      //    - contactValue = phone
+      //    - phone is verified
+      //    - email remains unverified
+      //
+      // 2. Email signup:
+      //    - contactValue = email
+      //    - email is verified
+      //    - phone remains NULL/unverified
+      //
+      // 3. Both email + phone supplied:
+      //    - contactType is phone because phone is the
+      //      selected OTP channel
+      //    - phone is verified
+      //    - email remains unverified
+      // ======================================================
+
+      const isPhoneSignup = pendingSignup.contactType === 'phone';
+
+      const phone = isPhoneSignup ? pendingSignup.contactValue : null;
+
+      const email = pendingSignup.email;
+
+      const emailVerified = !isPhoneSignup;
+      const phoneVerified = isPhoneSignup;
+
+      // ======================================================
+      // Create actual user.
       // ======================================================
 
       const userResult = await client.query<CompletedSignupUser>(
@@ -161,9 +185,9 @@ export class PostgresSignupCompletionRepository implements SignupCompletionRepos
             $2,
             $3,
             $4,
-            FALSE,
-            TRUE,
             $5,
+            $6,
+            $7,
             'active'
           )
           RETURNING
@@ -174,8 +198,10 @@ export class PostgresSignupCompletionRepository implements SignupCompletionRepos
         [
           pendingSignup.firstName,
           pendingSignup.lastName,
-          pendingSignup.email,
-          pendingSignup.contactValue,
+          email,
+          phone,
+          emailVerified,
+          phoneVerified,
           pendingSignup.role,
         ],
       );

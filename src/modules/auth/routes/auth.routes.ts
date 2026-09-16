@@ -4,7 +4,6 @@ import type { AuthControllerDependencies } from '../controllers/auth.controller.
 import { createAuthHandlers } from '../controllers/auth.controller.js';
 
 import { requireAuth } from '../middleware/auth.middleware.js';
-
 import { requireCsrf } from '../middleware/csrf.middleware.js';
 
 import {
@@ -31,14 +30,9 @@ export function createAuthRouter(
     signup,
     verifySignup,
     resendSignupOtp,
-
     login,
-    loginEmail,
     verifyLogin,
-    verifyLoginEmail,
     resendLoginOtp,
-    resendLoginEmailOtp,
-
     refresh,
     logout,
     logoutAll,
@@ -47,7 +41,6 @@ export function createAuthRouter(
   } = createAuthHandlers(dependencies);
 
   const enableRateLimiting = options.enableRateLimiting ?? true;
-
   const enableCsrfProtection = options.enableCsrfProtection ?? true;
 
   // ==========================================================
@@ -78,15 +71,16 @@ export function createAuthRouter(
 
   // ==========================================================
   // POST /auth/login
+  //
+  // Supports:
+  // - email login
+  // - phone login
+  // - email + phone login
+  //
+  // OTP channel is determined by the login service.
   // ==========================================================
 
   router.post('/login', ...(enableRateLimiting ? [authLoginRateLimiter] : []), login);
-
-  // ==========================================================
-  // POST /auth/login/email
-  // ==========================================================
-
-  router.post('/login/email', ...(enableRateLimiting ? [authLoginRateLimiter] : []), loginEmail);
 
   // ==========================================================
   // POST /auth/login/verify
@@ -102,33 +96,15 @@ export function createAuthRouter(
   );
 
   // ==========================================================
-  // POST /auth/login/email/verify
-  // ==========================================================
-
-  router.post(
-    '/login/email/verify',
-    ...(enableRateLimiting ? [authOtpVerifyRateLimiter] : []),
-    verifyLoginEmail,
-  );
-
-  // ==========================================================
   // POST /auth/login/resend
+  //
+  // OTP channel is determined from the stored login challenge.
   // ==========================================================
 
   router.post(
     '/login/resend',
     ...(enableRateLimiting ? [authOtpResendRateLimiter] : []),
     resendLoginOtp,
-  );
-
-  // ==========================================================
-  // POST /auth/login/email/resend
-  // ==========================================================
-
-  router.post(
-    '/login/email/resend',
-    ...(enableRateLimiting ? [authOtpResendRateLimiter] : []),
-    resendLoginEmailOtp,
   );
 
   // ==========================================================

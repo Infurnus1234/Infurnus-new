@@ -23,7 +23,7 @@ export class SignupVerificationService {
     // Validate input
     // --------------------------------------------------------
 
-    if (!signupId) {
+    if (typeof signupId !== 'string' || signupId.trim().length === 0) {
       throw new AppError('INVALID_SIGNUP', 'Invalid signup', 400);
     }
 
@@ -39,6 +39,14 @@ export class SignupVerificationService {
 
     if (!providerSession) {
       throw new AppError('INVALID_SIGNUP', 'Invalid or expired signup', 400);
+    }
+
+    // --------------------------------------------------------
+    // Validate contact type
+    // --------------------------------------------------------
+
+    if (providerSession.contactType !== 'phone' && providerSession.contactType !== 'email') {
+      throw new AppError('INVALID_SIGNUP', 'Invalid signup verification contact', 400);
     }
 
     // --------------------------------------------------------
@@ -73,13 +81,48 @@ export class SignupVerificationService {
       );
     }
 
-    // --------------------------------------------------------
-    // Verify OTP with Sendmator
-    //
-    // INFURNUS does not verify a locally stored OTP hash.
-    // --------------------------------------------------------
+    if (providerSessionToken.length === 0) {
+      throw new AppError(
+        'OTP_PROVIDER_SESSION_INVALID',
+        'OTP verification session is invalid',
+        500,
+      );
+    }
 
-    const verification = await this.otpProvider.verifySmsOtp(providerSessionToken, otp);
+    // ========================================================
+    // Verify OTP using the correct channel
+    // ========================================================
+
+    let verification: {
+      verified: boolean;
+      attemptsRemaining: number;
+    };
+
+    try {
+      if (providerSession.contactType === 'email') {
+        // ----------------------------------------------------
+        // Email signup → Email OTP
+        // ----------------------------------------------------
+
+        verification = await this.otpProvider.verifyEmailOtp(providerSessionToken, otp);
+      } else {
+        // ----------------------------------------------------
+        // Phone signup → SMS OTP
+        // ----------------------------------------------------
+
+        verification = await this.otpProvider.verifySmsOtp(providerSessionToken, otp);
+      }
+    } catch {
+      throw new AppError(
+        'OTP_PROVIDER_UNAVAILABLE',
+        'OTP verification service is temporarily unavailable',
+        502,
+      );
+    }
+
+    // --------------------------------------------------------
+    // Invalid OTP
+    // --------------------------------------------------------
 
     if (!verification.verified) {
       if (verification.attemptsRemaining <= 0) {
@@ -89,9 +132,9 @@ export class SignupVerificationService {
       throw new AppError('INVALID_OTP', 'Invalid OTP', 400);
     }
 
-    // --------------------------------------------------------
+    // ========================================================
     // Atomically complete verified signup
-    // --------------------------------------------------------
+    // ========================================================
 
     const result = await this.completionRepository.completeVerifiedSignup(signupId);
 

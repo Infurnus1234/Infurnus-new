@@ -1,16 +1,24 @@
 import { AppError } from '../../../common/errors/app-error.js';
 import { decryptSecret } from '../../../common/crypto/encryption.js';
 
+import { env } from '../../../config/env.js';
+
 import type { OtpProvider } from '../providers/otp.provider.js';
 import type { PendingSignupRepository } from '../repositories/pending-signup.repository.js';
 
+// ============================================================
+// OTP Resend Result
+// ============================================================
+
 export interface OtpResendResult {
   signupId: string;
-  contactType: 'phone';
+  contactType: 'phone' | 'email';
   expiresAt: Date;
 }
 
-const OTP_RESEND_COOLDOWN_SECONDS = 60;
+// ============================================================
+// OTP Resend Service
+// ============================================================
 
 export class OtpResendService {
   constructor(
@@ -18,12 +26,16 @@ export class OtpResendService {
     private readonly otpProvider: OtpProvider,
   ) {}
 
+  // ==========================================================
+  // Resend OTP
+  // ==========================================================
+
   async resend(signupId: string): Promise<OtpResendResult> {
     // --------------------------------------------------------
     // Validate signup ID
     // --------------------------------------------------------
 
-    if (!signupId) {
+    if (typeof signupId !== 'string' || signupId.trim().length === 0) {
       throw new AppError('INVALID_SIGNUP', 'Invalid signup', 400);
     }
 
@@ -31,7 +43,7 @@ export class OtpResendService {
     // Load pending signup
     //
     // This projection does not expose the provider
-    // session token.
+    // session token directly.
     // --------------------------------------------------------
 
     const signup = await this.repository.findById(signupId);
@@ -49,23 +61,22 @@ export class OtpResendService {
     }
 
     // --------------------------------------------------------
-    // Signup OTP is phone-only
+    // Validate signup contact type
     // --------------------------------------------------------
 
-    if (signup.contactType !== 'phone') {
-      throw new AppError('INVALID_SIGNUP', 'Phone verification is required', 400);
+    if (signup.contactType !== 'phone' && signup.contactType !== 'email') {
+      throw new AppError('INVALID_SIGNUP', 'Invalid OTP verification contact', 400);
     }
 
     // --------------------------------------------------------
     // Atomically claim resend slot
     //
-    // Prevents concurrent resend requests from
-    // both passing the cooldown check.
+    // Cooldown is environment-configured.
     // --------------------------------------------------------
 
     const providerSession = await this.repository.claimOtpResend(
       signupId,
-      OTP_RESEND_COOLDOWN_SECONDS,
+      env.AUTH_OTP_RESEND_COOLDOWN_SECONDS,
     );
 
     if (!providerSession) {
@@ -73,10 +84,10 @@ export class OtpResendService {
     }
 
     // --------------------------------------------------------
-    // Decrypt provider credential
+    // Decrypt provider session token
     //
-    // The repository stores the session token encrypted.
-    // Never send the encrypted value to Sendmator.
+    // The repository stores the provider session token
+    // encrypted. Never send the encrypted value to Sendmator.
     // --------------------------------------------------------
 
     let providerSessionToken: string;
@@ -91,14 +102,33 @@ export class OtpResendService {
       );
     }
 
+    // ========================================================
+    // Resend using correct OTP channel
+    // ========================================================
+
+    let response: {
+      expiresAt: string;
+    };
+
+    if (signup.contactType === 'email') {
+      // ------------------------------------------------------
+      // Email signup → Email OTP resend
+      // ------------------------------------------------------
+
+      response = await this.otpProvider.resendEmailOtp(providerSessionToken);
+    } else {
+      // ------------------------------------------------------
+      // Phone signup → SMS OTP resend
+      // ------------------------------------------------------
+
+      response = await this.otpProvider.resendSmsOtp(providerSessionToken);
+    }
+
     // --------------------------------------------------------
-    // Ask Sendmator to resend using the existing
-    // provider session.
+    // Validate provider expiry
     // --------------------------------------------------------
 
-    const response = await this.otpProvider.resendSmsOtp(providerSessionToken);
-
-    if (!response.expiresAt) {
+    if (typeof response.expiresAt !== 'string' || response.expiresAt.length === 0) {
       throw new AppError(
         'OTP_PROVIDER_INVALID_RESPONSE',
         'OTP provider returned an invalid expiry time',
@@ -116,6 +146,10 @@ export class OtpResendService {
       );
     }
 
+    // --------------------------------------------------------
+    // Provider session must not already be expired
+    // --------------------------------------------------------
+
     if (expiresAt.getTime() <= Date.now()) {
       throw new AppError(
         'OTP_PROVIDER_INVALID_RESPONSE',
@@ -125,7 +159,7 @@ export class OtpResendService {
     }
 
     // --------------------------------------------------------
-    // Persist provider-reported expiry.
+    // Persist provider-reported expiry
     // --------------------------------------------------------
 
     const updated = await this.repository.updateOtpProviderExpiry(signupId, expiresAt);
@@ -138,9 +172,13 @@ export class OtpResendService {
       );
     }
 
+    // --------------------------------------------------------
+    // Return result
+    // --------------------------------------------------------
+
     return {
       signupId,
-      contactType: 'phone',
+      contactType: signup.contactType,
       expiresAt,
     };
   }

@@ -5,6 +5,10 @@ import { ZodError } from 'zod';
 import { AppError } from '../errors/app-error.js';
 
 export function errorMiddleware(err: unknown, _req: Request, res: Response, _next: NextFunction) {
+  // ==========================================================
+  // Validation errors
+  // ==========================================================
+
   if (err instanceof ZodError) {
     res.status(400).json({
       success: false,
@@ -16,6 +20,10 @@ export function errorMiddleware(err: unknown, _req: Request, res: Response, _nex
 
     return;
   }
+
+  // ==========================================================
+  // Expected application errors
+  // ==========================================================
 
   if (err instanceof AppError) {
     res.status(err.statusCode).json({
@@ -29,21 +37,34 @@ export function errorMiddleware(err: unknown, _req: Request, res: Response, _nex
     return;
   }
 
-  // ----------------------------------------------------------
-  // Server-side diagnostic logging.
+  // ==========================================================
+  // Unexpected server errors
   //
-  // Never expose the raw error to the API client.
-  // ----------------------------------------------------------
-
-  console.error('Unhandled application error:', err);
+  // Never expose internal error details to the client.
+  // Do not log the complete unknown error object because it
+  // may contain sensitive database/provider/request metadata.
+  // ==========================================================
 
   if (err instanceof Error) {
-    console.error('Error name:', err.name);
-
-    console.error('Error message:', err.message);
-
-    console.error('Error stack:', err.stack);
+    console.error(
+      JSON.stringify({
+        event: 'unhandled_application_error',
+        errorType: err.name,
+        stack: err.stack,
+      }),
+    );
+  } else {
+    console.error(
+      JSON.stringify({
+        event: 'unhandled_application_error',
+        errorType: 'UnknownError',
+      }),
+    );
   }
+
+  // ==========================================================
+  // Generic client response
+  // ==========================================================
 
   res.status(500).json({
     success: false,
