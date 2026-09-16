@@ -114,8 +114,8 @@ async function startServer() {
   // Start server
   // ==========================================================
 
-  server.listen(env.PORT, () => {
-    console.log(`INFURNUS API listening on port ${env.PORT}`);
+  server.listen(env.PORT, '0.0.0.0', () => {
+    console.log(`INFURNUS API listening on port ${env.PORT} (0.0.0.0)`);
   });
 
   // ==========================================================
