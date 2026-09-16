@@ -4,11 +4,11 @@ import type {
   CreateUserData,
   PublicUser,
   UpdateAddressData,
-  UpdateUserData,
+  UpdateUserPreferencesData,
   UserAddress,
   UserHistoryEntry,
   UserPreferences,
-  UpdateUserPreferencesData,
+  UpdateUserData,
 } from '../types/user.js';
 
 export interface UserRepository {
@@ -30,6 +30,68 @@ export interface UserRepository {
   findHistory(userId: string, limit: number): Promise<UserHistoryEntry[]>;
 }
 
+const USER_COLUMNS = {
+  firstName: 'first_name',
+  lastName: 'last_name',
+  email: 'email',
+  phone: 'phone',
+} as const;
+
+const ADDRESS_COLUMNS = {
+  label: 'label',
+  addressLine1: 'address_line_1',
+  addressLine2: 'address_line_2',
+  city: 'city',
+  state: 'state',
+  postalCode: 'postal_code',
+  country: 'country',
+  latitude: 'latitude',
+  longitude: 'longitude',
+  isDefault: 'is_default',
+} as const;
+
+const PREFERENCE_COLUMNS = {
+  pushNotificationsEnabled: 'push_notifications_enabled',
+  emailNotificationsEnabled: 'email_notifications_enabled',
+  smsNotificationsEnabled: 'sms_notifications_enabled',
+} as const;
+
+const PUBLIC_USER_PROJECTION = `
+  id,
+  first_name AS "firstName",
+  last_name AS "lastName",
+  email,
+  phone,
+  created_at AS "createdAt",
+  updated_at AS "updatedAt"
+`;
+
+const ADDRESS_PROJECTION = `
+  id,
+  user_id AS "userId",
+  label,
+  address_line_1 AS "addressLine1",
+  address_line_2 AS "addressLine2",
+  city,
+  state,
+  postal_code AS "postalCode",
+  country,
+  latitude,
+  longitude,
+  is_default AS "isDefault",
+  created_at AS "createdAt",
+  updated_at AS "updatedAt"
+`;
+
+const PREFERENCES_PROJECTION = `
+  user_id AS "userId",
+  push_notifications_enabled AS "pushNotificationsEnabled",
+  email_notifications_enabled AS "emailNotificationsEnabled",
+  sms_notifications_enabled AS "smsNotificationsEnabled",
+  created_at AS "createdAt",
+  updated_at AS "updatedAt"
+`;
+
 export class PostgresUserRepository implements UserRepository {
   constructor(private readonly pool: Pool) {}
 
@@ -37,57 +99,107 @@ export class PostgresUserRepository implements UserRepository {
     const result = await this.pool.query<PublicUser>(
       `INSERT INTO users (first_name, last_name, email, phone)
        VALUES ($1, $2, $3, $4)
-       RETURNING id, first_name AS "firstName", last_name AS "lastName",
-                 email, phone, created_at AS "createdAt", updated_at AS "updatedAt"`,
+       RETURNING ${PUBLIC_USER_PROJECTION}`,
       [data.firstName, data.lastName, data.email, data.phone],
     );
-    const user = result.rows.at(0);
+
+    const user = result.rows[0];
+
     if (!user) {
       throw new Error('User insert returned no row');
     }
+
     return user;
   }
 
   async findById(id: string): Promise<PublicUser | null> {
     const result = await this.pool.query<PublicUser>(
-      `SELECT id, first_name AS "firstName", last_name AS "lastName",
-              email, phone, created_at AS "createdAt", updated_at AS "updatedAt"
-       FROM users WHERE id = $1`,
+      `SELECT ${PUBLIC_USER_PROJECTION}
+       FROM users
+       WHERE id = $1
+         AND deleted_at IS NULL
+       LIMIT 1`,
       [id],
     );
+
     return result.rows[0] ?? null;
   }
 
   async update(id: string, data: UpdateUserData): Promise<PublicUser | null> {
-    const fields = Object.keys(data);
-    const values = Object.values(data);
-    const columns: Record<string, string> = {
-      firstName: 'first_name',
-      lastName: 'last_name',
-      email: 'email',
-      phone: 'phone',
-    };
-    const assignments = fields.map((field, index) => `${columns[field]} = $${index + 1}`);
+    const fields = Object.keys(data) as Array<keyof UpdateUserData>;
+
+    if (fields.length === 0) {
+      return this.findById(id);
+    }
+
+    const assignments: string[] = [];
+    const values: unknown[] = [];
+
+    for (const field of fields) {
+      const column = USER_COLUMNS[field];
+
+      if (!column) {
+        continue;
+      }
+
+      values.push(data[field]);
+      assignments.push(`${column} = $${values.length}`);
+    }
+
+    if (assignments.length === 0) {
+      return this.findById(id);
+    }
+
+    values.push(id);
+
     const result = await this.pool.query<PublicUser>(
-      `UPDATE users SET ${assignments.join(', ')}, updated_at = NOW()
-       WHERE id = $${values.length + 1}
-       RETURNING id, first_name AS "firstName", last_name AS "lastName",
-                 email, phone, created_at AS "createdAt", updated_at AS "updatedAt"`,
-      [...values, id],
+      `UPDATE users
+       SET ${assignments.join(', ')},
+           updated_at = NOW()
+       WHERE id = $${values.length}
+         AND deleted_at IS NULL
+       RETURNING ${PUBLIC_USER_PROJECTION}`,
+      values,
     );
+
     return result.rows[0] ?? null;
   }
 
   async createAddress(userId: string, data: CreateAddressData): Promise<UserAddress> {
     const result = await this.pool.query<UserAddress>(
       `INSERT INTO user_addresses
-         (user_id, label, address_line_1, address_line_2, city, state, postal_code,
-          country, latitude, longitude, is_default)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'India'), $9, $10, COALESCE($11, FALSE))
-       RETURNING id, user_id AS "userId", label, address_line_1 AS "addressLine1",
-                 address_line_2 AS "addressLine2", city, state, postal_code AS "postalCode",
-                 country, latitude, longitude, is_default AS "isDefault",
-                 created_at AS "createdAt", updated_at AS "updatedAt"`,
+         (
+           user_id,
+           label,
+           address_line_1,
+           address_line_2,
+           city,
+           state,
+           postal_code,
+           country,
+           latitude,
+           longitude,
+           is_default
+         )
+       SELECT
+         $1,
+         $2,
+         $3,
+         $4,
+         $5,
+         $6,
+         $7,
+         COALESCE($8, 'India'),
+         $9,
+         $10,
+         COALESCE($11, FALSE)
+       WHERE EXISTS (
+         SELECT 1
+         FROM users
+         WHERE id = $1
+           AND deleted_at IS NULL
+       )
+       RETURNING ${ADDRESS_PROJECTION}`,
       [
         userId,
         data.label,
@@ -102,8 +214,13 @@ export class PostgresUserRepository implements UserRepository {
         data.isDefault ?? false,
       ],
     );
-    const address = result.rows.at(0);
-    if (!address) throw new Error('Address insert returned no row');
+
+    const address = result.rows[0];
+
+    if (!address) {
+      throw new Error('Address insert failed: user does not exist or is inactive');
+    }
+
     return address;
   }
 
@@ -112,54 +229,103 @@ export class PostgresUserRepository implements UserRepository {
     addressId: string,
     data: UpdateAddressData,
   ): Promise<UserAddress | null> {
-    const columns: Record<string, string> = {
-      label: 'label',
-      addressLine1: 'address_line_1',
-      addressLine2: 'address_line_2',
-      city: 'city',
-      state: 'state',
-      postalCode: 'postal_code',
-      country: 'country',
-      latitude: 'latitude',
-      longitude: 'longitude',
-      isDefault: 'is_default',
-    };
-    const fields = Object.keys(data);
-    const values = Object.values(data).map((value) => (value === undefined ? null : value));
-    const assignments = fields.map((field, index) => `${columns[field]} = $${index + 1}`);
+    const fields = Object.keys(data) as Array<keyof UpdateAddressData>;
+
+    if (fields.length === 0) {
+      const result = await this.pool.query<UserAddress>(
+        `SELECT ${ADDRESS_PROJECTION}
+         FROM user_addresses ua
+         WHERE ua.user_id = $1
+           AND ua.id = $2
+           AND EXISTS (
+             SELECT 1
+             FROM users u
+             WHERE u.id = ua.user_id
+               AND u.deleted_at IS NULL
+           )
+         LIMIT 1`,
+        [userId, addressId],
+      );
+
+      return result.rows[0] ?? null;
+    }
+
+    const assignments: string[] = [];
+    const values: unknown[] = [];
+
+    for (const field of fields) {
+      const column = ADDRESS_COLUMNS[field];
+
+      if (!column) {
+        continue;
+      }
+
+      values.push(data[field] === undefined ? null : data[field]);
+      assignments.push(`${column} = $${values.length}`);
+    }
+
+    if (assignments.length === 0) {
+      return null;
+    }
+
+    values.push(userId);
+    const userIdParam = values.length;
+
+    values.push(addressId);
+    const addressIdParam = values.length;
+
     const result = await this.pool.query<UserAddress>(
-      `UPDATE user_addresses SET ${assignments.join(', ')}
-       WHERE user_id = $${values.length + 1} AND id = $${values.length + 2}
-       RETURNING id, user_id AS "userId", label, address_line_1 AS "addressLine1",
-                 address_line_2 AS "addressLine2", city, state, postal_code AS "postalCode",
-                 country, latitude, longitude, is_default AS "isDefault",
-                 created_at AS "createdAt", updated_at AS "updatedAt"`,
-      [...values, userId, addressId],
+      `UPDATE user_addresses ua
+       SET ${assignments.join(', ')},
+           updated_at = NOW()
+       WHERE ua.user_id = $${userIdParam}
+         AND ua.id = $${addressIdParam}
+         AND EXISTS (
+           SELECT 1
+           FROM users u
+           WHERE u.id = ua.user_id
+             AND u.deleted_at IS NULL
+         )
+       RETURNING ${ADDRESS_PROJECTION}`,
+      values,
     );
+
     return result.rows[0] ?? null;
   }
 
   async findAddresses(userId: string): Promise<UserAddress[]> {
     const result = await this.pool.query<UserAddress>(
-      `SELECT id, user_id AS "userId", label, address_line_1 AS "addressLine1",
-              address_line_2 AS "addressLine2", city, state, postal_code AS "postalCode",
-              country, latitude, longitude, is_default AS "isDefault",
-              created_at AS "createdAt", updated_at AS "updatedAt"
-       FROM user_addresses WHERE user_id = $1 ORDER BY is_default DESC, created_at DESC`,
+      `SELECT ${ADDRESS_PROJECTION}
+       FROM user_addresses ua
+       WHERE ua.user_id = $1
+         AND EXISTS (
+           SELECT 1
+           FROM users u
+           WHERE u.id = ua.user_id
+             AND u.deleted_at IS NULL
+         )
+       ORDER BY ua.is_default DESC, ua.created_at DESC`,
       [userId],
     );
+
     return result.rows;
   }
 
   async findPreferences(userId: string): Promise<UserPreferences | null> {
     const result = await this.pool.query<UserPreferences>(
-      `SELECT user_id AS "userId", push_notifications_enabled AS "pushNotificationsEnabled",
-              email_notifications_enabled AS "emailNotificationsEnabled",
-              sms_notifications_enabled AS "smsNotificationsEnabled",
-              created_at AS "createdAt", updated_at AS "updatedAt"
-       FROM user_preferences WHERE user_id = $1`,
+      `SELECT ${PREFERENCES_PROJECTION}
+       FROM user_preferences up
+       WHERE up.user_id = $1
+         AND EXISTS (
+           SELECT 1
+           FROM users u
+           WHERE u.id = up.user_id
+             AND u.deleted_at IS NULL
+         )
+       LIMIT 1`,
       [userId],
     );
+
     return result.rows[0] ?? null;
   }
 
@@ -167,38 +333,84 @@ export class PostgresUserRepository implements UserRepository {
     userId: string,
     data: UpdateUserPreferencesData,
   ): Promise<UserPreferences | null> {
-    const columns: Record<string, string> = {
-      pushNotificationsEnabled: 'push_notifications_enabled',
-      emailNotificationsEnabled: 'email_notifications_enabled',
-      smsNotificationsEnabled: 'sms_notifications_enabled',
-    };
-    const fields = Object.keys(data);
-    const values = Object.values(data);
-    const assignments = fields.map((field, index) => `${columns[field]} = $${index + 1}`);
+    const fields = Object.keys(data) as Array<keyof UpdateUserPreferencesData>;
+
+    if (fields.length === 0) {
+      return this.findPreferences(userId);
+    }
+
+    const columns: string[] = [];
+    const values: unknown[] = [];
+
+    for (const field of fields) {
+      const column = PREFERENCE_COLUMNS[field];
+
+      if (!column) {
+        continue;
+      }
+
+      columns.push(column);
+      values.push(data[field]);
+    }
+
+    if (columns.length === 0) {
+      return this.findPreferences(userId);
+    }
+
+    const insertValues = values.map((_, index) => `$${index + 1}`).join(', ');
+    const userIdParam = values.length + 1;
+
+    const assignments = columns.map((column, index) => `${column} = $${index + 1}`).join(', ');
+
     const result = await this.pool.query<UserPreferences>(
-      `INSERT INTO user_preferences (user_id, ${fields.map((field) => columns[field]).join(', ')})
-       VALUES ($${values.length + 1}, ${values.map((_, index) => `$${index + 1}`).join(', ')})
-       ON CONFLICT (user_id) DO UPDATE SET ${assignments.join(', ')}
-       RETURNING user_id AS "userId", push_notifications_enabled AS "pushNotificationsEnabled",
-                 email_notifications_enabled AS "emailNotificationsEnabled",
-                 sms_notifications_enabled AS "smsNotificationsEnabled",
-                 created_at AS "createdAt", updated_at AS "updatedAt"`,
+      `INSERT INTO user_preferences (
+         user_id,
+         ${columns.join(', ')}
+       )
+       SELECT
+         $${userIdParam},
+         ${insertValues}
+       WHERE EXISTS (
+         SELECT 1
+         FROM users
+         WHERE id = $${userIdParam}
+           AND deleted_at IS NULL
+       )
+       ON CONFLICT (user_id)
+       DO UPDATE SET
+         ${assignments},
+         updated_at = NOW()
+       RETURNING ${PREFERENCES_PROJECTION}`,
       [...values, userId],
     );
+
     return result.rows[0] ?? null;
   }
 
   async findHistory(userId: string, limit: number): Promise<UserHistoryEntry[]> {
+    const safeLimit = Math.min(Math.max(Math.trunc(limit), 1), 100);
+
     const result = await this.pool.query<UserHistoryEntry>(
-      `SELECT id, user_id AS "userId", event_type AS "eventType",
-              entity_type AS "entityType", entity_id AS "entityId",
-              created_at AS "createdAt"
-       FROM user_history
-       WHERE user_id = $1
-       ORDER BY created_at DESC
+      `SELECT
+         id,
+         user_id AS "userId",
+         event_type AS "eventType",
+         entity_type AS "entityType",
+         entity_id AS "entityId",
+         created_at AS "createdAt"
+       FROM user_history uh
+       WHERE uh.user_id = $1
+         AND EXISTS (
+           SELECT 1
+           FROM users u
+           WHERE u.id = uh.user_id
+             AND u.deleted_at IS NULL
+         )
+       ORDER BY uh.created_at DESC
        LIMIT $2`,
-      [userId, limit],
+      [userId, safeLimit],
     );
+
     return result.rows;
   }
 }
