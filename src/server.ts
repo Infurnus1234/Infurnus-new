@@ -26,6 +26,13 @@ import { PostgresRentalRepository } from './modules/rentals/repositories/rental.
 import { SendmatorOtpProvider } from './modules/auth/providers/sendmator-otp.provider.js';
 import { DevOtpProvider } from './modules/auth/providers/dev-otp.provider.js';
 
+import { FareCalculatorService } from './modules/fares/services/fare-calculator.service.js';
+import { FareEstimateService } from './modules/fares/services/fare-estimate.service.js';
+
+import { PostgresCouponRepository } from './modules/coupons/repositories/coupon.repository.js';
+import { CouponCalculatorService } from './modules/coupons/services/coupon-calculator.service.js';
+import { CouponRedemptionService } from './modules/coupons/services/coupon-redemption.service.js';
+
 async function startServer() {
   // ==========================================================
   // Database
@@ -59,10 +66,47 @@ async function startServer() {
 
   const rentalRepository = new PostgresRentalRepository(pool);
 
+  const couponRepository = new PostgresCouponRepository(pool);
+
+  // ==========================================================
+  // Map provider
+  //
+  // One provider instance is shared by:
+  // - Fare estimation
+  // - Route recalculation
+  // - Socket.IO ride infrastructure
+  // ==========================================================
+
+  const googleMapsProvider = new GoogleMapsProvider();
+
+  // ==========================================================
+  // Fare services
+  // ==========================================================
+
+  const fareCalculatorService = new FareCalculatorService();
+
+  const fareEstimateService = new FareEstimateService(googleMapsProvider, fareCalculatorService);
+
+  // ==========================================================
+  // Coupon services
+  //
+  // Coupon redemption is transaction-backed and uses the
+  // PostgreSQL repository with row-level locking.
+  // ==========================================================
+
+  const couponCalculatorService = new CouponCalculatorService();
+
+  const couponRedemptionService = new CouponRedemptionService(
+    couponRepository,
+    couponCalculatorService,
+  );
+
   // ==========================================================
   // Express application
   //
   // authOtpProvider is passed explicitly as the 9th argument.
+  // fareEstimateService is passed as the 10th argument.
+  // couponRedemptionService is passed as the 11th argument.
   // ==========================================================
 
   const app = createApp(
@@ -75,6 +119,8 @@ async function startServer() {
     driverRepository,
     rentalRepository,
     otpProvider,
+    fareEstimateService,
+    couponRedemptionService,
   );
 
   // ==========================================================
@@ -90,8 +136,6 @@ async function startServer() {
   const rideService = new RideService(rideRepository, driverRepository);
 
   const driverService = new DriverService(driverRepository);
-
-  const googleMapsProvider = new GoogleMapsProvider();
 
   const routeRecalculationService = new RouteRecalculationService(googleMapsProvider);
 

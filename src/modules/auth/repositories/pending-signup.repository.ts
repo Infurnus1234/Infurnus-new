@@ -1,7 +1,7 @@
 import { AppError } from '../../../common/errors/app-error.js';
 import { pool } from '../../../infrastructure/database/postgres.js';
 
-import type { CreatePendingSignupData, PendingSignup } from '../types/signup.js';
+import type { CreatePendingSignupData, PendingSignup, SignupContactType } from '../types/signup.js';
 
 // ============================================================
 // Repository contract
@@ -31,6 +31,7 @@ export interface PendingSignupRepository {
    */
   getOtpProviderSession(id: string): Promise<{
     provider: string;
+    contactType: SignupContactType;
     sessionId: string;
     sessionToken: string;
     expiresAt: Date;
@@ -48,6 +49,7 @@ export interface PendingSignupRepository {
     cooldownSeconds: number,
   ): Promise<{
     provider: string;
+    contactType: SignupContactType;
     sessionId: string;
     sessionToken: string;
     expiresAt: Date;
@@ -127,7 +129,6 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
             last_otp_sent_at AS "lastOtpSentAt",
             otp_provider AS "otpProvider",
             otp_provider_session_id AS "otpProviderSessionId",
-            otp_provider_session_token AS "otpProviderSessionToken",
             otp_provider_expires_at AS "otpProviderExpiresAt",
             created_at AS "createdAt",
             updated_at AS "updatedAt"
@@ -147,13 +148,20 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
         ],
       );
 
-      const pendingSignup = result.rows[0];
+      const row = result.rows[0];
 
-      if (!pendingSignup) {
+      if (!row) {
         throw new AppError('SIGNUP_CREATION_FAILED', 'Failed to create pending signup', 500);
       }
 
-      return pendingSignup;
+      return {
+        ...row,
+
+        // Provider credential is intentionally never returned
+        // by create(). It is available only through the
+        // dedicated provider-session methods.
+        otpProviderSessionToken: null,
+      };
     } catch (error: unknown) {
       if (
         typeof error === 'object' &&
@@ -251,6 +259,7 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
 
   async getOtpProviderSession(id: string): Promise<{
     provider: string;
+    contactType: SignupContactType;
     sessionId: string;
     sessionToken: string;
     expiresAt: Date;
@@ -258,6 +267,7 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
   } | null> {
     const result = await pool.query<{
       provider: string;
+      contactType: SignupContactType;
       sessionId: string;
       sessionToken: string;
       expiresAt: Date;
@@ -266,6 +276,7 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
       `
         SELECT
           otp_provider AS "provider",
+          contact_type AS "contactType",
           otp_provider_session_id AS "sessionId",
           otp_provider_session_token AS "sessionToken",
           otp_provider_expires_at AS "expiresAt",
@@ -293,12 +304,14 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
     cooldownSeconds: number,
   ): Promise<{
     provider: string;
+    contactType: SignupContactType;
     sessionId: string;
     sessionToken: string;
     expiresAt: Date;
   } | null> {
     const result = await pool.query<{
       provider: string;
+      contactType: SignupContactType;
       sessionId: string;
       sessionToken: string;
       expiresAt: Date;
@@ -318,6 +331,7 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
               ($2::integer * INTERVAL '1 second')
         RETURNING
           otp_provider AS "provider",
+          contact_type AS "contactType",
           otp_provider_session_id AS "sessionId",
           otp_provider_session_token AS "sessionToken",
           otp_provider_expires_at AS "expiresAt"
@@ -337,7 +351,8 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
       `
         UPDATE pending_signups
         SET
-          otp_provider_expires_at = $2
+          otp_provider_expires_at = $2,
+          updated_at = NOW()
         WHERE id = $1
           AND otp_verified_at IS NULL
           AND otp_provider IS NOT NULL

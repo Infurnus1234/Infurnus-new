@@ -36,7 +36,9 @@ import { SignupVerificationService } from '../services/signup-verification.servi
 import { TokenService } from '../services/token.service.js';
 
 import { clearCsrfTokenCookie, setCsrfTokenCookie } from '../utils/csrf-cookie.js';
+
 import { generateCsrfToken } from '../utils/csrf.js';
+
 import { clearRefreshTokenCookie, setRefreshTokenCookie } from '../utils/refresh-cookie.js';
 
 // ============================================================
@@ -80,6 +82,10 @@ export function createAuthController(
 
   const authUserRepository = new PostgresAuthUserRepository();
 
+  // ==========================================================
+  // Signup services
+  // ==========================================================
+
   const signupService = new SignupService(
     pendingSignupRepository,
     otpProvider,
@@ -94,6 +100,10 @@ export function createAuthController(
 
   const otpResendService = new OtpResendService(pendingSignupRepository, otpProvider);
 
+  // ==========================================================
+  // Login services
+  // ==========================================================
+
   const loginService = new LoginService(loginRepository, loginChallengeRepository, otpProvider);
 
   const loginVerificationService = new LoginVerificationService(
@@ -107,6 +117,10 @@ export function createAuthController(
     otpProvider,
     env.AUTH_OTP_RESEND_COOLDOWN_SECONDS,
   );
+
+  // ==========================================================
+  // Token / session services
+  // ==========================================================
 
   const refreshTokenService = new RefreshTokenService(refreshTokenRepository);
 
@@ -162,23 +176,30 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
     try {
       const input = signupSchema.parse(req.body);
 
-      // ------------------------------------------------------
-      // Phone is mandatory for signup.
-      // ------------------------------------------------------
-
-      const phone = input.phone;
-
-      if (typeof phone !== 'string' || !phone.trim()) {
-        throw new AppError('INVALID_SIGNUP_CONTACT', 'Phone number is required', 400);
-      }
+      /*
+       * Supported signup modes:
+       *
+       * 1. Email only
+       * 2. Phone only
+       * 3. Email + phone
+       *
+       * The schema guarantees that at least one
+       * contact method is supplied.
+       *
+       * Optional properties are conditionally spread
+       * so exactOptionalPropertyTypes is satisfied.
+       */
 
       const result = await signupService.signup({
         firstName: input.firstName,
         lastName: input.lastName,
-        phone,
+
+        ...(input.email !== undefined ? { email: input.email } : {}),
+
+        ...(input.phone !== undefined ? { phone: input.phone } : {}),
+
         password: input.password,
         role: input.role,
-        ...(input.email !== undefined ? { email: input.email } : {}),
       });
 
       res.status(201).json({
@@ -203,6 +224,13 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
       const input = verifySignupOtpSchema.parse(req.body);
 
       const result = await signupVerificationService.verify(input.signupId, input.otp);
+
+      /*
+       * Signup OTP verification succeeded.
+       *
+       * Authentication tokens are issued only after
+       * successful OTP verification.
+       */
 
       const accessToken = await tokenService.createAccessToken({
         userId: result.userId,
@@ -257,20 +285,41 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
   // ==========================================================
   // POST /auth/login
   // ==========================================================
+  //
+  // Supported:
+  //
+  // 1. Email + password
+  // 2. Phone + password
+  // 3. Email + phone + password
+  //
+  // At least one identifier is required.
+  //
+  // OTP channel is selected by LoginService:
+  //
+  // - Phone supplied -> SMS OTP
+  // - Email only -> Email OTP
+  // - Both supplied -> SMS OTP preferred
+  //
+  // This endpoint does NOT issue authentication tokens.
+  // Tokens are issued only after OTP verification.
+  // ==========================================================
 
   async function login(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const input = loginSchema.parse(req.body);
 
       const result = await loginService.authenticate({
-        password: input.password,
         ...(input.email !== undefined ? { email: input.email } : {}),
+
         ...(input.phone !== undefined ? { phone: input.phone } : {}),
+
+        password: input.password,
       });
 
       /*
-       * Password authentication has succeeded,
-       * but the login is NOT authenticated yet.
+       * Password authentication succeeded.
+       *
+       * Login is NOT fully authenticated yet.
        *
        * No access token.
        * No refresh token.
@@ -280,6 +329,7 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
        * Authentication completes only after
        * successful OTP verification.
        */
+
       res.status(200).json({
         success: true,
         data: {
@@ -303,15 +353,19 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
       const result = await loginVerificationService.verify(input.challengeId, input.otp);
 
       /*
-       * Login OTP verification has succeeded.
+       * Login OTP verification succeeded.
        *
        * The verification service has already:
-       * - verified the provider OTP
-       * - atomically consumed the challenge
-       * - re-checked the current account status
        *
-       * Only now may authentication tokens be issued.
+       * - verified the provider OTP
+       * - checked challenge expiry
+       * - checked replay state
+       * - atomically consumed the challenge
+       * - re-checked account status
+       *
+       * Only now are authentication tokens issued.
        */
+
       const accessToken = await tokenService.createAccessToken({
         userId: result.userId,
         role: result.role,
@@ -498,6 +552,10 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
     }
   }
 
+  // ==========================================================
+  // Return handlers
+  // ==========================================================
+
   return {
     signup,
     verifySignup,
@@ -522,6 +580,10 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
 export const defaultAuthController = createAuthController();
 
 export const defaultAuthHandlers = createAuthHandlers(defaultAuthController);
+
+// ============================================================
+// Default exported handlers
+// ============================================================
 
 export const signup = defaultAuthHandlers.signup;
 

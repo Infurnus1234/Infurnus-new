@@ -2,9 +2,17 @@ import { z } from 'zod';
 import { rideStatuses } from '../types/ride.js';
 
 const uuid = z.string().uuid();
+
 const latitude = z.number().finite().min(-90).max(90);
+
 const longitude = z.number().finite().min(-180).max(180);
-const location = z.object({ latitude, longitude }).strict();
+
+const location = z
+  .object({
+    latitude,
+    longitude,
+  })
+  .strict();
 
 export const createRideSchema = z
   .object({
@@ -15,9 +23,23 @@ export const createRideSchema = z
   })
   .strict();
 
+export const fareEstimateSchema = z
+  .object({
+    pickup: location,
+    destination: location,
+  })
+  .strict();
+
 export const rideIdSchema = z.object({ id: uuid }).strict();
+
 export const rideStatusSchema = z.enum(rideStatuses);
-export const cancelRideSchema = z.object({ reason: z.string().trim().min(1).max(500) }).strict();
+
+export const cancelRideSchema = z
+  .object({
+    reason: z.string().trim().min(1).max(500),
+  })
+  .strict();
+
 export const listRidesSchema = z
   .object({
     status: z.enum(rideStatuses).optional(),
@@ -27,5 +49,9 @@ export const listRidesSchema = z
   .strict();
 
 export type CreateRideInput = z.infer<typeof createRideSchema>;
+
+export type FareEstimateInput = z.infer<typeof fareEstimateSchema>;
+
 export type CancelRideInput = z.infer<typeof cancelRideSchema>;
+
 export type ListRidesInput = z.infer<typeof listRidesSchema>;

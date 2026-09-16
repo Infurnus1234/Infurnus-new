@@ -167,7 +167,7 @@ describe('Auth Controller', () => {
 
       const req = createRequest({
         body: {
-          email: 'customer@example.com',
+          phone: '+919876543210',
           password: 'StrongPassword123!',
         },
       });
@@ -183,7 +183,7 @@ describe('Auth Controller', () => {
       expect(mocks.login).toHaveBeenCalledTimes(1);
 
       expect(mocks.login).toHaveBeenCalledWith({
-        email: 'customer@example.com',
+        phone: '+919876543210',
         password: 'StrongPassword123!',
       });
 
@@ -253,7 +253,7 @@ describe('Auth Controller', () => {
 
       const req = createRequest({
         body: {
-          email: 'customer@example.com',
+          phone: '+919876543210',
           password: 'StrongPassword123!',
         },
       });
@@ -289,7 +289,7 @@ describe('Auth Controller', () => {
 
       const req = createRequest({
         body: {
-          email: 'customer@example.com',
+          phone: '+919876543210',
           password: 'StrongPassword123!',
         },
       });
