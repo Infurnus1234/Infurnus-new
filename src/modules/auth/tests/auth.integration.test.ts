@@ -887,6 +887,37 @@ describe.sequential('Auth integration', () => {
   });
 
   // ========================================================
+  // Email Login
+  // ========================================================
+
+  describe('email login', () => {
+    it('returns a login challenge for email login', async () => {
+      const { userId, email } = await createVerifiedUser('auth-email-login');
+
+      const loginResponse = await request(app).post('/auth/login/email').send({
+        email,
+        password: 'StrongPassword123!',
+      });
+
+      expect(loginResponse.status).toBe(200);
+      expect(loginResponse.body.success).toBe(true);
+      expect(loginResponse.body.data.challengeId).toEqual(expect.any(String));
+
+      await cleanupUser(userId);
+    });
+
+    it('rejects email login with invalid credentials', async () => {
+      const loginResponse = await request(app).post('/auth/login/email').send({
+        email: 'nonexistent@example.com',
+        password: 'any-password',
+      });
+
+      expect(loginResponse.status).toBe(401);
+      expect(loginResponse.body.success).toBe(false);
+    });
+  });
+
+  // ========================================================
   // Login
   // ========================================================
 
@@ -1151,6 +1182,37 @@ describe.sequential('Auth integration', () => {
   });
 
   // ========================================================
+  // Email Login
+  // ========================================================
+
+  describe('email login', () => {
+    it('returns a login challenge for email login', async () => {
+      const { userId, email } = await createVerifiedUser('auth-email-login');
+
+      const loginResponse = await request(app).post('/auth/login/email').send({
+        email,
+        password: 'StrongPassword123!',
+      });
+
+      expect(loginResponse.status).toBe(200);
+      expect(loginResponse.body.success).toBe(true);
+      expect(loginResponse.body.data.challengeId).toEqual(expect.any(String));
+
+      await cleanupUser(userId);
+    });
+
+    it('rejects email login with invalid credentials', async () => {
+      const loginResponse = await request(app).post('/auth/login/email').send({
+        email: 'nonexistent@example.com',
+        password: 'any-password',
+      });
+
+      expect(loginResponse.status).toBe(401);
+      expect(loginResponse.body.success).toBe(false);
+    });
+  });
+
+  // ========================================================
   // Refresh
   // ========================================================
 
@@ -1411,6 +1473,37 @@ describe.sequential('Auth integration', () => {
       expect(refreshResponse.body.success).toBe(false);
 
       await cleanupUser(userId);
+    });
+  });
+
+  // ========================================================
+  // Email Login
+  // ========================================================
+
+  describe('email login', () => {
+    it('returns a login challenge for email login', async () => {
+      const { userId, email } = await createVerifiedUser('auth-email-login');
+
+      const loginResponse = await request(app).post('/auth/login/email').send({
+        email,
+        password: 'StrongPassword123!',
+      });
+
+      expect(loginResponse.status).toBe(200);
+      expect(loginResponse.body.success).toBe(true);
+      expect(loginResponse.body.data.challengeId).toEqual(expect.any(String));
+
+      await cleanupUser(userId);
+    });
+
+    it('rejects email login with invalid credentials', async () => {
+      const loginResponse = await request(app).post('/auth/login/email').send({
+        email: 'nonexistent@example.com',
+        password: 'any-password',
+      });
+
+      expect(loginResponse.status).toBe(401);
+      expect(loginResponse.body.success).toBe(false);
     });
   });
 
@@ -1776,6 +1869,37 @@ describe.sequential('Auth integration', () => {
   });
 
   // ========================================================
+  // Email Login
+  // ========================================================
+
+  describe('email login', () => {
+    it('returns a login challenge for email login', async () => {
+      const { userId, email } = await createVerifiedUser('auth-email-login');
+
+      const loginResponse = await request(app).post('/auth/login/email').send({
+        email,
+        password: 'StrongPassword123!',
+      });
+
+      expect(loginResponse.status).toBe(200);
+      expect(loginResponse.body.success).toBe(true);
+      expect(loginResponse.body.data.challengeId).toEqual(expect.any(String));
+
+      await cleanupUser(userId);
+    });
+
+    it('rejects email login with invalid credentials', async () => {
+      const loginResponse = await request(app).post('/auth/login/email').send({
+        email: 'nonexistent@example.com',
+        password: 'any-password',
+      });
+
+      expect(loginResponse.status).toBe(401);
+      expect(loginResponse.body.success).toBe(false);
+    });
+  });
+
+  // ========================================================
   // Logout
   // ========================================================
 
@@ -1862,6 +1986,37 @@ describe.sequential('Auth integration', () => {
       expect(refreshCookie).toContain('SameSite');
 
       await cleanupUser(userId);
+    });
+  });
+
+  // ========================================================
+  // Email Login
+  // ========================================================
+
+  describe('email login', () => {
+    it('returns a login challenge for email login', async () => {
+      const { userId, email } = await createVerifiedUser('auth-email-login');
+
+      const loginResponse = await request(app).post('/auth/login/email').send({
+        email,
+        password: 'StrongPassword123!',
+      });
+
+      expect(loginResponse.status).toBe(200);
+      expect(loginResponse.body.success).toBe(true);
+      expect(loginResponse.body.data.challengeId).toEqual(expect.any(String));
+
+      await cleanupUser(userId);
+    });
+
+    it('rejects email login with invalid credentials', async () => {
+      const loginResponse = await request(app).post('/auth/login/email').send({
+        email: 'nonexistent@example.com',
+        password: 'any-password',
+      });
+
+      expect(loginResponse.status).toBe(401);
+      expect(loginResponse.body.success).toBe(false);
     });
   });
 

@@ -103,7 +103,13 @@ const envSchema = z
 
     AUTH_LOGOUT_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(30),
 
-    AUTH_RATE_LIMIT_ENABLED: z.coerce.boolean().default(true),
+    AUTH_RATE_LIMIT_ENABLED: z.preprocess((val) => {
+      if (typeof val === 'string') {
+        if (val.toLowerCase() === 'false') return false;
+        if (val.toLowerCase() === 'true') return true;
+      }
+      return val;
+    }, z.coerce.boolean().default(true)),
 
     // ============================================================
     // Sendmator

@@ -109,6 +109,16 @@ vi.mock('../controllers/auth.controller.js', () => ({
   createAuthHandlers: vi.fn(() => mockHandlers),
 }));
 
+vi.mock('../../../config/env.js', async (importOriginal) => {
+  const actual = await importOriginal<any>();
+  return {
+    env: {
+      ...actual.env,
+      AUTH_RATE_LIMIT_ENABLED: true,
+    },
+  };
+});
+
 async function createTestApp() {
   vi.resetModules();
 
