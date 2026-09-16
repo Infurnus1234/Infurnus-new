@@ -6,8 +6,11 @@ abstract class AuthRemoteDataSource {
   Future<AuthResponse> verifySignup(VerifySignupRequest request);
   Future<SignupResponse> resendSignupOtp(ResendSignupRequest request);
   Future<LoginChallengeResponse> login(LoginRequest request);
+  Future<LoginChallengeResponse> loginEmail(LoginRequest request);
   Future<AuthResponse> verifyLogin(VerifyLoginRequest request);
+  Future<AuthResponse> verifyLoginEmail(VerifyLoginRequest request);
   Future<LoginChallengeResponse> resendLoginOtp(ResendLoginRequest request);
+  Future<LoginChallengeResponse> resendLoginEmailOtp(ResendLoginRequest request);
   Future<AuthResponse> refreshToken();
   Future<void> logout();
   Future<PublicUser> getUserProfile(String userId);
@@ -43,14 +46,32 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   }
 
   @override
+  Future<LoginChallengeResponse> loginEmail(LoginRequest request) async {
+    final response = await _dio.post('/auth/login/email', data: request.toJson());
+    return LoginChallengeResponse.fromJson(response.data['data']);
+  }
+
+  @override
   Future<AuthResponse> verifyLogin(VerifyLoginRequest request) async {
     final response = await _dio.post('/auth/login/verify', data: request.toJson());
     return AuthResponse.fromJson(response.data['data']);
   }
 
   @override
+  Future<AuthResponse> verifyLoginEmail(VerifyLoginRequest request) async {
+    final response = await _dio.post('/auth/login/email/verify', data: request.toJson());
+    return AuthResponse.fromJson(response.data['data']);
+  }
+
+  @override
   Future<LoginChallengeResponse> resendLoginOtp(ResendLoginRequest request) async {
     final response = await _dio.post('/auth/login/resend', data: request.toJson());
+    return LoginChallengeResponse.fromJson(response.data['data']);
+  }
+
+  @override
+  Future<LoginChallengeResponse> resendLoginEmailOtp(ResendLoginRequest request) async {
+    final response = await _dio.post('/auth/login/email/resend', data: request.toJson());
     return LoginChallengeResponse.fromJson(response.data['data']);
   }
 

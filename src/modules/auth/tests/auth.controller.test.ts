@@ -185,7 +185,7 @@ describe('Auth Controller', () => {
       expect(mocks.login).toHaveBeenCalledWith({
         email: 'customer@example.com',
         password: 'StrongPassword123!',
-      });
+      }, 'phone');
 
       expect(cookie).not.toHaveBeenCalled();
 
@@ -228,7 +228,7 @@ describe('Auth Controller', () => {
       expect(mocks.login).toHaveBeenCalledWith({
         phone: '+919876543210',
         password: 'StrongPassword123!',
-      });
+      }, 'phone');
 
       expect(status).toHaveBeenCalledWith(200);
 
@@ -356,7 +356,7 @@ describe('Auth Controller', () => {
 
       expect(mocks.verifyLogin).toHaveBeenCalledTimes(1);
 
-      expect(mocks.verifyLogin).toHaveBeenCalledWith(challengeId, '123456');
+      expect(mocks.verifyLogin).toHaveBeenCalledWith(challengeId, '123456', 'phone');
 
       expect(mocks.createAccessToken).toHaveBeenCalledTimes(1);
 
@@ -563,7 +563,7 @@ describe('Auth Controller', () => {
 
       await handlers.verifyLogin(req, response, next);
 
-      expect(mocks.verifyLogin).toHaveBeenCalledWith(challengeId, '123456');
+      expect(mocks.verifyLogin).toHaveBeenCalledWith(challengeId, '123456', 'phone');
 
       expect(mocks.createAccessToken).toHaveBeenCalledWith({
         userId,
@@ -657,7 +657,7 @@ describe('Auth Controller', () => {
 
       expect(mocks.resendLoginOtp).toHaveBeenCalledTimes(1);
 
-      expect(mocks.resendLoginOtp).toHaveBeenCalledWith(challengeId);
+      expect(mocks.resendLoginOtp).toHaveBeenCalledWith(challengeId, 'phone');
 
       expect(cookie).not.toHaveBeenCalled();
 
@@ -726,7 +726,7 @@ describe('Auth Controller', () => {
 
       await handlers.resendLoginOtp(req, response, next);
 
-      expect(mocks.resendLoginOtp).toHaveBeenCalledWith(challengeId);
+      expect(mocks.resendLoginOtp).toHaveBeenCalledWith(challengeId, 'phone');
 
       expect(cookie).not.toHaveBeenCalled();
 

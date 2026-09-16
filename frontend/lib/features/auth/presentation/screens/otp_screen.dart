@@ -118,18 +118,18 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                 ),
               ),
               const SizedBox(height: 32),
-              const Text(
-                'Verify your number',
-                style: TextStyle(
+              Text(
+                authState.loginChannel == 'email' ? 'Verify your email' : 'Verify your number',
+                style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
                   color: Colors.black,
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'Enter the 6-digit code sent to\n+91 98765 43210',
-                style: TextStyle(
+              Text(
+                'Enter the 6-digit code sent to\n${authState.contactValue ?? ""}',
+                style: const TextStyle(
                   fontSize: 16,
                   color: Colors.grey,
                 ),

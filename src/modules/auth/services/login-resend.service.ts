@@ -14,7 +14,7 @@ export class LoginResendService {
     private readonly cooldownSeconds: number,
   ) {}
 
-  async resend(challengeId: string): Promise<LoginResendResult> {
+  async resend(challengeId: string, channel: 'phone' | 'email' = 'phone'): Promise<LoginResendResult> {
     if (!challengeId) {
       throw new AppError('INVALID_LOGIN_CHALLENGE', 'Invalid login challenge', 400);
     }
@@ -70,7 +70,9 @@ export class LoginResendService {
       );
     }
 
-    const resendResult = await this.otpProvider.resendSmsOtp(providerSessionToken);
+    const resendResult = channel === 'email'
+      ? await this.otpProvider.resendEmailOtp(providerSessionToken)
+      : await this.otpProvider.resendSmsOtp(providerSessionToken);
 
     const providerExpiresAt = new Date(resendResult.expiresAt);
 

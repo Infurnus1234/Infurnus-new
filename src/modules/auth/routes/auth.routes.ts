@@ -33,8 +33,11 @@ export function createAuthRouter(
     resendSignupOtp,
 
     login,
+    loginEmail,
     verifyLogin,
+    verifyLoginEmail,
     resendLoginOtp,
+    resendLoginEmailOtp,
 
     refresh,
     logout,
@@ -80,6 +83,12 @@ export function createAuthRouter(
   router.post('/login', ...(enableRateLimiting ? [authLoginRateLimiter] : []), login);
 
   // ==========================================================
+  // POST /auth/login/email
+  // ==========================================================
+
+  router.post('/login/email', ...(enableRateLimiting ? [authLoginRateLimiter] : []), loginEmail);
+
+  // ==========================================================
   // POST /auth/login/verify
   //
   // Authentication is completed here after successful
@@ -93,6 +102,16 @@ export function createAuthRouter(
   );
 
   // ==========================================================
+  // POST /auth/login/email/verify
+  // ==========================================================
+
+  router.post(
+    '/login/email/verify',
+    ...(enableRateLimiting ? [authOtpVerifyRateLimiter] : []),
+    verifyLoginEmail,
+  );
+
+  // ==========================================================
   // POST /auth/login/resend
   // ==========================================================
 
@@ -100,6 +119,16 @@ export function createAuthRouter(
     '/login/resend',
     ...(enableRateLimiting ? [authOtpResendRateLimiter] : []),
     resendLoginOtp,
+  );
+
+  // ==========================================================
+  // POST /auth/login/email/resend
+  // ==========================================================
+
+  router.post(
+    '/login/email/resend',
+    ...(enableRateLimiting ? [authOtpResendRateLimiter] : []),
+    resendLoginEmailOtp,
   );
 
   // ==========================================================

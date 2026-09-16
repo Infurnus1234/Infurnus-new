@@ -16,7 +16,7 @@ export class LoginVerificationService {
     private readonly otpProvider: OtpProvider,
   ) {}
 
-  async verify(challengeId: string, otp: string): Promise<LoginVerificationResult> {
+  async verify(challengeId: string, otp: string, _channel: 'phone' | 'email' = 'phone'): Promise<LoginVerificationResult> {
     if (!challengeId) {
       throw new AppError('INVALID_LOGIN_CHALLENGE', 'Invalid login challenge', 400);
     }

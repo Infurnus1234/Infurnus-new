@@ -6,7 +6,10 @@ class VerifyLoginOtpUseCase {
 
   VerifyLoginOtpUseCase(this.repository);
 
-  Future<AuthResponse> execute(VerifyLoginRequest request) {
+  Future<AuthResponse> execute(VerifyLoginRequest request, [String channel = 'phone']) {
+    if (channel == 'email') {
+      return repository.verifyLoginEmail(request);
+    }
     return repository.verifyLogin(request);
   }
 }

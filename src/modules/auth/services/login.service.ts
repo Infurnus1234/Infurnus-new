@@ -23,7 +23,7 @@ export class LoginService {
     private readonly otpProvider: OtpProvider,
   ) {}
 
-  async authenticate(input: LoginInput): Promise<LoginChallengeResult> {
+  async authenticate(input: LoginInput, channel: 'phone' | 'email' = 'phone'): Promise<LoginChallengeResult> {
     const hasEmail = Boolean(input.email);
     const hasPhone = Boolean(input.phone);
 
@@ -49,15 +49,19 @@ export class LoginService {
       throw new AppError('INVALID_CREDENTIALS', 'Invalid email/phone or password', 401);
     }
 
-    if (!identity.phone) {
-      throw new AppError('PHONE_NOT_CONFIGURED', 'Account phone number is not configured', 500);
-    }
+    let providerSession;
 
-    /*
-     * Sendmator generates and owns the OTP.
-     * INFURNUS does not generate or store the OTP.
-     */
-    const providerSession = await this.otpProvider.sendSmsOtp(identity.phone);
+    if (channel === 'email') {
+      if (!identity.email) {
+        throw new AppError('EMAIL_NOT_CONFIGURED', 'Account email address is not configured', 400);
+      }
+      providerSession = await this.otpProvider.sendEmailOtp(identity.email);
+    } else {
+      if (!identity.phone) {
+        throw new AppError('PHONE_NOT_CONFIGURED', 'Account phone number is not configured', 500);
+      }
+      providerSession = await this.otpProvider.sendSmsOtp(identity.phone);
+    }
 
     if (!providerSession.sessionId || !providerSession.sessionToken || !providerSession.expiresAt) {
       throw new AppError(
