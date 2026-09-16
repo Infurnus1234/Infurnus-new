@@ -1,5 +1,5 @@
 import rateLimit from 'express-rate-limit';
-import type { Request } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 
 import { env } from '../../../config/env.js';
 
@@ -16,7 +16,7 @@ const standardRateLimitOptions = {
 
 export function createRateLimiter({ windowMs, limit, keyGenerator }: RateLimiterConfig) {
   if (!env.AUTH_RATE_LIMIT_ENABLED) {
-    return (_req: Request, _res: any, next: any) => next();
+    return (_req: Request, _res: Response, next: NextFunction) => next();
   }
 
   return rateLimit({
