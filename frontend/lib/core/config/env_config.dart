@@ -34,4 +34,4 @@ class EnvConfig {
 
 // Change this to EnvConfig.emulator if using an Android Emulator
 // Change this to EnvConfig.dev if using a physical device on the same network
-final envConfigProvider = EnvConfig.emulator;
+final envConfigProvider = EnvConfig.dev;
