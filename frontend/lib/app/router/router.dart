@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/auth/presentation/screens/welcome_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/signup_screen.dart';
 import '../../features/auth/presentation/screens/otp_screen.dart';
+import '../../features/auth/presentation/screens/location_permission_screen.dart';
+import '../../features/auth/presentation/screens/notifications_permission_screen.dart';
+import '../../features/auth/presentation/screens/setup_complete_screen.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
 import '../../features/customer/presentation/screens/customer_home_screen.dart';
 import '../../features/customer/presentation/screens/profile_screen.dart';
@@ -37,6 +41,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const SplashScreen(),
       ),
       GoRoute(
+        path: '/welcome',
+        builder: (context, state) => const WelcomeScreen(),
+      ),
+      GoRoute(
         path: '/login',
         builder: (context, state) => const LoginScreen(),
       ),
@@ -47,6 +55,18 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/otp',
         builder: (context, state) => const OtpScreen(),
+      ),
+      GoRoute(
+        path: '/location-permission',
+        builder: (context, state) => const LocationPermissionScreen(),
+      ),
+      GoRoute(
+        path: '/notifications-permission',
+        builder: (context, state) => const NotificationsPermissionScreen(),
+      ),
+      GoRoute(
+        path: '/setup-complete',
+        builder: (context, state) => const SetupCompleteScreen(),
       ),
       GoRoute(
         path: '/customer-home',
@@ -129,19 +149,23 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
     ],
     redirect: (context, state) {
-      final isLoggingIn = state.matchedLocation == '/login' || 
+      final isLoggingIn = state.matchedLocation == '/welcome' ||
+                         state.matchedLocation == '/login' || 
                          state.matchedLocation == '/otp' || 
-                         state.matchedLocation == '/signup';
+                         state.matchedLocation == '/signup' ||
+                         state.matchedLocation == '/location-permission' ||
+                         state.matchedLocation == '/notifications-permission' ||
+                         state.matchedLocation == '/setup-complete';
       final isSplash = state.matchedLocation == '/splash';
 
       if (authState.status == AuthStatus.initial) return isSplash ? null : '/splash';
       
       if (authState.status == AuthStatus.unauthenticated) {
-        return isLoggingIn ? null : '/login';
+        return isLoggingIn ? null : '/welcome';
       }
 
       if (authState.status == AuthStatus.authenticated) {
-        if (isLoggingIn || isSplash) return '/customer-home';
+        if (state.matchedLocation == '/welcome' || isSplash) return '/customer-home';
       }
 
       return null;
@@ -153,18 +177,25 @@ class SplashScreen extends ConsumerWidget {
   const SplashScreen({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Basic splash that checks auth
     return const Scaffold(
+      backgroundColor: Colors.white,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
               'INFURNUS',
-              style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF00C853)),
+              style: TextStyle(
+                fontSize: 32, 
+                fontWeight: FontWeight.bold, 
+                color: Color(0xFF00C853),
+                letterSpacing: 4,
+              ),
             ),
             SizedBox(height: 20),
-            CircularProgressIndicator(),
+            CircularProgressIndicator(
+              color: Color(0xFF00C853),
+            ),
           ],
         ),
       ),
