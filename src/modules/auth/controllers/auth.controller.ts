@@ -262,24 +262,44 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
     try {
       const input = loginSchema.parse(req.body);
 
-      const result = await loginService.authenticate({
-        password: input.password,
-        ...(input.email !== undefined ? { email: input.email } : {}),
-        ...(input.phone !== undefined ? { phone: input.phone } : {}),
-      });
+      const result = await loginService.authenticate(
+        {
+          password: input.password,
+          ...(input.email !== undefined ? { email: input.email } : {}),
+          ...(input.phone !== undefined ? { phone: input.phone } : {}),
+        },
+        'phone',
+      );
 
-      /*
-       * Password authentication has succeeded,
-       * but the login is NOT authenticated yet.
-       *
-       * No access token.
-       * No refresh token.
-       * No refresh-token cookie.
-       * No CSRF cookie.
-       *
-       * Authentication completes only after
-       * successful OTP verification.
-       */
+      res.status(200).json({
+        success: true,
+        data: {
+          challengeId: result.challengeId,
+          expiresAt: result.expiresAt,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ==========================================================
+  // POST /auth/login/email
+  // ==========================================================
+
+  async function loginEmail(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const input = loginSchema.parse(req.body);
+
+      const result = await loginService.authenticate(
+        {
+          password: input.password,
+          ...(input.email !== undefined ? { email: input.email } : {}),
+          ...(input.phone !== undefined ? { phone: input.phone } : {}),
+        },
+        'email',
+      );
+
       res.status(200).json({
         success: true,
         data: {
@@ -300,18 +320,45 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
     try {
       const input = verifyLoginOtpSchema.parse(req.body);
 
-      const result = await loginVerificationService.verify(input.challengeId, input.otp);
+      const result = await loginVerificationService.verify(input.challengeId, input.otp, 'phone');
 
-      /*
-       * Login OTP verification has succeeded.
-       *
-       * The verification service has already:
-       * - verified the provider OTP
-       * - atomically consumed the challenge
-       * - re-checked the current account status
-       *
-       * Only now may authentication tokens be issued.
-       */
+      const accessToken = await tokenService.createAccessToken({
+        userId: result.userId,
+        role: result.role,
+      });
+
+      const refreshToken = await refreshTokenService.create(result.userId, {
+        userAgent: req.get('user-agent') ?? null,
+        ipAddress: req.ip ?? null,
+      });
+
+      setRefreshTokenCookie(res, refreshToken.refreshToken);
+
+      setCsrfTokenCookie(res, generateCsrfToken());
+
+      res.status(200).json({
+        success: true,
+        data: {
+          userId: result.userId,
+          accessToken,
+          expiresAt: refreshToken.expiresAt,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ==========================================================
+  // POST /auth/login/email/verify
+  // ==========================================================
+
+  async function verifyLoginEmail(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const input = verifyLoginOtpSchema.parse(req.body);
+
+      const result = await loginVerificationService.verify(input.challengeId, input.otp, 'email');
+
       const accessToken = await tokenService.createAccessToken({
         userId: result.userId,
         role: result.role,
@@ -347,7 +394,29 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
     try {
       const input = resendLoginOtpSchema.parse(req.body);
 
-      const result = await loginResendService.resend(input.challengeId);
+      const result = await loginResendService.resend(input.challengeId, 'phone');
+
+      res.status(200).json({
+        success: true,
+        data: {
+          challengeId: input.challengeId,
+          expiresAt: result.expiresAt,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ==========================================================
+  // POST /auth/login/email/resend
+  // ==========================================================
+
+  async function resendLoginEmailOtp(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const input = resendLoginOtpSchema.parse(req.body);
+
+      const result = await loginResendService.resend(input.challengeId, 'email');
 
       res.status(200).json({
         success: true,
@@ -504,8 +573,11 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
     resendSignupOtp,
 
     login,
+    loginEmail,
     verifyLogin,
+    verifyLoginEmail,
     resendLoginOtp,
+    resendLoginEmailOtp,
 
     refresh,
     logout,
@@ -531,9 +603,15 @@ export const resendSignupOtp = defaultAuthHandlers.resendSignupOtp;
 
 export const login = defaultAuthHandlers.login;
 
+export const loginEmail = defaultAuthHandlers.loginEmail;
+
 export const verifyLogin = defaultAuthHandlers.verifyLogin;
 
+export const verifyLoginEmail = defaultAuthHandlers.verifyLoginEmail;
+
 export const resendLoginOtp = defaultAuthHandlers.resendLoginOtp;
+
+export const resendLoginEmailOtp = defaultAuthHandlers.resendLoginEmailOtp;
 
 export const refresh = defaultAuthHandlers.refresh;
 

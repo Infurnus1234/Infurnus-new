@@ -67,6 +67,14 @@ class TestOtpProvider implements OtpProvider {
     };
   }
 
+  async sendEmailOtp(email: string): Promise<{
+    sessionId: string;
+    sessionToken: string;
+    expiresAt: string;
+  }> {
+    return this.sendSmsOtp(email);
+  }
+
   async verifySmsOtp(
     sessionToken: string,
     otp: string,
@@ -137,6 +145,12 @@ class TestOtpProvider implements OtpProvider {
     return {
       expiresAt,
     };
+  }
+
+  async resendEmailOtp(sessionToken: string): Promise<{
+    expiresAt: string;
+  }> {
+    return this.resendSmsOtp(sessionToken);
   }
 
   getSmsOtp(phone: string): string {

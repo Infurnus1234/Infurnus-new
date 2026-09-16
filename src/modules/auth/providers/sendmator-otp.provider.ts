@@ -69,6 +69,55 @@ export class SendmatorOtpProvider implements OtpProvider {
     }
   }
 
+  async sendEmailOtp(email: string): Promise<{
+    sessionId: string;
+    sessionToken: string;
+    expiresAt: string;
+  }> {
+    try {
+      const response = await this.client.otp.send({
+        channels: ['email'],
+        recipients: {
+          email,
+        },
+      });
+
+      console.log('Sendmator OTP email send response:', {
+        sessionId: response.session_id,
+        expiresAt: response.expires_at,
+        hasSessionToken: Boolean(response.session_token),
+        channelsSent: response.channels_sent,
+        message: response.message,
+      });
+
+      const sessionId = response.session_id;
+      const sessionToken = response.session_token;
+      const expiresAt = response.expires_at;
+
+      if (!sessionId || !sessionToken || !expiresAt) {
+        throw new AppError(
+          'OTP_PROVIDER_INVALID_RESPONSE',
+          'OTP provider returned an invalid session response',
+          502,
+        );
+      }
+
+      return {
+        sessionId,
+        sessionToken,
+        expiresAt,
+      };
+    } catch (error: unknown) {
+      console.error('Sendmator OTP email send failed:', error);
+
+      if (error instanceof AppError) {
+        throw error;
+      }
+
+      throw new AppError('OTP_PROVIDER_SEND_FAILED', 'Failed to send verification code', 502);
+    }
+  }
+
   async verifySmsOtp(
     sessionToken: string,
     otp: string,
@@ -81,6 +130,7 @@ export class SendmatorOtpProvider implements OtpProvider {
         session_token: sessionToken,
         otps: {
           sms: otp,
+          email: otp, // Try both since same interface
         },
       });
 
@@ -129,5 +179,11 @@ export class SendmatorOtpProvider implements OtpProvider {
 
       throw new AppError('OTP_PROVIDER_RESEND_FAILED', 'Failed to resend verification code', 502);
     }
+  }
+
+  async resendEmailOtp(sessionToken: string): Promise<{
+    expiresAt: string;
+  }> {
+    return this.resendSmsOtp(sessionToken); // Same logic in Sendmator
   }
 }

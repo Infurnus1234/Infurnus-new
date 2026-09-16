@@ -5,6 +5,12 @@ export interface OtpProvider {
     expiresAt: string;
   }>;
 
+  sendEmailOtp(email: string): Promise<{
+    sessionId: string;
+    sessionToken: string;
+    expiresAt: string;
+  }>;
+
   verifySmsOtp(
     sessionToken: string,
     otp: string,
@@ -14,6 +20,10 @@ export interface OtpProvider {
   }>;
 
   resendSmsOtp(sessionToken: string): Promise<{
+    expiresAt: string;
+  }>;
+
+  resendEmailOtp(sessionToken: string): Promise<{
     expiresAt: string;
   }>;
 }

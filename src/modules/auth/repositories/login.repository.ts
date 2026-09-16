@@ -5,6 +5,7 @@ export interface LoginIdentity {
   role: string;
   status: 'active' | 'suspended' | 'banned';
   phone: string;
+  email: string | null;
   passwordHash: string;
 }
 
@@ -22,6 +23,7 @@ export class PostgresLoginRepository implements LoginRepository {
           u.role,
           u.status,
           u.phone,
+          u.email,
           uc.password_hash AS "passwordHash"
         FROM users u
         INNER JOIN user_credentials uc
@@ -44,6 +46,7 @@ export class PostgresLoginRepository implements LoginRepository {
           u.role,
           u.status,
           u.phone,
+          u.email,
           uc.password_hash AS "passwordHash"
         FROM users u
         INNER JOIN user_credentials uc

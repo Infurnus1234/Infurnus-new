@@ -14,12 +14,16 @@ class AuthState {
   final String? errorMessage;
   final String? signupId;
   final String? loginChallengeId;
+  final String loginChannel; // 'phone' or 'email'
+  final String? contactValue;
 
   AuthState({
     required this.status,
     this.errorMessage,
     this.signupId,
     this.loginChallengeId,
+    this.loginChannel = 'phone',
+    this.contactValue,
   });
 
   AuthState copyWith({
@@ -27,12 +31,16 @@ class AuthState {
     String? errorMessage,
     String? signupId,
     String? loginChallengeId,
+    String? loginChannel,
+    String? contactValue,
   }) {
     return AuthState(
       status: status ?? this.status,
       errorMessage: errorMessage ?? this.errorMessage,
       signupId: signupId ?? this.signupId,
       loginChallengeId: loginChallengeId ?? this.loginChallengeId,
+      loginChannel: loginChannel ?? this.loginChannel,
+      contactValue: contactValue ?? this.contactValue,
     );
   }
 }
@@ -95,7 +103,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> signup(SignupRequest request) async {
-    state = state.copyWith(status: AuthStatus.loading);
+    state = state.copyWith(status: AuthStatus.loading, contactValue: request.phone ?? request.email);
     try {
       final response = await ref.read(signupUseCaseProvider).execute(request);
       state = state.copyWith(
@@ -123,7 +131,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(status: AuthStatus.loading);
       try {
         final request = VerifyLoginRequest(challengeId: state.loginChallengeId!, otp: otp);
-        final response = await ref.read(verifyLoginOtpUseCaseProvider).execute(request);
+        final response = await ref.read(verifyLoginOtpUseCaseProvider).execute(request, state.loginChannel);
         await _handleAuthSuccess(response);
       } catch (e) {
         final message = _parseError(e);
@@ -132,10 +140,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  Future<void> login(LoginRequest request) async {
-    state = state.copyWith(status: AuthStatus.loading);
+  Future<void> login(LoginRequest request, [String channel = 'phone']) async {
+    state = state.copyWith(
+      status: AuthStatus.loading, 
+      loginChannel: channel,
+      contactValue: channel == 'email' ? request.email : request.phone,
+    );
     try {
-      final response = await ref.read(loginUseCaseProvider).execute(request);
+      final response = await ref.read(loginUseCaseProvider).execute(request, channel);
       state = state.copyWith(
         status: AuthStatus.otpRequired,
         loginChallengeId: response.challengeId,
@@ -151,6 +163,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final data = e.response?.data;
       if (data is Map && data['error'] != null) {
         return data['error']['message'] ?? 'An error occurred';
+      }
+      if (e.type == DioExceptionType.connectionTimeout || e.type == DioExceptionType.receiveTimeout) {
+        return 'Connection timed out. Please check your internet or firewall settings.';
+      }
+      if (e.type == DioExceptionType.connectionError) {
+        return 'Connection error. The server might be unreachable.';
       }
       return e.message ?? e.toString();
     }
@@ -168,7 +186,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } else if (state.loginChallengeId != null) {
       try {
         final request = ResendLoginRequest(challengeId: state.loginChallengeId!);
-        await ref.read(resendLoginOtpUseCaseProvider).execute(request);
+        await ref.read(resendLoginOtpUseCaseProvider).execute(request, state.loginChannel);
       } catch (e) {
         state = state.copyWith(errorMessage: e.toString());
       }

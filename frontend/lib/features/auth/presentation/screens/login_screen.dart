@@ -15,10 +15,16 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _phoneController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _isEmailLogin = false;
+  bool _isPasswordVisible = false;
 
   @override
   void dispose() {
     _phoneController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
@@ -45,7 +51,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         elevation: 0,
       ),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -92,97 +98,220 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'Enter your mobile number to continue',
-                style: TextStyle(
+              Text(
+                _isEmailLogin 
+                    ? 'Enter your email to continue'
+                    : 'Enter your mobile number to continue',
+                style: const TextStyle(
                   fontSize: 16,
                   color: Colors.grey,
                 ),
               ),
-              const SizedBox(height: 48),
+              const SizedBox(height: 32),
               
-              // Phone Input
+              // Login Mode Toggle
               Container(
                 decoration: BoxDecoration(
                   color: Colors.grey[100],
                   borderRadius: BorderRadius.circular(12),
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
                   children: [
-                    // Country Code
-                    Row(
-                      children: [
-                        const Text(
-                          '🇮🇳',
-                          style: TextStyle(fontSize: 20),
-                        ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          '+91',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setState(() => _isEmailLogin = false),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            color: !_isEmailLogin ? AppColors.primaryGreen : Colors.transparent,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Center(
+                            child: Text(
+                              'Phone',
+                              style: TextStyle(
+                                color: !_isEmailLogin ? Colors.white : Colors.grey,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Container(
-                          height: 24,
-                          width: 1,
-                          color: Colors.grey[300],
-                        ),
-                      ],
+                      ),
                     ),
-                    const SizedBox(width: 16),
-                    // Input
                     Expanded(
-                      child: TextField(
-                        controller: _phoneController,
-                        keyboardType: TextInputType.phone,
-                        decoration: const InputDecoration(
-                          hintText: '98765 43210',
-                          border: InputBorder.none,
-                          hintStyle: TextStyle(color: Colors.grey),
-                        ),
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2,
+                      child: GestureDetector(
+                        onTap: () => setState(() => _isEmailLogin = true),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            color: _isEmailLogin ? AppColors.primaryGreen : Colors.transparent,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Center(
+                            child: Text(
+                              'Email',
+                              style: TextStyle(
+                                color: _isEmailLogin ? Colors.white : Colors.grey,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ),
                   ],
                 ),
               ),
+              const SizedBox(height: 24),
+
+              if (!_isEmailLogin)
+                // Phone Input
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      // Country Code
+                      Row(
+                        children: [
+                          const Text(
+                            '🇮🇳',
+                            style: TextStyle(fontSize: 20),
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            '+91',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            height: 24,
+                            width: 1,
+                            color: Colors.grey[300],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 16),
+                      // Input
+                      Expanded(
+                        child: TextField(
+                          controller: _phoneController,
+                          keyboardType: TextInputType.phone,
+                          decoration: const InputDecoration(
+                            hintText: '98765 43210',
+                            border: InputBorder.none,
+                            hintStyle: TextStyle(color: Colors.grey),
+                          ),
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                // Email Input
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: TextField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      hintText: 'name@example.com',
+                      prefixIcon: Icon(Icons.email_outlined, color: Colors.grey),
+                      border: InputBorder.none,
+                      hintStyle: TextStyle(color: Colors.grey),
+                    ),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
               
+              const SizedBox(height: 16),
+              
+              // Password Input (Required by Backend)
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: TextField(
+                  controller: _passwordController,
+                  obscureText: !_isPasswordVisible,
+                  decoration: InputDecoration(
+                    hintText: 'Password',
+                    prefixIcon: const Icon(Icons.lock_outline, color: Colors.grey),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                        color: Colors.grey,
+                      ),
+                      onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
+                    ),
+                    border: InputBorder.none,
+                    hintStyle: const TextStyle(color: Colors.grey),
+                  ),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+
               const SizedBox(height: 32),
               
               InfurnusButton(
                 text: 'Send OTP   →',
                 isLoading: authState.status == AuthStatus.loading,
                 onPressed: () {
-                  if (_phoneController.text.isNotEmpty) {
-                    final phone = _phoneController.text.trim().replaceAll(RegExp(r'[^\d+]'), '');
-                    // Backend expects full phone or at least the logic we have uses it
-                    // Assuming for now the user enters the 10 digits
-                    final fullPhone = phone.startsWith('+') ? phone : '+91$phone';
-                    
-                    final request = LoginRequest(
-                      phone: fullPhone,
-                      password: 'DefaultPassword123!', // Using a placeholder for now as per reference UI (only phone)
-                    );
-                    ref.read(authProvider.notifier).login(request);
+                  if (_isEmailLogin) {
+                    if (_emailController.text.isNotEmpty && _passwordController.text.isNotEmpty) {
+                      final request = LoginRequest(
+                        email: _emailController.text.trim(),
+                        password: _passwordController.text,
+                      );
+                      ref.read(authProvider.notifier).login(request, 'email');
+                    }
+                  } else {
+                    if (_phoneController.text.isNotEmpty && _passwordController.text.isNotEmpty) {
+                      final phone = _phoneController.text.trim().replaceAll(RegExp(r'[^\d+]'), '');
+                      final fullPhone = phone.startsWith('+') ? phone : '+91$phone';
+                      
+                      final request = LoginRequest(
+                        phone: fullPhone,
+                        password: _passwordController.text,
+                      );
+                      ref.read(authProvider.notifier).login(request, 'phone');
+                    }
                   }
                 },
               ),
               
               const SizedBox(height: 16),
               
-              const Center(
+              Center(
                 child: Text(
-                  "We'll send a 6-digit code to verify your number",
+                  _isEmailLogin 
+                      ? "We'll send a 6-digit code to verify your email"
+                      : "We'll send a 6-digit code to verify your number",
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: Colors.grey,
                     fontSize: 12,
                   ),
