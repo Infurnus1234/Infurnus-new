@@ -15,6 +15,10 @@ const standardRateLimitOptions = {
 };
 
 export function createRateLimiter({ windowMs, limit, keyGenerator }: RateLimiterConfig) {
+  if (!env.AUTH_RATE_LIMIT_ENABLED) {
+    return (_req: Request, _res: any, next: any) => next();
+  }
+
   return rateLimit({
     windowMs,
     limit,
