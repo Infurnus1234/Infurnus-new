@@ -1,21 +1,12 @@
-import { randomUUID } from "node:crypto";
-import {
-  afterAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-} from "vitest";
+import { randomUUID } from 'node:crypto';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { pool } from "../../../infrastructure/database/postgres.js";
-import { PostgresCouponRepository } from "../repositories/coupon.repository.js";
+import { pool } from '../../../infrastructure/database/postgres.js';
+import { PostgresCouponRepository } from '../repositories/coupon.repository.js';
 
-const databaseEnabled =
-  process.env.COUPON_DB_TESTS === "true";
+const databaseEnabled = process.env.COUPON_DB_TESTS === 'true';
 
-const describeDatabase = databaseEnabled
-  ? describe
-  : describe.skip;
+const describeDatabase = databaseEnabled ? describe : describe.skip;
 
 const repository = new PostgresCouponRepository(pool);
 
@@ -27,7 +18,7 @@ interface Fixture {
 
 async function createFixture(): Promise<Fixture> {
   const suffix = randomUUID();
-  const compact = suffix.replaceAll("-", "");
+  const compact = suffix.replaceAll('-', '');
 
   const userResult = await pool.query<{ id: string }>(
     `INSERT INTO users
@@ -99,19 +90,13 @@ async function createFixture(): Promise<Fixture> {
   };
 }
 
-async function cleanFixture(
-  fixture: Fixture,
-): Promise<void> {
+async function cleanFixture(fixture: Fixture): Promise<void> {
   await pool.query(
     `DELETE FROM coupon_redemptions
      WHERE coupon_id = $1
         OR user_id = $2
         OR ride_id = $3`,
-    [
-      fixture.couponId,
-      fixture.userId,
-      fixture.rideId,
-    ],
+    [fixture.couponId, fixture.userId, fixture.rideId],
   );
 
   await pool.query(
@@ -133,105 +118,86 @@ async function cleanFixture(
   );
 }
 
-describeDatabase(
-  "coupon PostgreSQL integration",
-  () => {
-    let fixture: Fixture;
+describeDatabase('coupon PostgreSQL integration', () => {
+  let fixture: Fixture;
 
-    beforeEach(async () => {
-      fixture = await createFixture();
-    });
+  beforeEach(async () => {
+    fixture = await createFixture();
+  });
 
-    afterAll(async () => {
-      if (fixture) {
-        await cleanFixture(fixture);
-      }
+  afterAll(async () => {
+    if (fixture) {
+      await cleanFixture(fixture);
+    }
 
-      await pool.end();
-    });
+    await pool.end();
+  });
 
-    it("finds a coupon by normalized code", async () => {
-      const couponResult = await pool.query<{
-        code: string;
-      }>(
-        `SELECT code
+  it('finds a coupon by normalized code', async () => {
+    const couponResult = await pool.query<{
+      code: string;
+    }>(
+      `SELECT code
          FROM coupons
          WHERE id = $1`,
-        [fixture.couponId],
-      );
+      [fixture.couponId],
+    );
 
-      const code = couponResult.rows[0]!.code;
+    const code = couponResult.rows[0]!.code;
 
-      const coupon =
-        await repository.findByCode(
-          `  ${code.toLowerCase()}  `,
-        );
+    const coupon = await repository.findByCode(`  ${code.toLowerCase()}  `);
 
-      expect(coupon).not.toBeNull();
-      expect(coupon!.id).toBe(
-        fixture.couponId,
-      );
-      expect(coupon!.code).toBe(code);
-      expect(coupon!.discountType).toBe(
-        "PERCENTAGE",
-      );
-      expect(coupon!.discountValue).toBe(20);
-      expect(coupon!.maxDiscountAmount).toBe(
-        5000,
-      );
-      expect(coupon!.usageLimit).toBe(10);
-      expect(coupon!.perUserLimit).toBe(2);
-    });
+    expect(coupon).not.toBeNull();
+    expect(coupon!.id).toBe(fixture.couponId);
+    expect(coupon!.code).toBe(code);
+    expect(coupon!.discountType).toBe('PERCENTAGE');
+    expect(coupon!.discountValue).toBe(20);
+    expect(coupon!.maxDiscountAmount).toBe(5000);
+    expect(coupon!.usageLimit).toBe(10);
+    expect(coupon!.perUserLimit).toBe(2);
+  });
 
-    it("returns null for an unknown coupon", async () => {
-      const coupon =
-        await repository.findByCode(
-          `MISSING-${randomUUID()}`,
-        );
+  it('returns null for an unknown coupon', async () => {
+    const coupon = await repository.findByCode(`MISSING-${randomUUID()}`);
+
+    expect(coupon).toBeNull();
+  });
+
+  it('locks and returns a coupon inside a transaction', async () => {
+    const client = await pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      const coupon = await repository.findByCodeForUpdate('INVALID-CODE', client);
 
       expect(coupon).toBeNull();
-    });
 
-    it("locks and returns a coupon inside a transaction", async () => {
-      const client = await pool.connect();
+      await client.query('ROLLBACK');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  });
 
-      try {
-        await client.query("BEGIN");
+  it('counts user redemptions correctly', async () => {
+    const client = await pool.connect();
 
-        const coupon =
-          await repository.findByCodeForUpdate(
-            "INVALID-CODE",
-            client,
-          );
+    try {
+      await client.query('BEGIN');
 
-        expect(coupon).toBeNull();
+      const initialCount = await repository.countUserRedemptions(
+        fixture.couponId,
+        fixture.userId,
+        client,
+      );
 
-        await client.query("ROLLBACK");
-      } catch (error) {
-        await client.query("ROLLBACK");
-        throw error;
-      } finally {
-        client.release();
-      }
-    });
+      expect(initialCount).toBe(0);
 
-    it("counts user redemptions correctly", async () => {
-      const client = await pool.connect();
-
-      try {
-        await client.query("BEGIN");
-
-        const initialCount =
-          await repository.countUserRedemptions(
-            fixture.couponId,
-            fixture.userId,
-            client,
-          );
-
-        expect(initialCount).toBe(0);
-
-        await client.query(
-          `INSERT INTO coupon_redemptions
+      await client.query(
+        `INSERT INTO coupon_redemptions
              (
                coupon_id,
                user_id,
@@ -255,161 +221,127 @@ describeDatabase(
                2000,
                8000
              )`,
-          [
-            fixture.couponId,
-            fixture.userId,
-            fixture.rideId,
-          ],
-        );
+        [fixture.couponId, fixture.userId, fixture.rideId],
+      );
 
-        const count =
-          await repository.countUserRedemptions(
-            fixture.couponId,
-            fixture.userId,
-            client,
-          );
+      const count = await repository.countUserRedemptions(fixture.couponId, fixture.userId, client);
 
-        expect(count).toBe(1);
+      expect(count).toBe(1);
 
-        await client.query("ROLLBACK");
-      } catch (error) {
-        await client.query("ROLLBACK");
-        throw error;
-      } finally {
-        client.release();
-      }
-    });
+      await client.query('ROLLBACK');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  });
 
-    it("increments coupon usage", async () => {
-      const client = await pool.connect();
+  it('increments coupon usage', async () => {
+    const client = await pool.connect();
 
-      try {
-        await client.query("BEGIN");
+    try {
+      await client.query('BEGIN');
 
-        const incremented =
-          await repository.incrementUsage(
-            fixture.couponId,
-            client,
-          );
+      const incremented = await repository.incrementUsage(fixture.couponId, client);
 
-        expect(incremented).toBe(true);
+      expect(incremented).toBe(true);
 
-        const result = await client.query<{
-          usage_count: number;
-        }>(
-          `SELECT usage_count
+      const result = await client.query<{
+        usage_count: number;
+      }>(
+        `SELECT usage_count
            FROM coupons
            WHERE id = $1`,
-          [fixture.couponId],
-        );
+        [fixture.couponId],
+      );
 
-        expect(
-          Number(result.rows[0]!.usage_count),
-        ).toBe(1);
+      expect(Number(result.rows[0]!.usage_count)).toBe(1);
 
-        await client.query("ROLLBACK");
-      } catch (error) {
-        await client.query("ROLLBACK");
-        throw error;
-      } finally {
-        client.release();
-      }
-    });
+      await client.query('ROLLBACK');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  });
 
-    it("refuses to increment usage after the global limit", async () => {
-      const client = await pool.connect();
+  it('refuses to increment usage after the global limit', async () => {
+    const client = await pool.connect();
 
-      try {
-        await client.query("BEGIN");
+    try {
+      await client.query('BEGIN');
 
-        await client.query(
-          `UPDATE coupons
+      await client.query(
+        `UPDATE coupons
            SET usage_count = usage_limit
            WHERE id = $1`,
-          [fixture.couponId],
-        );
+        [fixture.couponId],
+      );
 
-        const incremented =
-          await repository.incrementUsage(
-            fixture.couponId,
-            client,
-          );
+      const incremented = await repository.incrementUsage(fixture.couponId, client);
 
-        expect(incremented).toBe(false);
+      expect(incremented).toBe(false);
 
-        await client.query("ROLLBACK");
-      } catch (error) {
-        await client.query("ROLLBACK");
-        throw error;
-      } finally {
-        client.release();
-      }
-    });
+      await client.query('ROLLBACK');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  });
 
-    it("creates an immutable redemption snapshot", async () => {
-      const client = await pool.connect();
+  it('creates an immutable redemption snapshot', async () => {
+    const client = await pool.connect();
 
-      try {
-        await client.query("BEGIN");
+    try {
+      await client.query('BEGIN');
 
-        const created =
-          await repository.createRedemption(
-            {
-              couponId: fixture.couponId,
-              userId: fixture.userId,
-              rideId: fixture.rideId,
-              couponCode: " test-snapshot ",
-              discountType: "PERCENTAGE",
-              discountValue: 20,
-              fareBeforeDiscount: 10000,
-              discountAmount: 2000,
-              fareAfterDiscount: 8000,
-            },
-            client,
-          );
+      const created = await repository.createRedemption(
+        {
+          couponId: fixture.couponId,
+          userId: fixture.userId,
+          rideId: fixture.rideId,
+          couponCode: ' test-snapshot ',
+          discountType: 'PERCENTAGE',
+          discountValue: 20,
+          fareBeforeDiscount: 10000,
+          discountAmount: 2000,
+          fareAfterDiscount: 8000,
+        },
+        client,
+      );
 
-        expect(created.couponId).toBe(
-          fixture.couponId,
-        );
-        expect(created.userId).toBe(
-          fixture.userId,
-        );
-        expect(created.rideId).toBe(
-          fixture.rideId,
-        );
-        expect(created.couponCode).toBe(
-          "TEST-SNAPSHOT",
-        );
-        expect(created.discountType).toBe(
-          "PERCENTAGE",
-        );
-        expect(created.discountValue).toBe(20);
-        expect(
-          created.fareBeforeDiscount,
-        ).toBe(10000);
-        expect(created.discountAmount).toBe(2000);
-        expect(
-          created.fareAfterDiscount,
-        ).toBe(8000);
+      expect(created.couponId).toBe(fixture.couponId);
+      expect(created.userId).toBe(fixture.userId);
+      expect(created.rideId).toBe(fixture.rideId);
+      expect(created.couponCode).toBe('TEST-SNAPSHOT');
+      expect(created.discountType).toBe('PERCENTAGE');
+      expect(created.discountValue).toBe(20);
+      expect(created.fareBeforeDiscount).toBe(10000);
+      expect(created.discountAmount).toBe(2000);
+      expect(created.fareAfterDiscount).toBe(8000);
 
-        await client.query("ROLLBACK");
-      } catch (error) {
-        await client.query("ROLLBACK");
-        throw error;
-      } finally {
-        client.release();
-      }
-    });
+      await client.query('ROLLBACK');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  });
 
-    it("enforces redemption fare arithmetic at the database level", async () => {
-      const client = await pool.connect();
+  it('enforces redemption fare arithmetic at the database level', async () => {
+    const client = await pool.connect();
 
-      try {
-        await client.query("BEGIN");
+    try {
+      await client.query('BEGIN');
 
-        await expect(
-          client.query(
-            `INSERT INTO coupon_redemptions
+      await expect(
+        client.query(
+          `INSERT INTO coupon_redemptions
                (
                  coupon_id,
                  user_id,
@@ -433,21 +365,16 @@ describeDatabase(
                  2000,
                  9000
                )`,
-            [
-              fixture.couponId,
-              fixture.userId,
-              fixture.rideId,
-            ],
-          ),
-        ).rejects.toBeDefined();
+          [fixture.couponId, fixture.userId, fixture.rideId],
+        ),
+      ).rejects.toBeDefined();
 
-        await client.query("ROLLBACK");
-      } catch (error) {
-        await client.query("ROLLBACK");
-        throw error;
-      } finally {
-        client.release();
-      }
-    });
-  },
-);
+      await client.query('ROLLBACK');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  });
+});

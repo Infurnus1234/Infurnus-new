@@ -57,9 +57,7 @@ describe('Fare HTTP integration', () => {
     it('rejects unauthenticated requests', async () => {
       const { app, estimate } = createTestApp();
 
-      const response = await request(app)
-        .post('/fares/estimate')
-        .send(validBody);
+      const response = await request(app).post('/fares/estimate').send(validBody);
 
       expect(response.status).toBe(401);
       expect(response.body.success).toBe(false);
