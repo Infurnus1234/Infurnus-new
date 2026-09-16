@@ -8,14 +8,17 @@ async function clearDevAuth() {
 
   try {
     // 1. Find user IDs
-    const userResult = await pool.query('SELECT id FROM users WHERE phone = $1 OR email = $2', [testPhone, testEmail]);
-    const userIds = userResult.rows.map(r => r.id);
+    const userResult = await pool.query('SELECT id FROM users WHERE phone = $1 OR email = $2', [
+      testPhone,
+      testEmail,
+    ]);
+    const userIds = userResult.rows.map((r) => r.id);
 
     if (userIds.length > 0) {
       // 2. Delete login challenges
       const challengeResult = await pool.query(
         'DELETE FROM login_challenges WHERE user_id = ANY($1)',
-        [userIds]
+        [userIds],
       );
       console.log(`Deleted ${challengeResult.rowCount} login challenges.`);
     }
@@ -23,7 +26,7 @@ async function clearDevAuth() {
     // 3. Delete pending signups
     const signupResult = await pool.query(
       'DELETE FROM pending_signups WHERE contact_value = $1 OR email = $2',
-      [testPhone, testEmail]
+      [testPhone, testEmail],
     );
     console.log(`Deleted ${signupResult.rowCount} pending signups.`);
 

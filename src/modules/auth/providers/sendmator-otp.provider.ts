@@ -4,6 +4,22 @@ import { AppError } from '../../../common/errors/app-error.js';
 import { env } from '../../../config/env.js';
 import type { OtpProvider } from './otp.provider.js';
 
+interface SendmatorSendResponse {
+  session_id?: string;
+  session_token?: string;
+  expires_at?: string;
+  channels_sent?: unknown;
+}
+
+interface SendmatorVerifyResponse {
+  verified?: boolean;
+  attempts_remaining?: number;
+}
+
+interface SendmatorResendResponse {
+  expires_at?: string;
+}
+
 export class SendmatorOtpProvider implements OtpProvider {
   private readonly client: Sendmator;
 
@@ -17,35 +33,42 @@ export class SendmatorOtpProvider implements OtpProvider {
     });
   }
 
+  // ============================================================
+  // SMS OTP
+  // ============================================================
+
   async sendSmsOtp(phone: string): Promise<{
     sessionId: string;
     sessionToken: string;
     expiresAt: string;
   }> {
     try {
-      const response = await this.client.otp.send({
+      const response = (await this.client.otp.send({
         channels: ['sms'],
         recipients: {
           sms: phone,
         },
-      });
+      })) as SendmatorSendResponse;
 
-      // Safe diagnostic logging.
-      // NEVER log the session token or OTP.
-      console.log('Sendmator OTP send response:', {
-        sessionId: response.session_id,
-        expiresAt: response.expires_at,
-        hasSessionToken: Boolean(response.session_token),
+      console.info('Sendmator SMS OTP send completed', {
+        sessionIdPresent: Boolean(response.session_id),
+        sessionTokenPresent: Boolean(response.session_token),
+        expiresAtPresent: Boolean(response.expires_at),
         channelsSent: response.channels_sent,
-        message: response.message,
-        config: response.config,
       });
 
       const sessionId = response.session_id;
       const sessionToken = response.session_token;
       const expiresAt = response.expires_at;
 
-      if (!sessionId || !sessionToken || !expiresAt) {
+      if (
+        typeof sessionId !== 'string' ||
+        sessionId.length === 0 ||
+        typeof sessionToken !== 'string' ||
+        sessionToken.length === 0 ||
+        typeof expiresAt !== 'string' ||
+        expiresAt.length === 0
+      ) {
         throw new AppError(
           'OTP_PROVIDER_INVALID_RESPONSE',
           'OTP provider returned an invalid session response',
@@ -59,60 +82,13 @@ export class SendmatorOtpProvider implements OtpProvider {
         expiresAt,
       };
     } catch (error: unknown) {
-      console.error('Sendmator OTP send failed:', error);
-
       if (error instanceof AppError) {
         throw error;
       }
 
-      throw new AppError('OTP_PROVIDER_SEND_FAILED', 'Failed to send verification code', 502);
-    }
-  }
-
-  async sendEmailOtp(email: string): Promise<{
-    sessionId: string;
-    sessionToken: string;
-    expiresAt: string;
-  }> {
-    try {
-      const response = await this.client.otp.send({
-        channels: ['email'],
-        recipients: {
-          email,
-        },
+      console.error('Sendmator SMS OTP send failed', {
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
       });
-
-      console.log('Sendmator OTP email send response:', {
-        sessionId: response.session_id,
-        expiresAt: response.expires_at,
-        hasSessionToken: Boolean(response.session_token),
-        channelsSent: response.channels_sent,
-        message: response.message,
-      });
-
-      const sessionId = response.session_id;
-      const sessionToken = response.session_token;
-      const expiresAt = response.expires_at;
-
-      if (!sessionId || !sessionToken || !expiresAt) {
-        throw new AppError(
-          'OTP_PROVIDER_INVALID_RESPONSE',
-          'OTP provider returned an invalid session response',
-          502,
-        );
-      }
-
-      return {
-        sessionId,
-        sessionToken,
-        expiresAt,
-      };
-    } catch (error: unknown) {
-      console.error('Sendmator OTP email send failed:', error);
-
-      if (error instanceof AppError) {
-        throw error;
-      }
 
       throw new AppError('OTP_PROVIDER_SEND_FAILED', 'Failed to send verification code', 502);
     }
@@ -126,24 +102,22 @@ export class SendmatorOtpProvider implements OtpProvider {
     attemptsRemaining: number;
   }> {
     try {
-      const response = await this.client.otp.verify({
+      const response = (await this.client.otp.verify({
         session_token: sessionToken,
         otps: {
           sms: otp,
-          email: otp, // Try both since same interface
         },
-      });
+      })) as SendmatorVerifyResponse;
 
-      return {
-        verified: response.verified === true,
-        attemptsRemaining: response.attempts_remaining,
-      };
+      return this.parseVerificationResponse(response);
     } catch (error: unknown) {
-      console.error('Sendmator OTP verification failed:', error);
-
       if (error instanceof AppError) {
         throw error;
       }
+
+      console.error('Sendmator SMS OTP verification failed', {
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+      });
 
       throw new AppError('OTP_PROVIDER_VERIFY_FAILED', 'Failed to verify verification code', 502);
     }
@@ -152,14 +126,152 @@ export class SendmatorOtpProvider implements OtpProvider {
   async resendSmsOtp(sessionToken: string): Promise<{
     expiresAt: string;
   }> {
+    return this.resendOtp(sessionToken, 'SMS');
+  }
+
+  // ============================================================
+  // EMAIL OTP
+  // ============================================================
+
+  async sendEmailOtp(email: string): Promise<{
+    sessionId: string;
+    sessionToken: string;
+    expiresAt: string;
+  }> {
     try {
-      const response = await this.client.otp.resend({
-        session_token: sessionToken,
+      const response = (await this.client.otp.send({
+        channels: ['email'],
+        recipients: {
+          email,
+        },
+      })) as SendmatorSendResponse;
+
+      console.info('Sendmator email OTP send completed', {
+        sessionIdPresent: Boolean(response.session_id),
+        sessionTokenPresent: Boolean(response.session_token),
+        expiresAtPresent: Boolean(response.expires_at),
+        channelsSent: response.channels_sent,
       });
+
+      const sessionId = response.session_id;
+      const sessionToken = response.session_token;
+      const expiresAt = response.expires_at;
+
+      if (
+        typeof sessionId !== 'string' ||
+        sessionId.length === 0 ||
+        typeof sessionToken !== 'string' ||
+        sessionToken.length === 0 ||
+        typeof expiresAt !== 'string' ||
+        expiresAt.length === 0
+      ) {
+        throw new AppError(
+          'OTP_PROVIDER_INVALID_RESPONSE',
+          'OTP provider returned an invalid session response',
+          502,
+        );
+      }
+
+      return {
+        sessionId,
+        sessionToken,
+        expiresAt,
+      };
+    } catch (error: unknown) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+
+      console.error('Sendmator email OTP send failed', {
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+      });
+
+      throw new AppError('OTP_PROVIDER_SEND_FAILED', 'Failed to send verification code', 502);
+    }
+  }
+
+  async verifyEmailOtp(
+    sessionToken: string,
+    otp: string,
+  ): Promise<{
+    verified: boolean;
+    attemptsRemaining: number;
+  }> {
+    try {
+      const response = (await this.client.otp.verify({
+        session_token: sessionToken,
+        otps: {
+          email: otp,
+        },
+      })) as SendmatorVerifyResponse;
+
+      return this.parseVerificationResponse(response);
+    } catch (error: unknown) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+
+      console.error('Sendmator email OTP verification failed', {
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+      });
+
+      throw new AppError('OTP_PROVIDER_VERIFY_FAILED', 'Failed to verify verification code', 502);
+    }
+  }
+
+  async resendEmailOtp(sessionToken: string): Promise<{
+    expiresAt: string;
+  }> {
+    return this.resendOtp(sessionToken, 'EMAIL');
+  }
+
+  // ============================================================
+  // Shared Verification Response Validation
+  // ============================================================
+
+  private parseVerificationResponse(response: SendmatorVerifyResponse): {
+    verified: boolean;
+    attemptsRemaining: number;
+  } {
+    const verified = response.verified === true;
+    const attemptsRemaining = response.attempts_remaining;
+
+    if (
+      typeof attemptsRemaining !== 'number' ||
+      !Number.isInteger(attemptsRemaining) ||
+      attemptsRemaining < 0
+    ) {
+      throw new AppError(
+        'OTP_PROVIDER_INVALID_RESPONSE',
+        'OTP provider returned an invalid verification response',
+        502,
+      );
+    }
+
+    return {
+      verified,
+      attemptsRemaining,
+    };
+  }
+
+  // ============================================================
+  // Shared Resend
+  // ============================================================
+
+  private async resendOtp(
+    sessionToken: string,
+    channel: 'SMS' | 'EMAIL',
+  ): Promise<{
+    expiresAt: string;
+  }> {
+    try {
+      const response = (await this.client.otp.resend({
+        session_token: sessionToken,
+      })) as SendmatorResendResponse;
 
       const expiresAt = response.expires_at;
 
-      if (!expiresAt) {
+      if (typeof expiresAt !== 'string' || expiresAt.length === 0) {
         throw new AppError(
           'OTP_PROVIDER_INVALID_RESPONSE',
           'OTP provider returned an invalid expiry time',
@@ -171,19 +283,15 @@ export class SendmatorOtpProvider implements OtpProvider {
         expiresAt,
       };
     } catch (error: unknown) {
-      console.error('Sendmator OTP resend failed:', error);
-
       if (error instanceof AppError) {
         throw error;
       }
 
+      console.error(`Sendmator ${channel} OTP resend failed`, {
+        errorType: error instanceof Error ? error.constructor.name : typeof error,
+      });
+
       throw new AppError('OTP_PROVIDER_RESEND_FAILED', 'Failed to resend verification code', 502);
     }
-  }
-
-  async resendEmailOtp(sessionToken: string): Promise<{
-    expiresAt: string;
-  }> {
-    return this.resendSmsOtp(sessionToken); // Same logic in Sendmator
   }
 }

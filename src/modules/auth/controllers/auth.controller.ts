@@ -36,7 +36,9 @@ import { SignupVerificationService } from '../services/signup-verification.servi
 import { TokenService } from '../services/token.service.js';
 
 import { clearCsrfTokenCookie, setCsrfTokenCookie } from '../utils/csrf-cookie.js';
+
 import { generateCsrfToken } from '../utils/csrf.js';
+
 import { clearRefreshTokenCookie, setRefreshTokenCookie } from '../utils/refresh-cookie.js';
 
 // ============================================================
@@ -80,6 +82,10 @@ export function createAuthController(
 
   const authUserRepository = new PostgresAuthUserRepository();
 
+  // ==========================================================
+  // Signup services
+  // ==========================================================
+
   const signupService = new SignupService(
     pendingSignupRepository,
     otpProvider,
@@ -94,6 +100,10 @@ export function createAuthController(
 
   const otpResendService = new OtpResendService(pendingSignupRepository, otpProvider);
 
+  // ==========================================================
+  // Login services
+  // ==========================================================
+
   const loginService = new LoginService(loginRepository, loginChallengeRepository, otpProvider);
 
   const loginVerificationService = new LoginVerificationService(
@@ -107,6 +117,10 @@ export function createAuthController(
     otpProvider,
     env.AUTH_OTP_RESEND_COOLDOWN_SECONDS,
   );
+
+  // ==========================================================
+  // Token / session services
+  // ==========================================================
 
   const refreshTokenService = new RefreshTokenService(refreshTokenRepository);
 
@@ -162,23 +176,30 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
     try {
       const input = signupSchema.parse(req.body);
 
-      // ------------------------------------------------------
-      // Phone is mandatory for signup.
-      // ------------------------------------------------------
-
-      const phone = input.phone;
-
-      if (typeof phone !== 'string' || !phone.trim()) {
-        throw new AppError('INVALID_SIGNUP_CONTACT', 'Phone number is required', 400);
-      }
+      /*
+       * Supported signup modes:
+       *
+       * 1. Email only
+       * 2. Phone only
+       * 3. Email + phone
+       *
+       * The schema guarantees that at least one
+       * contact method is supplied.
+       *
+       * Optional properties are conditionally spread
+       * so exactOptionalPropertyTypes is satisfied.
+       */
 
       const result = await signupService.signup({
         firstName: input.firstName,
         lastName: input.lastName,
-        phone,
+
+        ...(input.email !== undefined ? { email: input.email } : {}),
+
+        ...(input.phone !== undefined ? { phone: input.phone } : {}),
+
         password: input.password,
         role: input.role,
-        ...(input.email !== undefined ? { email: input.email } : {}),
       });
 
       res.status(201).json({
@@ -203,6 +224,13 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
       const input = verifySignupOtpSchema.parse(req.body);
 
       const result = await signupVerificationService.verify(input.signupId, input.otp);
+
+      /*
+       * Signup OTP verification succeeded.
+       *
+       * Authentication tokens are issued only after
+       * successful OTP verification.
+       */
 
       const accessToken = await tokenService.createAccessToken({
         userId: result.userId,
@@ -257,48 +285,50 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
   // ==========================================================
   // POST /auth/login
   // ==========================================================
+  //
+  // Supported:
+  //
+  // 1. Email + password
+  // 2. Phone + password
+  // 3. Email + phone + password
+  //
+  // At least one identifier is required.
+  //
+  // OTP channel is selected by LoginService:
+  //
+  // - Phone supplied -> SMS OTP
+  // - Email only -> Email OTP
+  // - Both supplied -> SMS OTP preferred
+  //
+  // This endpoint does NOT issue authentication tokens.
+  // Tokens are issued only after OTP verification.
+  // ==========================================================
 
   async function login(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const input = loginSchema.parse(req.body);
 
-      const result = await loginService.authenticate(
-        {
-          password: input.password,
-          ...(input.email !== undefined ? { email: input.email } : {}),
-          ...(input.phone !== undefined ? { phone: input.phone } : {}),
-        },
-        'phone',
-      );
+      const result = await loginService.authenticate({
+        ...(input.email !== undefined ? { email: input.email } : {}),
 
-      res.status(200).json({
-        success: true,
-        data: {
-          challengeId: result.challengeId,
-          expiresAt: result.expiresAt,
-        },
+        ...(input.phone !== undefined ? { phone: input.phone } : {}),
+
+        password: input.password,
       });
-    } catch (error) {
-      next(error);
-    }
-  }
 
-  // ==========================================================
-  // POST /auth/login/email
-  // ==========================================================
-
-  async function loginEmail(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const input = loginSchema.parse(req.body);
-
-      const result = await loginService.authenticate(
-        {
-          password: input.password,
-          ...(input.email !== undefined ? { email: input.email } : {}),
-          ...(input.phone !== undefined ? { phone: input.phone } : {}),
-        },
-        'email',
-      );
+      /*
+       * Password authentication succeeded.
+       *
+       * Login is NOT fully authenticated yet.
+       *
+       * No access token.
+       * No refresh token.
+       * No refresh-token cookie.
+       * No CSRF cookie.
+       *
+       * Authentication completes only after
+       * successful OTP verification.
+       */
 
       res.status(200).json({
         success: true,
@@ -320,44 +350,21 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
     try {
       const input = verifyLoginOtpSchema.parse(req.body);
 
-      const result = await loginVerificationService.verify(input.challengeId, input.otp, 'phone');
+      const result = await loginVerificationService.verify(input.challengeId, input.otp);
 
-      const accessToken = await tokenService.createAccessToken({
-        userId: result.userId,
-        role: result.role,
-      });
-
-      const refreshToken = await refreshTokenService.create(result.userId, {
-        userAgent: req.get('user-agent') ?? null,
-        ipAddress: req.ip ?? null,
-      });
-
-      setRefreshTokenCookie(res, refreshToken.refreshToken);
-
-      setCsrfTokenCookie(res, generateCsrfToken());
-
-      res.status(200).json({
-        success: true,
-        data: {
-          userId: result.userId,
-          accessToken,
-          expiresAt: refreshToken.expiresAt,
-        },
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  // ==========================================================
-  // POST /auth/login/email/verify
-  // ==========================================================
-
-  async function verifyLoginEmail(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const input = verifyLoginOtpSchema.parse(req.body);
-
-      const result = await loginVerificationService.verify(input.challengeId, input.otp, 'email');
+      /*
+       * Login OTP verification succeeded.
+       *
+       * The verification service has already:
+       *
+       * - verified the provider OTP
+       * - checked challenge expiry
+       * - checked replay state
+       * - atomically consumed the challenge
+       * - re-checked account status
+       *
+       * Only now are authentication tokens issued.
+       */
 
       const accessToken = await tokenService.createAccessToken({
         userId: result.userId,
@@ -394,29 +401,7 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
     try {
       const input = resendLoginOtpSchema.parse(req.body);
 
-      const result = await loginResendService.resend(input.challengeId, 'phone');
-
-      res.status(200).json({
-        success: true,
-        data: {
-          challengeId: input.challengeId,
-          expiresAt: result.expiresAt,
-        },
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  // ==========================================================
-  // POST /auth/login/email/resend
-  // ==========================================================
-
-  async function resendLoginEmailOtp(req: Request, res: Response, next: NextFunction): Promise<void> {
-    try {
-      const input = resendLoginOtpSchema.parse(req.body);
-
-      const result = await loginResendService.resend(input.challengeId, 'email');
+      const result = await loginResendService.resend(input.challengeId);
 
       res.status(200).json({
         success: true,
@@ -567,17 +552,18 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
     }
   }
 
+  // ==========================================================
+  // Return handlers
+  // ==========================================================
+
   return {
     signup,
     verifySignup,
     resendSignupOtp,
 
     login,
-    loginEmail,
     verifyLogin,
-    verifyLoginEmail,
     resendLoginOtp,
-    resendLoginEmailOtp,
 
     refresh,
     logout,
@@ -595,6 +581,10 @@ export const defaultAuthController = createAuthController();
 
 export const defaultAuthHandlers = createAuthHandlers(defaultAuthController);
 
+// ============================================================
+// Default exported handlers
+// ============================================================
+
 export const signup = defaultAuthHandlers.signup;
 
 export const verifySignup = defaultAuthHandlers.verifySignup;
@@ -603,15 +593,9 @@ export const resendSignupOtp = defaultAuthHandlers.resendSignupOtp;
 
 export const login = defaultAuthHandlers.login;
 
-export const loginEmail = defaultAuthHandlers.loginEmail;
-
 export const verifyLogin = defaultAuthHandlers.verifyLogin;
 
-export const verifyLoginEmail = defaultAuthHandlers.verifyLoginEmail;
-
 export const resendLoginOtp = defaultAuthHandlers.resendLoginOtp;
-
-export const resendLoginEmailOtp = defaultAuthHandlers.resendLoginEmailOtp;
 
 export const refresh = defaultAuthHandlers.refresh;
 

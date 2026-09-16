@@ -1,11 +1,9 @@
 export interface OtpProvider {
-  sendSmsOtp(phone: string): Promise<{
-    sessionId: string;
-    sessionToken: string;
-    expiresAt: string;
-  }>;
+  // ============================================================
+  // SMS OTP
+  // ============================================================
 
-  sendEmailOtp(email: string): Promise<{
+  sendSmsOtp(phone: string): Promise<{
     sessionId: string;
     sessionToken: string;
     expiresAt: string;
@@ -21,6 +19,24 @@ export interface OtpProvider {
 
   resendSmsOtp(sessionToken: string): Promise<{
     expiresAt: string;
+  }>;
+
+  // ============================================================
+  // EMAIL OTP
+  // ============================================================
+
+  sendEmailOtp(email: string): Promise<{
+    sessionId: string;
+    sessionToken: string;
+    expiresAt: string;
+  }>;
+
+  verifyEmailOtp(
+    sessionToken: string,
+    otp: string,
+  ): Promise<{
+    verified: boolean;
+    attemptsRemaining: number;
   }>;
 
   resendEmailOtp(sessionToken: string): Promise<{
