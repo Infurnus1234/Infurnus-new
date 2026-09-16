@@ -280,12 +280,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 text: 'Send OTP   →',
                 isLoading: authState.status == AuthStatus.loading,
                 onPressed: () {
+                  debugPrint('[UI] Send OTP button pressed. current status: ${authState.status}');
+                  if (authState.status == AuthStatus.loading) {
+                    debugPrint('[UI] Button press ignored - already loading');
+                    return;
+                  }
                   if (_isEmailLogin) {
                     if (_emailController.text.isNotEmpty && _passwordController.text.isNotEmpty) {
                       final request = LoginRequest(
                         email: _emailController.text.trim(),
                         password: _passwordController.text,
                       );
+                      debugPrint('[UI] Calling loginEmail');
                       ref.read(authProvider.notifier).login(request, 'email');
                     }
                   } else {
@@ -297,6 +303,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         phone: fullPhone,
                         password: _passwordController.text,
                       );
+                      debugPrint('[UI] Calling loginPhone');
                       ref.read(authProvider.notifier).login(request, 'phone');
                     }
                   }
