@@ -7,7 +7,13 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   final container = ProviderContainer();
-  await container.read(notificationServiceProvider).init();
+  try {
+    await container.read(notificationServiceProvider).init().timeout(
+      const Duration(seconds: 5),
+    );
+  } catch (e) {
+    debugPrint('Notification service init failed: $e');
+  }
 
   runApp(
     UncontrolledProviderScope(

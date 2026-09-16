@@ -30,11 +30,30 @@ import '../../features/customer/presentation/screens/delete_account_screen.dart'
 import '../../features/customer/presentation/screens/booking_history_screen.dart';
 import '../../features/support/presentation/screens/support_screen.dart';
 
+class RouterNotifier extends ChangeNotifier {
+  final Ref _ref;
+  AuthStatus _status = AuthStatus.initial;
+
+  RouterNotifier(this._ref) {
+    _ref.listen(authProvider, (previous, next) {
+      if (_status != next.status) {
+        _status = next.status;
+        notifyListeners();
+      }
+    });
+  }
+
+  AuthStatus get status => _status;
+}
+
+final routerNotifierProvider = ChangeNotifierProvider((ref) => RouterNotifier(ref));
+
 final routerProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authProvider);
+  final notifier = ref.read(routerNotifierProvider);
 
   return GoRouter(
     initialLocation: '/splash',
+    refreshListenable: notifier,
     routes: [
       GoRoute(
         path: '/splash',
@@ -149,6 +168,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
     ],
     redirect: (context, state) {
+      final status = notifier.status;
+      
       final isLoggingIn = state.matchedLocation == '/welcome' ||
                          state.matchedLocation == '/login' || 
                          state.matchedLocation == '/otp' || 
@@ -158,14 +179,14 @@ final routerProvider = Provider<GoRouter>((ref) {
                          state.matchedLocation == '/setup-complete';
       final isSplash = state.matchedLocation == '/splash';
 
-      if (authState.status == AuthStatus.initial) return isSplash ? null : '/splash';
+      if (status == AuthStatus.initial) return isSplash ? null : '/splash';
       
-      if (authState.status == AuthStatus.unauthenticated) {
+      if (status == AuthStatus.unauthenticated) {
         return isLoggingIn ? null : '/welcome';
       }
 
-      if (authState.status == AuthStatus.authenticated) {
-        if (state.matchedLocation == '/welcome' || isSplash) return '/customer-home';
+      if (status == AuthStatus.authenticated) {
+        if (isLoggingIn || isSplash) return '/customer-home';
       }
 
       return null;
