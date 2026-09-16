@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/services/socket_service.dart';
 import '../../../../core/storage/secure_storage.dart';
@@ -44,21 +45,52 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> checkAuthStatus() async {
-    final token = await ref.read(secureStorageProvider).read(key: 'auth_token');
-    final userId = await ref.read(secureStorageProvider).read(key: 'user_id');
-    
-    if (token != null && userId != null) {
-      try {
-        final publicUser = await ref.read(getUserProfileUseCaseProvider).execute(userId);
-        final role = await ref.read(secureStorageProvider).read(key: 'user_role') ?? 'customer';
-        ref.read(userProvider.notifier).setUser(publicUser.toEntity(role));
-        ref.read(socketServiceProvider).connect(token);
-        state = state.copyWith(status: AuthStatus.authenticated);
-      } catch (e) {
+    debugPrint('AuthNotifier: Checking auth status...');
+    try {
+      final token = await ref.read(secureStorageProvider).read(key: 'auth_token').timeout(
+        const Duration(seconds: 3),
+        onTimeout: () {
+          debugPrint('AuthNotifier: token read timeout');
+          return null;
+        },
+      );
+      final userId = await ref.read(secureStorageProvider).read(key: 'user_id').timeout(
+        const Duration(seconds: 3),
+        onTimeout: () {
+          debugPrint('AuthNotifier: userId read timeout');
+          return null;
+        },
+      );
+      
+      debugPrint('AuthNotifier: token: ${token != null ? "found" : "null"}, userId: $userId');
+
+      if (token != null && userId != null) {
+        try {
+          debugPrint('AuthNotifier: Fetching user profile for $userId');
+          final publicUser = await ref.read(getUserProfileUseCaseProvider).execute(userId).timeout(
+            const Duration(seconds: 7),
+          );
+          final role = await ref.read(secureStorageProvider).read(key: 'user_role').timeout(
+            const Duration(seconds: 3),
+            onTimeout: () => 'customer',
+          ) ?? 'customer';
+          
+          debugPrint('AuthNotifier: Profile fetched, role: $role. Authenticating...');
+          ref.read(userProvider.notifier).setUser(publicUser.toEntity(role));
+          ref.read(socketServiceProvider).connect(token);
+          state = state.copyWith(status: AuthStatus.authenticated);
+          debugPrint('AuthNotifier: Authenticated successfully');
+        } catch (e) {
+          debugPrint('AuthNotifier: Profile fetch failed: $e. Reverting to unauthenticated.');
+          state = state.copyWith(status: AuthStatus.unauthenticated);
+        }
+      } else {
+        debugPrint('AuthNotifier: No session found. Unauthenticated.');
         state = state.copyWith(status: AuthStatus.unauthenticated);
       }
-    } else {
-      state = state.copyWith(status: AuthStatus.unauthenticated);
+    } catch (e) {
+      debugPrint('AuthNotifier: Fatal error in checkAuthStatus: $e');
+      state = state.copyWith(status: AuthStatus.unauthenticated, errorMessage: e.toString());
     }
   }
 

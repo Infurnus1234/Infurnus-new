@@ -1,6 +1,7 @@
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
@@ -47,10 +48,16 @@ final dioProvider = Provider<Dio>((ref) {
       onRequest: (options, handler) async {
         // 1. Ensure CookieJar is attached before any request
         if (!dio.interceptors.any((i) => i is CookieManager)) {
-          final cookieJar = await ref.read(cookieJarProvider.future);
-          // Check again inside async block to prevent duplicate additions
-          if (!dio.interceptors.any((i) => i is CookieManager)) {
-            dio.interceptors.add(CookieManager(cookieJar));
+          try {
+            final cookieJar = await ref.read(cookieJarProvider.future).timeout(
+              const Duration(seconds: 5),
+            );
+            // Check again inside async block to prevent duplicate additions
+            if (!dio.interceptors.any((i) => i is CookieManager)) {
+              dio.interceptors.add(CookieManager(cookieJar));
+            }
+          } catch (e) {
+            debugPrint('Failed to initialize CookieJar: $e');
           }
         }
 

@@ -40,7 +40,7 @@ class SocketService {
     _updateState(SocketConnectionState.connecting);
 
     // Backend contract: Namespace default '/', Handshake auth: { token: accessToken }
-    _socket = io.io(EnvConfig.dev.socketUrl, <String, dynamic>{
+    _socket = io.io(envConfigProvider.socketUrl, <String, dynamic>{
       'transports': ['websocket'],
       'autoConnect': false,
       'auth': {'token': token},
