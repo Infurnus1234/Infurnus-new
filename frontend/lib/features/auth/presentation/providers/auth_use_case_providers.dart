@@ -3,6 +3,8 @@ import '../../domain/usecases/signup_use_case.dart';
 import '../../domain/usecases/verify_signup_otp_use_case.dart';
 import '../../domain/usecases/resend_signup_otp_use_case.dart';
 import '../../domain/usecases/login_use_case.dart';
+import '../../domain/usecases/verify_login_otp_use_case.dart';
+import '../../domain/usecases/resend_login_otp_use_case.dart';
 import '../../domain/usecases/refresh_token_use_case.dart';
 import '../../domain/usecases/logout_use_case.dart';
 import '../../domain/usecases/get_user_profile_use_case.dart';
@@ -26,6 +28,16 @@ final resendSignupOtpUseCaseProvider = Provider<ResendSignupOtpUseCase>((ref) {
 final loginUseCaseProvider = Provider<LoginUseCase>((ref) {
   final repository = ref.watch(authRepositoryProvider);
   return LoginUseCase(repository);
+});
+
+final verifyLoginOtpUseCaseProvider = Provider<VerifyLoginOtpUseCase>((ref) {
+  final repository = ref.watch(authRepositoryProvider);
+  return VerifyLoginOtpUseCase(repository);
+});
+
+final resendLoginOtpUseCaseProvider = Provider<ResendLoginOtpUseCase>((ref) {
+  final repository = ref.watch(authRepositoryProvider);
+  return ResendLoginOtpUseCase(repository);
 });
 
 final refreshTokenUseCaseProvider = Provider<RefreshTokenUseCase>((ref) {

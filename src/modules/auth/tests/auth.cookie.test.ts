@@ -67,6 +67,16 @@ const mockHandlers = {
     });
   }),
 
+  loginEmail: vi.fn((_req, res) => {
+    res.status(200).json({
+      success: true,
+      data: {
+        challengeId: 'challenge-id',
+        expiresAt: new Date().toISOString(),
+      },
+    });
+  }),
+
   // ----------------------------------------------------------
   // POST /auth/login/verify
   //
@@ -93,6 +103,17 @@ const mockHandlers = {
     });
   }),
 
+  verifyLoginEmail: vi.fn((_req, res) => {
+    res.status(200).json({
+      success: true,
+      data: {
+        userId: 'user-id',
+        accessToken: 'access-token',
+        expiresAt: new Date().toISOString(),
+      },
+    });
+  }),
+
   // ----------------------------------------------------------
   // POST /auth/login/resend
   //
@@ -101,6 +122,16 @@ const mockHandlers = {
   // ----------------------------------------------------------
 
   resendLoginOtp: vi.fn((_req, res) => {
+    res.status(200).json({
+      success: true,
+      data: {
+        challengeId: 'challenge-id',
+        expiresAt: new Date().toISOString(),
+      },
+    });
+  }),
+
+  resendLoginEmailOtp: vi.fn((_req, res) => {
     res.status(200).json({
       success: true,
       data: {

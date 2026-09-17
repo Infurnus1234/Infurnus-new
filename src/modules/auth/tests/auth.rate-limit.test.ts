@@ -33,6 +33,13 @@ const mockHandlers = {
     });
   }),
 
+  loginEmail: vi.fn((_req, res) => {
+    res.status(200).json({
+      success: true,
+      data: { status: 'login-email-ok' },
+    });
+  }),
+
   // ----------------------------------------------------------
   // POST /auth/login/verify
   // ----------------------------------------------------------
@@ -44,6 +51,13 @@ const mockHandlers = {
     });
   }),
 
+  verifyLoginEmail: vi.fn((_req, res) => {
+    res.status(200).json({
+      success: true,
+      data: { status: 'login-verify-email-ok' },
+    });
+  }),
+
   // ----------------------------------------------------------
   // POST /auth/login/resend
   // ----------------------------------------------------------
@@ -52,6 +66,13 @@ const mockHandlers = {
     res.status(200).json({
       success: true,
       data: { status: 'login-resend-ok' },
+    });
+  }),
+
+  resendLoginEmailOtp: vi.fn((_req, res) => {
+    res.status(200).json({
+      success: true,
+      data: { status: 'login-resend-email-ok' },
     });
   }),
 
@@ -87,6 +108,17 @@ const mockHandlers = {
 vi.mock('../controllers/auth.controller.js', () => ({
   createAuthHandlers: vi.fn(() => mockHandlers),
 }));
+
+vi.mock('../../../config/env.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../config/env.js')>();
+  return {
+    ...actual,
+    env: {
+      ...actual.env,
+      AUTH_RATE_LIMIT_ENABLED: true,
+    },
+  };
+});
 
 async function createTestApp() {
   vi.resetModules();

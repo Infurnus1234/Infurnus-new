@@ -23,24 +23,24 @@ describe('PostgresLoginChallengeRepository', () => {
 
     const userResult = await pool.query<{ id: string }>(
       `
-          INSERT INTO users (
-            first_name,
-            last_name,
-            email,
-            phone,
-            role,
-            status
-          )
-          VALUES (
-            $1,
-            $2,
-            $3,
-            $4,
-            $5,
-            $6
-          )
-          RETURNING id
-        `,
+        INSERT INTO users (
+          first_name,
+          last_name,
+          email,
+          phone,
+          role,
+          status
+        )
+        VALUES (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          $6
+        )
+        RETURNING id
+      `,
       [
         'Login',
         'Challenge',
@@ -65,6 +65,18 @@ describe('PostgresLoginChallengeRepository', () => {
       `
         DELETE FROM login_challenges
         WHERE user_id = $1
+      `,
+      [userId],
+    );
+
+    await pool.query(
+      `
+        UPDATE users
+        SET
+          status = 'active',
+          deleted_at = NULL,
+          updated_at = NOW()
+        WHERE id = $1
       `,
       [userId],
     );
@@ -94,6 +106,7 @@ describe('PostgresLoginChallengeRepository', () => {
     overrides: Partial<{
       userId: string;
       otpProvider: string;
+      otpChannel: 'sms' | 'email';
       providerSessionId: string;
       encryptedProviderSessionToken: string;
       providerExpiresAt: Date;
@@ -106,6 +119,7 @@ describe('PostgresLoginChallengeRepository', () => {
     return {
       userId,
       otpProvider: 'sendmator',
+      otpChannel: 'sms' as const,
       providerSessionId: `provider-session-${Date.now()}-${Math.random()}`,
       encryptedProviderSessionToken: 'v1.test-encrypted-session-token',
       providerExpiresAt: new Date(now.getTime() + 10 * 60 * 1000),
@@ -120,10 +134,21 @@ describe('PostgresLoginChallengeRepository', () => {
       `
         UPDATE login_challenges
         SET
-          expires_at =
-            NOW() - INTERVAL '1 second',
-          provider_expires_at =
-            NOW() - INTERVAL '1 second',
+          expires_at = NOW() - INTERVAL '1 second',
+          provider_expires_at = NOW() - INTERVAL '1 second',
+          updated_at = NOW()
+        WHERE id = $1
+      `,
+      [challengeId],
+    );
+  }
+
+  async function expireProviderSession(challengeId: string): Promise<void> {
+    await pool.query(
+      `
+        UPDATE login_challenges
+        SET
+          provider_expires_at = NOW() - INTERVAL '1 second',
           updated_at = NOW()
         WHERE id = $1
       `,
@@ -142,21 +167,22 @@ describe('PostgresLoginChallengeRepository', () => {
       id: string;
       userId: string;
       otpProvider: string;
+      otpChannel: 'sms' | 'email';
       providerSessionId: string;
       encryptedProviderSessionToken: string;
     }>(
       `
-          SELECT
-            id,
-            user_id AS "userId",
-            otp_provider AS "otpProvider",
-            provider_session_id AS
-              "providerSessionId",
-            encrypted_provider_session_token AS
-              "encryptedProviderSessionToken"
-          FROM login_challenges
-          WHERE id = $1
-        `,
+        SELECT
+          id,
+          user_id AS "userId",
+          otp_provider AS "otpProvider",
+          otp_channel AS "otpChannel",
+          provider_session_id AS "providerSessionId",
+          encrypted_provider_session_token AS
+            "encryptedProviderSessionToken"
+        FROM login_challenges
+        WHERE id = $1
+      `,
       [result.id],
     );
 
@@ -166,6 +192,7 @@ describe('PostgresLoginChallengeRepository', () => {
       id: result.id,
       userId,
       otpProvider: 'sendmator',
+      otpChannel: 'sms',
       providerSessionId: data.providerSessionId,
       encryptedProviderSessionToken: data.encryptedProviderSessionToken,
     });
@@ -184,10 +211,13 @@ describe('PostgresLoginChallengeRepository', () => {
       id: created.id,
       userId,
       otpProvider: 'sendmator',
+      otpChannel: 'sms',
       providerSessionId: data.providerSessionId,
       encryptedProviderSessionToken: data.encryptedProviderSessionToken,
     });
 
+    expect(result?.providerExpiresAt).toBeInstanceOf(Date);
+    expect(result?.expiresAt).toBeInstanceOf(Date);
     expect(result?.verifiedAt).toBeNull();
     expect(result?.consumedAt).toBeNull();
   });
@@ -213,6 +243,7 @@ describe('PostgresLoginChallengeRepository', () => {
       id: created.id,
       userId,
       otpProvider: 'sendmator',
+      otpChannel: 'sms',
       providerSessionId: data.providerSessionId,
       encryptedProviderSessionToken: data.encryptedProviderSessionToken,
     });
@@ -262,6 +293,27 @@ describe('PostgresLoginChallengeRepository', () => {
     expect(result).not.toBeNull();
 
     expect(result!.providerExpiresAt.getTime()).toBe(newExpiry.getTime());
+  });
+
+  it('does not update provider expiry for an expired challenge', async () => {
+    const created = await repository.create(createChallengeData());
+
+    await expireChallenge(created.id);
+
+    const originalExpiry = (await repository.getProviderSession(created.id))!.providerExpiresAt;
+
+    const updated = await repository.updateProviderExpiry(
+      created.id,
+      new Date(Date.now() + 20 * 60 * 1000),
+    );
+
+    expect(updated).toBe(false);
+
+    const result = await repository.getProviderSession(created.id);
+
+    expect(result).not.toBeNull();
+
+    expect(result!.providerExpiresAt.getTime()).toBe(originalExpiry.getTime());
   });
 
   it('returns false when updating a missing challenge', async () => {
@@ -329,6 +381,18 @@ describe('PostgresLoginChallengeRepository', () => {
     });
   });
 
+  it('rejects consumption when the provider session has expired', async () => {
+    const created = await repository.create(createChallengeData());
+
+    await expireProviderSession(created.id);
+
+    const result = await repository.consume(created.id);
+
+    expect(result).toEqual({
+      status: 'expired',
+    });
+  });
+
   it('does not consume an expired challenge', async () => {
     const created = await repository.create(createChallengeData());
 
@@ -337,6 +401,33 @@ describe('PostgresLoginChallengeRepository', () => {
     const result = await repository.consume(created.id);
 
     expect(result.status).toBe('expired');
+
+    const challenge = await repository.getProviderSession(created.id);
+
+    expect(challenge).not.toBeNull();
+    expect(challenge!.verifiedAt).toBeNull();
+    expect(challenge!.consumedAt).toBeNull();
+  });
+
+  it('does not consume a challenge belonging to a soft-deleted user', async () => {
+    const created = await repository.create(createChallengeData());
+
+    await pool.query(
+      `
+        UPDATE users
+        SET
+          deleted_at = NOW(),
+          updated_at = NOW()
+        WHERE id = $1
+      `,
+      [userId],
+    );
+
+    const result = await repository.consume(created.id);
+
+    expect(result).toEqual({
+      status: 'not_found',
+    });
 
     const challenge = await repository.getProviderSession(created.id);
 
@@ -394,11 +485,11 @@ describe('PostgresLoginChallengeRepository', () => {
     expect(second.id).not.toBe(first.id);
 
     /*
-     * Expired unconsumed challenges are deleted
-     * when a replacement challenge is created.
+     * Expired unconsumed challenges are deleted when
+     * a replacement challenge is created.
      *
-     * They are NOT marked as consumed because
-     * consumed_at represents successful verification.
+     * They are NOT marked as consumed because consumed_at
+     * represents successful verification.
      */
     const oldChallenge = await repository.getProviderSession(first.id);
 
@@ -429,10 +520,8 @@ describe('PostgresLoginChallengeRepository', () => {
     expect(rejected).toHaveLength(1);
   });
 
-  it('does not expose plaintext provider token through the database test data', async () => {
-    const plaintextToken = 'real-sendmator-session-token-must-not-be-stored';
-
-    const encryptedToken = 'v1.encrypted-value-only';
+  it('stores only the supplied encrypted provider session token', async () => {
+    const encryptedToken = 'v1.encrypted-sendmator-session-token';
 
     const created = await repository.create(
       createChallengeData({
@@ -445,7 +534,5 @@ describe('PostgresLoginChallengeRepository', () => {
     expect(result).not.toBeNull();
 
     expect(result!.encryptedProviderSessionToken).toBe(encryptedToken);
-
-    expect(result!.encryptedProviderSessionToken).not.toBe(plaintextToken);
   });
 });

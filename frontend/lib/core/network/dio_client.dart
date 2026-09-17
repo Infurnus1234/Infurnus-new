@@ -1,6 +1,7 @@
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
@@ -32,7 +33,7 @@ Future<bool>? _refreshFuture;
 final dioProvider = Provider<Dio>((ref) {
   final dio = Dio(
     BaseOptions(
-      baseUrl: EnvConfig.dev.baseUrl,
+      baseUrl: envConfigProvider.baseUrl,
       connectTimeout: const Duration(seconds: 15),
       receiveTimeout: const Duration(seconds: 15),
       headers: const {
@@ -45,12 +46,20 @@ final dioProvider = Provider<Dio>((ref) {
   dio.interceptors.add(
     InterceptorsWrapper(
       onRequest: (options, handler) async {
+        debugPrint('Dio: Requesting ${options.method} ${options.uri}');
+        debugPrint('Dio: Base URL is ${options.baseUrl}');
         // 1. Ensure CookieJar is attached before any request
         if (!dio.interceptors.any((i) => i is CookieManager)) {
-          final cookieJar = await ref.read(cookieJarProvider.future);
-          // Check again inside async block to prevent duplicate additions
-          if (!dio.interceptors.any((i) => i is CookieManager)) {
-            dio.interceptors.add(CookieManager(cookieJar));
+          try {
+            final cookieJar = await ref.read(cookieJarProvider.future).timeout(
+              const Duration(seconds: 5),
+            );
+            // Check again inside async block to prevent duplicate additions
+            if (!dio.interceptors.any((i) => i is CookieManager)) {
+              dio.interceptors.add(CookieManager(cookieJar));
+            }
+          } catch (e) {
+            debugPrint('Failed to initialize CookieJar: $e');
           }
         }
 

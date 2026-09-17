@@ -1,8 +1,19 @@
 import { z } from 'zod';
 
 // ============================================================
-// Shared password validation
+// Common schemas
 // ============================================================
+
+const phoneSchema = z
+  .string()
+  .trim()
+  .regex(/^\+?[1-9]\d{7,14}$/, 'Invalid phone number');
+
+const emailSchema = z
+  .string()
+  .trim()
+  .email('Invalid email address')
+  .max(320, 'Email must not exceed 320 characters');
 
 const passwordSchema = z
   .string()
@@ -11,12 +22,18 @@ const passwordSchema = z
 
 // ============================================================
 // Signup
+// ============================================================
 //
-// Business rules:
-// - Phone number is mandatory.
-// - Email is optional.
-// - Phone is the primary verification channel.
-// - Signup requires phone OTP verification.
+// Supported:
+//
+// 1. Email only
+// 2. Phone only
+// 3. Email + phone
+//
+// At least one contact method is required.
+//
+// If both are supplied, the service decides which
+// contact receives the OTP.
 // ============================================================
 
 export const signupSchema = z
@@ -33,18 +50,9 @@ export const signupSchema = z
       .min(1, 'Last name is required')
       .max(100, 'Last name must not exceed 100 characters'),
 
-    email: z
-      .string()
-      .trim()
-      .email('Invalid email address')
-      .max(320, 'Email must not exceed 320 characters')
-      .optional(),
+    email: emailSchema.optional(),
 
-    phone: z
-      .string()
-      .trim()
-      .min(7, 'Invalid phone number')
-      .max(20, 'Phone number must not exceed 20 characters'),
+    phone: phoneSchema.optional(),
 
     password: passwordSchema,
 
@@ -52,7 +60,24 @@ export const signupSchema = z
 
     role: z.enum(['customer', 'driver']).default('customer'),
   })
+  .strict()
   .superRefine((data, ctx) => {
+    // At least one contact method is required.
+    if (!data.email && !data.phone) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['email'],
+        message: 'Either email or phone number is required',
+      });
+
+      ctx.addIssue({
+        code: 'custom',
+        path: ['phone'],
+        message: 'Either email or phone number is required',
+      });
+    }
+
+    // Password confirmation.
     if (data.password !== data.confirmPassword) {
       ctx.addIssue({
         code: 'custom',
@@ -66,62 +91,68 @@ export const signupSchema = z
 // Signup OTP verification
 // ============================================================
 
-export const verifySignupOtpSchema = z.object({
-  signupId: z.string().uuid('Invalid signup ID'),
+export const verifySignupOtpSchema = z
+  .object({
+    signupId: z.string().uuid('Invalid signup ID'),
 
-  otp: z.string().regex(/^\d{6}$/, 'OTP must be 6 digits'),
-});
+    otp: z.string().regex(/^\d{6}$/, 'OTP must be 6 digits'),
+  })
+  .strict();
 
 // ============================================================
 // Signup OTP resend
 // ============================================================
 
-export const resendSignupOtpSchema = z.object({
-  signupId: z.string().uuid('Invalid signup ID'),
-});
+export const resendSignupOtpSchema = z
+  .object({
+    signupId: z.string().uuid('Invalid signup ID'),
+  })
+  .strict();
 
 // ============================================================
 // Login
+// ============================================================
 //
-// Login continues to support either email or phone.
-// This is intentionally separate from signup rules.
+// Supported:
+//
+// 1. Email + password
+// 2. Phone + password
+// 3. Email + phone + password
+//
+// At least one identifier is required.
+//
+// OTP channel:
+//
+// - Phone supplied -> SMS OTP
+// - Email only -> Email OTP
+// - Both supplied -> Phone/SMS preferred
 // ============================================================
 
 export const loginSchema = z
   .object({
-    email: z
-      .string()
-      .trim()
-      .email('Invalid email address')
-      .max(320, 'Email must not exceed 320 characters')
-      .optional(),
+    email: emailSchema.optional(),
 
-    phone: z
-      .string()
-      .trim()
-      .min(7, 'Invalid phone number')
-      .max(20, 'Phone number must not exceed 20 characters')
-      .optional(),
+    phone: phoneSchema.optional(),
 
     password: z
       .string()
       .min(1, 'Password is required')
       .max(128, 'Password must not exceed 128 characters'),
   })
+  .strict()
   .superRefine((data, ctx) => {
+    // At least one login identifier is required.
     if (!data.email && !data.phone) {
       ctx.addIssue({
         code: 'custom',
         path: ['email'],
-        message: 'Email or phone number is required',
+        message: 'Either email or phone number is required',
       });
-    }
 
-    if (data.email && data.phone) {
       ctx.addIssue({
         code: 'custom',
-        path: ['email'],
-        message: 'Provide either email or phone number, not both',
+        path: ['phone'],
+        message: 'Either email or phone number is required',
       });
     }
   });
@@ -130,16 +161,20 @@ export const loginSchema = z
 // Login OTP verification
 // ============================================================
 
-export const verifyLoginOtpSchema = z.object({
-  challengeId: z.string().uuid('Invalid login challenge ID'),
+export const verifyLoginOtpSchema = z
+  .object({
+    challengeId: z.string().uuid('Invalid login challenge ID'),
 
-  otp: z.string().regex(/^\d{6}$/, 'OTP must be 6 digits'),
-});
+    otp: z.string().regex(/^\d{6}$/, 'OTP must be 6 digits'),
+  })
+  .strict();
 
 // ============================================================
 // Login OTP resend
 // ============================================================
 
-export const resendLoginOtpSchema = z.object({
-  challengeId: z.string().uuid('Invalid login challenge ID'),
-});
+export const resendLoginOtpSchema = z
+  .object({
+    challengeId: z.string().uuid('Invalid login challenge ID'),
+  })
+  .strict();

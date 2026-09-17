@@ -1,4 +1,5 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { LoginVerificationService } from '../services/login-verification.service.js';
 import type { AuthUserRepository } from '../repositories/auth-user.repository.js';
 import type { LoginChallengeRepository } from '../repositories/login-challenge.repository.js';
@@ -14,14 +15,17 @@ vi.mock('../../../common/crypto/encryption.js', () => ({
 function createProviderSession(
   overrides: Partial<LoginChallengeProviderSession> = {},
 ): LoginChallengeProviderSession {
+  const now = Date.now();
+
   return {
     id: 'challenge-id',
     userId: 'user-id',
     otpProvider: 'sendmator',
+    otpChannel: 'sms',
     providerSessionId: 'provider-session-id',
     encryptedProviderSessionToken: 'encrypted-provider-token',
-    providerExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
-    expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    providerExpiresAt: new Date(now + 10 * 60 * 1000),
+    expiresAt: new Date(now + 10 * 60 * 1000),
     verifiedAt: null,
     consumedAt: null,
     ...overrides,
@@ -40,6 +44,7 @@ function createDependencies() {
 
   const otpProvider = {
     verifySmsOtp: vi.fn(),
+    verifyEmailOtp: vi.fn(),
   } as unknown as OtpProvider;
 
   return {
@@ -61,7 +66,9 @@ describe('LoginVerificationService', () => {
     const dependencies = createDependencies();
 
     loginChallengeRepository = dependencies.loginChallengeRepository;
+
     authUserRepository = dependencies.authUserRepository;
+
     otpProvider = dependencies.otpProvider;
 
     service = new LoginVerificationService(
@@ -110,6 +117,8 @@ describe('LoginVerificationService', () => {
     });
 
     expect(otpProvider.verifySmsOtp).not.toHaveBeenCalled();
+
+    expect(otpProvider.verifyEmailOtp).not.toHaveBeenCalled();
   });
 
   it('rejects an already consumed challenge', async () => {
@@ -125,6 +134,8 @@ describe('LoginVerificationService', () => {
     });
 
     expect(otpProvider.verifySmsOtp).not.toHaveBeenCalled();
+
+    expect(otpProvider.verifyEmailOtp).not.toHaveBeenCalled();
   });
 
   it('rejects an already verified challenge', async () => {
@@ -140,6 +151,8 @@ describe('LoginVerificationService', () => {
     });
 
     expect(otpProvider.verifySmsOtp).not.toHaveBeenCalled();
+
+    expect(otpProvider.verifyEmailOtp).not.toHaveBeenCalled();
   });
 
   it('rejects an expired challenge before calling the OTP provider', async () => {
@@ -155,6 +168,8 @@ describe('LoginVerificationService', () => {
     });
 
     expect(otpProvider.verifySmsOtp).not.toHaveBeenCalled();
+
+    expect(otpProvider.verifyEmailOtp).not.toHaveBeenCalled();
   });
 
   it('rejects when the encrypted provider session token cannot be decrypted', async () => {
@@ -172,6 +187,8 @@ describe('LoginVerificationService', () => {
     });
 
     expect(otpProvider.verifySmsOtp).not.toHaveBeenCalled();
+
+    expect(otpProvider.verifyEmailOtp).not.toHaveBeenCalled();
 
     expect(loginChallengeRepository.consume).not.toHaveBeenCalled();
   });
@@ -405,6 +422,46 @@ describe('LoginVerificationService', () => {
     expect(authUserRepository.findIdentityById).toHaveBeenCalledWith('user-id');
   });
 
+  it('verifies an email OTP when the challenge channel is email', async () => {
+    vi.mocked(loginChallengeRepository.getProviderSession).mockResolvedValue(
+      createProviderSession({
+        otpChannel: 'email',
+      }),
+    );
+
+    vi.mocked(otpProvider.verifyEmailOtp).mockResolvedValue({
+      verified: true,
+      attemptsRemaining: 5,
+    });
+
+    vi.mocked(loginChallengeRepository.consume).mockResolvedValue({
+      status: 'consumed',
+      userId: 'user-id',
+      role: 'customer',
+    });
+
+    vi.mocked(authUserRepository.findIdentityById).mockResolvedValue({
+      id: 'user-id',
+      role: 'customer',
+      status: 'active',
+    });
+
+    const result = await service.verify('challenge-id', '123456');
+
+    expect(result).toEqual({
+      userId: 'user-id',
+      role: 'customer',
+    });
+
+    expect(otpProvider.verifyEmailOtp).toHaveBeenCalledWith('provider-session-token', '123456');
+
+    expect(otpProvider.verifySmsOtp).not.toHaveBeenCalled();
+
+    expect(loginChallengeRepository.consume).toHaveBeenCalledWith('challenge-id');
+
+    expect(authUserRepository.findIdentityById).toHaveBeenCalledWith('user-id');
+  });
+
   it('uses the current user role instead of trusting the challenge role', async () => {
     vi.mocked(loginChallengeRepository.getProviderSession).mockResolvedValue(
       createProviderSession(),
@@ -460,7 +517,9 @@ describe('LoginVerificationService', () => {
     const result = await service.verify('challenge-id', '123456');
 
     expect(result).not.toHaveProperty('providerSessionToken');
+
     expect(result).not.toHaveProperty('encryptedProviderSessionToken');
+
     expect(result).not.toHaveProperty('otp');
 
     expect(JSON.stringify(result)).not.toContain('provider-session-token');

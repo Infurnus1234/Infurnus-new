@@ -23,8 +23,33 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<AuthResponse> login(LoginRequest request) {
+  Future<LoginChallengeResponse> login(LoginRequest request) {
     return _remoteDataSource.login(request);
+  }
+
+  @override
+  Future<LoginChallengeResponse> loginEmail(LoginRequest request) {
+    return _remoteDataSource.loginEmail(request);
+  }
+
+  @override
+  Future<AuthResponse> verifyLogin(VerifyLoginRequest request) {
+    return _remoteDataSource.verifyLogin(request);
+  }
+
+  @override
+  Future<AuthResponse> verifyLoginEmail(VerifyLoginRequest request) {
+    return _remoteDataSource.verifyLoginEmail(request);
+  }
+
+  @override
+  Future<LoginChallengeResponse> resendLoginOtp(ResendLoginRequest request) {
+    return _remoteDataSource.resendLoginOtp(request);
+  }
+
+  @override
+  Future<LoginChallengeResponse> resendLoginEmailOtp(ResendLoginRequest request) {
+    return _remoteDataSource.resendLoginEmailOtp(request);
   }
 
   @override

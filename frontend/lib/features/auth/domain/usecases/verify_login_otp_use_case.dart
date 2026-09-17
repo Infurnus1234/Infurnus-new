@@ -1,0 +1,15 @@
+import '../../data/models/auth_models.dart';
+import '../repositories/auth_repository.dart';
+
+class VerifyLoginOtpUseCase {
+  final AuthRepository repository;
+
+  VerifyLoginOtpUseCase(this.repository);
+
+  Future<AuthResponse> execute(VerifyLoginRequest request, [String channel = 'phone']) {
+    if (channel == 'email') {
+      return repository.verifyLoginEmail(request);
+    }
+    return repository.verifyLogin(request);
+  }
+}

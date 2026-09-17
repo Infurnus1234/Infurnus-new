@@ -1,4 +1,7 @@
+import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/services/socket_service.dart';
 import '../../../../core/storage/secure_storage.dart';
 import '../../data/models/auth_models.dart';
 import 'auth_use_case_providers.dart';
@@ -10,46 +13,107 @@ class AuthState {
   final AuthStatus status;
   final String? errorMessage;
   final String? signupId;
+  final String? loginChallengeId;
+  final String loginChannel; // 'phone' or 'email'
+  final String? contactValue;
 
-  AuthState({required this.status, this.errorMessage, this.signupId});
+  AuthState({
+    required this.status,
+    this.errorMessage,
+    this.signupId,
+    this.loginChallengeId,
+    this.loginChannel = 'phone',
+    this.contactValue,
+  });
 
-  AuthState copyWith({AuthStatus? status, String? errorMessage, String? signupId}) {
+  AuthState copyWith({
+    AuthStatus? status,
+    String? errorMessage,
+    String? signupId,
+    String? loginChallengeId,
+    String? loginChannel,
+    String? contactValue,
+  }) {
     return AuthState(
       status: status ?? this.status,
       errorMessage: errorMessage ?? this.errorMessage,
       signupId: signupId ?? this.signupId,
+      loginChallengeId: loginChallengeId ?? this.loginChallengeId,
+      loginChannel: loginChannel ?? this.loginChannel,
+      contactValue: contactValue ?? this.contactValue,
     );
   }
 }
 
 class AuthNotifier extends StateNotifier<AuthState> {
   final Ref ref;
+  bool _isProcessing = false;
 
   AuthNotifier(this.ref) : super(AuthState(status: AuthStatus.initial)) {
     checkAuthStatus();
   }
 
   Future<void> checkAuthStatus() async {
-    final token = await ref.read(secureStorageProvider).read(key: 'auth_token');
-    final userId = await ref.read(secureStorageProvider).read(key: 'user_id');
-    
-    if (token != null && userId != null) {
-      try {
-        final publicUser = await ref.read(getUserProfileUseCaseProvider).execute(userId);
-        // We might need to store the role in secure storage too or derive it
-        final role = await ref.read(secureStorageProvider).read(key: 'user_role') ?? 'customer';
-        ref.read(userProvider.notifier).setUser(publicUser.toEntity(role));
-        state = state.copyWith(status: AuthStatus.authenticated);
-      } catch (e) {
+    if (_isProcessing) return;
+    _isProcessing = true;
+    debugPrint('AuthNotifier: Checking auth status...');
+    try {
+      final token = await ref.read(secureStorageProvider).read(key: 'auth_token').timeout(
+        const Duration(seconds: 3),
+        onTimeout: () {
+          debugPrint('AuthNotifier: token read timeout');
+          return null;
+        },
+      );
+      final userId = await ref.read(secureStorageProvider).read(key: 'user_id').timeout(
+        const Duration(seconds: 3),
+        onTimeout: () {
+          debugPrint('AuthNotifier: userId read timeout');
+          return null;
+        },
+      );
+      
+      debugPrint('AuthNotifier: token: ${token != null ? "found" : "null"}, userId: $userId');
+
+      if (token != null && userId != null) {
+        try {
+          debugPrint('AuthNotifier: Fetching user profile for $userId');
+          final publicUser = await ref.read(getUserProfileUseCaseProvider).execute(userId).timeout(
+            const Duration(seconds: 7),
+          );
+          final role = await ref.read(secureStorageProvider).read(key: 'user_role').timeout(
+            const Duration(seconds: 3),
+            onTimeout: () => 'customer',
+          ) ?? 'customer';
+          
+          debugPrint('AuthNotifier: Profile fetched, role: $role. Authenticating...');
+          ref.read(userProvider.notifier).setUser(publicUser.toEntity(role));
+          ref.read(socketServiceProvider).connect(token);
+          state = state.copyWith(status: AuthStatus.authenticated);
+          debugPrint('AuthNotifier: Authenticated successfully');
+        } catch (e) {
+          debugPrint('AuthNotifier: Profile fetch failed: $e. Reverting to unauthenticated.');
+          state = state.copyWith(status: AuthStatus.unauthenticated);
+        }
+      } else {
+        debugPrint('AuthNotifier: No session found. Unauthenticated.');
         state = state.copyWith(status: AuthStatus.unauthenticated);
       }
-    } else {
-      state = state.copyWith(status: AuthStatus.unauthenticated);
+    } catch (e) {
+      debugPrint('AuthNotifier: Fatal error in checkAuthStatus: $e');
+      state = state.copyWith(status: AuthStatus.unauthenticated, errorMessage: e.toString());
+    } finally {
+      _isProcessing = false;
     }
   }
 
   Future<void> signup(SignupRequest request) async {
-    state = state.copyWith(status: AuthStatus.loading);
+    if (_isProcessing) {
+      debugPrint('[AUTH] Signup BLOCKED - already processing');
+      return;
+    }
+    _isProcessing = true;
+    state = state.copyWith(status: AuthStatus.loading, contactValue: request.phone ?? request.email);
     try {
       final response = await ref.read(signupUseCaseProvider).execute(request);
       state = state.copyWith(
@@ -57,31 +121,105 @@ class AuthNotifier extends StateNotifier<AuthState> {
         signupId: response.signupId,
       );
     } catch (e) {
-      state = state.copyWith(status: AuthStatus.unauthenticated, errorMessage: e.toString());
+      final message = _parseError(e);
+      state = state.copyWith(status: AuthStatus.unauthenticated, errorMessage: message);
+    } finally {
+      _isProcessing = false;
     }
   }
 
   Future<void> verifyOtp(String otp) async {
-    if (state.signupId == null) return;
-    
-    state = state.copyWith(status: AuthStatus.loading);
-    try {
-      final request = VerifySignupRequest(signupId: state.signupId!, otp: otp);
-      final response = await ref.read(verifySignupOtpUseCaseProvider).execute(request);
-      
-      await _handleAuthSuccess(response);
-    } catch (e) {
-      state = state.copyWith(status: AuthStatus.otpRequired, errorMessage: e.toString());
+    if (_isProcessing) {
+      debugPrint('[AUTH] OTP Verify BLOCKED - already processing');
+      return;
+    }
+    _isProcessing = true;
+    if (state.signupId != null) {
+      state = state.copyWith(status: AuthStatus.loading);
+      try {
+        final request = VerifySignupRequest(signupId: state.signupId!, otp: otp);
+        final response = await ref.read(verifySignupOtpUseCaseProvider).execute(request);
+        await _handleAuthSuccess(response);
+      } catch (e) {
+        final message = _parseError(e);
+        state = state.copyWith(status: AuthStatus.otpRequired, errorMessage: message);
+      } finally {
+        _isProcessing = false;
+      }
+    } else if (state.loginChallengeId != null) {
+      state = state.copyWith(status: AuthStatus.loading);
+      try {
+        final request = VerifyLoginRequest(challengeId: state.loginChallengeId!, otp: otp);
+        final response = await ref.read(verifyLoginOtpUseCaseProvider).execute(request, state.loginChannel);
+        await _handleAuthSuccess(response);
+      } catch (e) {
+        final message = _parseError(e);
+        state = state.copyWith(status: AuthStatus.otpRequired, errorMessage: message);
+      } finally {
+        _isProcessing = false;
+      }
+    } else {
+      _isProcessing = false;
     }
   }
 
-  Future<void> login(LoginRequest request) async {
-    state = state.copyWith(status: AuthStatus.loading);
+  Future<void> login(LoginRequest request, [String channel = 'phone']) async {
+    if (_isProcessing) {
+      return;
+    }
+    _isProcessing = true;
+
+    state = state.copyWith(
+      status: AuthStatus.loading, 
+      loginChannel: channel,
+      contactValue: channel == 'email' ? request.email : request.phone,
+    );
     try {
-      final response = await ref.read(loginUseCaseProvider).execute(request);
-      await _handleAuthSuccess(response);
+      final response = await ref.read(loginUseCaseProvider).execute(request, channel);
+      state = state.copyWith(
+        status: AuthStatus.otpRequired,
+        loginChallengeId: response.challengeId,
+      );
     } catch (e) {
-      state = state.copyWith(status: AuthStatus.unauthenticated, errorMessage: e.toString());
+      final message = _parseError(e);
+      state = state.copyWith(status: AuthStatus.unauthenticated, errorMessage: message);
+    } finally {
+      _isProcessing = false;
+    }
+  }
+
+  String _parseError(dynamic e) {
+    if (e is DioException) {
+      final data = e.response?.data;
+      if (data is Map && data['error'] != null) {
+        return data['error']['message'] ?? 'An error occurred';
+      }
+      if (e.type == DioExceptionType.connectionTimeout || e.type == DioExceptionType.receiveTimeout) {
+        return 'Connection timed out. Please check your internet or firewall settings.';
+      }
+      if (e.type == DioExceptionType.connectionError) {
+        return 'Connection error. The server might be unreachable.';
+      }
+      return e.message ?? e.toString();
+    }
+    return e.toString();
+  }
+
+  Future<void> resendOtp() async {
+    if (state.signupId != null) {
+      try {
+        final request = ResendSignupRequest(signupId: state.signupId!);
+        await ref.read(resendSignupOtpUseCaseProvider).execute(request);
+      } catch (e) {
+        state = state.copyWith(errorMessage: e.toString());
+      }
+    } else if (state.loginChallengeId != null) {
+      try {
+        final request = ResendLoginRequest(challengeId: state.loginChallengeId!);
+        await ref.read(resendLoginOtpUseCaseProvider).execute(request, state.loginChannel);
+      } catch (e) {
+        state = state.copyWith(errorMessage: e.toString());
+      }
     }
   }
 
@@ -91,12 +229,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
     
     final publicUser = await ref.read(getUserProfileUseCaseProvider).execute(response.userId);
     
-    // Role handling - in a real app, role comes from the profile or token.
-    // Defaulting to 'customer' if not available in the current DTO.
     const role = 'customer';
     await ref.read(secureStorageProvider).write(key: 'user_role', value: role);
 
     ref.read(userProvider.notifier).setUser(publicUser.toEntity(role));
+    ref.read(socketServiceProvider).connect(response.accessToken);
     state = state.copyWith(status: AuthStatus.authenticated);
   }
 
@@ -107,6 +244,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await ref.read(secureStorageProvider).delete(key: 'auth_token');
       await ref.read(secureStorageProvider).delete(key: 'user_id');
       await ref.read(secureStorageProvider).delete(key: 'user_role');
+      ref.read(socketServiceProvider).disconnect();
       ref.read(userProvider.notifier).logout();
       state = state.copyWith(status: AuthStatus.unauthenticated, signupId: null);
     }
