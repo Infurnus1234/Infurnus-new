@@ -133,9 +133,7 @@ describe('Vehicles API', () => {
   it('returns 404 for a nonexistent vehicle', async () => {
     const app = createApp(undefined, undefined, new InMemoryVehicleRepository());
 
-    const response = await request(app).get(
-      '/vehicles/950e8400-e29b-41d4-a716-446655440000',
-    );
+    const response = await request(app).get('/vehicles/950e8400-e29b-41d4-a716-446655440000');
 
     expect(response.status).toBe(404);
     expect(response.body.error.code).toBe('VEHICLE_NOT_FOUND');
@@ -144,9 +142,7 @@ describe('Vehicles API', () => {
   it('rejects an empty vehicle update', async () => {
     const app = createApp(undefined, undefined, new InMemoryVehicleRepository());
 
-    const response = await request(app)
-      .patch(`/vehicles/${vehicle.id}`)
-      .send({});
+    const response = await request(app).patch(`/vehicles/${vehicle.id}`).send({});
 
     expect(response.status).toBe(400);
   });
