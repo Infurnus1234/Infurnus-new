@@ -11,5 +11,8 @@ void main() {
     );
 
     expect(find.byType(InfurnusApp), findsOneWidget);
+    
+    // Allow any pending initialization timers to finish
+    await tester.pumpAndSettle(const Duration(seconds: 1));
   });
 }

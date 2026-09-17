@@ -3,21 +3,46 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LoginResendService } from '../services/login-resend.service.js';
 import type { LoginChallengeRepository } from '../repositories/login-challenge.repository.js';
 import type { OtpProvider } from '../providers/otp.provider.js';
-import type { LoginChallengeProviderSession } from '../types/login-challenge.js';
+import type {
+  LoginChallengeProviderSession,
+  LoginChallengeResendClaim,
+} from '../types/login-challenge.js';
 
 function createProviderSession(
   overrides: Partial<LoginChallengeProviderSession> = {},
 ): LoginChallengeProviderSession {
+  const now = Date.now();
+
   return {
     id: 'challenge-id',
     userId: 'user-id',
     otpProvider: 'sendmator',
+    otpChannel: 'sms',
     providerSessionId: 'provider-session-id',
     encryptedProviderSessionToken: 'encrypted-provider-token',
-    providerExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
-    expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    providerExpiresAt: new Date(now + 10 * 60 * 1000),
+    expiresAt: new Date(now + 10 * 60 * 1000),
     verifiedAt: null,
     consumedAt: null,
+    ...overrides,
+  };
+}
+
+function createResendClaim(
+  overrides: Partial<LoginChallengeResendClaim> = {},
+): LoginChallengeResendClaim {
+  const now = Date.now();
+
+  return {
+    id: 'challenge-id',
+    userId: 'user-id',
+    otpProvider: 'sendmator',
+    otpChannel: 'sms',
+    providerSessionId: 'provider-session-id',
+    encryptedProviderSessionToken: 'encrypted-provider-token',
+    providerExpiresAt: new Date(now + 10 * 60 * 1000),
+    expiresAt: new Date(now + 10 * 60 * 1000),
+    lastOtpSentAt: new Date(),
     ...overrides,
   };
 }
@@ -31,6 +56,7 @@ function createDependencies() {
 
   const otpProvider = {
     resendSmsOtp: vi.fn(),
+    resendEmailOtp: vi.fn(),
   } as unknown as OtpProvider;
 
   return {
@@ -75,6 +101,26 @@ describe('LoginResendService', () => {
     expect(loginChallengeRepository.getProviderSession).not.toHaveBeenCalled();
   });
 
+  it('rejects a whitespace-only challenge id', async () => {
+    await expect(service.resend('   ')).rejects.toMatchObject({
+      code: 'INVALID_LOGIN_CHALLENGE',
+      statusCode: 400,
+    });
+
+    expect(loginChallengeRepository.getProviderSession).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid cooldown configuration', async () => {
+    const invalidService = new LoginResendService(loginChallengeRepository, otpProvider, -1);
+
+    await expect(invalidService.resend('challenge-id')).rejects.toMatchObject({
+      code: 'INVALID_CONFIGURATION',
+      statusCode: 500,
+    });
+
+    expect(loginChallengeRepository.getProviderSession).not.toHaveBeenCalled();
+  });
+
   it('rejects a missing login challenge', async () => {
     vi.mocked(loginChallengeRepository.getProviderSession).mockResolvedValue(null);
 
@@ -86,6 +132,8 @@ describe('LoginResendService', () => {
     expect(loginChallengeRepository.claimResend).not.toHaveBeenCalled();
 
     expect(otpProvider.resendSmsOtp).not.toHaveBeenCalled();
+
+    expect(otpProvider.resendEmailOtp).not.toHaveBeenCalled();
   });
 
   it('rejects an already consumed challenge', async () => {
@@ -103,6 +151,8 @@ describe('LoginResendService', () => {
     expect(loginChallengeRepository.claimResend).not.toHaveBeenCalled();
 
     expect(otpProvider.resendSmsOtp).not.toHaveBeenCalled();
+
+    expect(otpProvider.resendEmailOtp).not.toHaveBeenCalled();
   });
 
   it('rejects an already verified challenge', async () => {
@@ -120,9 +170,11 @@ describe('LoginResendService', () => {
     expect(loginChallengeRepository.claimResend).not.toHaveBeenCalled();
 
     expect(otpProvider.resendSmsOtp).not.toHaveBeenCalled();
+
+    expect(otpProvider.resendEmailOtp).not.toHaveBeenCalled();
   });
 
-  it('rejects an expired challenge', async () => {
+  it('rejects an expired local challenge', async () => {
     vi.mocked(loginChallengeRepository.getProviderSession).mockResolvedValue(
       createProviderSession({
         expiresAt: new Date(Date.now() - 1000),
@@ -137,6 +189,27 @@ describe('LoginResendService', () => {
     expect(loginChallengeRepository.claimResend).not.toHaveBeenCalled();
 
     expect(otpProvider.resendSmsOtp).not.toHaveBeenCalled();
+
+    expect(otpProvider.resendEmailOtp).not.toHaveBeenCalled();
+  });
+
+  it('rejects an expired provider session', async () => {
+    vi.mocked(loginChallengeRepository.getProviderSession).mockResolvedValue(
+      createProviderSession({
+        providerExpiresAt: new Date(Date.now() - 1000),
+      }),
+    );
+
+    await expect(service.resend('challenge-id')).rejects.toMatchObject({
+      code: 'OTP_EXPIRED',
+      statusCode: 400,
+    });
+
+    expect(loginChallengeRepository.claimResend).not.toHaveBeenCalled();
+
+    expect(otpProvider.resendSmsOtp).not.toHaveBeenCalled();
+
+    expect(otpProvider.resendEmailOtp).not.toHaveBeenCalled();
   });
 
   it('rejects when the atomic resend cooldown claim fails', async () => {
@@ -157,6 +230,8 @@ describe('LoginResendService', () => {
     );
 
     expect(otpProvider.resendSmsOtp).not.toHaveBeenCalled();
+
+    expect(otpProvider.resendEmailOtp).not.toHaveBeenCalled();
   });
 
   it('decrypts the provider session token before resend', async () => {
@@ -164,16 +239,7 @@ describe('LoginResendService', () => {
       createProviderSession(),
     );
 
-    vi.mocked(loginChallengeRepository.claimResend).mockResolvedValue({
-      id: 'challenge-id',
-      userId: 'user-id',
-      otpProvider: 'sendmator',
-      providerSessionId: 'provider-session-id',
-      encryptedProviderSessionToken: 'encrypted-provider-token',
-      providerExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-      lastOtpSentAt: new Date(),
-    });
+    vi.mocked(loginChallengeRepository.claimResend).mockResolvedValue(createResendClaim());
 
     vi.mocked(otpProvider.resendSmsOtp).mockResolvedValue({
       expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
@@ -193,16 +259,7 @@ describe('LoginResendService', () => {
       createProviderSession(),
     );
 
-    vi.mocked(loginChallengeRepository.claimResend).mockResolvedValue({
-      id: 'challenge-id',
-      userId: 'user-id',
-      otpProvider: 'sendmator',
-      providerSessionId: 'provider-session-id',
-      encryptedProviderSessionToken: 'encrypted-provider-token',
-      providerExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-      lastOtpSentAt: new Date(),
-    });
+    vi.mocked(loginChallengeRepository.claimResend).mockResolvedValue(createResendClaim());
 
     decryptSecretMock.mockImplementation(() => {
       throw new Error('decryption failed');
@@ -215,6 +272,29 @@ describe('LoginResendService', () => {
 
     expect(otpProvider.resendSmsOtp).not.toHaveBeenCalled();
 
+    expect(otpProvider.resendEmailOtp).not.toHaveBeenCalled();
+
+    expect(loginChallengeRepository.updateProviderExpiry).not.toHaveBeenCalled();
+  });
+
+  it('rejects an empty decrypted provider session token', async () => {
+    vi.mocked(loginChallengeRepository.getProviderSession).mockResolvedValue(
+      createProviderSession(),
+    );
+
+    vi.mocked(loginChallengeRepository.claimResend).mockResolvedValue(createResendClaim());
+
+    decryptSecretMock.mockReturnValue('');
+
+    await expect(service.resend('challenge-id')).rejects.toMatchObject({
+      code: 'OTP_PROVIDER_SESSION_INVALID',
+      statusCode: 500,
+    });
+
+    expect(otpProvider.resendSmsOtp).not.toHaveBeenCalled();
+
+    expect(otpProvider.resendEmailOtp).not.toHaveBeenCalled();
+
     expect(loginChallengeRepository.updateProviderExpiry).not.toHaveBeenCalled();
   });
 
@@ -225,16 +305,12 @@ describe('LoginResendService', () => {
       createProviderSession(),
     );
 
-    vi.mocked(loginChallengeRepository.claimResend).mockResolvedValue({
-      id: 'challenge-id',
-      userId: 'user-id',
-      otpProvider: 'sendmator',
-      providerSessionId: 'provider-session-id',
-      encryptedProviderSessionToken: 'encrypted-provider-token',
-      providerExpiresAt: new Date(Date.now() + 5 * 60 * 1000),
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-      lastOtpSentAt: new Date(),
-    });
+    vi.mocked(loginChallengeRepository.claimResend).mockResolvedValue(
+      createResendClaim({
+        providerExpiresAt: new Date(Date.now() + 5 * 60 * 1000),
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      }),
+    );
 
     vi.mocked(otpProvider.resendSmsOtp).mockResolvedValue({
       expiresAt: providerExpiresAt.toISOString(),
@@ -264,21 +340,64 @@ describe('LoginResendService', () => {
     expect(updatedExpiry?.getTime()).toBe(providerExpiresAt.getTime());
   });
 
+  it('resends an email OTP when the challenge channel is email', async () => {
+    const providerExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    vi.mocked(loginChallengeRepository.getProviderSession).mockResolvedValue(
+      createProviderSession({
+        otpChannel: 'email',
+      }),
+    );
+
+    vi.mocked(loginChallengeRepository.claimResend).mockResolvedValue(
+      createResendClaim({
+        otpChannel: 'email',
+      }),
+    );
+
+    vi.mocked(otpProvider.resendEmailOtp).mockResolvedValue({
+      expiresAt: providerExpiresAt.toISOString(),
+    });
+
+    vi.mocked(loginChallengeRepository.updateProviderExpiry).mockResolvedValue(true);
+
+    const result = await service.resend('challenge-id');
+
+    expect(result.expiresAt.getTime()).toBe(providerExpiresAt.getTime());
+
+    expect(otpProvider.resendEmailOtp).toHaveBeenCalledWith('provider-session-token');
+
+    expect(otpProvider.resendSmsOtp).not.toHaveBeenCalled();
+
+    expect(loginChallengeRepository.updateProviderExpiry).toHaveBeenCalledWith(
+      'challenge-id',
+      expect.any(Date),
+    );
+  });
+
+  it('maps provider resend failures to a controlled error', async () => {
+    vi.mocked(loginChallengeRepository.getProviderSession).mockResolvedValue(
+      createProviderSession(),
+    );
+
+    vi.mocked(loginChallengeRepository.claimResend).mockResolvedValue(createResendClaim());
+
+    vi.mocked(otpProvider.resendSmsOtp).mockRejectedValue(new Error('provider internal error'));
+
+    await expect(service.resend('challenge-id')).rejects.toMatchObject({
+      code: 'OTP_PROVIDER_UNAVAILABLE',
+      statusCode: 502,
+    });
+
+    expect(loginChallengeRepository.updateProviderExpiry).not.toHaveBeenCalled();
+  });
+
   it('rejects an invalid provider expiry response', async () => {
     vi.mocked(loginChallengeRepository.getProviderSession).mockResolvedValue(
       createProviderSession(),
     );
 
-    vi.mocked(loginChallengeRepository.claimResend).mockResolvedValue({
-      id: 'challenge-id',
-      userId: 'user-id',
-      otpProvider: 'sendmator',
-      providerSessionId: 'provider-session-id',
-      encryptedProviderSessionToken: 'encrypted-provider-token',
-      providerExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-      lastOtpSentAt: new Date(),
-    });
+    vi.mocked(loginChallengeRepository.claimResend).mockResolvedValue(createResendClaim());
 
     vi.mocked(otpProvider.resendSmsOtp).mockResolvedValue({
       expiresAt: 'not-a-valid-date',
@@ -297,16 +416,7 @@ describe('LoginResendService', () => {
       createProviderSession(),
     );
 
-    vi.mocked(loginChallengeRepository.claimResend).mockResolvedValue({
-      id: 'challenge-id',
-      userId: 'user-id',
-      otpProvider: 'sendmator',
-      providerSessionId: 'provider-session-id',
-      encryptedProviderSessionToken: 'encrypted-provider-token',
-      providerExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-      lastOtpSentAt: new Date(),
-    });
+    vi.mocked(loginChallengeRepository.claimResend).mockResolvedValue(createResendClaim());
 
     vi.mocked(otpProvider.resendSmsOtp).mockResolvedValue({
       expiresAt: new Date(Date.now() - 1000).toISOString(),
@@ -320,27 +430,39 @@ describe('LoginResendService', () => {
     expect(loginChallengeRepository.updateProviderExpiry).not.toHaveBeenCalled();
   });
 
-  it('rejects when updating provider expiry fails', async () => {
+  it('rejects when updating provider expiry returns false', async () => {
     vi.mocked(loginChallengeRepository.getProviderSession).mockResolvedValue(
       createProviderSession(),
     );
 
-    vi.mocked(loginChallengeRepository.claimResend).mockResolvedValue({
-      id: 'challenge-id',
-      userId: 'user-id',
-      otpProvider: 'sendmator',
-      providerSessionId: 'provider-session-id',
-      encryptedProviderSessionToken: 'encrypted-provider-token',
-      providerExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-      lastOtpSentAt: new Date(),
-    });
+    vi.mocked(loginChallengeRepository.claimResend).mockResolvedValue(createResendClaim());
 
     vi.mocked(otpProvider.resendSmsOtp).mockResolvedValue({
       expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
     });
 
     vi.mocked(loginChallengeRepository.updateProviderExpiry).mockResolvedValue(false);
+
+    await expect(service.resend('challenge-id')).rejects.toMatchObject({
+      code: 'LOGIN_RESEND_UPDATE_FAILED',
+      statusCode: 500,
+    });
+  });
+
+  it('maps provider expiry update database failures to a controlled error', async () => {
+    vi.mocked(loginChallengeRepository.getProviderSession).mockResolvedValue(
+      createProviderSession(),
+    );
+
+    vi.mocked(loginChallengeRepository.claimResend).mockResolvedValue(createResendClaim());
+
+    vi.mocked(otpProvider.resendSmsOtp).mockResolvedValue({
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+    });
+
+    vi.mocked(loginChallengeRepository.updateProviderExpiry).mockRejectedValue(
+      new Error('database unavailable'),
+    );
 
     await expect(service.resend('challenge-id')).rejects.toMatchObject({
       code: 'LOGIN_RESEND_UPDATE_FAILED',
@@ -355,16 +477,12 @@ describe('LoginResendService', () => {
       createProviderSession(),
     );
 
-    vi.mocked(loginChallengeRepository.claimResend).mockResolvedValue({
-      id: 'challenge-id',
-      userId: 'user-id',
-      otpProvider: 'sendmator',
-      providerSessionId: 'provider-session-id',
-      encryptedProviderSessionToken: 'encrypted-provider-token',
-      providerExpiresAt,
-      expiresAt: providerExpiresAt,
-      lastOtpSentAt: new Date(),
-    });
+    vi.mocked(loginChallengeRepository.claimResend).mockResolvedValue(
+      createResendClaim({
+        providerExpiresAt,
+        expiresAt: providerExpiresAt,
+      }),
+    );
 
     vi.mocked(otpProvider.resendSmsOtp).mockResolvedValue({
       expiresAt: providerExpiresAt.toISOString(),

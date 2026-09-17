@@ -1,19 +1,42 @@
 import { pool } from '../../../infrastructure/database/postgres.js';
 
+// ============================================================
+// Login Identity
+// ============================================================
+
 export interface LoginIdentity {
   id: string;
   role: string;
   status: 'active' | 'suspended' | 'banned';
-  phone: string;
+
+  /**
+   * Email and phone are nullable because a user may
+   * authenticate using either contact method.
+   */
+  email: string | null;
+  phone: string | null;
+
   passwordHash: string;
 }
+
+// ============================================================
+// Repository Contract
+// ============================================================
 
 export interface LoginRepository {
   findByEmail(email: string): Promise<LoginIdentity | null>;
   findByPhone(phone: string): Promise<LoginIdentity | null>;
 }
 
+// ============================================================
+// PostgreSQL Implementation
+// ============================================================
+
 export class PostgresLoginRepository implements LoginRepository {
+  // ==========================================================
+  // Find user by email
+  // ==========================================================
+
   async findByEmail(email: string): Promise<LoginIdentity | null> {
     const result = await pool.query<LoginIdentity>(
       `
@@ -21,6 +44,7 @@ export class PostgresLoginRepository implements LoginRepository {
           u.id,
           u.role,
           u.status,
+          u.email,
           u.phone,
           uc.password_hash AS "passwordHash"
         FROM users u
@@ -36,6 +60,10 @@ export class PostgresLoginRepository implements LoginRepository {
     return result.rows[0] ?? null;
   }
 
+  // ==========================================================
+  // Find user by phone
+  // ==========================================================
+
   async findByPhone(phone: string): Promise<LoginIdentity | null> {
     const result = await pool.query<LoginIdentity>(
       `
@@ -43,6 +71,7 @@ export class PostgresLoginRepository implements LoginRepository {
           u.id,
           u.role,
           u.status,
+          u.email,
           u.phone,
           uc.password_hash AS "passwordHash"
         FROM users u

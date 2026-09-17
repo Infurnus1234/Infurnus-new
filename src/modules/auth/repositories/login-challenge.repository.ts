@@ -1,7 +1,6 @@
-import { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 
 import { AppError } from '../../../common/errors/app-error.js';
-import { withTransaction } from '../../../infrastructure/database/postgres.js';
 
 import type {
   ConsumeLoginChallengeResult,
@@ -9,6 +8,10 @@ import type {
   LoginChallengeProviderSession,
   LoginChallengeResendClaim,
 } from '../types/login-challenge.js';
+
+// ============================================================
+// Repository Contract
+// ============================================================
 
 export interface LoginChallengeRepository {
   create(data: CreateLoginChallengeData): Promise<{ id: string }>;
@@ -25,18 +28,50 @@ export interface LoginChallengeRepository {
   consume(challengeId: string): Promise<ConsumeLoginChallengeResult>;
 }
 
+// ============================================================
+// PostgreSQL Implementation
+// ============================================================
+
 export class PostgresLoginChallengeRepository implements LoginChallengeRepository {
   constructor(private readonly pool: Pool) {}
 
+  // ==========================================================
+  // Transaction Helper
+  // ==========================================================
+
+  private async withTransaction<T>(operation: (client: PoolClient) => Promise<T>): Promise<T> {
+    const client = await this.pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      const result = await operation(client);
+
+      await client.query('COMMIT');
+
+      return result;
+    } catch (error) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // Preserve the original database/application error.
+      }
+
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  // ==========================================================
+  // Create Login Challenge
+  // ==========================================================
+
   async create(data: CreateLoginChallengeData): Promise<{ id: string }> {
-    return withTransaction(async (client) => {
+    return this.withTransaction(async (client) => {
       /*
-       * An expired, still-unconsumed challenge must not block
-       * creation of a fresh challenge for the same user.
-       *
-       * Expired challenges are deleted rather than marked as
-       * consumed because consumption represents a successfully
-       * verified challenge.
+       * Remove expired active challenges before creating
+       * a new challenge.
        */
       await client.query(
         `
@@ -55,18 +90,20 @@ export class PostgresLoginChallengeRepository implements LoginChallengeRepositor
             INSERT INTO login_challenges (
               user_id,
               otp_provider,
+              otp_channel,
               provider_session_id,
               encrypted_provider_session_token,
               provider_expires_at,
               expires_at,
               last_otp_sent_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING id
           `,
           [
             data.userId,
             data.otpProvider,
+            data.otpChannel,
             data.providerSessionId,
             data.encryptedProviderSessionToken,
             data.providerExpiresAt,
@@ -106,6 +143,10 @@ export class PostgresLoginChallengeRepository implements LoginChallengeRepositor
     });
   }
 
+  // ==========================================================
+  // Get Provider Session
+  // ==========================================================
+
   async getProviderSession(challengeId: string): Promise<LoginChallengeProviderSession | null> {
     const result = await this.pool.query<LoginChallengeProviderSession>(
       `
@@ -113,6 +154,7 @@ export class PostgresLoginChallengeRepository implements LoginChallengeRepositor
             id,
             user_id AS "userId",
             otp_provider AS "otpProvider",
+            otp_channel AS "otpChannel",
             provider_session_id AS "providerSessionId",
             encrypted_provider_session_token AS
               "encryptedProviderSessionToken",
@@ -129,6 +171,10 @@ export class PostgresLoginChallengeRepository implements LoginChallengeRepositor
 
     return result.rows[0] ?? null;
   }
+
+  // ==========================================================
+  // Atomically Claim Resend
+  // ==========================================================
 
   async claimResend(
     challengeId: string,
@@ -150,6 +196,7 @@ export class PostgresLoginChallengeRepository implements LoginChallengeRepositor
             id,
             user_id AS "userId",
             otp_provider AS "otpProvider",
+            otp_channel AS "otpChannel",
             provider_session_id AS "providerSessionId",
             encrypted_provider_session_token AS
               "encryptedProviderSessionToken",
@@ -163,16 +210,22 @@ export class PostgresLoginChallengeRepository implements LoginChallengeRepositor
     return result.rows[0] ?? null;
   }
 
+  // ==========================================================
+  // Update Provider Expiry
+  // ==========================================================
+
   async updateProviderExpiry(challengeId: string, providerExpiresAt: Date): Promise<boolean> {
     const result = await this.pool.query(
       `
         UPDATE login_challenges
         SET
           provider_expires_at = $2,
+          expires_at = $2,
           updated_at = NOW()
         WHERE id = $1
           AND consumed_at IS NULL
           AND verified_at IS NULL
+          AND expires_at > NOW()
       `,
       [challengeId, providerExpiresAt],
     );
@@ -180,16 +233,21 @@ export class PostgresLoginChallengeRepository implements LoginChallengeRepositor
     return result.rowCount === 1;
   }
 
+  // ==========================================================
+  // Consume Login Challenge
+  // ==========================================================
+
   async consume(challengeId: string): Promise<ConsumeLoginChallengeResult> {
-    return withTransaction(async (client) => {
+    return this.withTransaction(async (client) => {
       /*
-       * Lock the challenge row so concurrent verification requests
-       * cannot both consume the same challenge.
+       * Lock the challenge row so concurrent verification
+       * requests cannot both consume the same challenge.
        */
       const challengeResult = await client.query<{
         userId: string;
         verifiedAt: Date | null;
         consumedAt: Date | null;
+        providerExpiresAt: Date;
         expiresAt: Date;
       }>(
         `
@@ -197,6 +255,7 @@ export class PostgresLoginChallengeRepository implements LoginChallengeRepositor
             user_id AS "userId",
             verified_at AS "verifiedAt",
             consumed_at AS "consumedAt",
+            provider_expires_at AS "providerExpiresAt",
             expires_at AS "expiresAt"
           FROM login_challenges
           WHERE id = $1
@@ -207,11 +266,37 @@ export class PostgresLoginChallengeRepository implements LoginChallengeRepositor
 
       const challenge = challengeResult.rows[0];
 
+      // ------------------------------------------------------
+      // Challenge not found
+      // ------------------------------------------------------
+
       if (!challenge) {
         return {
           status: 'not_found',
         };
       }
+
+      const now = Date.now();
+
+      // ------------------------------------------------------
+      // Challenge expired
+      // ------------------------------------------------------
+
+      /*
+       * Expiry takes precedence over consumed / verified state.
+       *
+       * If either the local challenge or the provider session
+       * has expired, the challenge cannot be used anymore.
+       */
+      if (challenge.expiresAt.getTime() <= now || challenge.providerExpiresAt.getTime() <= now) {
+        return {
+          status: 'expired',
+        };
+      }
+
+      // ------------------------------------------------------
+      // Challenge already consumed / verified
+      // ------------------------------------------------------
 
       if (challenge.consumedAt || challenge.verifiedAt) {
         return {
@@ -219,17 +304,19 @@ export class PostgresLoginChallengeRepository implements LoginChallengeRepositor
         };
       }
 
-      if (challenge.expiresAt.getTime() <= Date.now()) {
-        return {
-          status: 'expired',
-        };
-      }
+      // ------------------------------------------------------
+      // Atomically consume challenge
+      // ------------------------------------------------------
 
       /*
-       * Atomically mark the challenge as verified and consumed.
+       * Mark the challenge as verified and consumed.
        *
-       * Only an active challenge belonging to a non-deleted user
-       * can transition into the consumed state.
+       * The user must:
+       * - exist
+       * - not be soft-deleted
+       * - still have an unused challenge
+       * - have an unexpired local challenge
+       * - have an unexpired provider session
        */
       const consumeResult = await client.query<{
         userId: string;
@@ -248,6 +335,7 @@ export class PostgresLoginChallengeRepository implements LoginChallengeRepositor
             AND lc.consumed_at IS NULL
             AND lc.verified_at IS NULL
             AND lc.expires_at > NOW()
+            AND lc.provider_expires_at > NOW()
           RETURNING
             lc.user_id AS "userId",
             u.role
@@ -257,11 +345,42 @@ export class PostgresLoginChallengeRepository implements LoginChallengeRepositor
 
       const consumed = consumeResult.rows[0];
 
+      // ------------------------------------------------------
+      // Challenge could not be consumed
+      // ------------------------------------------------------
+
       if (!consumed) {
+        /*
+         * The challenge was valid when initially checked, but
+         * the UPDATE could not transition it to consumed.
+         *
+         * Check whether the associated user still exists.
+         */
+        const userResult = await client.query<{ id: string }>(
+          `
+            SELECT id
+            FROM users
+            WHERE id = $1
+              AND deleted_at IS NULL
+            LIMIT 1
+          `,
+          [challenge.userId],
+        );
+
+        if (userResult.rows.length === 0) {
+          return {
+            status: 'not_found',
+          };
+        }
+
         return {
           status: 'already_consumed',
         };
       }
+
+      // ------------------------------------------------------
+      // Successfully consumed
+      // ------------------------------------------------------
 
       return {
         status: 'consumed',

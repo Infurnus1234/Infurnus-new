@@ -4,7 +4,6 @@ import type { AuthControllerDependencies } from '../controllers/auth.controller.
 import { createAuthHandlers } from '../controllers/auth.controller.js';
 
 import { requireAuth } from '../middleware/auth.middleware.js';
-
 import { requireCsrf } from '../middleware/csrf.middleware.js';
 
 import {
@@ -31,11 +30,9 @@ export function createAuthRouter(
     signup,
     verifySignup,
     resendSignupOtp,
-
     login,
     verifyLogin,
     resendLoginOtp,
-
     refresh,
     logout,
     logoutAll,
@@ -44,7 +41,6 @@ export function createAuthRouter(
   } = createAuthHandlers(dependencies);
 
   const enableRateLimiting = options.enableRateLimiting ?? true;
-
   const enableCsrfProtection = options.enableCsrfProtection ?? true;
 
   // ==========================================================
@@ -75,6 +71,13 @@ export function createAuthRouter(
 
   // ==========================================================
   // POST /auth/login
+  //
+  // Supports:
+  // - email login
+  // - phone login
+  // - email + phone login
+  //
+  // OTP channel is determined by the login service.
   // ==========================================================
 
   router.post('/login', ...(enableRateLimiting ? [authLoginRateLimiter] : []), login);
@@ -94,6 +97,8 @@ export function createAuthRouter(
 
   // ==========================================================
   // POST /auth/login/resend
+  //
+  // OTP channel is determined from the stored login challenge.
   // ==========================================================
 
   router.post(

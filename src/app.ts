@@ -48,13 +48,21 @@ import type { RentalRepository } from './modules/rentals/repositories/rental.rep
 import { createRentalRouter } from './modules/rentals/routes/rental.routes.js';
 import { RentalService } from './modules/rentals/services/rental.service.js';
 
+import type { FareEstimateService } from './modules/fares/services/fare-estimate.service.js';
+import { FareController } from './modules/fares/controllers/fare.controller.js';
+import { createFareRouter } from './modules/fares/routes/fare.routes.js';
+
+import type { CouponRedemptionService } from './modules/coupons/services/coupon-redemption.service.js';
+import { CouponController } from './modules/coupons/controllers/coupon.controller.js';
+import { createCouponRouter } from './modules/coupons/routes/coupon.routes.js';
+
 export interface AppOptions {
   enableAuthRateLimiting?: boolean;
   enableAuthCsrfProtection?: boolean;
 }
 
 // ============================================================
-// Production repository composition
+// Production repository/service composition
 // ============================================================
 
 export function createApp(
@@ -67,6 +75,8 @@ export function createApp(
   driverRepository?: DriverRepository,
   rentalRepository?: RentalRepository,
   authOtpProvider?: OtpProvider,
+  fareEstimateService?: FareEstimateService,
+  couponRedemptionService?: CouponRedemptionService,
 ): express.Express;
 
 // ============================================================
@@ -93,6 +103,8 @@ export function createApp(
   driverRepository?: DriverRepository,
   rentalRepository?: RentalRepository,
   authOtpProvider?: OtpProvider,
+  fareEstimateService?: FareEstimateService,
+  couponRedemptionService?: CouponRedemptionService,
 ) {
   const app = express();
 
@@ -229,6 +241,26 @@ export function createApp(
     const rentalController = new RentalController(new RentalService(rentalRepository));
 
     app.use('/rentals', createRentalRouter(rentalController));
+  }
+
+  // ==========================================================
+  // Fare estimation
+  // ==========================================================
+
+  if (fareEstimateService) {
+    const fareController = new FareController(fareEstimateService);
+
+    app.use('/fares', createFareRouter(fareController));
+  }
+
+  // ==========================================================
+  // Coupons
+  // ==========================================================
+
+  if (couponRedemptionService) {
+    const couponController = new CouponController(couponRedemptionService);
+
+    app.use('/coupons', createCouponRouter(couponController));
   }
 
   // ==========================================================
