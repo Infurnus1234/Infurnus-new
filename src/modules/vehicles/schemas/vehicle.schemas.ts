@@ -19,6 +19,10 @@ export const createVehicleSchema = z
     model: vehicleText.max(50),
     color: z.string().trim().min(1).max(30).optional(),
     plateNumber,
+    sector: z.enum(['passenger', 'logistics', 'service', 'premium']).default('passenger').optional(),
+    category: z.string().trim().min(1).max(50).default('sedan').optional(),
+    fuelRatePerKm: z.number().nonnegative().default(0).optional(),
+    loadCapacityKg: z.number().nonnegative().default(0).optional(),
   })
   .strict();
 
@@ -28,6 +32,10 @@ export const updateVehicleSchema = z
     model: vehicleText.max(50).optional(),
     color: z.string().trim().min(1).max(30).nullable().optional(),
     plateNumber: plateNumber.optional(),
+    sector: z.enum(['passenger', 'logistics', 'service', 'premium']).optional(),
+    category: z.string().trim().min(1).max(50).optional(),
+    fuelRatePerKm: z.number().nonnegative().optional(),
+    loadCapacityKg: z.number().nonnegative().optional(),
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0, {

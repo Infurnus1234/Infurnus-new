@@ -6,6 +6,7 @@ import { authenticateSocket } from './socket.auth.js';
 import { joinAuthorizedRideRoom, leaveRideRoom, rideRoom } from './socket.rooms.js';
 import { driverLocationSchema } from '../../modules/rides/schemas/driver.schemas.js';
 import { rideStatusSchema } from '../../modules/rides/schemas/ride.schemas.js';
+import { rideEvents } from '../../modules/rides/events/ride.events.js';
 import type { DriverService } from '../../modules/rides/services/driver.service.js';
 import type { RideRepository } from '../../modules/rides/repositories/ride.repository.js';
 import type { RideService } from '../../modules/rides/services/ride.service.js';
@@ -44,8 +45,34 @@ export function createSocketServer(
   });
 
   if (rideDependencies) {
+    const onRideCreated = (ride: unknown) => {
+      io.to('drivers:available').emit('ride:incoming', { ride });
+    };
+
+    const onRideAccepted = (ride: { id: string }) => {
+      io.to('drivers:available').emit('ride:taken', { rideId: ride.id });
+    };
+
+    const onRideCancelled = (rideId: string) => {
+      io.to('drivers:available').emit('ride:cancelled', { rideId });
+    };
+
+    rideEvents.on('ride:created', onRideCreated);
+    rideEvents.on('ride:accepted', onRideAccepted);
+    rideEvents.on('ride:cancelled', onRideCancelled);
+
+    io.on('close', () => {
+      rideEvents.off('ride:created', onRideCreated);
+      rideEvents.off('ride:accepted', onRideAccepted);
+      rideEvents.off('ride:cancelled', onRideCancelled);
+    });
+
     io.on('connection', (socket) => {
       const userId = socket.data.auth?.userId;
+
+      if (socket.data.auth?.role === 'driver') {
+        void socket.join('drivers:available');
+      }
 
       socket.on('ride:join', async (rideId: unknown, ack?: SocketAck) => {
         try {

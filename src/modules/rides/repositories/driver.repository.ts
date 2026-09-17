@@ -1,8 +1,16 @@
 import type { Pool, PoolClient } from 'pg';
-import type { DriverAvailabilityStatus, DriverCandidate, DriverLocation } from '../types/driver.js';
+import type {
+  DriverAvailabilityStatus,
+  DriverCandidate,
+  DriverLocation,
+  DriverProfile,
+} from '../types/driver.js';
+import type { UpsertDriverProfileInput } from '../schemas/driver.schemas.js';
 
 export interface DriverRepository {
   findProfileIdByUserId(userId: string): Promise<string | null>;
+  findProfileByUserId(userId: string): Promise<DriverProfile | null>;
+  upsertProfile(userId: string, input: UpsertDriverProfileInput): Promise<DriverProfile>;
   getAvailability(profileId: string): Promise<DriverAvailabilityStatus | null>;
   updateAvailability(profileId: string, status: DriverAvailabilityStatus): Promise<boolean>;
   setBusy(profileId: string, client?: PoolClient): Promise<boolean>;
@@ -27,6 +35,49 @@ export class PostgresDriverRepository implements DriverRepository {
       [userId],
     );
     return result.rows[0]?.id ?? null;
+  }
+
+  async findProfileByUserId(userId: string): Promise<DriverProfile | null> {
+    const result = await this.pool.query<DriverProfile>(
+      `SELECT id, user_id AS "userId", license_number AS "licenseNumber",
+              license_expiry::text AS "licenseExpiry", license_document_key AS "licenseDocumentKey",
+              vehicle_rc_document_key AS "vehicleRcDocumentKey", profile_photo_key AS "profilePhotoKey",
+              verification_status AS "verificationStatus", rejection_reason AS "rejectionReason",
+              availability_status AS "availabilityStatus", created_at AS "createdAt", updated_at AS "updatedAt"
+       FROM driver_profiles WHERE user_id = $1`,
+      [userId],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async upsertProfile(userId: string, input: UpsertDriverProfileInput): Promise<DriverProfile> {
+    const result = await this.pool.query<DriverProfile>(
+      `INSERT INTO driver_profiles (user_id, license_number, license_expiry, profile_photo_key, license_document_key, vehicle_rc_document_key)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (user_id) DO UPDATE
+       SET license_number = EXCLUDED.license_number,
+           license_expiry = EXCLUDED.license_expiry,
+           profile_photo_key = COALESCE(EXCLUDED.profile_photo_key, driver_profiles.profile_photo_key),
+           license_document_key = COALESCE(EXCLUDED.license_document_key, driver_profiles.license_document_key),
+           vehicle_rc_document_key = COALESCE(EXCLUDED.vehicle_rc_document_key, driver_profiles.vehicle_rc_document_key),
+           updated_at = NOW()
+       RETURNING id, user_id AS "userId", license_number AS "licenseNumber",
+                 license_expiry::text AS "licenseExpiry", license_document_key AS "licenseDocumentKey",
+                 vehicle_rc_document_key AS "vehicleRcDocumentKey", profile_photo_key AS "profilePhotoKey",
+                 verification_status AS "verificationStatus", rejection_reason AS "rejectionReason",
+                 availability_status AS "availabilityStatus", created_at AS "createdAt", updated_at AS "updatedAt"`,
+      [
+        userId,
+        input.licenseNumber,
+        input.licenseExpiry,
+        input.profilePhotoKey ?? null,
+        input.licenseDocumentKey ?? null,
+        input.vehicleRcDocumentKey ?? null,
+      ],
+    );
+    const profile = result.rows[0];
+    if (!profile) throw new Error('Driver profile upsert returned no row');
+    return profile;
   }
 
   async getAvailability(profileId: string): Promise<DriverAvailabilityStatus | null> {

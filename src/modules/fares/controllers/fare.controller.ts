@@ -9,7 +9,34 @@ export class FareController {
     try {
       const input = fareEstimateSchema.parse(req.body);
 
-      const fare = await this.fareEstimateService.estimate(input.pickup, input.destination);
+      const sector = input.sector;
+      const vehicleCategory = input.vehicleCategory ?? input.serviceDetails?.serviceType;
+      const waitingMinutes = input.waitingMinutes;
+      const weightKg = input.weightKg ?? input.goods?.weightKg;
+      const hasLoadingAssistance = input.hasLoadingAssistance ?? input.goods?.hasLoadingAssistance;
+      const rentalHours = input.rentalHours ?? input.rentalDetails?.hours ?? input.serviceDetails?.workHours;
+      const fuelRatePerKm = input.fuelRatePerKm ?? input.rentalDetails?.fuelRatePerKm;
+
+      const hasOptions =
+        sector !== undefined ||
+        vehicleCategory !== undefined ||
+        waitingMinutes !== undefined ||
+        weightKg !== undefined ||
+        hasLoadingAssistance !== undefined ||
+        rentalHours !== undefined ||
+        fuelRatePerKm !== undefined;
+
+      const fare = hasOptions
+        ? await this.fareEstimateService.estimate(input.pickup, input.destination, {
+            sector,
+            vehicleCategory,
+            waitingMinutes,
+            weightKg,
+            hasLoadingAssistance,
+            rentalHours,
+            fuelRatePerKm,
+          })
+        : await this.fareEstimateService.estimate(input.pickup, input.destination);
 
       res.json({
         success: true,

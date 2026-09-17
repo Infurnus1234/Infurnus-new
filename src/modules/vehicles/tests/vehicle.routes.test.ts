@@ -1,6 +1,7 @@
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 import { createApp } from '../../../app.js';
+import { signAccessToken } from '../../auth/utils/jwt.js';
 import type { VehicleRepository } from '../repositories/vehicle.repository.js';
 import type { CreateVehicleData, UpdateVehicleData, Vehicle } from '../types/vehicle.js';
 
@@ -12,6 +13,10 @@ const vehicle: Vehicle = {
   model: 'Innova',
   color: 'White',
   plateNumber: 'KA01AB1234',
+  sector: 'passenger',
+  category: 'suv',
+  fuelRatePerKm: 0,
+  loadCapacityKg: 0,
   isActive: true,
   retiredAt: null,
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -42,6 +47,10 @@ class InMemoryVehicleRepository implements VehicleRepository {
       model: data.model,
       color: data.color ?? null,
       plateNumber: data.plateNumber,
+      sector: data.sector ?? 'passenger',
+      category: data.category ?? 'sedan',
+      fuelRatePerKm: data.fuelRatePerKm ?? 0,
+      loadCapacityKg: data.loadCapacityKg ?? 0,
     };
     this.vehicles.set(created.id, created);
     return created;
@@ -82,58 +91,109 @@ class InMemoryVehicleRepository implements VehicleRepository {
 }
 
 describe('Vehicles API', () => {
+  const getAuthToken = () =>
+    signAccessToken({
+      sub: '550e8400-e29b-41d4-a716-446655440000',
+      role: 'driver',
+      type: 'access',
+    });
+
+  it('rejects unauthenticated requests with 401', async () => {
+    const app = createApp(undefined, undefined, new InMemoryVehicleRepository());
+    const response = await request(app).get('/vehicles');
+    expect(response.status).toBe(401);
+  });
+
   it('creates, retrieves, lists, updates, and deactivates vehicles', async () => {
     const app = createApp(undefined, undefined, new InMemoryVehicleRepository());
-    const created = await request(app).post('/vehicles').send({
-      driverProfileId,
-      make: 'Honda',
-      model: 'City',
-      plateNumber: 'KA02CD5678',
-    });
+    const token = await getAuthToken();
+
+    const created = await request(app)
+      .post('/vehicles')
+      .set('authorization', `Bearer ${token}`)
+      .send({
+        driverProfileId,
+        make: 'Honda',
+        model: 'City',
+        plateNumber: 'KA02CD5678',
+      });
     expect(created.status).toBe(201);
     expect(created.body.data.passwordHash).toBeUndefined();
     const id = created.body.data.id;
-    expect((await request(app).get(`/vehicles/${id}`)).status).toBe(200);
     expect(
-      (await request(app).get(`/vehicles?driverProfileId=${driverProfileId}`)).body.data,
+      (await request(app).get(`/vehicles/${id}`).set('authorization', `Bearer ${token}`)).status,
+    ).toBe(200);
+    expect(
+      (
+        await request(app)
+          .get(`/vehicles?driverProfileId=${driverProfileId}`)
+          .set('authorization', `Bearer ${token}`)
+      ).body.data,
     ).toHaveLength(2);
-    const updated = await request(app).patch(`/vehicles/${id}`).send({ color: 'Blue' });
+    const updated = await request(app)
+      .patch(`/vehicles/${id}`)
+      .set('authorization', `Bearer ${token}`)
+      .send({ color: 'Blue' });
     expect(updated.status).toBe(200);
-    const deactivated = await request(app).post(`/vehicles/${id}/deactivate`).send({});
+    const deactivated = await request(app)
+      .post(`/vehicles/${id}/deactivate`)
+      .set('authorization', `Bearer ${token}`)
+      .send({});
     expect(deactivated.status).toBe(200);
     expect(deactivated.body.data.isActive).toBe(false);
     expect(
-      (await request(app).get(`/vehicles?driverProfileId=${driverProfileId}`)).body.data,
+      (
+        await request(app)
+          .get(`/vehicles?driverProfileId=${driverProfileId}`)
+          .set('authorization', `Bearer ${token}`)
+      ).body.data,
     ).toHaveLength(1);
   });
 
   it('handles validation, conflicts, and missing driver profiles', async () => {
     const app = createApp(undefined, undefined, new InMemoryVehicleRepository());
-    expect((await request(app).post('/vehicles').send({ driverProfileId: 'bad' })).status).toBe(
-      400,
-    );
+    const token = await getAuthToken();
+
+    expect(
+      (
+        await request(app)
+          .post('/vehicles')
+          .set('authorization', `Bearer ${token}`)
+          .send({ driverProfileId: 'bad' })
+      ).status,
+    ).toBe(400);
+
     const duplicate = await request(app)
       .post('/vehicles')
+      .set('authorization', `Bearer ${token}`)
       .send({ driverProfileId, make: 'Ford', model: 'Ecosport', plateNumber: vehicle.plateNumber });
     expect(duplicate.status).toBe(409);
-    const missing = await request(app).get(
-      '/vehicles?driverProfileId=950e8400-e29b-41d4-a716-446655440000',
-    );
+
+    const missing = await request(app)
+      .get('/vehicles?driverProfileId=950e8400-e29b-41d4-a716-446655440000')
+      .set('authorization', `Bearer ${token}`);
     expect(missing.status).toBe(404);
     expect(missing.body.error.code).toBe('DRIVER_PROFILE_NOT_FOUND');
   });
+
   it('rejects an invalid vehicle ID', async () => {
     const app = createApp(undefined, undefined, new InMemoryVehicleRepository());
+    const token = await getAuthToken();
 
-    const response = await request(app).get('/vehicles/not-a-valid-uuid');
+    const response = await request(app)
+      .get('/vehicles/not-a-valid-uuid')
+      .set('authorization', `Bearer ${token}`);
 
     expect(response.status).toBe(400);
   });
 
   it('returns 404 for a nonexistent vehicle', async () => {
     const app = createApp(undefined, undefined, new InMemoryVehicleRepository());
+    const token = await getAuthToken();
 
-    const response = await request(app).get('/vehicles/950e8400-e29b-41d4-a716-446655440000');
+    const response = await request(app)
+      .get('/vehicles/950e8400-e29b-41d4-a716-446655440000')
+      .set('authorization', `Bearer ${token}`);
 
     expect(response.status).toBe(404);
     expect(response.body.error.code).toBe('VEHICLE_NOT_FOUND');
@@ -141,17 +201,23 @@ describe('Vehicles API', () => {
 
   it('rejects an empty vehicle update', async () => {
     const app = createApp(undefined, undefined, new InMemoryVehicleRepository());
+    const token = await getAuthToken();
 
-    const response = await request(app).patch(`/vehicles/${vehicle.id}`).send({});
+    const response = await request(app)
+      .patch(`/vehicles/${vehicle.id}`)
+      .set('authorization', `Bearer ${token}`)
+      .send({});
 
     expect(response.status).toBe(400);
   });
 
   it('rejects unexpected vehicle fields', async () => {
     const app = createApp(undefined, undefined, new InMemoryVehicleRepository());
+    const token = await getAuthToken();
 
     const response = await request(app)
       .patch(`/vehicles/${vehicle.id}`)
+      .set('authorization', `Bearer ${token}`)
       .send({ make: 'Honda', passwordHash: 'unexpected' });
 
     expect(response.status).toBe(400);

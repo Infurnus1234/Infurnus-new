@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import '../models/fare_estimate_model.dart';
 import '../models/ride_model.dart';
 
 abstract class RideRemoteDataSource {
@@ -6,6 +7,10 @@ abstract class RideRemoteDataSource {
   Future<List<RideModel>> listRides({String? status, int? limit});
   Future<RideModel> getRide(String id);
   Future<RideModel> cancelRide(String id, String reason);
+  Future<FareEstimateModel> estimateFare(Map<String, dynamic> data);
+  Future<void> submitRating(String rideId, int rating, {String? review});
+  Future<Map<String, dynamic>> initiatePayment(Map<String, dynamic> data);
+  Future<List<dynamic>> listPayments();
 }
 
 class RideRemoteDataSourceImpl implements RideRemoteDataSource {
@@ -38,5 +43,32 @@ class RideRemoteDataSourceImpl implements RideRemoteDataSource {
   Future<RideModel> cancelRide(String id, String reason) async {
     final response = await _dio.post('/rides/$id/cancel', data: {'reason': reason});
     return RideModel.fromJson(response.data['data']);
+  }
+
+  @override
+  Future<FareEstimateModel> estimateFare(Map<String, dynamic> data) async {
+    final response = await _dio.post('/fares/estimate', data: data);
+    return FareEstimateModel.fromJson(response.data['data']);
+  }
+
+  @override
+  Future<void> submitRating(String rideId, int rating, {String? review}) async {
+    await _dio.post('/ratings', data: {
+      'rideId': rideId,
+      'rating': rating,
+      if (review != null && review.isNotEmpty) 'review': review,
+    });
+  }
+
+  @override
+  Future<Map<String, dynamic>> initiatePayment(Map<String, dynamic> data) async {
+    final response = await _dio.post('/payments/initiate', data: data);
+    return response.data['data'];
+  }
+
+  @override
+  Future<List<dynamic>> listPayments() async {
+    final response = await _dio.get('/payments/history');
+    return response.data['data'] as List<dynamic>;
   }
 }

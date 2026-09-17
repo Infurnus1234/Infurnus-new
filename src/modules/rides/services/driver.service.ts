@@ -1,18 +1,48 @@
 import { env } from '../../../config/env.js';
 import { AppError } from '../../../common/errors/app-error.js';
-import type { DriverAvailabilityInput, DriverLocationInput } from '../schemas/driver.schemas.js';
+import type {
+  DriverAvailabilityInput,
+  DriverLocationInput,
+  UpsertDriverProfileInput,
+} from '../schemas/driver.schemas.js';
 import type { DriverRepository } from '../repositories/driver.repository.js';
+import type { DriverProfile } from '../types/driver.js';
+import type { RideRepository } from '../repositories/ride.repository.js';
 
 export class DriverService {
   constructor(
     private readonly repository: DriverRepository,
     private readonly clock: () => Date = () => new Date(),
+    private readonly rideRepository?: RideRepository,
   ) {}
 
   async profileForUser(userId: string): Promise<string> {
     const profileId = await this.repository.findProfileIdByUserId(userId);
     if (!profileId) throw new AppError('DRIVER_PROFILE_NOT_FOUND', 'Driver profile not found', 404);
     return profileId;
+  }
+
+  async getProfile(userId: string): Promise<DriverProfile> {
+    const profile = await this.repository.findProfileByUserId(userId);
+    if (!profile) throw new AppError('DRIVER_PROFILE_NOT_FOUND', 'Driver profile not found', 404);
+    return profile;
+  }
+
+  async upsertProfile(userId: string, input: UpsertDriverProfileInput): Promise<DriverProfile> {
+    return this.repository.upsertProfile(userId, input);
+  }
+
+  async getDriverHistory(userId: string, limit = 20) {
+    const profileId = await this.profileForUser(userId);
+    const rides = this.rideRepository ? await this.rideRepository.listForDriver(profileId, limit) : [];
+    const completedRides = rides.filter((r) => r.status === 'completed');
+    const totalEarnings = completedRides.length * 150; // base standard estimate
+
+    return {
+      totalTrips: completedRides.length,
+      totalEarnings,
+      rides,
+    };
   }
 
   async updateAvailability(userId: string, input: DriverAvailabilityInput): Promise<void> {

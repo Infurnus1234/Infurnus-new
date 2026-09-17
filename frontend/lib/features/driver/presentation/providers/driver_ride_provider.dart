@@ -10,34 +10,42 @@ class DriverRideState {
   final bool isLoading;
   final bool isAccepting;
   final bool isUpdatingStatus;
+  final bool isLoadingAvailable;
   final String? errorMessage;
   final RideModel? currentRide;
   final RouteModel? currentRoute;
+  final List<RideModel> availableRides;
 
   DriverRideState({
     this.isLoading = false,
     this.isAccepting = false,
     this.isUpdatingStatus = false,
+    this.isLoadingAvailable = false,
     this.errorMessage,
     this.currentRide,
     this.currentRoute,
+    this.availableRides = const [],
   });
 
   DriverRideState copyWith({
     bool? isLoading,
     bool? isAccepting,
     bool? isUpdatingStatus,
+    bool? isLoadingAvailable,
     String? errorMessage,
     RideModel? currentRide,
     RouteModel? currentRoute,
+    List<RideModel>? availableRides,
   }) {
     return DriverRideState(
       isLoading: isLoading ?? this.isLoading,
       isAccepting: isAccepting ?? this.isAccepting,
       isUpdatingStatus: isUpdatingStatus ?? this.isUpdatingStatus,
+      isLoadingAvailable: isLoadingAvailable ?? this.isLoadingAvailable,
       errorMessage: errorMessage,
       currentRide: currentRide ?? this.currentRide,
       currentRoute: currentRoute ?? this.currentRoute,
+      availableRides: availableRides ?? this.availableRides,
     );
   }
 }
@@ -49,6 +57,7 @@ class DriverRideNotifier extends StateNotifier<DriverRideState> {
 
   DriverRideNotifier(this.ref) : super(DriverRideState()) {
     _subscribeToSocketEvents();
+    fetchAvailableRides();
   }
 
   void _subscribeToSocketEvents() {
@@ -59,13 +68,35 @@ class DriverRideNotifier extends StateNotifier<DriverRideState> {
   }
 
   void _handleSocketEvent(SocketServerEvent event) {
-    if (state.currentRide == null) return;
-
     switch (event.name) {
+      case 'ride:incoming':
+        final rideData = event.data is Map ? event.data['ride'] ?? event.data : null;
+        if (rideData != null && rideData is Map<String, dynamic>) {
+          try {
+            final newRide = RideModel.fromJson(rideData);
+            final currentList = List<RideModel>.from(state.availableRides);
+            currentList.removeWhere((r) => r.id == newRide.id);
+            currentList.insert(0, newRide);
+            state = state.copyWith(availableRides: currentList);
+          } catch (_) {}
+        }
+        break;
+
+      case 'ride:taken':
+      case 'ride:cancelled':
+        final rideId = event.data is Map ? (event.data['rideId'] ?? event.data['id']) : null;
+        if (rideId != null) {
+          final currentList = List<RideModel>.from(state.availableRides);
+          currentList.removeWhere((r) => r.id == rideId.toString());
+          state = state.copyWith(availableRides: currentList);
+        }
+        break;
+
       case 'ride:lifecycle_updated':
-        final rideData = event.data['ride'];
-        if (rideData != null) {
-          final updated = RideModel.fromJson(rideData as Map<String, dynamic>);
+        if (state.currentRide == null) return;
+        final rideData = event.data is Map ? event.data['ride'] : null;
+        if (rideData != null && rideData is Map<String, dynamic>) {
+          final updated = RideModel.fromJson(rideData);
           if (updated.id == state.currentRide?.id) {
             state = state.copyWith(currentRide: updated);
             _handleRideStateChange(updated.status);
@@ -74,17 +105,34 @@ class DriverRideNotifier extends StateNotifier<DriverRideState> {
         break;
 
       case 'ride:route_updated':
-        final rideId = event.data['rideId'];
+        if (state.currentRide == null) return;
+        final rideId = event.data is Map ? event.data['rideId'] : null;
         if (rideId == state.currentRide?.id) {
           final routeData = event.data['route'];
-          if (routeData != null) {
+          if (routeData != null && routeData is Map<String, dynamic>) {
             state = state.copyWith(
-              currentRoute: RouteModel.fromJson(routeData as Map<String, dynamic>),
+              currentRoute: RouteModel.fromJson(routeData),
             );
           }
         }
         break;
     }
+  }
+
+  Future<void> fetchAvailableRides() async {
+    state = state.copyWith(isLoadingAvailable: true, errorMessage: null);
+    try {
+      final rides = await ref.read(getAvailableRidesUseCaseProvider).execute();
+      state = state.copyWith(availableRides: rides, isLoadingAvailable: false);
+    } catch (e) {
+      state = state.copyWith(isLoadingAvailable: false, errorMessage: e.toString());
+    }
+  }
+
+  void dismissRide(String rideId) {
+    final currentList = List<RideModel>.from(state.availableRides);
+    currentList.removeWhere((r) => r.id == rideId);
+    state = state.copyWith(availableRides: currentList);
   }
 
   Future<void> acceptRide(String rideId) async {
@@ -93,9 +141,13 @@ class DriverRideNotifier extends StateNotifier<DriverRideState> {
     try {
       final ride = await ref.read(acceptRideUseCaseProvider).execute(rideId);
       
+      final currentList = List<RideModel>.from(state.availableRides);
+      currentList.removeWhere((r) => r.id == rideId);
+
       state = state.copyWith(
         isAccepting: false,
         currentRide: ride,
+        availableRides: currentList,
       );
 
       // Join socket room for this ride

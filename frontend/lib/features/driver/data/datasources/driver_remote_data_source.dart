@@ -2,19 +2,27 @@ import 'package:dio/dio.dart';
 import '../models/partner_model.dart';
 import '../models/partner_document_model.dart';
 import '../models/vehicle_model.dart';
+import '../models/driver_profile_model.dart';
+import '../models/driver_history_model.dart';
 import '../../../auth/data/models/user_preferences_model.dart';
 import '../../../customer/data/models/ride_model.dart';
 
 abstract class DriverRemoteDataSource {
   Future<PartnerModel> createPartner(Map<String, dynamic> data);
   Future<PartnerModel> getPartner(String id);
+  Future<PartnerModel?> getMyPartner();
   Future<PartnerModel> updatePartner(String id, Map<String, dynamic> data);
   Future<List<PartnerDocumentModel>> listDocuments(String partnerId);
   Future<PartnerDocumentModel> addDocument(String partnerId, Map<String, dynamic> data);
   Future<PartnerDocumentModel> updateDocument(String partnerId, String documentId, Map<String, dynamic> data);
   
+  Future<DriverProfileModel?> getDriverProfile();
+  Future<DriverProfileModel> upsertDriverProfile(Map<String, dynamic> data);
+  Future<DriverHistoryModel> getDriverHistory({int limit = 20});
+
   Future<void> updateAvailability(String status);
   Future<void> updateLocation(Map<String, dynamic> data);
+  Future<List<RideModel>> getAvailableRides();
   Future<RideModel> acceptRide(String rideId);
   Future<RideModel> completeRide(String rideId);
   Future<RideModel> transitionRide(String rideId, String status);
@@ -45,6 +53,46 @@ class DriverRemoteDataSourceImpl implements DriverRemoteDataSource {
   Future<PartnerModel> getPartner(String id) async {
     final response = await _dio.get('/partners/$id');
     return PartnerModel.fromJson(response.data['data']);
+  }
+
+  @override
+  Future<PartnerModel?> getMyPartner() async {
+    try {
+      final response = await _dio.get('/partners/me');
+      if (response.data['data'] != null) {
+        return PartnerModel.fromJson(response.data['data']);
+      }
+      return null;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  @override
+  Future<DriverProfileModel?> getDriverProfile() async {
+    try {
+      final response = await _dio.get('/rides/driver/profile');
+      if (response.data['data'] != null) {
+        return DriverProfileModel.fromJson(response.data['data']);
+      }
+      return null;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  @override
+  Future<DriverProfileModel> upsertDriverProfile(Map<String, dynamic> data) async {
+    final response = await _dio.post('/rides/driver/profile', data: data);
+    return DriverProfileModel.fromJson(response.data['data']);
+  }
+
+  @override
+  Future<DriverHistoryModel> getDriverHistory({int limit = 20}) async {
+    final response = await _dio.get('/rides/driver/history', queryParameters: {'limit': limit});
+    return DriverHistoryModel.fromJson(response.data['data']);
   }
 
   @override
@@ -80,6 +128,13 @@ class DriverRemoteDataSourceImpl implements DriverRemoteDataSource {
   @override
   Future<void> updateLocation(Map<String, dynamic> data) async {
     await _dio.post('/rides/driver/location', data: data);
+  }
+
+  @override
+  Future<List<RideModel>> getAvailableRides() async {
+    final response = await _dio.get('/rides/driver/available');
+    final List list = response.data['data'] ?? [];
+    return list.map((e) => RideModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   @override

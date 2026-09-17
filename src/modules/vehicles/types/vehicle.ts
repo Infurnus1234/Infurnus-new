@@ -5,6 +5,10 @@ export interface Vehicle {
   model: string;
   color: string | null;
   plateNumber: string;
+  sector: string;
+  category: string;
+  fuelRatePerKm: number;
+  loadCapacityKg: number;
   isActive: boolean;
   retiredAt: Date | null;
   createdAt: Date;
@@ -17,6 +21,10 @@ export interface CreateVehicleData {
   model: string;
   color?: string | undefined;
   plateNumber: string;
+  sector?: string | undefined;
+  category?: string | undefined;
+  fuelRatePerKm?: number | undefined;
+  loadCapacityKg?: number | undefined;
 }
 
 export interface UpdateVehicleData {
@@ -24,4 +32,8 @@ export interface UpdateVehicleData {
   model?: string | undefined;
   color?: string | null | undefined;
   plateNumber?: string | undefined;
+  sector?: string | undefined;
+  category?: string | undefined;
+  fuelRatePerKm?: number | undefined;
+  loadCapacityKg?: number | undefined;
 }

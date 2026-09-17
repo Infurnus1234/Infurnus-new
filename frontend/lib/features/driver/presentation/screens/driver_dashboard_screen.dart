@@ -7,6 +7,7 @@ import '../../../../shared/widgets/infurnus_error_view.dart';
 import '../../../../shared/widgets/infurnus_loader.dart';
 import '../../../auth/presentation/providers/user_provider.dart';
 import '../providers/driver_dashboard_provider.dart';
+import '../providers/driver_ride_provider.dart';
 
 class DriverDashboardScreen extends ConsumerStatefulWidget {
   const DriverDashboardScreen({super.key});
@@ -28,6 +29,7 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
   Widget build(BuildContext context) {
     final user = ref.watch(userProvider);
     final dashboardState = ref.watch(driverDashboardProvider);
+    final driverRideState = ref.watch(driverRideProvider);
     final partner = dashboardState.partner;
     final vehicle = dashboardState.vehicle;
 
@@ -47,23 +49,45 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
                     const SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryGreen),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.primaryGreen,
+                      ),
                     )
-                  else
+                  else ...[
+                    Text(
+                      isOnline ? 'ONLINE' : 'OFFLINE',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: isOnline ? AppColors.primaryGreen : Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     Switch(
                       value: isOnline,
                       onChanged: (val) {
-                        final newStatus = val ? 'available' : 'offline';
+                        final newStatus = val ? 'available' : 'unavailable';
                         ref.read(driverDashboardProvider.notifier).updateAvailability(newStatus);
                       },
                       activeTrackColor: AppColors.primaryGreen,
                     ),
+                  ],
                 ],
               ),
             ),
         ],
       ),
-      body: _buildBody(context, user, dashboardState, partner, vehicle, isApproved, isOnline),
+      body: _buildBody(
+        context,
+        user,
+        dashboardState,
+        driverRideState,
+        partner,
+        vehicle,
+        isApproved,
+        isOnline,
+      ),
     );
   }
 
@@ -71,6 +95,7 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
     BuildContext context,
     dynamic user,
     DriverDashboardState state,
+    DriverRideState rideState,
     dynamic partner,
     dynamic vehicle,
     bool isApproved,
@@ -87,87 +112,287 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
       );
     }
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+    return RefreshIndicator(
+      onRefresh: () => ref.read(driverDashboardProvider.notifier).loadDashboard(),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Welcome Header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Welcome, ${user?.firstName ?? "Driver"}',
+                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      partner != null ? partner.businessName : 'INFURNUS Mobility Driver',
+                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+                if (state.isBroadcastingLocation)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryGreen.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppColors.primaryGreen.withOpacity(0.3)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.gps_fixed, size: 13, color: AppColors.primaryGreen),
+                        SizedBox(width: 4),
+                        Text(
+                          'GPS Live',
+                          style: TextStyle(
+                            color: AppColors.primaryGreen,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            if (state.errorMessage != null) _buildErrorBanner(state.errorMessage!),
+
+            // ACTIVE BOOKING / RIDE BANNER (If assigned or in progress)
+            if (rideState.currentRide != null) ...[
+              _buildActiveBookingCard(context, rideState.currentRide!),
+              const SizedBox(height: 16),
+            ],
+
+            // 1. Partner Status / Onboarding CTA
+            if (partner == null)
+              _buildNoPartnerCard(context)
+            else
+              _buildPartnerStatusCard(context, partner),
+
+            const SizedBox(height: 16),
+
+            // 2. Real-Time Earnings & Trips Summary (If approved)
+            if (partner != null && isApproved) ...[
+              _buildEarningsSummaryCard(context, state),
+              const SizedBox(height: 16),
+            ],
+
+            // 3. Vehicle Card
+            if (partner != null && isApproved) ...[
+              _buildVehicleCard(context, vehicle),
+              const SizedBox(height: 16),
+            ],
+
+            // 4. Quick Action Cards
+            const Text(
+              'Driver Operations',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+
+            _buildActionCard(
+              Icons.local_taxi,
+              'Ride Panel & Live Requests',
+              rideState.availableRides.isNotEmpty
+                  ? '${rideState.availableRides.length} incoming requests available!'
+                  : 'Accept rides and manage trip lifecycle',
+              () => context.push('/driver-ride-request'),
+              badge: rideState.availableRides.isNotEmpty
+                  ? '${rideState.availableRides.length}'
+                  : null,
+            ),
+            const SizedBox(height: 12),
+            _buildActionCard(
+              Icons.account_balance_wallet_outlined,
+              'Earnings & Trip History',
+              'View completed trips and payout summaries',
+              () => context.push('/driver-financials'),
+            ),
+            const SizedBox(height: 12),
+            _buildActionCard(
+              Icons.person_outline,
+              'Driver & Partner Profile',
+              'Update license, personal details, and business bio',
+              () => context.push('/driver-onboarding'),
+            ),
+            const SizedBox(height: 12),
+            _buildActionCard(
+              Icons.folder_open,
+              'KYC Verification Documents',
+              'Upload and review verification documents',
+              () => context.push('/driver-documents'),
+            ),
+            const SizedBox(height: 12),
+            _buildActionCard(
+              Icons.directions_car_outlined,
+              'Vehicle Fleet',
+              'Manage registered vehicles and sectors',
+              () => context.push('/driver-vehicles'),
+            ),
+            const SizedBox(height: 12),
+            _buildActionCard(
+              Icons.chat_bubble_outline,
+              'Driver AI Assistant',
+              'Instant driver support and policy guidelines',
+              () => context.push('/ai-assistant/driver'),
+            ),
+
+            const SizedBox(height: 24),
+
+            // 5. Online / Offline Status Indication
+            if (partner != null && isApproved)
+              if (isOnline) _buildWaitingForRides() else _buildOfflineMessage(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActiveBookingCard(BuildContext context, dynamic ride) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.primaryDark,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryGreen.withOpacity(0.2),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.directions_car, color: AppColors.primaryGreen, size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    'ACTIVE TRIP IN PROGRESS',
+                    style: TextStyle(
+                      color: AppColors.primaryGreen,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.white10,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  ride.status.name.toString().toUpperCase(),
+                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           Text(
-            'Welcome, ${user?.firstName ?? "Driver"}',
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            'Pickup: ${ride.pickupAddress ?? "${ride.pickup.latitude}, ${ride.pickup.longitude}"}',
+            style: const TextStyle(color: Colors.white70, fontSize: 13),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Destination: ${ride.destinationAddress ?? "${ride.destination.latitude}, ${ride.destination.longitude}"}',
+            style: const TextStyle(color: Colors.white70, fontSize: 13),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => context.push('/driver-ride-request'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryGreen,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('Open Ride Control Panel', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEarningsSummaryCard(BuildContext context, DriverDashboardState state) {
+    final history = state.history;
+    final totalEarnings = history?.totalEarnings ?? 0.0;
+    final totalTrips = history?.totalTrips ?? 0;
+
+    return InfurnusCard(
+      onTap: () => context.push('/driver-financials'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Earnings Overview', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey[500]),
+            ],
           ),
           const SizedBox(height: 16),
-
-          if (state.errorMessage != null) _buildErrorBanner(state.errorMessage!),
-
-          // 1. Partner Status / Onboarding CTA
-          if (partner == null)
-            _buildNoPartnerCard(context)
-          else
-            _buildPartnerStatusCard(context, partner),
-
-          const SizedBox(height: 16),
-
-          // 2. Vehicle Card
-          if (partner != null && isApproved) _buildVehicleCard(context, vehicle),
-
-          const SizedBox(height: 16),
-
-          // 3. Quick Action Cards
-          _buildActionCard(
-            Icons.person_outline,
-            'Partner Profile',
-            'View and edit business details',
-            () => context.push('/driver-profile'),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Total Completed', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                    const SizedBox(height: 4),
+                    Text(
+                      '₹${totalEarnings.toStringAsFixed(0)}',
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primaryGreen,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(width: 1, height: 40, color: Colors.grey[200]),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Total Trips', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$totalTrips',
+                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
-          _buildActionCard(
-            Icons.folder_open,
-            'KYC Documents Metadata',
-            'Manage partner verification documents',
-            () => context.push('/driver-documents'),
-          ),
-          const SizedBox(height: 12),
-          _buildActionCard(
-            Icons.directions_car_outlined,
-            'Vehicle Fleet',
-            'Manage registered vehicles',
-            () => context.push('/driver-vehicles'),
-          ),
-          const SizedBox(height: 12),
-          _buildActionCard(
-            Icons.local_taxi,
-            'Ride Panel & Accept Requests',
-            'Accept ride requests and manage trip status',
-            () => context.push('/driver-ride-request'),
-          ),
-          const SizedBox(height: 12),
-          _buildActionCard(
-            Icons.account_balance_wallet_outlined,
-            'Earnings & History',
-            'View financial status',
-            () => context.push('/driver-financials'),
-          ),
-          const SizedBox(height: 12),
-          _buildActionCard(
-            Icons.notifications_none_outlined,
-            'Notifications & Settings',
-            'Manage communication preferences & activity history',
-            () => context.push('/driver-notifications'),
-          ),
-          const SizedBox(height: 12),
-          _buildActionCard(
-            Icons.chat_bubble_outline,
-            'Driver AI Assistant',
-            'Get support and answer questions',
-            () => context.push('/ai-assistant/driver'),
-          ),
-
-          const SizedBox(height: 24),
-
-          // 4. Online / Offline State Display
-          if (partner != null && isApproved)
-            if (isOnline) _buildWaitingForRides() else _buildOfflineMessage(),
         ],
       ),
     );
@@ -220,7 +445,7 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
-            child: const Text('Become a Partner'),
+            child: const Text('Complete Driver Onboarding'),
           ),
         ],
       ),
@@ -301,10 +526,8 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
               ),
             ),
             OutlinedButton(
-              onPressed: () {
-                // Future vehicle setup
-              },
-              child: const Text('Setup'),
+              onPressed: () => context.push('/driver-onboarding'),
+              child: const Text('Setup Vehicle'),
             ),
           ],
         ),
@@ -345,21 +568,42 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
     );
   }
 
-  Widget _buildActionCard(IconData icon, String title, String subtitle, VoidCallback onTap) {
+  Widget _buildActionCard(
+    IconData icon,
+    String title,
+    String subtitle,
+    VoidCallback onTap, {
+    String? badge,
+  }) {
     return InfurnusCard(
       onTap: onTap,
       child: Row(
         children: [
           Icon(icon, color: AppColors.primaryGreen),
           const SizedBox(width: 16),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-              Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+              ],
+            ),
           ),
-          const Spacer(),
+          if (badge != null) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppColors.primaryGreen,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                badge,
+                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
           const Icon(Icons.chevron_right, color: Colors.grey),
         ],
       ),

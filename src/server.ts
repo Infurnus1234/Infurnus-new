@@ -33,6 +33,9 @@ import { PostgresCouponRepository } from './modules/coupons/repositories/coupon.
 import { CouponCalculatorService } from './modules/coupons/services/coupon-calculator.service.js';
 import { CouponRedemptionService } from './modules/coupons/services/coupon-redemption.service.js';
 
+import { PostgresRatingRepository } from './modules/ratings/repositories/rating.repository.js';
+import { PostgresPaymentRepository } from './modules/payments/repositories/payment.repository.js';
+
 async function startServer() {
   // ==========================================================
   // Database
@@ -67,6 +70,10 @@ async function startServer() {
   const rentalRepository = new PostgresRentalRepository(pool);
 
   const couponRepository = new PostgresCouponRepository(pool);
+
+  const ratingRepository = new PostgresRatingRepository(pool);
+
+  const paymentRepository = new PostgresPaymentRepository(pool);
 
   // ==========================================================
   // Map provider
@@ -107,6 +114,8 @@ async function startServer() {
   // authOtpProvider is passed explicitly as the 9th argument.
   // fareEstimateService is passed as the 10th argument.
   // couponRedemptionService is passed as the 11th argument.
+  // ratingRepository is passed as the 12th argument.
+  // paymentRepository is passed as the 13th argument.
   // ==========================================================
 
   const app = createApp(
@@ -121,6 +130,8 @@ async function startServer() {
     otpProvider,
     fareEstimateService,
     couponRedemptionService,
+    ratingRepository,
+    paymentRepository,
   );
 
   // ==========================================================
@@ -135,7 +146,7 @@ async function startServer() {
 
   const rideService = new RideService(rideRepository, driverRepository);
 
-  const driverService = new DriverService(driverRepository);
+  const driverService = new DriverService(driverRepository, undefined, rideRepository);
 
   const routeRecalculationService = new RouteRecalculationService(googleMapsProvider);
 
