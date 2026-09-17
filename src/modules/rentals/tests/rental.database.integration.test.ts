@@ -1,4 +1,4 @@
-﻿import { randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { pool } from '../../../infrastructure/database/postgres.js';
 import { PostgresRentalRepository } from '../repositories/rental.repository.js';
