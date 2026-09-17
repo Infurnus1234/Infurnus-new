@@ -9,6 +9,7 @@ class InfurnusTextField extends StatelessWidget {
   final bool isPassword;
   final String? Function(String?)? validator;
   final IconData? prefixIcon;
+  final void Function(String)? onChanged;
 
   const InfurnusTextField({
     super.key,
@@ -19,6 +20,7 @@ class InfurnusTextField extends StatelessWidget {
     this.isPassword = false,
     this.validator,
     this.prefixIcon,
+    this.onChanged,
   });
 
   @override
@@ -40,6 +42,7 @@ class InfurnusTextField extends StatelessWidget {
           keyboardType: keyboardType,
           obscureText: isPassword,
           validator: validator,
+          onChanged: onChanged,
           decoration: InputDecoration(
             hintText: hintText,
             prefixIcon: prefixIcon != null ? Icon(prefixIcon, color: AppColors.textSecondary) : null,

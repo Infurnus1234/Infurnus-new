@@ -56,6 +56,14 @@ import type { CouponRedemptionService } from './modules/coupons/services/coupon-
 import { CouponController } from './modules/coupons/controllers/coupon.controller.js';
 import { createCouponRouter } from './modules/coupons/routes/coupon.routes.js';
 
+import type { RatingRepository } from './modules/ratings/repositories/rating.repository.js';
+import { RatingController } from './modules/ratings/controllers/rating.controller.js';
+import { createRatingRouter } from './modules/ratings/routes/rating.routes.js';
+
+import type { PaymentRepository } from './modules/payments/repositories/payment.repository.js';
+import { PaymentController } from './modules/payments/controllers/payment.controller.js';
+import { createPaymentRouter } from './modules/payments/routes/payment.routes.js';
+
 export interface AppOptions {
   enableAuthRateLimiting?: boolean;
   enableAuthCsrfProtection?: boolean;
@@ -77,6 +85,8 @@ export function createApp(
   authOtpProvider?: OtpProvider,
   fareEstimateService?: FareEstimateService,
   couponRedemptionService?: CouponRedemptionService,
+  ratingRepository?: RatingRepository,
+  paymentRepository?: PaymentRepository,
 ): express.Express;
 
 // ============================================================
@@ -105,6 +115,8 @@ export function createApp(
   authOtpProvider?: OtpProvider,
   fareEstimateService?: FareEstimateService,
   couponRedemptionService?: CouponRedemptionService,
+  ratingRepository?: RatingRepository,
+  paymentRepository?: PaymentRepository,
 ) {
   const app = express();
 
@@ -227,7 +239,10 @@ export function createApp(
     const rideService = new RideService(rideRepository, driverRepository);
 
     const driverController = driverRepository
-      ? new DriverController(new DriverService(driverRepository), rideService)
+      ? new DriverController(
+          new DriverService(driverRepository, undefined, rideRepository),
+          rideService,
+        )
       : undefined;
 
     app.use('/rides', createRideRouter(new RideController(rideService), driverController));
@@ -261,6 +276,26 @@ export function createApp(
     const couponController = new CouponController(couponRedemptionService);
 
     app.use('/coupons', createCouponRouter(couponController));
+  }
+
+  // ==========================================================
+  // Ratings
+  // ==========================================================
+
+  if (ratingRepository) {
+    const ratingController = new RatingController(ratingRepository);
+
+    app.use('/ratings', createRatingRouter(ratingController));
+  }
+
+  // ==========================================================
+  // Payments
+  // ==========================================================
+
+  if (paymentRepository) {
+    const paymentController = new PaymentController(paymentRepository);
+
+    app.use('/payments', createPaymentRouter(paymentController));
   }
 
   // ==========================================================

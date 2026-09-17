@@ -65,7 +65,7 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppColors.primaryGreen.withOpacity(0.1),
+                      color: AppColors.primaryGreen.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(Icons.directions_car, color: AppColors.primaryGreen),
@@ -76,7 +76,7 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          ride.destinationAddress ?? 'Ride to ${ride.destination.latitude}, ${ride.destination.longitude}',
+                          ride.destinationAddress ?? 'Ride to ${ride.destination.latitude.toStringAsFixed(3)}, ${ride.destination.longitude.toStringAsFixed(3)}',
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -92,7 +92,11 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      // Fare is not available in RideModel yet
+                      if (ride.fareEstimate != null)
+                        Text(
+                          '₹${ride.fareEstimate!.toStringAsFixed(0)}',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
                       const SizedBox(height: 4),
                       Text(
                         _formatStatus(ride.status),

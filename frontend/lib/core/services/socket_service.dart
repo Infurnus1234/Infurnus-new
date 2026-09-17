@@ -68,6 +68,9 @@ class SocketService {
       'ride:driver_location_updated',
       'ride:lifecycle_updated',
       'ride:route_updated',
+      'ride:incoming',
+      'ride:taken',
+      'ride:cancelled',
     ];
 
     for (var eventName in serverEvents) {

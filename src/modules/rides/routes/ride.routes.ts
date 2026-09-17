@@ -8,11 +8,16 @@ export function createRideRouter(controller: RideController, driverController?: 
   const router = Router();
   router.use(requireAuth);
   if (driverController) {
+    router.get('/driver/profile', driverController.getProfile);
+    router.post('/driver/profile', driverController.upsertProfile);
+    router.get('/driver/history', requireRoles('driver'), driverController.history);
     router.patch('/driver/availability', requireRoles('driver'), driverController.availability);
     router.post('/driver/location', requireRoles('driver'), driverController.location);
+    router.get('/driver/available', requireRoles('driver'), driverController.listAvailableRides);
     router.post('/:id/accept', requireRoles('driver'), driverController.accept);
     router.post('/:id/complete', requireRoles('driver'), driverController.complete);
     router.post('/:id/status', requireRoles('driver'), driverController.transition);
+    router.post('/:id/verify-pin', requireRoles('driver'), driverController.verifyPin);
   }
   router.post('/', controller.create);
   router.get('/', controller.list);

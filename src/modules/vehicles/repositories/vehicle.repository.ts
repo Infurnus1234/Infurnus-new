@@ -12,7 +12,12 @@ export interface VehicleRepository {
 
 const vehicleProjection = `
   id, driver_profile_id AS "driverProfileId", make, model, color,
-  plate_number AS "plateNumber", is_active AS "isActive", retired_at AS "retiredAt",
+  plate_number AS "plateNumber",
+  COALESCE(sector, 'passenger') AS "sector",
+  COALESCE(category, 'sedan') AS "category",
+  COALESCE(fuel_rate_per_km, 0)::numeric AS "fuelRatePerKm",
+  COALESCE(load_capacity_kg, 0)::numeric AS "loadCapacityKg",
+  is_active AS "isActive", retired_at AS "retiredAt",
   created_at AS "createdAt", updated_at AS "updatedAt"`;
 
 export class PostgresVehicleRepository implements VehicleRepository {
@@ -25,10 +30,20 @@ export class PostgresVehicleRepository implements VehicleRepository {
 
   async create(data: CreateVehicleData): Promise<Vehicle> {
     const result = await this.pool.query<Vehicle>(
-      `INSERT INTO vehicles (driver_profile_id, make, model, color, plate_number)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO vehicles (driver_profile_id, make, model, color, plate_number, sector, category, fuel_rate_per_km, load_capacity_kg)
+       VALUES ($1, $2, $3, $4, $5, COALESCE($6, 'passenger'), COALESCE($7, 'sedan'), COALESCE($8, 0), COALESCE($9, 0))
        RETURNING ${vehicleProjection}`,
-      [data.driverProfileId, data.make, data.model, data.color ?? null, data.plateNumber],
+      [
+        data.driverProfileId,
+        data.make,
+        data.model,
+        data.color ?? null,
+        data.plateNumber,
+        data.sector ?? 'passenger',
+        data.category ?? 'sedan',
+        data.fuelRatePerKm ?? 0,
+        data.loadCapacityKg ?? 0,
+      ],
     );
     const vehicle = result.rows.at(0);
     if (!vehicle) throw new Error('Vehicle insert returned no row');
@@ -61,6 +76,10 @@ export class PostgresVehicleRepository implements VehicleRepository {
       model: 'model',
       color: 'color',
       plateNumber: 'plate_number',
+      sector: 'sector',
+      category: 'category',
+      fuelRatePerKm: 'fuel_rate_per_km',
+      loadCapacityKg: 'load_capacity_kg',
     };
     const fields = Object.keys(data);
     const values = Object.values(data).map((value) => (value === undefined ? null : value));

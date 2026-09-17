@@ -24,6 +24,16 @@ export class PartnerController {
     }
   };
 
+  getMyPartner = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      if (!request.auth) throw new Error('Authentication middleware is required');
+      const partner = await this.service.getMyPartner(request.auth);
+      response.json({ success: true, data: partner, message: 'Current partner retrieved' });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   getById = async (request: Request, response: Response, next: NextFunction) => {
     try {
       const { id } = partnerIdSchema.parse(request.params);

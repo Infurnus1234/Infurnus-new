@@ -20,3 +20,18 @@ export interface DriverCandidate {
   activeRideCount: number;
   locationRecordedAt: Date;
 }
+
+export interface DriverProfile {
+  id: string;
+  userId: string;
+  licenseNumber: string;
+  licenseExpiry: string;
+  licenseDocumentKey?: string | null;
+  vehicleRcDocumentKey?: string | null;
+  profilePhotoKey?: string | null;
+  verificationStatus: string;
+  rejectionReason?: string | null;
+  availabilityStatus?: DriverAvailabilityStatus | null;
+  createdAt: Date;
+  updatedAt: Date;
+}

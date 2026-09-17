@@ -23,6 +23,13 @@ export interface FareCalculationInput {
   distanceMeters: number;
   durationSeconds: number;
   currency?: FareCurrency;
+  sector?: 'passenger' | 'logistics' | 'service' | 'premium' | undefined;
+  vehicleCategory?: string | undefined;
+  waitingMinutes?: number | undefined;
+  weightKg?: number | undefined;
+  hasLoadingAssistance?: boolean | undefined;
+  rentalHours?: number | undefined;
+  fuelRatePerKm?: number | undefined;
 }
 
 /**
@@ -38,6 +45,11 @@ export interface FareBreakdown {
   baseAmount: number;
   distanceAmount: number;
   timeAmount: number;
+  waitingAmount?: number;
+  weightAmount?: number;
+  loadingAmount?: number;
+  fuelAmount?: number;
+  taxAmount?: number;
   grossAmount: number;
 }
 
@@ -52,6 +64,8 @@ export interface FareCalculationResult extends FareBreakdown {
   durationSeconds: number;
   currency: FareCurrency;
   pricingVersion: string;
+  routeSource?: 'google_maps_road' | 'haversine_estimated';
+  straightLineDistanceMeters?: number;
 }
 
 /**
