@@ -42,6 +42,9 @@ class Repository implements AdminRepository {
       fitnessExpiringOrExpired: 0,
     },
   });
+  verifyDriver = async (_id: string, _status: string) => true;
+  verifyVehicle = async (_id: string, _status: string) => true;
+  verifyDocument = async (_id: string, _status: string) => true;
 }
 
 describe('Admin API route matrix', () => {

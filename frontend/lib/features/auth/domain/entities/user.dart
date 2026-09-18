@@ -20,6 +20,7 @@ class User {
   });
 
   String get name => '$firstName $lastName'.trim();
-  bool get isApprovedDriver => role == 'driver';
+  bool get isApprovedDriver =>
+      role == 'driver' || role == 'fleet_owner' || role == 'driver_fleet_owner';
   String get fullName => '$firstName $lastName';
 }

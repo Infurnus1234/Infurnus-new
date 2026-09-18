@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../../core/storage/secure_storage.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_button.dart';
 import '../../../../shared/widgets/infurnus_card.dart';
 import '../../../../shared/widgets/infurnus_loader.dart';
 import '../../../../shared/widgets/infurnus_text_field.dart';
+import '../../../auth/presentation/providers/user_provider.dart';
 import '../providers/driver_dashboard_provider.dart';
 import '../providers/driver_providers.dart';
 
@@ -160,9 +163,152 @@ class _DriverProfileScreenState extends ConsumerState<DriverProfileScreen> {
                           ],
                         ),
                       ),
+
+                      const SizedBox(height: 16),
+
+                      // Provider Mode Switcher (if user is DRIVER_FLEET_OWNER)
+                      _buildProviderModeSwitcher(context),
+
+                      const SizedBox(height: 16),
+
+                      // Provider Actions
+                      const Text('Account & Services', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 12),
+
+                      _buildActionTile(
+                        icon: Icons.account_balance,
+                        title: 'Bank & Payout Account',
+                        subtitle: 'Manage settlement account and payout details',
+                        onTap: () => context.push('/provider-bank-account'),
+                      ),
+                      const SizedBox(height: 10),
+                      _buildActionTile(
+                        icon: Icons.folder_open,
+                        title: 'KYC & Verification Documents',
+                        subtitle: 'Upload and check status of driving license and RC',
+                        onTap: () => context.push('/driver-documents'),
+                      ),
+                      const SizedBox(height: 10),
+                      _buildActionTile(
+                        icon: Icons.support_agent,
+                        title: 'Support & Helpdesk',
+                        subtitle: 'Submit tickets and view resolution status',
+                        onTap: () => context.push('/support-tickets'),
+                      ),
                     ],
                   ),
                 ),
+    );
+  }
+
+  Widget _buildProviderModeSwitcher(BuildContext context) {
+    final user = ref.watch(userProvider);
+    final isHybrid = user?.role == 'driver_fleet_owner';
+    if (!isHybrid) return const SizedBox.shrink();
+
+    return InfurnusCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryGreen.withOpacity(0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.swap_horiz, color: AppColors.primaryGreen, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Provider Mode Switcher', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    Text('You are registered as a Driver + Fleet Owner', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    await ref.read(secureStorageProvider).write(key: 'provider_mode', value: 'driver');
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Switched to Driver Mode')),
+                      );
+                      context.go('/driver-dashboard');
+                    }
+                  },
+                  icon: const Icon(Icons.drive_eta, size: 16),
+                  label: const Text('Driver Mode'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryGreen,
+                    foregroundColor: Colors.black,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    await ref.read(secureStorageProvider).write(key: 'provider_mode', value: 'fleet_owner');
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Switched to Fleet Owner Mode')),
+                      );
+                      context.push('/fleet-dashboard');
+                    }
+                  },
+                  icon: const Icon(Icons.business, size: 16),
+                  label: const Text('Fleet Mode'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return InfurnusCard(
+      onTap: onTap,
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.primaryGreen.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: AppColors.primaryGreen, size: 20),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                const SizedBox(height: 2),
+                Text(subtitle, style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+              ],
+            ),
+          ),
+          const Icon(Icons.arrow_forward_ios, size: 13, color: Colors.grey),
+        ],
+      ),
     );
   }
 

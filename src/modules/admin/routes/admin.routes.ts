@@ -17,5 +17,10 @@ export function createAdminRouter(controller: AdminController) {
   router.get('/reports/users', controller.listUsers);
   router.get('/reports/partners', controller.listPartners);
   router.get('/reports/vehicles', controller.listVehicles);
+
+  router.post('/drivers/:id/verify', controller.verifyDriver);
+  router.post('/vehicles/:id/verify', controller.verifyVehicle);
+  router.post('/documents/:id/verify', controller.verifyDocument);
+
   return router;
 }

@@ -10,6 +10,9 @@ const repository = (overrides: Partial<AdminRepository> = {}): AdminRepository =
   listVehicles: vi.fn().mockResolvedValue({ items: [], page: 1, pageSize: 25, total: 0 }),
   getVehicle: vi.fn().mockResolvedValue(null),
   dashboard: vi.fn().mockResolvedValue({}),
+  verifyDriver: vi.fn().mockResolvedValue(true),
+  verifyVehicle: vi.fn().mockResolvedValue(true),
+  verifyDocument: vi.fn().mockResolvedValue(true),
   ...overrides,
 });
 
