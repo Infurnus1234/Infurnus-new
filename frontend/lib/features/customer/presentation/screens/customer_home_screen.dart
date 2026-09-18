@@ -104,7 +104,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
                         style: TextStyle(color: Colors.grey, fontSize: 14),
                       ),
                       Text(
-                        '${user?.firstName ?? "Niranjan"} 👋',
+                        '${user?.firstName ?? "User"} 👋',
                         style: const TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,

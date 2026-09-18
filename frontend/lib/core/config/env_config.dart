@@ -11,10 +11,15 @@ class EnvConfig {
     required this.environment,
   });
 
-  // For physical devices on the same LAN (Update IP as needed)
+  static const String _defaultApiUrl = String.fromEnvironment(
+    'API_URL',
+    defaultValue: 'http://192.168.0.163:3000',
+  );
+
+  // For physical devices on the same LAN (Configurable via --dart-define=API_URL=...)
   static const EnvConfig dev = EnvConfig(
-    baseUrl: 'http://192.168.0.163:3000',
-    socketUrl: 'http://192.168.0.163:3000',
+    baseUrl: _defaultApiUrl,
+    socketUrl: _defaultApiUrl,
     environment: Environment.dev,
   );
 

@@ -8,7 +8,9 @@ import '../../../../shared/widgets/infurnus_button.dart';
 import '../../../../shared/widgets/infurnus_card.dart';
 import '../../../../shared/widgets/infurnus_map.dart';
 import '../../../../shared/widgets/infurnus_outlined_button.dart';
+import '../../data/models/fleet_vehicle_model.dart';
 import '../providers/ride_provider.dart';
+import '../providers/ride_use_case_providers.dart';
 
 class RideBookingScreen extends ConsumerStatefulWidget {
   const RideBookingScreen({super.key});
@@ -25,6 +27,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
   int _selectedRating = 5;
   String _selectedPaymentMethod = 'wallet'; // 'wallet', 'upi', 'card', 'cash'
   bool _isProcessingPayment = false;
+  List<FleetVehicleModel> _premiumFleet = [];
 
   final List<Map<String, dynamic>> _quickDestinations = [
     {
@@ -57,18 +60,31 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
   void initState() {
     super.initState();
     final rideState = ref.read(rideProvider);
-    _pickupController.text = rideState.pickup ?? 'Current Location';
-    _destinationController.text = rideState.destination ?? 'Airport Terminal 1';
+    _pickupController.text = rideState.pickup ?? '';
+    _destinationController.text = rideState.destination ?? '';
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _detectCurrentLocation();
+      _fetchPremiumFleet();
     });
+  }
+
+  Future<void> _fetchPremiumFleet() async {
+    try {
+      final fleet = await ref.read(getFleetUseCaseProvider)(sector: 'premium');
+      if (mounted) {
+        setState(() => _premiumFleet = fleet);
+      }
+    } catch (_) {}
   }
 
   Future<void> _detectCurrentLocation() async {
     try {
       final pos = await ref.read(locationServiceProvider).getCurrentPosition();
       if (pos != null && mounted) {
+        if (_pickupController.text.isEmpty) {
+          _pickupController.text = 'Current Location';
+        }
         ref.read(rideProvider.notifier).setPickupCoords(
               LatLng(pos.latitude, pos.longitude),
               address: 'Current Location',
@@ -86,15 +102,57 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
     super.dispose();
   }
 
-  void _handleBooking() {
-    if (_pickupController.text.trim().isEmpty || _destinationController.text.trim().isEmpty) {
+  void _handleBooking() async {
+    final pickupText = _pickupController.text.trim();
+    final destText = _destinationController.text.trim();
+
+    if (pickupText.isEmpty || destText.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter pickup and destination')),
       );
       return;
     }
 
+    final rideState = ref.read(rideProvider);
+    if (rideState.pickupCoords == null) {
+      final success = await ref.read(rideProvider.notifier).geocodeAndSetPickup(pickupText);
+      if (!success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not locate pickup "$pickupText". Please check the address.'),
+            backgroundColor: Colors.red[700],
+          ),
+        );
+        return;
+      }
+    }
+
+    if (ref.read(rideProvider).destinationCoords == null) {
+      final success = await ref.read(rideProvider.notifier).geocodeAndSetDestination(destText);
+      if (!success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not locate destination "$destText". Please check the address.'),
+            backgroundColor: Colors.red[700],
+          ),
+        );
+        return;
+      }
+    }
+
     ref.read(rideProvider.notifier).requestRide();
+  }
+
+  String _getFuelNoticeText(RideState state) {
+    final rentalFuelRate = state.rentalDetails?['fuelRatePerKm'] as num?;
+    if (rentalFuelRate != null && rentalFuelRate > 0) {
+      return 'Actual distance fuel billed separately @ ₹${rentalFuelRate.toStringAsFixed(0)}/km';
+    }
+    final vehicle = _premiumFleet.where((v) => v.category == state.selectedTier).firstOrNull;
+    if (vehicle != null && vehicle.fuelRatePerKm > 0) {
+      return 'Actual distance fuel billed separately @ ₹${vehicle.fuelRatePerKm.toStringAsFixed(0)}/km';
+    }
+    return 'Actual distance fuel billed separately as per vehicle rate';
   }
 
   void _showFareBreakdownSheet(RideState state) {
@@ -241,11 +299,11 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
 
     final pickupLatLng = rideState.currentRide != null
         ? LatLng(rideState.currentRide!.pickup.latitude, rideState.currentRide!.pickup.longitude)
-        : (rideState.pickupCoords ?? const LatLng(12.9716, 77.5946));
+        : rideState.pickupCoords;
 
     final destinationLatLng = rideState.currentRide != null
         ? LatLng(rideState.currentRide!.destination.latitude, rideState.currentRide!.destination.longitude)
-        : (rideState.destinationCoords ?? const LatLng(12.9716, 77.6946));
+        : rideState.destinationCoords;
 
     return Scaffold(
       appBar: AppBar(
@@ -433,11 +491,11 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Column(
+                Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Chauffeur Standby Package', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                    Text('Actual distance fuel billed separately @ ₹16/km', style: TextStyle(fontSize: 11, color: Colors.black54)),
+                    const Text('Chauffeur Standby Package', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                    Text(_getFuelNoticeText(state), style: const TextStyle(fontSize: 11, color: Colors.black54)),
                   ],
                 ),
                 GestureDetector(
@@ -531,11 +589,18 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                     isDense: true,
                     contentPadding: EdgeInsets.symmetric(vertical: 8),
                   ),
-                  onSubmitted: (val) {
-                    ref.read(rideProvider.notifier).setPickupCoords(
-                          const LatLng(12.9716, 77.5946),
-                          address: val,
-                        );
+                  onSubmitted: (val) async {
+                    final query = val.trim();
+                    if (query.isEmpty) return;
+                    final success = await ref.read(rideProvider.notifier).geocodeAndSetPickup(query);
+                    if (!success && mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Could not locate "$query". Please check the address.'),
+                          backgroundColor: Colors.red[700],
+                        ),
+                      );
+                    }
                   },
                 ),
               ),
@@ -560,11 +625,18 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                     isDense: true,
                     contentPadding: EdgeInsets.symmetric(vertical: 8),
                   ),
-                  onSubmitted: (val) {
-                    ref.read(rideProvider.notifier).setDestinationCoords(
-                          const LatLng(12.9716, 77.6946),
-                          address: val,
-                        );
+                  onSubmitted: (val) async {
+                    final query = val.trim();
+                    if (query.isEmpty) return;
+                    final success = await ref.read(rideProvider.notifier).geocodeAndSetDestination(query);
+                    if (!success && mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Could not locate "$query". Please check the address.'),
+                          backgroundColor: Colors.red[700],
+                        ),
+                      );
+                    }
                   },
                 ),
               ),

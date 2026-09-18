@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import '../../../../core/services/geocoding_service.dart';
 import '../../../../core/services/socket_service.dart';
 import '../../../../core/storage/secure_storage.dart';
 import '../../data/models/fare_estimate_model.dart';
@@ -246,14 +247,46 @@ class RideNotifier extends StateNotifier<RideState> {
     state = state.copyWith(
       pickup: pickup,
       destination: dest,
-      pickupCoords: pickupCoords ?? state.pickupCoords ?? const LatLng(12.9716, 77.5946),
-      destinationCoords: destCoords ?? state.destinationCoords ?? const LatLng(12.9716, 77.6946),
+      pickupCoords: pickupCoords ?? state.pickupCoords,
+      destinationCoords: destCoords ?? state.destinationCoords,
       status: RideStatus.initial,
       errorMessage: null,
       lastDriverLocation: null,
       currentRoute: null,
     );
-    estimateRouteFare();
+    if (state.pickupCoords != null && state.destinationCoords != null) {
+      estimateRouteFare();
+    }
+  }
+
+  Future<bool> geocodeAndSetPickup(String address) async {
+    final trimmed = address.trim();
+    if (trimmed.isEmpty) return false;
+    final coords = await ref.read(geocodingServiceProvider).geocodeAddress(trimmed);
+    if (coords != null) {
+      setPickupCoords(coords, address: trimmed);
+      return true;
+    } else {
+      state = state.copyWith(
+        errorMessage: 'Unable to locate "$trimmed". Please check the address.',
+      );
+      return false;
+    }
+  }
+
+  Future<bool> geocodeAndSetDestination(String address) async {
+    final trimmed = address.trim();
+    if (trimmed.isEmpty) return false;
+    final coords = await ref.read(geocodingServiceProvider).geocodeAddress(trimmed);
+    if (coords != null) {
+      setDestinationCoords(coords, address: trimmed);
+      return true;
+    } else {
+      state = state.copyWith(
+        errorMessage: 'Unable to locate "$trimmed". Please check the address.',
+      );
+      return false;
+    }
   }
 
   void setPickupCoords(LatLng coords, {String? address}) {
@@ -319,8 +352,12 @@ class RideNotifier extends StateNotifier<RideState> {
   }
 
   Future<void> estimateRouteFare() async {
-    final pickup = state.pickupCoords ?? const LatLng(12.9716, 77.5946);
-    final destination = state.destinationCoords ?? const LatLng(13.0827, 77.5877);
+    if (state.pickupCoords == null || state.destinationCoords == null) {
+      return;
+    }
+
+    final pickup = state.pickupCoords!;
+    final destination = state.destinationCoords!;
 
     state = state.copyWith(isEstimatingFare: true);
 
@@ -379,11 +416,18 @@ class RideNotifier extends StateNotifier<RideState> {
   Future<void> requestRide() async {
     if (state.status == RideStatus.searching) return;
 
+    if (state.pickupCoords == null || state.destinationCoords == null) {
+      state = state.copyWith(
+        errorMessage: 'Please select valid pickup and destination locations',
+      );
+      return;
+    }
+
     state = state.copyWith(status: RideStatus.searching, errorMessage: null);
 
     try {
-      final pickup = state.pickupCoords ?? const LatLng(12.9716, 77.5946);
-      final destination = state.destinationCoords ?? const LatLng(12.9716, 77.6946);
+      final pickup = state.pickupCoords!;
+      final destination = state.destinationCoords!;
 
       final data = <String, dynamic>{
         'pickup': {'latitude': pickup.latitude, 'longitude': pickup.longitude},
