@@ -16,9 +16,7 @@ export const initiatePaymentSchema = z
   .refine(
     (data) => {
       const count =
-        (data.rideId ? 1 : 0) +
-        (data.rentalId ? 1 : 0) +
-        (data.logisticsOrderId ? 1 : 0);
+        (data.rideId ? 1 : 0) + (data.rentalId ? 1 : 0) + (data.logisticsOrderId ? 1 : 0);
       return count === 1;
     },
     { message: 'Exactly one of rideId, rentalId, or logisticsOrderId must be provided' },
