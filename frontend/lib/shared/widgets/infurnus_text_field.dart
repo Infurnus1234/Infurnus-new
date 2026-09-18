@@ -10,6 +10,7 @@ class InfurnusTextField extends StatelessWidget {
   final String? Function(String?)? validator;
   final IconData? prefixIcon;
   final void Function(String)? onChanged;
+  final int? maxLines;
 
   const InfurnusTextField({
     super.key,
@@ -21,6 +22,7 @@ class InfurnusTextField extends StatelessWidget {
     this.validator,
     this.prefixIcon,
     this.onChanged,
+    this.maxLines = 1,
   });
 
   @override
@@ -41,6 +43,7 @@ class InfurnusTextField extends StatelessWidget {
           controller: controller,
           keyboardType: keyboardType,
           obscureText: isPassword,
+          maxLines: isPassword ? 1 : maxLines,
           validator: validator,
           onChanged: onChanged,
           decoration: InputDecoration(

@@ -34,6 +34,16 @@ export interface DriverProfile {
   verificationStatus: string;
   rejectionReason?: string | null;
   availabilityStatus?: DriverAvailabilityStatus | null;
+  dob?: string | null;
+  gender?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  pinCode?: string | null;
+  emergencyContactName?: string | null;
+  emergencyContactPhone?: string | null;
+  activeVehicleId?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
+

@@ -1,0 +1,1374 @@
+
+Vehicle Provider / Driver App – Complete Requirements
+1. Provider Types
+The provider app should support 3 types of providers:
+
+A. Driver
+A person who drives a vehicle owned by someone else.
+Example:
+Driver Rahul → drives vehicle owned by Fleet Owner Amit.
+
+B. Fleet Owner
+A person/company that owns one or multiple vehicles and may have multiple drivers.
+Example:
+Amit owns 10 cars → assigns different drivers to each car.
+
+C. Driver + Fleet Owner
+A person who owns the vehicle and also drives it.
+Example:
+Rahul owns 1 car → Rahul himself drives it.
+During registration, the provider selects:
+Provider Type
+Driver 
+Fleet Owner 
+Driver + Fleet Owner 
+
+2. Provider App Main Flow
+The overall flow should be:
+Download App
+     ↓
+Login / Registration
+     ↓
+Select Provider Type
+     ↓
+Personal Details
+     ↓
+Identity Verification
+     ↓
+Vehicle Selection / Vehicle Registration
+     ↓
+Vehicle Documents
+     ↓
+Driver Documents
+     ↓
+Fleet Owner ↔ Driver Mapping
+     ↓
+Admin Verification
+     ↓
+Status = Pending
+     ↓
+Admin Reviews
+     ↓
+Eligible / Rejected / Resubmission
+     ↓
+Provider Dashboard
+     ↓
+Receive Ride / Logistics Requests
+     ↓
+Accept / Reject
+     ↓
+Complete Trip
+     ↓
+Earnings
+
+3. Login & Registration
+3.1 Login Options
+Provider can log in using:
+Mobile number 
+Gmail/Google account 
+Mobile Login
+Enter Mobile Number
+        ↓
+Send OTP
+        ↓
+Enter OTP
+        ↓
+Verify OTP
+        ↓
+Login
+Google Login
+Continue with Google
+        ↓
+Google Authentication
+        ↓
+Account Created / Existing Account
+        ↓
+Login
+
+4. Provider Registration
+After first login:
+Step 1 – Select Provider Type
+How do you want to register?
+
+○ Driver
+○ Fleet Owner
+○ Driver + Fleet Owner
+This selection determines the rest of the registration flow.
+
+5. Personal Details
+For Driver:
+Full Name 
+Profile Photo 
+Mobile Number 
+Email 
+Date of Birth 
+Gender 
+Address 
+City 
+State 
+PIN Code 
+Emergency Contact 
+
+For Fleet Owner:
+Owner Name 
+Business/Fleet Name 
+Mobile Number 
+Email 
+Address 
+City 
+State 
+PIN Code 
+Number of Vehicles 
+
+6. Driver Verification
+Driver must submit identity and driving documents.
+Required Documents
+Identity
+Aadhaar Card 
+PAN Card — optional/depending on business requirements 
+Driving
+Driving Licence 
+Driving Licence Number 
+DL expiry date 
+Vehicle class/category 
+Potential future verification:
+Police/background verification 
+Driving history 
+Insurance-related verification 
+
+7. Document Upload System
+The app should provide a dedicated document-upload screen.
+Example:
+Driver Documents
+
+Aadhaar Card
+[ Upload Front ] [ Upload Back ]
+
+Driving Licence
+[ Upload Front ] [ Upload Back ]
+
+PAN Card
+[ Upload ]
+
+              [Submit]
+Document status
+Every document should have a status:
+Not Uploaded
+     ↓
+Uploaded
+     ↓
+Under Verification
+     ↓
+Verified
+or
+Rejected
+   ↓
+Re-upload
+
+8. Vehicle Registration
+For a Driver + Fleet Owner, the provider can directly add their own vehicle.
+For a Fleet Owner, they can add multiple vehicles.
+For a Driver, the vehicle may be assigned by the fleet owner.
+Vehicle details
+Vehicle Number 
+Vehicle Type 
+Vehicle Model 
+Vehicle Manufacturer 
+Manufacturing Year 
+Fuel Type 
+Seating Capacity 
+Vehicle Color 
+Registration Date 
+Registration Expiry 
+Commercial/Private 
+Permit details where applicable 
+Example:
+Add Vehicle
+
+Vehicle Number
+[ BR01AB1234 ]
+
+Vehicle Type
+[ Sedan ▼ ]
+
+Vehicle Model
+[ Dzire ]
+
+Fuel Type
+[ Petrol ▼ ]
+
+Seating Capacity
+[ 4 ]
+
+                [Continue]
+
+9. Vehicle Documents
+The vehicle owner needs to submit vehicle-related documents.
+Documents
+RC / Registration Certificate 
+Vehicle Insurance 
+Fitness Certificate, where applicable 
+Permit, where applicable 
+Pollution Certificate (PUC) 
+Other applicable commercial vehicle documents 
+Example:
+Vehicle Documents
+
+RC
+[ Upload ]
+
+Insurance
+[ Upload ]
+
+PUC
+[ Upload ]
+
+Fitness Certificate
+[ Upload ]
+
+Permit
+[ Upload ]
+
+          [Submit for Verification]
+
+10. Fleet Owner → Driver Mapping
+This is one of the most important features in your requirement.
+You mentioned:
+The cleanest implementation is a Driver Assignment Code / Vehicle Assignment Code.
+
+Fleet Owner Flow
+Fleet owner adds vehicle:
+Fleet Owner
+     ↓
+Add Vehicle
+     ↓
+Vehicle BR01AB1234
+     ↓
+Assign Driver
+     ↓
+Generate Driver Assignment Code
+Example:
+Vehicle: BR01AB1234
+Driver: Rahul Kumar
+
+Driver Assignment Code:
+FLEET-48291
+
+Driver Flow
+Driver logs into the app:
+Login
+ ↓
+Select "I'm a Driver"
+ ↓
+Enter Fleet/Vehicle Assignment Code
+ ↓
+System verifies code
+ ↓
+Vehicle information displayed
+ ↓
+Driver confirms
+ ↓
+Driver assigned to vehicle
+Example:
+Enter Vehicle Assignment Code
+
+[ FLEET-48291 ]
+
+             [Verify]
+
+Vehicle Found
+
+Vehicle: BR01AB1234
+Model: Maruti Dzire
+Owner: Amit Kumar
+
+[Confirm Assignment]
+
+11. Important Mapping Rule
+The backend should maintain a relationship like:
+Fleet Owner
+     │
+     ├── Vehicle 1
+     │      └── Driver A
+     │
+     ├── Vehicle 2
+     │      └── Driver B
+     │
+     └── Vehicle 3
+            └── Driver C
+A fleet owner can have:
+1 → Many Vehicles
+And:
+Vehicle → 0 or 1 Active Driver
+You can later allow multiple drivers for a vehicle if you introduce shifts.
+Example:
+Vehicle BR01AB1234
+
+Morning Shift → Rahul
+Night Shift   → Amit
+
+12. Vehicle Selection
+A driver who is already associated with multiple vehicles should be able to select the vehicle they are currently operating.
+Example:
+Select Vehicle
+
+🚗 BR01AB1234
+   Maruti Dzire
+   Assigned by Amit
+
+🚙 BR02CD4567
+   Hyundai Aura
+   Assigned by Amit
+
+[Continue]
+
+13. "How Much?" / Vehicle Pricing
+Your requirement says:
+select vehicle or how much
+I would separate this into vehicle selection and pricing configuration.
+For example, fleet owner can configure:
+Vehicle Pricing
+Per KM 
+Per Hour 
+Base Fare 
+Minimum Fare 
+Waiting Charge 
+Extra KM Charge 
+Outstation Rate 
+Daily Rate 
+Example:
+Vehicle Pricing
+
+Base Fare:          ₹100
+Per KM:             ₹15
+Per Hour:           ₹250
+Waiting:            ₹5/min
+
+Outstation:
+Per KM:             ₹18
+
+[Save Pricing]
+However, if your startup has a centralized pricing engine, don't let drivers manually set prices. Admin can define the fare structure and the provider only sees the applicable earnings.
+
+14. Admin Verification
+After submitting all information:
+Provider
+   ↓
+Submit Application
+   ↓
+Status = PENDING
+   ↓
+Admin Reviews
+   ↓
+Documents Verified?
+   ↓
+YES → ELIGIBLE
+NO → REJECTED / RESUBMISSION
+
+15. Provider Status
+Use clear statuses.
+Registration Status
+Status
+Meaning
+Draft
+Registration not completed
+Pending
+Submitted, waiting for admin
+Under Review
+Admin is checking
+Eligible
+Approved and can operate
+Rejected
+Application rejected
+Resubmission Required
+Document/details need correction
+Suspended
+Temporarily disabled
+Blocked
+Account permanently disabled
+
+16. Driver Dashboard
+Once the driver becomes Eligible, they see:
+--------------------------------
+Hello, Rahul 👋
+
+Status: ● Eligible
+
+Today's Earnings
+₹1,250
+
+Today's Trips
+8
+
+Online Hours
+7h 20m
+
+--------------------------------
+
+[ Go Online ]
+
+Upcoming Ride
+BR01AB1234
+Pickup: Patna Junction
+Drop: Airport
+
+--------------------------------
+
+Quick Actions
+
+🚗 Vehicle
+📄 Documents
+💰 Earnings
+📍 Trips
+🔔 Notifications
+👤 Profile
+--------------------------------
+
+17. Online / Offline System
+Driver should have:
+Offline
+🔴 Offline
+
+[ Go Online ]
+Online
+🟢 Online
+
+You are available for bookings.
+
+[ Go Offline ]
+Only eligible/approved drivers should be allowed to go online.
+
+18. Ride/Booking Request
+When a customer books a vehicle:
+       NEW RIDE REQUEST
+
+Pickup
+Patna Junction
+
+Drop
+Patna Airport
+
+Distance
+12.5 KM
+
+Estimated Earnings
+₹220
+
+Payment
+UPI
+
+[ ACCEPT ]     [ REJECT ]
+Driver gets a limited amount of time to respond.
+Example:
+Accept within 15 seconds
+
+19. Ride Flow
+After accepting:
+Ride Accepted
+      ↓
+Navigate to Pickup
+      ↓
+Arrived at Pickup
+      ↓
+Start Ride
+      ↓
+Trip in Progress
+      ↓
+Reached Destination
+      ↓
+Complete Ride
+      ↓
+Payment
+      ↓
+Earnings Updated
+
+20. Driver Trip Screen
+Before pickup
+Customer
+Rahul
+
+Pickup
+Patna Junction
+
+Drop
+Patna Airport
+
+[ Navigate ]
+
+[ Arrived ]
+At pickup
+Customer has arrived?
+
+[ Start Ride ]
+During ride
+Trip in Progress
+
+Pickup ✓
+Ride Started ✓
+
+Current Location
+📍 Live Tracking
+
+Distance
+8.2 KM
+
+[ Emergency ]
+End
+Destination Reached
+
+Final Fare
+₹245
+
+Payment
+UPI
+
+[ Complete Trip ]
+
+21. Earnings
+Driver should have an earnings section.
+Earnings
+
+Today
+₹1,850
+
+This Week
+₹10,450
+
+This Month
+₹42,800
+Detailed:
+17 Sept
+
+Ride #1024      ₹250
+Ride #1025      ₹320
+Ride #1026      ₹180
+Ride #1027      ₹410
+
+Gross Earnings  ₹1,160
+Commission      -₹116
+Net Earnings    ₹1,044
+For fleet owners, you may need a separate fleet earnings view.
+
+22. Fleet Owner Dashboard
+Fleet owner needs additional functionality that a normal driver doesn't have.
+Fleet Dashboard
+
+Total Vehicles     12
+Active Vehicles     9
+Available Drivers   8
+Pending Documents   2
+
+--------------------------------
+
+Vehicles
+
+BR01AB1234
+Dzire
+Driver: Rahul
+Status: Online
+
+BR02CD4567
+Aura
+Driver: Amit
+Status: Offline
+
+BR03EF7890
+Ertiga
+Driver: Unassigned
+Status: Available
+
+23. Fleet Owner Features
+Fleet owner should be able to:
+Vehicle Management
+Add vehicle 
+Edit vehicle 
+Remove vehicle 
+View vehicle status 
+Upload documents 
+Track document expiry 
+Driver Management
+Add driver 
+Generate driver code 
+Assign driver 
+Unassign driver 
+View driver status 
+View driver documents 
+View driver trips 
+View driver earnings 
+Fleet Monitoring
+Online vehicles 
+Offline vehicles 
+Active trips 
+Available vehicles 
+Vehicle location 
+Maintenance status 
+
+24. Vehicle Document Expiry
+Very useful feature.
+For example:
+⚠ Document Expiring
+
+Vehicle: BR01AB1234
+
+Insurance expires in 7 days.
+
+[Renew Document]
+Admin can also receive alerts.
+
+25. Driver Document Expiry
+Same system:
+Driving Licence
+
+Status: Verified
+
+Expiry:
+12 March 2027
+
+● Active
+Before expiry:
+⚠ Your Driving Licence expires in 30 days.
+Please upload renewed document.
+
+26. Admin Panel
+Your admin panel should be a web application, not necessarily a mobile app.
+Admin login:
+Admin Login
+Email
+Password
+OTP / 2FA
+
+[Login]
+
+27. Admin Dashboard
+ADMIN DASHBOARD
+
+Total Users             12,450
+Total Drivers            2,340
+Fleet Owners               420
+Vehicles                  3,850
+
+Pending Verification       87
+Active Drivers           1,820
+Online Drivers             640
+Active Trips               215
+
+Today's Revenue
+₹4,85,200
+
+28. Admin Modules
+Your admin panel should have these modules:
+Dashboard
+
+Users
+Drivers
+Fleet Owners
+Vehicles
+
+Driver Verification
+Vehicle Verification
+Documents
+
+Driver-Vehicle Mapping
+
+Bookings
+Active Trips
+Completed Trips
+Cancelled Trips
+
+Payments
+Earnings
+Commission
+
+Support
+Complaints
+Disputes
+
+Notifications
+
+Reports & Analytics
+
+Settings
+Admin Users
+Roles & Permissions
+
+29. Admin Driver Verification
+Admin opens:
+Driver Verification
+
+Rahul Kumar
+Phone: XXXXXXXX
+
+Provider Type:
+Driver
+
+Documents:
+
+Aadhaar       ✓ Uploaded
+DL            ✓ Uploaded
+Photo         ✓ Uploaded
+
+Vehicle:
+BR01AB1234
+
+[ Verify ]
+
+[ Reject ]
+
+[ Request Resubmission ]
+Admin should be able to see uploaded documents securely and record a verification decision.
+
+30. Admin Vehicle Verification
+Vehicle Verification
+
+Vehicle:
+BR01AB1234
+
+Owner:
+Amit Kumar
+
+Type:
+Sedan
+
+Documents:
+
+RC             ✓
+Insurance      ✓
+PUC            ✓
+Fitness        ✓
+Permit         ✓
+
+Status:
+Pending
+
+[ Approve Vehicle ]
+
+[ Reject ]
+
+[ Request Resubmission ]
+
+31. Driver ↔ Vehicle Mapping in Admin
+Admin should have a dedicated screen:
+Driver-Vehicle Mapping
+
+Vehicle        Owner       Driver       Status
+
+BR01AB1234     Amit        Rahul        Active
+BR02CD4567     Amit        Amit         Active
+BR03EF7890     Amit        —            Unassigned
+Admin can:
+Assign Driver
+Change Driver
+Remove Driver
+Suspend Assignment
+
+32. Admin Status Management
+Admin should be able to change:
+Driver
+Pending
+   ↓
+Under Review
+   ↓
+Eligible
+or
+Pending
+   ↓
+Resubmission Required
+or
+Eligible
+   ↓
+Suspended
+Vehicle
+Pending
+   ↓
+Verified
+   ↓
+Active
+
+33. Notifications
+Both driver and fleet owner should receive notifications.
+Examples
+Verification
+Your documents have been successfully verified.
+Rejected
+Your driving licence could not be verified. Please upload a clearer copy.
+Vehicle
+Vehicle BR01AB1234 has been approved.
+Trip
+New ride request received.
+Payment
+₹250 has been added to your earnings.
+Expiry
+Your vehicle insurance expires in 10 days.
+
+34. Profile
+Provider profile:
+Profile
+
+[Profile Photo]
+
+Rahul Kumar
+
+Mobile
+XXXXXXXXXX
+
+Email
+rahul@gmail.com
+
+Provider Type
+Driver
+
+Verification Status
+✓ Eligible
+
+Documents
+Vehicles
+Bank Details
+Emergency Contact
+
+Settings
+Help & Support
+Logout
+
+35. Bank / Payment Details
+For payouts:
+Account holder name 
+Bank account number 
+IFSC 
+Bank name 
+UPI ID 
+Status:
+Bank Account
+✓ Verified
+For security, sensitive bank information should be masked in the UI.
+
+36. Support
+Driver can raise support tickets.
+Help & Support
+
+Ride Issue
+Payment Issue
+Account Issue
+Vehicle Issue
+Document Issue
+Technical Issue
+
+[ Create Support Ticket ]
+Example:
+Ticket #SUP10245
+
+Category:
+Payment
+
+Message:
+Payment not received for Ride #1024.
+
+Status:
+Under Review
+
+37. Emergency / Safety
+For a transport/logistics startup, include:
+SOS button 
+Emergency contact 
+Share trip 
+Customer details 
+Support call 
+Trip tracking 
+The SOS flow should be designed carefully around your actual operating and emergency-response capabilities.
+
+38. User App ↔ Driver App ↔ Admin Architecture
+Your complete ecosystem becomes:
+                   ┌─────────────────┐
+                   │   ADMIN PANEL   │
+                   │                 │
+                   │ Users           │
+                   │ Drivers         │
+                   │ Fleet Owners    │
+                   │ Vehicles        │
+                   │ Documents       │
+                   │ Bookings        │
+                   │ Payments        │
+                   └────────┬────────┘
+                            │
+                            │ Backend APIs
+                            │
+              ┌─────────────┴─────────────┐
+              │                           │
+      ┌───────▼────────┐         ┌────────▼────────┐
+      │   USER APP     │         │  DRIVER APP     │
+      │                │         │                 │
+      │ Login          │         │ Login            │
+      │ Search         │         │ Documents        │
+      │ Select Vehicle │         │ Vehicle          │
+      │ Book           │         │ Driver Mapping   │
+      │ Payment        │         │ Go Online        │
+      │ Track          │         │ Accept Ride      │
+      │ Rating         │         │ Complete Ride    │
+      └────────────────┘         │ Earnings         │
+                                 └──────────────────┘
+
+39. Backend Core Entities
+For your development team, I would define these main database entities:
+User
+Driver
+FleetOwner
+Vehicle
+VehicleDocument
+DriverDocument
+DriverVehicleAssignment
+Booking
+Trip
+Payment
+Earning
+Notification
+SupportTicket
+Admin
+Important relationship:
+User
+ │
+ ├── Driver
+ │
+ └── FleetOwner
+        │
+        └── Vehicles
+                │
+                └── Driver Assignment
+
+40. Suggested Driver App Navigation
+For a driver:
+Bottom Navigation
+
+🏠 Home
+📍 Trips
+💰 Earnings
+🔔 Notifications
+👤 Profile
+Inside Profile:
+Personal Details
+Documents
+Vehicle
+Bank Details
+Emergency Contact
+Help & Support
+Settings
+Logout
+For Fleet Owner:
+🏠 Dashboard
+🚗 Fleet
+👨‍✈️ Drivers
+💰 Earnings
+👤 Profile
+This can be the same app, with screens/features changing according to the provider type.
+
+
+
+
+. Driver
+The driver should only see what is necessary to perform the assigned trip.
+Driver can see:
+Login/profile 
+Verification status 
+Assigned vehicle 
+Current/new trip 
+Pickup location 
+Drop location 
+Customer name/contact — only if operationally required 
+Navigation 
+Trip status 
+Current trip details 
+New trip requests 
+Accept/Reject trip 
+Start trip 
+End trip 
+SOS/emergency 
+Basic notifications 
+Support 
+Driver should NOT see:
+❌ Fare/booking amount 
+❌ Customer payment amount 
+❌ Commission 
+❌ Fleet owner's earnings 
+❌ Driver earnings 
+❌ Previous trip history 
+❌ Previous trip revenue 
+❌ Fleet revenue 
+❌ Payment transactions 
+❌ Other drivers' information 
+❌ Fleet financial reports 
+
+2. Fleet Owner
+Fleet owner gets the business/financial side.
+Fleet Owner can see:
+Dashboard 
+Vehicles 
+Drivers 
+Driver-vehicle assignment 
+Current trips 
+Trip history 
+Booking details 
+Revenue 
+Earnings 
+Payments 
+Commission 
+Vehicle performance 
+Driver performance 
+Documents 
+Payouts 
+Reports 
+
+3. Driver Home Screen
+I would make the driver app very simple.
+┌──────────────────────────────┐
+│ Hello Rahul 👋               │
+│ ● Online                     │
+├──────────────────────────────┤
+│                              │
+│     NEW TRIP                 │
+│                              │
+│ Pickup                       │
+│ 📍 Patna Junction            │
+│                              │
+│ Drop                         │
+│ 📍 Patna Airport             │
+│                              │
+│ Vehicle                      │
+│ BR01AB1234                   │
+│                              │
+│        [ ACCEPT ]             │
+│        [ REJECT ]             │
+│                              │
+├──────────────────────────────┤
+│                              │
+│ Today's Activity             │
+│                              │
+│ Current Trip                 │
+│ Pickup → Drop                │
+│                              │
+├──────────────────────────────┤
+│ Home | Trips | Notifications │
+│             | Profile        │
+└──────────────────────────────┘
+Notice there is no ₹ amount anywhere.
+
+4. Driver Trip Screen
+After accepting:
+┌──────────────────────────────┐
+│         TRIP                 │
+├──────────────────────────────┤
+│                              │
+│ Pickup                       │
+│ 📍 Patna Junction            │
+│                              │
+│              ↓               │
+│                              │
+│ Drop                         │
+│ 📍 Patna Airport             │
+│                              │
+│ Customer                     │
+│ Rahul                        │
+│                              │
+│ [ CALL CUSTOMER ]            │
+│ [ NAVIGATE ]                 │
+│                              │
+│ [ ARRIVED ]                  │
+└──────────────────────────────┘
+After arriving:
+[ START TRIP ]
+During trip:
+┌──────────────────────────────┐
+│       TRIP IN PROGRESS       │
+│                              │
+│ 📍 Patna Airport             │
+│                              │
+│ Navigation                  │
+│                              │
+│ [ EMERGENCY ]                │
+│                              │
+│ [ COMPLETE TRIP ]            │
+└──────────────────────────────┘
+After completion:
+✓ Trip Completed
+
+Thank you.
+
+[ BACK TO HOME ]
+Don't show:
+Fare: ₹450
+Commission: ₹45
+Net: ₹405
+Payment: UPI
+The driver doesn't need any of that.
+
+5. What Should "Trips" Mean for Driver?
+Since you don't want drivers to know previous trip details, I would actually rename "Trips" to "My Assignment" or "Current Trip", or make it extremely limited.
+Instead of:
+Trips
+Today: 8
+Completed: 145
+Revenue: ₹42,000
+show:
+Current Assignment
+
+Pickup
+Patna Junction
+
+Drop
+Patna Airport
+
+Status
+In Progress
+Once the trip is completed, it disappears from the driver's active view.
+If you want drivers to have a record for operational/legal reasons, you can show a very limited history:
+Previous Assignments
+
+17 Sept
+Patna Junction → Airport
+Completed ✓
+But no fare, payment, revenue, or detailed customer/payment information.
+
+6. Fleet Owner Dashboard
+The fleet owner gets the complete picture.
+┌──────────────────────────────────┐
+│ Fleet Dashboard                  │
+├──────────────────────────────────┤
+│                                  │
+│ Vehicles          12             │
+│ Active             8             │
+│ Available          3             │
+│ Maintenance        1             │
+│                                  │
+│ Today's Revenue    ₹18,450       │
+│                                  │
+├──────────────────────────────────┤
+│ ACTIVE VEHICLES                  │
+│                                  │
+│ BR01AB1234                       │
+│ Driver: Rahul                    │
+│ Status: On Trip                  │
+│                                  │
+│ BR02CD5678                       │
+│ Driver: Amit                     │
+│ Status: Available                │
+│                                  │
+└──────────────────────────────────┘
+
+7. Fleet Owner → Driver Assignment
+Fleet owner can see:
+Vehicles
+
+BR01AB1234
+Maruti Dzire
+
+Driver
+Rahul Kumar
+
+Status
+🟢 On Trip
+
+[ View ]
+[ Change Driver ]
+Driver only sees:
+Assigned Vehicle
+
+BR01AB1234
+Maruti Dzire
+
+Status: Active
+He doesn't need to see the owner's revenue or vehicle earnings.
+
+8. Payment Visibility
+This should be enforced at the backend/API level, not just hidden from the UI.
+For example:
+Fleet Owner API
+GET /fleet/trips
+GET /fleet/earnings
+GET /fleet/payments
+GET /fleet/reports
+Driver API
+GET /driver/current-trip
+GET /driver/assigned-vehicle
+GET /driver/new-trips
+Don't send payment data in the driver API response at all.
+For example, don't do this:
+{
+  "tripId": "TR123",
+  "pickup": "Patna Junction",
+  "drop": "Airport",
+  "fare": 450,
+  "commission": 45,
+  "fleetEarning": 405
+}
+Instead:
+{
+  "tripId": "TR123",
+  "pickup": "Patna Junction",
+  "drop": "Airport",
+  "status": "ASSIGNED"
+}
+This is much safer.
+
+9. Role-Based Access Control
+Your backend should have roles like:
+ADMIN
+FLEET_OWNER
+DRIVER
+DRIVER_FLEET_OWNER
+Then permissions:
+Feature
+Admin
+Fleet Owner
+Driver
+Profile
+✅
+✅
+✅
+Documents
+✅
+✅
+✅
+Vehicle
+✅
+✅
+Assigned only
+Assign Driver
+✅
+✅
+❌
+New Trip
+✅
+✅
+✅
+Current Trip
+✅
+✅
+✅
+Navigation
+❌
+Optional
+✅
+Trip History
+✅
+✅
+❌
+Fare
+✅
+✅
+❌
+Payments
+✅
+✅
+❌
+Earnings
+✅
+✅
+❌
+Commission
+✅
+✅
+❌
+Fleet Reports
+✅
+✅
+❌
+Driver Management
+✅
+✅
+❌
+Vehicle Management
+✅
+✅
+❌
+Admin Settings
+✅
+❌
+❌
+
+10. Driver + Fleet Owner
+For Driver + Fleet Owner, there is an important distinction.
+If someone owns the vehicle and drives it themselves, their account can have both permissions:
+DRIVER
++
+FLEET_OWNER
+But I recommend giving them a role switch:
+┌──────────────────────────────┐
+│ Account Mode                 │
+│                              │
+│ 🚗 Driver Mode               │
+│                              │
+│ 🏢 Fleet Owner Mode          │
+└──────────────────────────────┘
+Driver Mode
+They see:
+New Trip
+Pickup
+Drop
+Navigation
+Current Assignment
+Fleet Owner Mode
+They see:
+Vehicles
+Drivers
+Trip History
+Revenue
+Payments
+Reports
+This keeps the app clean.
+
+11. Your Final Provider App
+So I would define your startup's provider app as:
+Provider App
+Driver Mode
+Login
+ ↓
+Profile
+ ↓
+Documents
+ ↓
+Vehicle Assignment
+ ↓
+Pending / Eligible
+ ↓
+Go Online
+ ↓
+New Trip
+ ↓
+Pickup
+ ↓
+Navigate
+ ↓
+Start Trip
+ ↓
+Complete Trip
+ ↓
+Back Online
+Fleet Owner Mode
+Login
+ ↓
+Fleet Dashboard
+ ↓
+Vehicles
+ ↓
+Drivers
+ ↓
+Assign Driver
+ ↓
+Monitor Active Trips
+ ↓
+Trip History
+ ↓
+Revenue
+ ↓
+Payments
+ ↓
+Reports
+Driver + Fleet Owner
+Login
+ ↓
+Select Mode
+
+ ┌───────────────┐
+ │ Driver Mode   │ → Operational information
+ └───────────────┘
+
+ ┌─────────────────────┐
+ │ Fleet Owner Mode    │ → Financial + fleet information
+ └─────────────────────┘

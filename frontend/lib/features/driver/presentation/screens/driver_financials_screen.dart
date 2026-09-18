@@ -46,7 +46,7 @@ class DriverFinancialsScreen extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 1. Total Earnings Hero Card
+                  // 1. Total Earnings / Operations Hero Card
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(20),
@@ -68,13 +68,13 @@ class DriverFinancialsScreen extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Row(
+                        Row(
                           children: [
-                            Icon(Icons.account_balance_wallet, color: AppColors.primaryGreen, size: 22),
-                            SizedBox(width: 8),
+                            const Icon(Icons.directions_car, color: AppColors.primaryGreen, size: 22),
+                            const SizedBox(width: 8),
                             Text(
-                              'TOTAL EARNINGS',
-                              style: TextStyle(
+                              totalEarnings > 0 ? 'TOTAL EARNINGS' : 'OPERATIONAL PERFORMANCE',
+                              style: const TextStyle(
                                 color: Colors.white70,
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
@@ -85,16 +85,18 @@ class DriverFinancialsScreen extends ConsumerWidget {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          '₹${totalEarnings.toStringAsFixed(2)}',
+                          totalEarnings > 0 ? '₹${totalEarnings.toStringAsFixed(2)}' : '$totalTrips Trips Completed',
                           style: const TextStyle(
-                            fontSize: 32,
+                            fontSize: 28,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
                           ),
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'From $totalTrips completed rides',
+                          totalEarnings > 0
+                              ? 'From $totalTrips completed rides'
+                              : 'Pure operational tracking • Zero-fare isolation active',
                           style: const TextStyle(color: Colors.white60, fontSize: 13),
                         ),
                       ],
@@ -127,12 +129,15 @@ class DriverFinancialsScreen extends ConsumerWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Avg / Trip', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                              Text(
+                                totalEarnings > 0 ? 'Avg / Trip' : 'Service Status',
+                                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                              ),
                               const SizedBox(height: 6),
                               Text(
-                                '₹${avgPerTrip.toStringAsFixed(0)}',
+                                totalEarnings > 0 ? '₹${avgPerTrip.toStringAsFixed(0)}' : 'Verified Driver',
                                 style: const TextStyle(
-                                  fontSize: 22,
+                                  fontSize: 18,
                                   fontWeight: FontWeight.bold,
                                   color: AppColors.primaryGreen,
                                 ),
@@ -192,7 +197,7 @@ class DriverFinancialsScreen extends ConsumerWidget {
                       itemCount: history.rides.length,
                       itemBuilder: (context, index) {
                         final ride = history.rides[index];
-                        return _buildRideHistoryItem(ride);
+                        return _buildRideHistoryItem(ride, showFare: totalEarnings > 0);
                       },
                     ),
                   ],
@@ -205,7 +210,7 @@ class DriverFinancialsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildRideHistoryItem(RideModel ride) {
+  Widget _buildRideHistoryItem(RideModel ride, {bool showFare = false}) {
     final isCompleted = ride.status == RideStatus.completed;
     final fare = ride.fareEstimate;
 
@@ -283,7 +288,7 @@ class DriverFinancialsScreen extends ConsumerWidget {
               ),
             ],
           ),
-          if (fare != null) ...[
+          if (showFare && fare != null) ...[
             const Divider(height: 18),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,

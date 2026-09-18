@@ -16,6 +16,9 @@ export interface AdminRepository {
   listVehicles(filters: AdminFilters): Promise<Page<AdminVehicle>>;
   getVehicle(id: string): Promise<AdminVehicle | null>;
   dashboard(): Promise<AdminDashboard>;
+  verifyDriver(driverId: string, status: string, rejectionReason?: string): Promise<boolean>;
+  verifyVehicle(vehicleId: string, status: string, rejectionReason?: string): Promise<boolean>;
+  verifyDocument(documentId: string, status: string, comments?: string): Promise<boolean>;
 }
 
 const userProjection = `
@@ -161,6 +164,39 @@ export class PostgresAdminRepository implements AdminRepository {
         fitnessExpiringOrExpired: fitness,
       },
     };
+  }
+
+  async verifyDriver(driverId: string, status: string, rejectionReason?: string): Promise<boolean> {
+    const res = await this.pool.query(
+      `UPDATE driver_profiles
+       SET verification_status = $1, updated_at = NOW()
+       WHERE id = $2 OR user_id = $2
+       RETURNING id`,
+      [status, driverId],
+    );
+    return (res.rowCount ?? 0) > 0;
+  }
+
+  async verifyVehicle(vehicleId: string, status: string, rejectionReason?: string): Promise<boolean> {
+    const res = await this.pool.query(
+      `UPDATE vehicles
+       SET verification_status = $1, updated_at = NOW()
+       WHERE id = $2
+       RETURNING id`,
+      [status, vehicleId],
+    );
+    return (res.rowCount ?? 0) > 0;
+  }
+
+  async verifyDocument(documentId: string, status: string, comments?: string): Promise<boolean> {
+    const res = await this.pool.query(
+      `UPDATE partner_documents
+       SET status = $1, comments = COALESCE($2, comments), updated_at = NOW()
+       WHERE id = $3
+       RETURNING id`,
+      [status, comments ?? null, documentId],
+    );
+    return (res.rowCount ?? 0) > 0;
   }
 
   private async complianceCount(type: string): Promise<number> {

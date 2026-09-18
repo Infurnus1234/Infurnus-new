@@ -144,7 +144,14 @@ class DriverOnboardingNotifier extends StateNotifier<DriverOnboardingState> {
   Future<bool> upsertDriverProfile({
     required String licenseNumber,
     required String licenseExpiry,
+    String? dob,
+    String? gender,
+    String? address,
     String? city,
+    String? stateName,
+    String? pinCode,
+    String? emergencyContactName,
+    String? emergencyContactPhone,
   }) async {
     state = state.copyWith(isSubmitting: true, errorMessage: null, successMessage: null);
 
@@ -152,7 +159,16 @@ class DriverOnboardingNotifier extends StateNotifier<DriverOnboardingState> {
       final profileData = {
         'licenseNumber': licenseNumber.trim(),
         'licenseExpiry': licenseExpiry.trim(),
+        if (dob != null && dob.isNotEmpty) 'dob': dob.trim(),
+        if (gender != null && gender.isNotEmpty) 'gender': gender.trim(),
+        if (address != null && address.isNotEmpty) 'address': address.trim(),
         if (city != null && city.isNotEmpty) 'city': city.trim(),
+        if (stateName != null && stateName.isNotEmpty) 'state': stateName.trim(),
+        if (pinCode != null && pinCode.isNotEmpty) 'pinCode': pinCode.trim(),
+        if (emergencyContactName != null && emergencyContactName.isNotEmpty)
+          'emergencyContactName': emergencyContactName.trim(),
+        if (emergencyContactPhone != null && emergencyContactPhone.isNotEmpty)
+          'emergencyContactPhone': emergencyContactPhone.trim(),
       };
 
       final profile = await ref.read(upsertDriverProfileUseCaseProvider).execute(profileData);

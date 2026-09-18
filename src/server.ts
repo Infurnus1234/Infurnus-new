@@ -35,6 +35,9 @@ import { CouponRedemptionService } from './modules/coupons/services/coupon-redem
 
 import { PostgresRatingRepository } from './modules/ratings/repositories/rating.repository.js';
 import { PostgresPaymentRepository } from './modules/payments/repositories/payment.repository.js';
+import { PostgresFleetRepository } from './modules/fleet/repositories/fleet.repository.js';
+import { PostgresProviderBankRepository } from './modules/providers/repositories/provider-bank.repository.js';
+import { PostgresSupportRepository } from './modules/support/repositories/support.repository.js';
 
 async function startServer() {
   // ==========================================================
@@ -75,6 +78,12 @@ async function startServer() {
 
   const paymentRepository = new PostgresPaymentRepository(pool);
 
+  const fleetRepository = new PostgresFleetRepository(pool);
+
+  const providerBankRepository = new PostgresProviderBankRepository(pool);
+
+  const supportRepository = new PostgresSupportRepository(pool);
+
   // ==========================================================
   // Map provider
   //
@@ -110,12 +119,6 @@ async function startServer() {
 
   // ==========================================================
   // Express application
-  //
-  // authOtpProvider is passed explicitly as the 9th argument.
-  // fareEstimateService is passed as the 10th argument.
-  // couponRedemptionService is passed as the 11th argument.
-  // ratingRepository is passed as the 12th argument.
-  // paymentRepository is passed as the 13th argument.
   // ==========================================================
 
   const app = createApp(
@@ -132,6 +135,9 @@ async function startServer() {
     couponRedemptionService,
     ratingRepository,
     paymentRepository,
+    fleetRepository,
+    providerBankRepository,
+    supportRepository,
   );
 
   // ==========================================================

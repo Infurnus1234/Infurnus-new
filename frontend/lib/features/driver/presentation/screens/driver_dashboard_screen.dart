@@ -7,7 +7,12 @@ import '../../../../shared/widgets/infurnus_error_view.dart';
 import '../../../../shared/widgets/infurnus_loader.dart';
 import '../../../auth/presentation/providers/user_provider.dart';
 import '../providers/driver_dashboard_provider.dart';
+import '../providers/driver_providers.dart';
 import '../providers/driver_ride_provider.dart';
+import 'driver_financials_screen.dart';
+import 'driver_notifications_screen.dart';
+import 'driver_profile_screen.dart';
+import 'fleet_dashboard_screen.dart';
 
 class DriverDashboardScreen extends ConsumerStatefulWidget {
   const DriverDashboardScreen({super.key});
@@ -17,12 +22,143 @@ class DriverDashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
+  int _currentIndex = 0;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(driverDashboardProvider.notifier).loadDashboard();
     });
+  }
+
+  void _showClaimCodeDialog() {
+    final codeController = TextEditingController();
+    Map<String, dynamic>? verifiedVehicle;
+    bool isVerifying = false;
+    bool isClaiming = false;
+    String? errorText;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF141A16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Claim Fleet Vehicle', style: TextStyle(color: Colors.white, fontSize: 18)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Enter the 5-digit assignment code provided by your Fleet Owner (e.g. FLEET-12345):',
+                style: TextStyle(color: Colors.grey[300], fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: codeController,
+                textCapitalization: TextCapitalization.characters,
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 1.5),
+                decoration: InputDecoration(
+                  hintText: 'FLEET-XXXXX',
+                  hintStyle: const TextStyle(color: Colors.grey),
+                  filled: true,
+                  fillColor: const Color(0xFF1E2621),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  prefixIcon: const Icon(Icons.vpn_key, color: AppColors.primaryGreen),
+                ),
+              ),
+              if (errorText != null) ...[
+                const SizedBox(height: 8),
+                Text(errorText!, style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+              ],
+              if (verifiedVehicle != null) ...[
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryGreen.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.primaryGreen.withOpacity(0.3)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${verifiedVehicle!['make']} ${verifiedVehicle!['model']}',
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                      Text('Plate: ${verifiedVehicle!['plateNumber']}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                      if (verifiedVehicle!['fleetOwnerName'] != null)
+                        Text('Owner: ${verifiedVehicle!['fleetOwnerName']}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            if (verifiedVehicle == null)
+              ElevatedButton(
+                onPressed: isVerifying
+                    ? null
+                    : () async {
+                        final code = codeController.text.trim();
+                        if (code.isEmpty) return;
+                        setDialogState(() {
+                          isVerifying = true;
+                          errorText = null;
+                        });
+                        try {
+                          final ds = ref.read(driverRemoteDataSourceProvider);
+                          final info = await ds.verifyAssignmentCode(code);
+                          setDialogState(() {
+                            isVerifying = false;
+                            verifiedVehicle = info;
+                          });
+                        } catch (e) {
+                          setDialogState(() {
+                            isVerifying = false;
+                            errorText = 'Invalid or expired assignment code';
+                          });
+                        }
+                      },
+                child: isVerifying ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Verify Code'),
+              )
+            else
+              ElevatedButton(
+                onPressed: isClaiming
+                    ? null
+                    : () async {
+                        final code = codeController.text.trim();
+                        setDialogState(() => isClaiming = true);
+                        try {
+                          final ds = ref.read(driverRemoteDataSourceProvider);
+                          await ds.claimAssignmentCode(code);
+                          if (ctx.mounted) Navigator.pop(ctx);
+                          ref.read(driverDashboardProvider.notifier).loadDashboard();
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Vehicle claimed & activated successfully!'),
+                                backgroundColor: AppColors.primaryGreen,
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          setDialogState(() {
+                            isClaiming = false;
+                            errorText = 'Failed to claim vehicle: $e';
+                          });
+                        }
+                      },
+                child: isClaiming ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Claim & Activate'),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -35,6 +171,25 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
 
     final bool isApproved = partner?.approvalStatus == 'approved';
     final bool isOnline = partner?.availabilityStatus == 'available';
+
+    if (_currentIndex == 1) {
+      return Scaffold(
+        body: user?.role == 'fleet_owner' ? const FleetDashboardScreen() : const DriverFinancialsScreen(),
+        bottomNavigationBar: _buildBottomBar(user),
+      );
+    }
+    if (_currentIndex == 2) {
+      return Scaffold(
+        body: const DriverNotificationsScreen(),
+        bottomNavigationBar: _buildBottomBar(user),
+      );
+    }
+    if (_currentIndex == 3) {
+      return Scaffold(
+        body: const DriverProfileScreen(),
+        bottomNavigationBar: _buildBottomBar(user),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -88,6 +243,38 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
         isApproved,
         isOnline,
       ),
+      bottomNavigationBar: _buildBottomBar(user),
+    );
+  }
+
+  Widget _buildBottomBar(dynamic user) {
+    return NavigationBar(
+      selectedIndex: _currentIndex,
+      onDestinationSelected: (idx) => setState(() => _currentIndex = idx),
+      backgroundColor: const Color(0xFF141916),
+      indicatorColor: AppColors.primaryGreen.withOpacity(0.2),
+      destinations: [
+        const NavigationDestination(
+          icon: Icon(Icons.home_outlined),
+          selectedIcon: Icon(Icons.home, color: AppColors.primaryGreen),
+          label: 'Home',
+        ),
+        NavigationDestination(
+          icon: Icon(user?.role == 'fleet_owner' ? Icons.business_outlined : Icons.alt_route_outlined),
+          selectedIcon: Icon(user?.role == 'fleet_owner' ? Icons.business : Icons.alt_route, color: AppColors.primaryGreen),
+          label: user?.role == 'fleet_owner' ? 'Fleet' : 'Trips',
+        ),
+        const NavigationDestination(
+          icon: Icon(Icons.notifications_none),
+          selectedIcon: Icon(Icons.notifications, color: AppColors.primaryGreen),
+          label: 'Alerts',
+        ),
+        const NavigationDestination(
+          icon: Icon(Icons.person_outline),
+          selectedIcon: Icon(Icons.person, color: AppColors.primaryGreen),
+          label: 'Profile',
+        ),
+      ],
     );
   }
 
@@ -512,22 +699,47 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
   Widget _buildVehicleCard(BuildContext context, dynamic vehicle) {
     if (vehicle == null) {
       return InfurnusCard(
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.directions_car_outlined, color: Colors.grey, size: 32),
-            const SizedBox(width: 16),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('No Active Vehicle', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                  Text('Register a vehicle to go online', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                ],
-              ),
+            const Row(
+              children: [
+                Icon(Icons.directions_car_outlined, color: Colors.grey, size: 28),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('No Active Vehicle', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                      Text('Register or claim a vehicle to go online', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            OutlinedButton(
-              onPressed: () => context.push('/driver-onboarding'),
-              child: const Text('Setup Vehicle'),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.qr_code, size: 16),
+                    label: const Text('Claim Code'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primaryGreen,
+                      side: const BorderSide(color: AppColors.primaryGreen),
+                    ),
+                    onPressed: _showClaimCodeDialog,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => context.push('/driver-onboarding'),
+                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryGreen, foregroundColor: Colors.white),
+                    child: const Text('Register'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -547,6 +759,11 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
                 Text('Plate: ${vehicle.plateNumber}', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
               ],
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.swap_horiz, color: Colors.white70),
+            tooltip: 'Claim Vehicle Code',
+            onPressed: _showClaimCodeDialog,
           ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

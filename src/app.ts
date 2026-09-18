@@ -64,6 +64,21 @@ import type { PaymentRepository } from './modules/payments/repositories/payment.
 import { PaymentController } from './modules/payments/controllers/payment.controller.js';
 import { createPaymentRouter } from './modules/payments/routes/payment.routes.js';
 
+import type { FleetRepository } from './modules/fleet/repositories/fleet.repository.js';
+import { FleetService } from './modules/fleet/services/fleet.service.js';
+import { FleetController } from './modules/fleet/controllers/fleet.controller.js';
+import { createFleetRouter } from './modules/fleet/routes/fleet.routes.js';
+
+import type { ProviderBankRepository } from './modules/providers/repositories/provider-bank.repository.js';
+import { ProviderService } from './modules/providers/services/provider.service.js';
+import { ProviderController } from './modules/providers/controllers/provider.controller.js';
+import { createProviderRouter } from './modules/providers/routes/provider.routes.js';
+
+import type { SupportRepository } from './modules/support/repositories/support.repository.js';
+import { SupportService } from './modules/support/services/support.service.js';
+import { SupportController } from './modules/support/controllers/support.controller.js';
+import { createSupportRouter } from './modules/support/routes/support.routes.js';
+
 export interface AppOptions {
   enableAuthRateLimiting?: boolean;
   enableAuthCsrfProtection?: boolean;
@@ -87,6 +102,9 @@ export function createApp(
   couponRedemptionService?: CouponRedemptionService,
   ratingRepository?: RatingRepository,
   paymentRepository?: PaymentRepository,
+  fleetRepository?: FleetRepository,
+  providerBankRepository?: ProviderBankRepository,
+  supportRepository?: SupportRepository,
 ): express.Express;
 
 // ============================================================
@@ -117,6 +135,9 @@ export function createApp(
   couponRedemptionService?: CouponRedemptionService,
   ratingRepository?: RatingRepository,
   paymentRepository?: PaymentRepository,
+  fleetRepository?: FleetRepository,
+  providerBankRepository?: ProviderBankRepository,
+  supportRepository?: SupportRepository,
 ) {
   const app = express();
 
@@ -300,6 +321,33 @@ export function createApp(
     );
 
     app.use('/payments', createPaymentRouter(paymentController));
+  }
+
+  // ==========================================================
+  // Fleet
+  // ==========================================================
+
+  if (fleetRepository) {
+    const fleetController = new FleetController(new FleetService(fleetRepository));
+    app.use('/fleet', createFleetRouter(fleetController));
+  }
+
+  // ==========================================================
+  // Provider Bank Details
+  // ==========================================================
+
+  if (providerBankRepository) {
+    const providerController = new ProviderController(new ProviderService(providerBankRepository));
+    app.use('/provider', createProviderRouter(providerController));
+  }
+
+  // ==========================================================
+  // Support Tickets
+  // ==========================================================
+
+  if (supportRepository) {
+    const supportController = new SupportController(new SupportService(supportRepository));
+    app.use('/support', createSupportRouter(supportController));
   }
 
   // ==========================================================

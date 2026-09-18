@@ -24,6 +24,11 @@ import '../../features/driver/presentation/screens/driver_profile_screen.dart';
 import '../../features/driver/presentation/screens/driver_documents_screen.dart';
 import '../../features/driver/presentation/screens/driver_vehicles_screen.dart';
 import '../../features/driver/presentation/screens/driver_notifications_screen.dart';
+import '../../features/driver/presentation/screens/fleet_dashboard_screen.dart';
+import '../../features/driver/presentation/screens/fleet_vehicles_screen.dart';
+import '../../features/driver/presentation/screens/fleet_drivers_screen.dart';
+import '../../features/driver/presentation/screens/provider_bank_account_screen.dart';
+import '../../features/driver/presentation/screens/support_tickets_screen.dart';
 import '../../features/customer/presentation/screens/rentals_screen.dart';
 import '../../features/customer/presentation/screens/logistics_screen.dart';
 import '../../features/ai_assistant/presentation/screens/ai_assistant_screen.dart';
@@ -114,6 +119,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const DriverDashboardScreen(),
       ),
       GoRoute(
+        path: '/driver/dashboard',
+        redirect: (_, __) => '/driver-dashboard',
+      ),
+      GoRoute(
         path: '/driver-onboarding',
         builder: (context, state) => const DriverOnboardingScreen(),
       ),
@@ -140,6 +149,26 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/driver-notifications',
         builder: (context, state) => const DriverNotificationsScreen(),
+      ),
+      GoRoute(
+        path: '/fleet-dashboard',
+        builder: (context, state) => const FleetDashboardScreen(),
+      ),
+      GoRoute(
+        path: '/fleet-vehicles',
+        builder: (context, state) => const FleetVehiclesScreen(),
+      ),
+      GoRoute(
+        path: '/fleet-drivers',
+        builder: (context, state) => const FleetDriversScreen(),
+      ),
+      GoRoute(
+        path: '/provider-bank-account',
+        builder: (context, state) => const ProviderBankAccountScreen(),
+      ),
+      GoRoute(
+        path: '/support-tickets',
+        builder: (context, state) => const SupportTicketsScreen(),
       ),
       GoRoute(
         path: '/rentals',

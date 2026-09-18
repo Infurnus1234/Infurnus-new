@@ -36,6 +36,10 @@ function repository(overrides: Partial<DriverRepository> = {}): DriverRepository
     updateLocation: vi.fn().mockResolvedValue(true),
     markStale: vi.fn().mockResolvedValue(true),
     findNearbyEligible: vi.fn().mockResolvedValue([]),
+    verifyAssignmentCode: vi.fn().mockResolvedValue(null),
+    claimAssignmentCode: vi.fn().mockResolvedValue(null),
+    setActiveVehicle: vi.fn().mockResolvedValue(true),
+    getAssignedVehicle: vi.fn().mockResolvedValue(null),
     ...overrides,
   };
 }

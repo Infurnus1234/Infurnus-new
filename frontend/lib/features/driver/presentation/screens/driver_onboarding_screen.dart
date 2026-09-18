@@ -21,9 +21,19 @@ class _DriverOnboardingScreenState extends ConsumerState<DriverOnboardingScreen>
   final _businessNameController = TextEditingController();
   final _businessDescController = TextEditingController();
 
+  String _selectedProviderType = 'DRIVER';
+  final List<Map<String, String>> _providerTypes = [
+    {'id': 'DRIVER', 'label': 'Individual Driver', 'desc': 'Operates assigned or owned vehicle'},
+    {'id': 'FLEET_OWNER', 'label': 'Fleet Owner', 'desc': 'Owns and manages fleet of vehicles & drivers'},
+    {'id': 'DRIVER_FLEET_OWNER', 'label': 'Driver cum Fleet Owner', 'desc': 'Drives active vehicle & manages fleet'},
+  ];
+
   // Driver Profile Controllers
   final _licenseNumberController = TextEditingController();
   final _licenseExpiryController = TextEditingController();
+  final _dobController = TextEditingController();
+  final _emergencyNameController = TextEditingController();
+  final _emergencyPhoneController = TextEditingController();
 
   // Vehicle Controllers
   final _makeController = TextEditingController();
@@ -71,6 +81,9 @@ class _DriverOnboardingScreenState extends ConsumerState<DriverOnboardingScreen>
     _businessDescController.dispose();
     _licenseNumberController.dispose();
     _licenseExpiryController.dispose();
+    _dobController.dispose();
+    _emergencyNameController.dispose();
+    _emergencyPhoneController.dispose();
     _makeController.dispose();
     _modelController.dispose();
     _colorController.dispose();
@@ -86,10 +99,19 @@ class _DriverOnboardingScreenState extends ConsumerState<DriverOnboardingScreen>
     final partner = onboardingState.partner;
     final driverProfile = onboardingState.driverProfile;
 
-    // Prefill license fields if profile already exists
+    // Prefill license and profile fields if profile already exists
     if (driverProfile != null && _licenseNumberController.text.isEmpty) {
       _licenseNumberController.text = driverProfile.licenseNumber;
       _licenseExpiryController.text = driverProfile.licenseExpiry.split('T').first;
+      if (driverProfile.dob != null && _dobController.text.isEmpty) {
+        _dobController.text = driverProfile.dob!.split('T').first;
+      }
+      if (driverProfile.emergencyContactName != null && _emergencyNameController.text.isEmpty) {
+        _emergencyNameController.text = driverProfile.emergencyContactName!;
+      }
+      if (driverProfile.emergencyContactPhone != null && _emergencyPhoneController.text.isEmpty) {
+        _emergencyPhoneController.text = driverProfile.emergencyContactPhone!;
+      }
     }
 
     return Scaffold(
@@ -183,6 +205,24 @@ class _DriverOnboardingScreenState extends ConsumerState<DriverOnboardingScreen>
           const Text('Fill in your details to register as an INFURNUS partner.',
               style: TextStyle(color: Colors.grey, fontSize: 13)),
           const SizedBox(height: 16),
+          DropdownButtonFormField<String>(
+            value: _selectedProviderType,
+            decoration: const InputDecoration(
+              labelText: 'Provider Category',
+              border: OutlineInputBorder(),
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            ),
+            items: _providerTypes.map((type) {
+              return DropdownMenuItem(
+                value: type['id'],
+                child: Text(type['label']!),
+              );
+            }).toList(),
+            onChanged: (val) {
+              if (val != null) setState(() => _selectedProviderType = val);
+            },
+          ),
+          const SizedBox(height: 12),
           InfurnusTextField(
             label: 'Partner / Business Name',
             hintText: 'e.g. John Doe Services',
@@ -332,6 +372,32 @@ class _DriverOnboardingScreenState extends ConsumerState<DriverOnboardingScreen>
             hintText: '2029-12-31',
             controller: _licenseExpiryController,
           ),
+          const SizedBox(height: 12),
+          InfurnusTextField(
+            label: 'Date of Birth (YYYY-MM-DD, Optional)',
+            hintText: '1995-05-15',
+            controller: _dobController,
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: InfurnusTextField(
+                  label: 'Emergency Contact Name',
+                  hintText: 'e.g. John Doe',
+                  controller: _emergencyNameController,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: InfurnusTextField(
+                  label: 'Emergency Phone',
+                  hintText: '9876543210',
+                  controller: _emergencyPhoneController,
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 16),
           InfurnusButton(
             text: profile != null ? 'Update Driver Profile' : 'Save Driver Profile',
@@ -347,6 +413,13 @@ class _DriverOnboardingScreenState extends ConsumerState<DriverOnboardingScreen>
               await ref.read(driverOnboardingProvider.notifier).upsertDriverProfile(
                     licenseNumber: _licenseNumberController.text.trim(),
                     licenseExpiry: _licenseExpiryController.text.trim(),
+                    dob: _dobController.text.trim().isNotEmpty ? _dobController.text.trim() : null,
+                    emergencyContactName: _emergencyNameController.text.trim().isNotEmpty
+                        ? _emergencyNameController.text.trim()
+                        : null,
+                    emergencyContactPhone: _emergencyPhoneController.text.trim().isNotEmpty
+                        ? _emergencyPhoneController.text.trim()
+                        : null,
                   );
             },
           ),
@@ -622,7 +695,7 @@ class _DriverOnboardingScreenState extends ConsumerState<DriverOnboardingScreen>
       text: 'Go to Driver Dashboard',
       onPressed: () {
         ref.read(driverDashboardProvider.notifier).loadDashboard();
-        context.go('/driver/dashboard');
+        context.go('/driver-dashboard');
       },
     );
   }

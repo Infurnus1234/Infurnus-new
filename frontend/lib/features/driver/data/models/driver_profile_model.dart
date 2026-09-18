@@ -9,6 +9,15 @@ class DriverProfileModel {
   final String verificationStatus;
   final String? rejectionReason;
   final String? availabilityStatus;
+  final String? dob;
+  final String? gender;
+  final String? address;
+  final String? city;
+  final String? state;
+  final String? pinCode;
+  final String? emergencyContactName;
+  final String? emergencyContactPhone;
+  final String? activeVehicleId;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -23,6 +32,15 @@ class DriverProfileModel {
     required this.verificationStatus,
     this.rejectionReason,
     this.availabilityStatus,
+    this.dob,
+    this.gender,
+    this.address,
+    this.city,
+    this.state,
+    this.pinCode,
+    this.emergencyContactName,
+    this.emergencyContactPhone,
+    this.activeVehicleId,
     this.createdAt,
     this.updatedAt,
   });
@@ -39,6 +57,15 @@ class DriverProfileModel {
       verificationStatus: (json['verificationStatus'] as String?) ?? 'pending',
       rejectionReason: json['rejectionReason'] as String?,
       availabilityStatus: json['availabilityStatus'] as String?,
+      dob: json['dob'] as String?,
+      gender: json['gender'] as String?,
+      address: json['address'] as String?,
+      city: json['city'] as String?,
+      state: json['state'] as String?,
+      pinCode: json['pinCode'] as String?,
+      emergencyContactName: json['emergencyContactName'] as String?,
+      emergencyContactPhone: json['emergencyContactPhone'] as String?,
+      activeVehicleId: json['activeVehicleId'] as String?,
       createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt'] as String) : null,
       updatedAt: json['updatedAt'] != null ? DateTime.parse(json['updatedAt'] as String) : null,
     );
@@ -55,5 +82,14 @@ class DriverProfileModel {
         'verificationStatus': verificationStatus,
         'rejectionReason': rejectionReason,
         'availabilityStatus': availabilityStatus,
+        'dob': dob,
+        'gender': gender,
+        'address': address,
+        'city': city,
+        'state': state,
+        'pinCode': pinCode,
+        'emergencyContactName': emergencyContactName,
+        'emergencyContactPhone': emergencyContactPhone,
+        'activeVehicleId': activeVehicleId,
       };
 }
