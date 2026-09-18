@@ -7,7 +7,7 @@ export const initiatePaymentSchema = z
     rideId: uuid.optional(),
     rentalId: uuid.optional(),
     logisticsOrderId: uuid.optional(),
-    amount: z.number().positive(),
+    amount: z.number().positive().optional(),
     currency: z.string().default('INR').optional(),
     provider: z.enum(['wallet', 'cash', 'upi', 'card', 'razorpay']).default('wallet'),
     idempotencyKey: z.string().trim().min(1).max(255).optional(),

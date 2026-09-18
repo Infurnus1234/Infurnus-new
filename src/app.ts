@@ -293,7 +293,11 @@ export function createApp(
   // ==========================================================
 
   if (paymentRepository) {
-    const paymentController = new PaymentController(paymentRepository);
+    const paymentController = new PaymentController(
+      paymentRepository,
+      rideRepository,
+      rentalRepository,
+    );
 
     app.use('/payments', createPaymentRouter(paymentController));
   }

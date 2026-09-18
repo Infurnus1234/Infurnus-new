@@ -17,12 +17,15 @@ export interface DriverRepository {
   releaseBusy(profileId: string, client?: PoolClient): Promise<boolean>;
   updateLocation(profileId: string, location: DriverLocation): Promise<boolean>;
   markStale(profileId: string): Promise<boolean>;
+  findActiveVehicleByUserId?(userId: string): Promise<{ sector: string; category: string } | null>;
   findNearbyEligible(
     latitude: number,
     longitude: number,
     radiusMeters: number,
     limit: number,
     staleBefore: Date,
+    sector?: string,
+    vehicleCategory?: string,
   ): Promise<DriverCandidate[]>;
 }
 
@@ -156,12 +159,28 @@ export class PostgresDriverRepository implements DriverRepository {
     return result.rowCount === 1;
   }
 
+  async findActiveVehicleByUserId(userId: string): Promise<{ sector: string; category: string } | null> {
+    const result = await this.pool.query<{ sector: string; category: string }>(
+      `SELECT COALESCE(v.sector, 'passenger') AS "sector", COALESCE(v.category, 'sedan') AS "category"
+       FROM vehicles v
+       JOIN driver_profiles dp ON dp.id = v.driver_profile_id
+       WHERE dp.user_id = $1
+         AND v.is_active = TRUE
+       ORDER BY v.created_at DESC
+       LIMIT 1`,
+      [userId],
+    );
+    return result.rows[0] ?? null;
+  }
+
   async findNearbyEligible(
     latitude: number,
     longitude: number,
     radiusMeters: number,
     limit: number,
     staleBefore: Date,
+    sector?: string,
+    vehicleCategory?: string,
   ): Promise<DriverCandidate[]> {
     const result = await this.pool.query<DriverCandidate>(
       `SELECT dp.id AS "driverProfileId", dp.user_id AS "userId", v.id AS "vehicleId",
@@ -171,7 +190,9 @@ export class PostgresDriverRepository implements DriverRepository {
           dp.availability_status AS "availabilityStatus",
           dp.verification_status AS "verificationStatus",
           dp.last_location_at AS "locationRecordedAt",
-          COUNT(active_ride.id)::int AS "activeRideCount"
+          COUNT(active_ride.id)::int AS "activeRideCount",
+          v.sector AS "sector",
+          v.category AS "vehicleCategory"
        FROM driver_profiles dp
        JOIN users u ON u.id = dp.user_id AND u.status = 'active'
        JOIN vehicles v ON v.driver_profile_id = dp.id AND v.is_active = TRUE
@@ -187,10 +208,12 @@ export class PostgresDriverRepository implements DriverRepository {
          AND dp.last_location_at >= $5
          AND ST_DWithin(dp.last_location, pickup.point, $3)
          AND active_ride.id IS NULL
-       GROUP BY dp.id, dp.user_id, v.id, pickup.point
+         AND ($6::varchar IS NULL OR v.sector = $6)
+         AND ($7::varchar IS NULL OR v.category = $7)
+       GROUP BY dp.id, dp.user_id, v.id, pickup.point, v.sector, v.category
        ORDER BY ST_Distance(dp.last_location, pickup.point), dp.id
        LIMIT $4`,
-      [longitude, latitude, radiusMeters, limit, staleBefore],
+      [longitude, latitude, radiusMeters, limit, staleBefore, sector ?? null, vehicleCategory ?? null],
     );
     return result.rows;
   }

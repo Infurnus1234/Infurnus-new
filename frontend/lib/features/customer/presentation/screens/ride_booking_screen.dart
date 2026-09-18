@@ -356,7 +356,6 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                       'serviceType': state.selectedTier,
                       'emergencyLevel': 'high',
                       'description': val,
-                      'workHours': 1,
                     });
                   },
                 ),
@@ -579,8 +578,9 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
       tiers = [
         {'id': 'ambulance', 'name': 'Ambulance', 'icon': Icons.medical_services, 'eta': 'Priority', 'price': 750.0},
         {'id': 'towing', 'name': 'Towing Van', 'icon': Icons.car_repair, 'eta': '12m', 'price': 900.0},
-        {'id': 'jcb', 'name': 'JCB Excavator', 'icon': Icons.agriculture, 'eta': 'Scheduled', 'price': 1260.0},
-        {'id': 'roadside_recovery', 'name': 'Roadside Recovery', 'icon': Icons.build, 'eta': '15m', 'price': 600.0},
+        {'id': 'jcb', 'name': 'JCB Excavator', 'icon': Icons.agriculture, 'eta': 'Scheduled', 'price': 1400.0},
+        {'id': 'recovery', 'name': 'Recovery Vehicle', 'icon': Icons.rv_hookup, 'eta': '15m', 'price': 900.0},
+        {'id': 'roadside_service', 'name': 'Roadside Service', 'icon': Icons.build, 'eta': '15m', 'price': 600.0},
       ];
     } else if (state.selectedSector == 'premium') {
       tiers = [

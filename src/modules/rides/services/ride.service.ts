@@ -103,6 +103,40 @@ export class RideService {
         throw new AppError('DRIVER_RELEASE_CONFLICT', 'Assigned driver could not be released', 409);
       }
 
+      if (ride.sector === 'premium') {
+        const bookedHours = Math.max(
+          1,
+          Number(ride.rentalDetails?.rentalHours ?? ride.rentalDetails?.hours ?? 1),
+        );
+        const hourlyRate = 1000;
+        const hourlyBase = bookedHours * hourlyRate;
+        const actualDistanceMeters = ride.actualDistanceMeters ?? 0;
+        const actualDistanceKm = Math.round((actualDistanceMeters / 1000) * 100) / 100;
+        const actualFuelCost = Number(ride.actualFuelCost ?? 0);
+        const subtotal = hourlyBase + actualFuelCost;
+        const taxAmount = Math.round((subtotal * 0.05) * 100) / 100;
+        const finalFare = Number(ride.finalFare ?? Math.round((subtotal + taxAmount) * 100) / 100);
+
+        ride.billing = {
+          currency: 'INR',
+          hourlyRate,
+          bookedHours,
+          hourlyBase,
+          fuelRatePerKm: actualDistanceKm > 0 ? Math.round((actualFuelCost / actualDistanceKm) * 100) / 100 : 15,
+          actualDistanceKm,
+          actualDistanceMeters,
+          actualFuelCost,
+          subtotal,
+          taxAmount,
+          finalFare,
+        };
+      } else {
+        ride.billing = {
+          currency: 'INR',
+          finalFare: Number(ride.finalFare ?? ride.fareEstimate ?? 0),
+        };
+      }
+
       return ride;
     });
   }

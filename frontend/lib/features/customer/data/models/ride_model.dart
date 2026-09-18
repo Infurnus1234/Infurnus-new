@@ -87,6 +87,9 @@ class RideModel {
   final String? pickupAddress;
   final String? destinationAddress;
   final double? fareEstimate;
+  final double? finalFare;
+  final int? actualDistanceMeters;
+  final double? actualFuelCost;
   final String? sector;
   final String? vehicleCategory;
   final Map<String, dynamic>? goods;
@@ -102,6 +105,8 @@ class RideModel {
   final DateTime createdAt;
   final DateTime updatedAt;
 
+  double get displayFare => finalFare ?? fareEstimate ?? 0.0;
+
   RideModel({
     required this.id,
     required this.customerId,
@@ -112,6 +117,9 @@ class RideModel {
     this.pickupAddress,
     this.destinationAddress,
     this.fareEstimate,
+    this.finalFare,
+    this.actualDistanceMeters,
+    this.actualFuelCost,
     this.sector,
     this.vehicleCategory,
     this.goods,
@@ -141,6 +149,13 @@ class RideModel {
       fareEstimate: json['fareEstimate'] != null
           ? (json['fareEstimate'] as num).toDouble()
           : (json['fare'] != null ? (json['fare'] as num).toDouble() : null),
+      finalFare: json['finalFare'] != null ? (json['finalFare'] as num).toDouble() : null,
+      actualDistanceMeters: json['actualDistanceMeters'] != null
+          ? (json['actualDistanceMeters'] as num).toInt()
+          : null,
+      actualFuelCost: json['actualFuelCost'] != null
+          ? (json['actualFuelCost'] as num).toDouble()
+          : null,
       sector: json['sector'] as String?,
       vehicleCategory: json['vehicleCategory'] as String?,
       goods: json['goods'] != null ? Map<String, dynamic>.from(json['goods'] as Map) : null,

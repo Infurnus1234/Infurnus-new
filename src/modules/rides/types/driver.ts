@@ -19,6 +19,8 @@ export interface DriverCandidate {
   verificationStatus: string;
   activeRideCount: number;
   locationRecordedAt: Date;
+  sector?: string;
+  vehicleCategory?: string;
 }
 
 export interface DriverProfile {

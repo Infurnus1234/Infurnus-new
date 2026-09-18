@@ -12,7 +12,7 @@ describe('BUG-P3-01 & BUG-P3-03 & BUG-P3-05: Fare Estimate Parity & Contract Tes
     baseFare: 5000,
     distanceRatePerKm: 1500,
     timeRatePerMinute: 200,
-    currency: 'INR',
+    currency: 'INR' as const,
     pricingVersion: 'v1-contract-test',
   };
   const calculator = new FareCalculatorService(pricingConfig);
@@ -27,11 +27,17 @@ describe('BUG-P3-01 & BUG-P3-03 & BUG-P3-05: Fare Estimate Parity & Contract Tes
         encodedPolyline: 'mock_polyline',
       };
     },
+    calculateMatrix: async () => [],
+    geocode: async () => null,
+    places: async () => [],
   };
 
   // Mock map provider simulating Google Maps failure / null
   const nullMapProvider: MapProvider = {
     calculateRoute: async () => null,
+    calculateMatrix: async () => [],
+    geocode: async () => null,
+    places: async () => [],
   };
 
   describe('BUG-P3-01: Flutter-Equivalent Contract Payload Validation', () => {

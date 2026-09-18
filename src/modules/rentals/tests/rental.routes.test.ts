@@ -1,6 +1,14 @@
-﻿import request from 'supertest';
-import { describe, expect, it } from 'vitest';
+import request from 'supertest';
+import { describe, expect, it, vi } from 'vitest';
 import { createApp } from '../../../app.js';
+
+vi.mock('../../../infrastructure/database/postgres.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../infrastructure/database/postgres.js')>();
+  return {
+    ...actual,
+    withTransaction: vi.fn(async (callback) => callback({} as never)),
+  };
+});
 import { signAccessToken } from '../../auth/utils/jwt.js';
 import type { CreateRentalInput, ListRentalsInput } from '../schemas/rental.schemas.js';
 import type { RentalRepository } from '../repositories/rental.repository.js';
