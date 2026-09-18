@@ -6,7 +6,9 @@ import '../../../../core/services/location_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_button.dart';
 import '../../../../shared/widgets/infurnus_card.dart';
+import '../../data/models/fleet_vehicle_model.dart';
 import '../providers/ride_provider.dart';
+import '../providers/ride_use_case_providers.dart';
 
 class RentalsScreen extends ConsumerStatefulWidget {
   const RentalsScreen({super.key});
@@ -22,43 +24,46 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
   DateTime _selectedDate = DateTime.now();
   TimeOfDay _selectedTime = const TimeOfDay(hour: 10, minute: 0);
 
-  final List<Map<String, dynamic>> _fleet = [
-    {
-      'id': 'fortuner',
-      'name': 'Toyota Fortuner',
-      'tagline': 'Luxury 4x4 • 7 Seater',
-      'hourlyRate': 1200.0,
-      'fuelRate': 16.0,
-      'features': 'Leather Interior • Chauffeur • High Clearance',
-      'icon': Icons.directions_car,
-    },
-    {
-      'id': 'thar',
-      'name': 'Mahindra Thar',
-      'tagline': 'Adventure 4x4 • 4 Seater',
-      'hourlyRate': 950.0,
-      'fuelRate': 14.0,
-      'features': 'Convertible Roof • All-Terrain • Iconic Stance',
-      'icon': Icons.terrain,
-    },
-    {
-      'id': 'luxury_suv',
-      'name': 'BMW / Mercedes SUV',
-      'tagline': 'VIP Executive • 5 Seater',
-      'hourlyRate': 2200.0,
-      'fuelRate': 22.0,
-      'features': 'Panoramic Sunroof • Executive Lounge • Butler Service',
-      'icon': Icons.stars,
-    },
-  ];
+  List<FleetVehicleModel> _fleetVehicles = [];
+  bool _isLoadingFleet = true;
+  String? _fleetError;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _fetchFleet();
       _detectCurrentLocation();
-      _syncToRideProvider();
     });
+  }
+
+  Future<void> _fetchFleet() async {
+    setState(() {
+      _isLoadingFleet = true;
+      _fleetError = null;
+    });
+    try {
+      final fleet = await ref.read(getFleetUseCaseProvider)(sector: 'premium');
+      if (mounted) {
+        setState(() {
+          _fleetVehicles = fleet;
+          _isLoadingFleet = false;
+          if (fleet.isNotEmpty) {
+            if (!_fleetVehicles.any((v) => v.category == _selectedVehicle)) {
+              _selectedVehicle = fleet.first.category;
+            }
+          }
+        });
+        _syncToRideProvider();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingFleet = false;
+          _fleetError = e.toString();
+        });
+      }
+    }
   }
 
   Future<void> _detectCurrentLocation() async {
@@ -81,8 +86,13 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
     super.dispose();
   }
 
-  Map<String, dynamic> get _currentCar =>
-      _fleet.firstWhere((c) => c['id'] == _selectedVehicle, orElse: () => _fleet.first);
+  FleetVehicleModel? get _currentCar {
+    if (_fleetVehicles.isEmpty) return null;
+    return _fleetVehicles.firstWhere(
+      (c) => c.category == _selectedVehicle,
+      orElse: () => _fleetVehicles.first,
+    );
+  }
 
   void _syncToRideProvider() {
     final car = _currentCar;
@@ -91,14 +101,18 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
           'Hourly Standby / As Directed',
         );
     ref.read(rideProvider.notifier).selectSector('premium');
-    ref.read(rideProvider.notifier).selectTier(_selectedVehicle);
-    ref.read(rideProvider.notifier).setRentalDetails({
-      'hours': _selectedHours,
-      'startDate': '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}',
-      'startTime': '${_selectedTime.hour}:${_selectedTime.minute.toString().padLeft(2, '0')}',
-      'fuelRatePerKm': car['fuelRate'] as double,
-      'vehicleModel': car['name'] as String,
-    });
+    if (car != null) {
+      ref.read(rideProvider.notifier).selectTier(car.category);
+      ref.read(rideProvider.notifier).setRentalDetails({
+        'hours': _selectedHours,
+        'startDate':
+            '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}',
+        'startTime':
+            '${_selectedTime.hour}:${_selectedTime.minute.toString().padLeft(2, '0')}',
+        'fuelRatePerKm': car.fuelRatePerKm,
+        'vehicleModel': '${car.make} ${car.model}',
+      });
+    }
   }
 
   void _handleBooking() {
@@ -109,18 +123,37 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
       return;
     }
 
+    if (_currentCar == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No premium vehicle available to book')),
+      );
+      return;
+    }
+
     _syncToRideProvider();
     ref.read(rideProvider.notifier).requestRide();
     context.push('/ride-booking');
+  }
+
+  IconData _getVehicleIcon(String category) {
+    switch (category.toLowerCase()) {
+      case 'fortuner':
+        return Icons.directions_car_filled;
+      case 'thar':
+        return Icons.terrain;
+      case 'luxury_suv':
+        return Icons.stars;
+      default:
+        return Icons.directions_car;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final rideState = ref.watch(rideProvider);
     final car = _currentCar;
-    final hourlyRate = car['hourlyRate'] as double;
-    final fuelRate = car['fuelRate'] as double;
-    final basePackageFare = hourlyRate * _selectedHours;
+    final fuelRate = car?.fuelRatePerKm ?? 0.0;
+    final estimatedAdvance = rideState.fare;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -175,68 +208,141 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
             const SizedBox(height: 24),
 
             // Select Fleet
-            const Text('Choose Your Vehicle', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            const SizedBox(height: 12),
-            ..._fleet.map((item) {
-              final isSelected = item['id'] == _selectedVehicle;
-              return GestureDetector(
-                onTap: () {
-                  setState(() => _selectedVehicle = item['id'] as String);
-                  _syncToRideProvider();
-                },
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: isSelected ? Colors.amber[50] : Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: isSelected ? Colors.amber[800]! : Colors.grey[200]!,
-                      width: isSelected ? 2 : 1,
-                    ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Choose Your Vehicle', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                if (_isLoadingFleet)
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryGreen),
                   ),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 24,
-                        backgroundColor: isSelected ? Colors.amber[100] : Colors.grey[100],
-                        child: Icon(item['icon'] as IconData, color: isSelected ? Colors.amber[900] : Colors.grey[800]),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            if (_isLoadingFleet)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 32),
+                child: Center(
+                  child: CircularProgressIndicator(color: AppColors.primaryGreen),
+                ),
+              )
+            else if (_fleetError != null)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.red[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.red[200]!),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.error_outline, color: Colors.red),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Unable to load active fleet: $_fleetError',
+                        style: const TextStyle(color: Colors.red, fontSize: 13),
                       ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                    ),
+                    TextButton(
+                      onPressed: _fetchFleet,
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              )
+            else if (_fleetVehicles.isEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.grey[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey[200]!),
+                ),
+                child: Column(
+                  children: [
+                    Icon(Icons.directions_car_outlined, size: 40, color: Colors.grey[400]),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'No premium vehicles currently available',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'All luxury fleet units are currently on assignment.',
+                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                    ),
+                  ],
+                ),
+              )
+            else
+              ..._fleetVehicles.map((item) {
+                final isSelected = item.category == _selectedVehicle;
+                final icon = _getVehicleIcon(item.category);
+
+                return GestureDetector(
+                  onTap: () {
+                    setState(() => _selectedVehicle = item.category);
+                    _syncToRideProvider();
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.amber[50] : Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isSelected ? Colors.amber[800]! : Colors.grey[200]!,
+                        width: isSelected ? 2 : 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 24,
+                          backgroundColor: isSelected ? Colors.amber[100] : Colors.grey[100],
+                          child: Icon(icon, color: isSelected ? Colors.amber[900] : Colors.grey[800]),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${item.make} ${item.model}',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${item.category.toUpperCase()} • Chauffeur Standby',
+                                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Text(item['name'] as String, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                            const SizedBox(height: 2),
-                            Text(item['tagline'] as String, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                            const SizedBox(height: 4),
                             Text(
-                              item['features'] as String,
-                              style: TextStyle(color: Colors.grey[500], fontSize: 11),
+                              '₹${item.fuelRatePerKm.toStringAsFixed(0)}/km',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.amber[900]),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'fuel rate',
+                              style: TextStyle(fontSize: 11, color: Colors.grey[600]),
                             ),
                           ],
                         ),
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            '₹${(item['hourlyRate'] as double).toStringAsFixed(0)}/hr',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.amber[900]),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '+₹${(item['fuelRate'] as double).toStringAsFixed(0)}/km fuel',
-                            style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-                          ),
-                        ],
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              );
-            }),
+                );
+              }),
             const SizedBox(height: 20),
 
             // Pickup & Schedule
@@ -344,7 +450,7 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            '₹${(hourlyRate * hrs).toStringAsFixed(0)}',
+                            'Standby',
                             style: TextStyle(
                               color: isSelected ? Colors.amber : Colors.grey[600],
                               fontSize: 11,
@@ -377,7 +483,12 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text('Base Package ($_selectedHours hours standby)', style: TextStyle(color: Colors.grey[700], fontSize: 13)),
-                      Text('₹${basePackageFare.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      Text(
+                        rideState.fareEstimate?.baseAmount != null
+                            ? '₹${rideState.fareEstimate!.baseAmount.toStringAsFixed(2)}'
+                            : (estimatedAdvance != null ? '₹${estimatedAdvance.toStringAsFixed(2)}' : 'Calculating...'),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 6),
@@ -385,7 +496,10 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text('Configured Fuel Rate', style: TextStyle(color: Colors.grey[700], fontSize: 13)),
-                      Text('₹${fuelRate.toStringAsFixed(2)} / km', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primaryGreen)),
+                      Text(
+                        '₹${fuelRate.toStringAsFixed(2)} / km',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primaryGreen),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 6),
@@ -393,7 +507,10 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text('Fuel Cost Policy', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                      Text('Billed on actual GPS distance', style: TextStyle(color: Colors.grey[600], fontSize: 12, fontStyle: FontStyle.italic)),
+                      Text(
+                        'Billed on actual GPS distance',
+                        style: TextStyle(color: Colors.grey[600], fontSize: 12, fontStyle: FontStyle.italic),
+                      ),
                     ],
                   ),
                   const Divider(height: 20),
@@ -402,7 +519,9 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                     children: [
                       const Text('Total Package Advance', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                       Text(
-                        '₹${basePackageFare.toStringAsFixed(2)}',
+                        estimatedAdvance != null
+                            ? '₹${estimatedAdvance.toStringAsFixed(2)}'
+                            : (rideState.isEstimatingFare ? 'Calculating...' : '--'),
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: AppColors.primaryDark),
                       ),
                     ],
@@ -414,9 +533,11 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
 
             // Book Button
             InfurnusButton(
-              text: 'Book Premium Vehicle • ₹${basePackageFare.toStringAsFixed(0)}',
+              text: estimatedAdvance != null
+                  ? 'Book Premium Vehicle • ₹${estimatedAdvance.toStringAsFixed(0)}'
+                  : 'Book Premium Vehicle',
               isLoading: rideState.isEstimatingFare,
-              onPressed: _handleBooking,
+              onPressed: _fleetVehicles.isEmpty ? null : _handleBooking,
             ),
             const SizedBox(height: 20),
           ],

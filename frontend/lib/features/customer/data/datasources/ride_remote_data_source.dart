@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import '../models/fare_estimate_model.dart';
+import '../models/fleet_vehicle_model.dart';
 import '../models/ride_model.dart';
 
 abstract class RideRemoteDataSource {
@@ -11,6 +12,7 @@ abstract class RideRemoteDataSource {
   Future<void> submitRating(String rideId, int rating, {String? review});
   Future<Map<String, dynamic>> initiatePayment(Map<String, dynamic> data);
   Future<List<dynamic>> listPayments();
+  Future<List<FleetVehicleModel>> getFleet({String? sector, String? category});
 }
 
 class RideRemoteDataSourceImpl implements RideRemoteDataSource {
@@ -70,5 +72,15 @@ class RideRemoteDataSourceImpl implements RideRemoteDataSource {
   Future<List<dynamic>> listPayments() async {
     final response = await _dio.get('/payments/history');
     return response.data['data'] as List<dynamic>;
+  }
+
+  @override
+  Future<List<FleetVehicleModel>> getFleet({String? sector, String? category}) async {
+    final response = await _dio.get('/vehicles/fleet', queryParameters: {
+      if (sector != null) 'sector': sector,
+      if (category != null) 'category': category,
+    });
+    final List list = response.data['data'] as List;
+    return list.map((e) => FleetVehicleModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 }

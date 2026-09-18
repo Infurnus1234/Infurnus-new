@@ -88,6 +88,26 @@ class InMemoryVehicleRepository implements VehicleRepository {
     this.vehicles.set(id, updated);
     return updated;
   }
+
+  async listFleet(sector?: string, category?: string) {
+    return [...this.vehicles.values()]
+      .filter(
+        (item) =>
+          item.isActive &&
+          (!sector || item.sector === sector) &&
+          (!category || item.category === category),
+      )
+      .map((item) => ({
+        id: item.id,
+        make: item.make,
+        model: item.model,
+        color: item.color,
+        sector: item.sector,
+        category: item.category,
+        fuelRatePerKm: item.fuelRatePerKm,
+        loadCapacityKg: item.loadCapacityKg,
+      }));
+  }
 }
 
 describe('Vehicles API', () => {

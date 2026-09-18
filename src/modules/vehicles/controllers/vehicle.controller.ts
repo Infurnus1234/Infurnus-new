@@ -4,6 +4,7 @@ import {
   deactivateVehicleSchema,
   updateVehicleSchema,
   vehicleDriverQuerySchema,
+  vehicleFleetQuerySchema,
   vehicleIdSchema,
 } from '../schemas/vehicle.schemas.js';
 import type { VehicleService } from '../services/vehicle.service.js';
@@ -36,6 +37,17 @@ export class VehicleController {
         vehicleDriverQuerySchema.parse(request.query),
       );
       response.json({ success: true, data: vehicles, message: 'Vehicles retrieved' });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getFleet = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      const fleet = await this.service.listFleet(
+        vehicleFleetQuerySchema.parse(request.query),
+      );
+      response.json({ success: true, data: fleet, message: 'Fleet retrieved' });
     } catch (error) {
       next(error);
     }

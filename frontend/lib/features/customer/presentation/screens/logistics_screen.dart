@@ -288,7 +288,7 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Driver Loading & Unloading Help', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                    subtitle: const Text('Helper assistance for heavy goods (+₹150)', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    subtitle: const Text('Helper assistance for heavy goods (server rate applies)', style: TextStyle(fontSize: 12, color: Colors.grey)),
                     value: _needLoadingHelper,
                     activeThumbColor: AppColors.primaryGreen,
                     onChanged: (val) {
@@ -313,29 +313,37 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
               ),
               child: Column(
                 children: [
-                  _buildFareRow('Base Logistics Charge', '₹${estimate?.baseAmount.toStringAsFixed(2) ?? "150.00"}'),
-                  const SizedBox(height: 6),
-                  _buildFareRow(
-                    'Distance Charge (${estimate?.distanceKm.toStringAsFixed(1) ?? "10.0"} km)',
-                    '₹${estimate?.distanceAmount.toStringAsFixed(2) ?? "180.00"}',
-                  ),
-                  if ((estimate?.weightAmount ?? 0) > 0) ...[
+                  if (estimate == null) ...[
+                    _buildFareRow('Status', 'Fare estimate calculating...'),
+                  ] else ...[
+                    _buildFareRow('Base Logistics Charge', '₹${estimate.baseAmount.toStringAsFixed(2)}'),
                     const SizedBox(height: 6),
-                    _buildFareRow('Weight Surcharge (>20kg)', '₹${estimate!.weightAmount!.toStringAsFixed(2)}'),
+                    _buildFareRow(
+                      'Distance Charge (${estimate.distanceKm.toStringAsFixed(1)} km)',
+                      '₹${estimate.distanceAmount.toStringAsFixed(2)}',
+                    ),
+                    if ((estimate.weightAmount ?? 0) > 0) ...[
+                      const SizedBox(height: 6),
+                      _buildFareRow('Weight Surcharge (>20kg)', '₹${estimate.weightAmount!.toStringAsFixed(2)}'),
+                    ],
+                    if (_needLoadingHelper && (estimate.loadingAmount ?? 0) > 0) ...[
+                      const SizedBox(height: 6),
+                      _buildFareRow('Loading/Unloading Helper', '₹${estimate.loadingAmount!.toStringAsFixed(2)}'),
+                    ],
+                    if ((estimate.taxAmount ?? 0) > 0) ...[
+                      const SizedBox(height: 6),
+                      _buildFareRow('Goods & Service Tax (5% GST)', '₹${estimate.taxAmount!.toStringAsFixed(2)}'),
+                    ],
                   ],
-                  if (_needLoadingHelper) ...[
-                    const SizedBox(height: 6),
-                    _buildFareRow('Loading/Unloading Helper', '₹${estimate?.loadingAmount?.toStringAsFixed(2) ?? "150.00"}'),
-                  ],
-                  const SizedBox(height: 6),
-                  _buildFareRow('Goods & Service Tax (5% GST)', '₹${estimate?.taxAmount?.toStringAsFixed(2) ?? "24.00"}'),
                   const Divider(height: 20),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text('Total Estimated Fare', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                       Text(
-                        '₹${rideState.fare?.toStringAsFixed(2) ?? "504.00"}',
+                        rideState.fare != null
+                            ? '₹${rideState.fare!.toStringAsFixed(2)}'
+                            : (estimate != null ? '₹${estimate.grossAmount.toStringAsFixed(2)}' : '--'),
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: AppColors.primaryGreen),
                       ),
                     ],

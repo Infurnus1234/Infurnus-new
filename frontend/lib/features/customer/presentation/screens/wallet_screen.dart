@@ -38,7 +38,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildBalanceCard(),
+            _buildBalanceCard(payments),
             const SizedBox(height: 28),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -62,7 +62,12 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
     );
   }
 
-  Widget _buildBalanceCard() {
+  Widget _buildBalanceCard(List<Map<String, dynamic>> payments) {
+    final totalSpent = payments.fold<double>(
+      0.0,
+      (sum, tx) => sum + ((tx['amount'] as num?)?.toDouble() ?? 0.0),
+    );
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -79,9 +84,16 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
       ),
       child: Column(
         children: [
-          const Text('Total Balance', style: TextStyle(color: Colors.white70, fontSize: 15)),
+          const Text('Wallet Balance', style: TextStyle(color: Colors.white70, fontSize: 15)),
           const SizedBox(height: 8),
-          const Text('₹2,450.00', style: TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold)),
+          const Text('₹0.00', style: TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold)),
+          if (totalSpent > 0) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Total Lifetime Settled: ₹${totalSpent.toStringAsFixed(2)}',
+              style: const TextStyle(color: Colors.white60, fontSize: 12),
+            ),
+          ],
           const SizedBox(height: 20),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,

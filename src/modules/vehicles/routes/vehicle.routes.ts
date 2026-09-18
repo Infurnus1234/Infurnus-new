@@ -6,6 +6,7 @@ export function createVehicleRouter(controller: VehicleController) {
   const router = Router();
   router.use(requireAuth);
   router.post('/', controller.create);
+  router.get('/fleet', controller.getFleet);
   router.get('/', controller.list);
   router.get('/:id', controller.getById);
   router.patch('/:id', controller.update);

@@ -36,7 +36,10 @@ export class DriverService {
     const profileId = await this.profileForUser(userId);
     const rides = this.rideRepository ? await this.rideRepository.listForDriver(profileId, limit) : [];
     const completedRides = rides.filter((r) => r.status === 'completed');
-    const totalEarnings = completedRides.length * 150; // base standard estimate
+    const totalEarnings = completedRides.reduce(
+      (sum, r) => sum + (r.finalFare ?? r.fareEstimate ?? 150),
+      0,
+    );
 
     return {
       totalTrips: completedRides.length,
