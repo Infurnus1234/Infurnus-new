@@ -95,8 +95,23 @@ export class DriverService {
     await this.repository.markStale(profileId);
   }
 
-  async nearby(latitude: number, longitude: number) {
+  async getActiveVehicleForUser(userId: string): Promise<{ sector: string; category: string } | null> {
+    return this.repository.findActiveVehicleByUserId ? this.repository.findActiveVehicleByUserId(userId) : null;
+  }
+
+  async nearby(latitude: number, longitude: number, sector?: string, vehicleCategory?: string) {
     const staleBefore = new Date(this.clock().getTime() - env.DRIVER_LOCATION_STALE_SECONDS * 1000);
+    if (sector !== undefined || vehicleCategory !== undefined) {
+      return this.repository.findNearbyEligible(
+        latitude,
+        longitude,
+        env.DRIVER_SEARCH_RADIUS_METERS,
+        env.MAX_DRIVER_MATCH_CANDIDATES,
+        staleBefore,
+        sector,
+        vehicleCategory,
+      );
+    }
     return this.repository.findNearbyEligible(
       latitude,
       longitude,

@@ -6,6 +6,7 @@ export interface PaymentRepository {
   capture(data: CapturePaymentData): Promise<Payment | null>;
   findById(id: string): Promise<Payment | null>;
   findByRideId(rideId: string): Promise<Payment[]>;
+  findActiveByRideId(rideId: string): Promise<Payment | null>;
   listForUser(userId: string, limit?: number): Promise<Payment[]>;
 }
 
@@ -78,6 +79,18 @@ export class PostgresPaymentRepository implements PaymentRepository {
       [rideId],
     );
     return result.rows;
+  }
+
+  async findActiveByRideId(rideId: string): Promise<Payment | null> {
+    const result = await this.pool.query<Payment>(
+      `SELECT ${paymentProjection}
+       FROM payments
+       WHERE ride_id = $1 AND status IN ('INITIATED', 'AUTHORIZED', 'CAPTURED')
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [rideId],
+    );
+    return result.rows[0] ?? null;
   }
 
   async listForUser(userId: string, limit: number = 20): Promise<Payment[]> {

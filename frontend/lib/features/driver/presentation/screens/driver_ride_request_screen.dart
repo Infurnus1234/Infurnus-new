@@ -298,6 +298,10 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
             ride.destinationAddress ?? '${ride.destination.latitude.toStringAsFixed(4)}, ${ride.destination.longitude.toStringAsFixed(4)}',
             Colors.red,
           ),
+          if (ride.sector == 'logistics' || ride.goods != null) ...[
+            const SizedBox(height: 8),
+            _buildLogisticsCargoDetails(ride),
+          ],
           const SizedBox(height: 12),
           Row(
             children: [
@@ -394,7 +398,141 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
         _locationRow(Icons.my_location, 'Pickup', ride.pickupAddress ?? '${ride.pickup.latitude}, ${ride.pickup.longitude}', AppColors.primaryGreen),
         const SizedBox(height: 8),
         _locationRow(Icons.location_on, 'Destination', ride.destinationAddress ?? '${ride.destination.latitude}, ${ride.destination.longitude}', Colors.red),
+        if (ride.sector == 'logistics' || ride.goods != null) ...[
+          const SizedBox(height: 8),
+          _buildLogisticsCargoDetails(ride),
+        ],
       ],
+    );
+  }
+
+  Widget _buildLogisticsCargoDetails(RideModel ride) {
+    final goods = ride.goods ?? {};
+    final category = goods['category'] ?? goods['itemType'] ?? 'General Cargo';
+    final description = goods['description'] ?? goods['notes'] ?? 'Standard freight';
+    final weight = goods['weightKg'] ?? goods['weight'] ?? 0;
+    final quantity = goods['quantity'] ?? goods['qty'] ?? 1;
+    final bool hasHelper = goods['hasLoadingAssistance'] == true || goods['loadingAssistance'] == true;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF8E1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFFFD54F)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.local_shipping, size: 16, color: Color(0xFFE65100)),
+              const SizedBox(width: 6),
+              const Text(
+                'LOGISTICS CARGO DETAILS',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFFE65100),
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFE082),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  category.toString(),
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF4E342E),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Item: ',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Colors.black87),
+              ),
+              Expanded(
+                child: Text(
+                  description.toString(),
+                  style: const TextStyle(fontSize: 12, color: Colors.black87),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    const Icon(Icons.scale, size: 14, color: Colors.black54),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Weight: $weight kg',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.black87),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Row(
+                  children: [
+                    const Icon(Icons.inventory_2, size: 14, color: Colors.black54),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Quantity: $quantity',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.black87),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            decoration: BoxDecoration(
+              color: hasHelper ? Colors.green[50] : Colors.grey[100],
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: hasHelper ? Colors.green[300]! : Colors.grey[300]!),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  hasHelper ? Icons.check_circle : Icons.info_outline,
+                  size: 13,
+                  color: hasHelper ? Colors.green[800] : Colors.grey[700],
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  hasHelper
+                      ? 'Loading/Unloading Assistance: REQUIRED (+ Helper included)'
+                      : 'Loading Assistance: NOT REQUIRED (Driver transport only)',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: hasHelper ? Colors.green[900] : Colors.grey[800],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

@@ -4,7 +4,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_FARE_PRICING } from '../config/fare.config.js';
 import { FareController } from '../controllers/fare.controller.js';
 import { FareCalculatorService } from '../services/fare-calculator.service.js';
-import { FareEstimateService } from '../services/fare-estimate.service.js';
+import {
+  FareEstimateService,
+  type FallbackRouteConfig,
+} from '../services/fare-estimate.service.js';
 
 import type { Coordinates, MapProvider, RouteResult } from '../../rides/providers/map.provider.js';
 

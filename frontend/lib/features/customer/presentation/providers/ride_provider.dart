@@ -175,6 +175,7 @@ class RideNotifier extends StateNotifier<RideState> {
     switch (event.name) {
       case 'ride:driver_assigned':
       case 'ride:lifecycle_updated':
+      case 'ride:completed':
         final rideData = event.data['ride'];
         if (rideData != null && rideData is Map<String, dynamic>) {
           final updatedRide = model.RideModel.fromJson(rideData);
