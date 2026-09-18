@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_button.dart';
+import '../../../../shared/widgets/infurnus_empty_state.dart';
 import '../providers/ride_provider.dart';
 
 class WalletScreen extends ConsumerStatefulWidget {
@@ -130,21 +131,10 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
   }
 
   Widget _buildEmptyTransactions() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.receipt_long_outlined, size: 56, color: Colors.grey[400]),
-          const SizedBox(height: 12),
-          const Text('No transactions yet', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          const SizedBox(height: 4),
-          Text(
-            'Your ride, logistics and rental payments will appear here.',
-            style: TextStyle(color: Colors.grey[600], fontSize: 13),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
+    return const InfurnusEmptyState(
+      icon: Icons.receipt_long_rounded,
+      title: 'No transactions yet',
+      description: 'Your ride, logistics and rental payments will appear here.',
     );
   }
 

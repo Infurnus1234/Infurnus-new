@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_card.dart';
+import '../../../../shared/widgets/infurnus_empty_state.dart';
 import '../../../../shared/widgets/infurnus_error_view.dart';
 import '../providers/ride_provider.dart';
 import '../../data/models/ride_model.dart' as model;
@@ -42,7 +43,13 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
           onRetry: () => ref.read(rideProvider.notifier).fetchRideHistory(),
         );
       }
-      return const Center(child: Text('No bookings found'));
+      return InfurnusEmptyState(
+        icon: Icons.receipt_long_rounded,
+        title: 'No bookings yet',
+        description: 'Your completed rides, logistics orders, and service requests will appear here.',
+        actionLabel: 'Book a Ride',
+        onAction: () => context.push('/ride-booking'),
+      );
     }
 
     return RefreshIndicator(
