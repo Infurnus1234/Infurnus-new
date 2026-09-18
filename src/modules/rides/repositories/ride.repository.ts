@@ -156,7 +156,10 @@ function mapRide(row: Record<string, unknown>, forCustomer = false): Ride {
     goods: normalizeGoods(row.goods),
     serviceDetails: (row.serviceDetails as Record<string, unknown> | null) ?? null,
     rentalDetails: (row.rentalDetails as Record<string, unknown> | null) ?? null,
-    pin: forCustomer && row.pin != null ? String(row.pin) : null,
+    pin:
+      forCustomer && row.pin != null && row.status !== 'completed' && row.status !== 'cancelled'
+        ? String(row.pin)
+        : null,
     pinVerified: Boolean(row.pinVerified),
     driverDetails:
       row.assignedDriverId && row.driverName
@@ -598,7 +601,7 @@ export class PostgresRideRepository implements RideRepository {
 
   async getRidePin(id: string): Promise<string | null> {
     const result = await this.pool.query(
-      `SELECT route_metadata->>'pin' AS pin
+      `SELECT COALESCE(pin, route_metadata->>'pin') AS pin
        FROM rides
        WHERE id = $1`,
       [id],
@@ -610,12 +613,13 @@ export class PostgresRideRepository implements RideRepository {
   async markPinVerified(id: string): Promise<boolean> {
     const result = await this.pool.query(
       `UPDATE rides
-       SET route_metadata = jsonb_set(
-         COALESCE(route_metadata, '{}'::jsonb),
-         '{pinVerified}',
-         'true'::jsonb
-       ),
-       updated_at = NOW()
+       SET pin_verified = TRUE,
+           route_metadata = jsonb_set(
+             COALESCE(route_metadata, '{}'::jsonb),
+             '{pinVerified}',
+             'true'::jsonb
+           ),
+           updated_at = NOW()
        WHERE id = $1`,
       [id],
     );
@@ -625,7 +629,7 @@ export class PostgresRideRepository implements RideRepository {
 
   async isPinVerified(id: string): Promise<boolean> {
     const result = await this.pool.query(
-      `SELECT (route_metadata->>'pinVerified')::boolean AS verified
+      `SELECT COALESCE(pin_verified, (route_metadata->>'pinVerified')::boolean, FALSE) AS verified
        FROM rides
        WHERE id = $1`,
       [id],

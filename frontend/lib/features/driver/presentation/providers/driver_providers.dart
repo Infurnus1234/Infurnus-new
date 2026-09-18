@@ -27,6 +27,7 @@ import '../../domain/usecases/update_partner_use_case.dart';
 import '../../domain/usecases/update_ride_status_use_case.dart';
 import '../../domain/usecases/update_user_preferences_use_case.dart';
 import '../../domain/usecases/update_vehicle_use_case.dart';
+import '../../domain/usecases/verify_ride_pin_use_case.dart';
 
 final driverRemoteDataSourceProvider = Provider<DriverRemoteDataSource>((ref) {
   final dio = ref.watch(dioProvider);
@@ -116,6 +117,11 @@ final completeRideUseCaseProvider = Provider<CompleteRideUseCase>((ref) {
 final updateRideStatusUseCaseProvider = Provider<UpdateRideStatusUseCase>((ref) {
   final repository = ref.watch(driverRepositoryProvider);
   return UpdateRideStatusUseCase(repository);
+});
+
+final verifyRidePinUseCaseProvider = Provider<VerifyRidePinUseCase>((ref) {
+  final repository = ref.watch(driverRepositoryProvider);
+  return VerifyRidePinUseCase(repository);
 });
 
 final getUserPreferencesUseCaseProvider = Provider<GetUserPreferencesUseCase>((ref) {

@@ -24,7 +24,8 @@ abstract class DriverRepository {
   Future<List<RideModel>> getAvailableRides();
   Future<RideModel> acceptRide(String rideId);
   Future<RideModel> completeRide(String rideId);
-  Future<RideModel> transitionRide(String rideId, String status);
+  Future<RideModel> transitionRide(String rideId, String status, {String? pin});
+  Future<bool> verifyPin(String rideId, String pin);
 
   Future<VehicleModel> createVehicle(Map<String, dynamic> data);
   Future<List<VehicleModel>> listVehicles({String? driverProfileId});

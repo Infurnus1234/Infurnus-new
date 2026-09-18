@@ -25,7 +25,8 @@ abstract class DriverRemoteDataSource {
   Future<List<RideModel>> getAvailableRides();
   Future<RideModel> acceptRide(String rideId);
   Future<RideModel> completeRide(String rideId);
-  Future<RideModel> transitionRide(String rideId, String status);
+  Future<RideModel> transitionRide(String rideId, String status, {String? pin});
+  Future<bool> verifyPin(String rideId, String pin);
 
   Future<VehicleModel> createVehicle(Map<String, dynamic> data);
   Future<List<VehicleModel>> listVehicles({String? driverProfileId});
@@ -150,9 +151,24 @@ class DriverRemoteDataSourceImpl implements DriverRemoteDataSource {
   }
 
   @override
-  Future<RideModel> transitionRide(String rideId, String status) async {
-    final response = await _dio.post('/rides/$rideId/status', data: {'status': status});
+  Future<RideModel> transitionRide(String rideId, String status, {String? pin}) async {
+    final response = await _dio.post(
+      '/rides/$rideId/status',
+      data: {
+        'status': status,
+        if (pin != null) 'pin': pin,
+      },
+    );
     return RideModel.fromJson(response.data['data']);
+  }
+
+  @override
+  Future<bool> verifyPin(String rideId, String pin) async {
+    final response = await _dio.post(
+      '/rides/$rideId/verify-pin',
+      data: {'pin': pin},
+    );
+    return response.data['success'] == true;
   }
 
   @override
