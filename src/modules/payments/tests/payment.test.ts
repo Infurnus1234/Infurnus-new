@@ -381,9 +381,7 @@ describe('INFURNUS Payments Module - Security & Reconciliation', () => {
     });
 
     it('forbids a driver from initiating payment for a customer ride (403)', async () => {
-      (mockRideRepo.findById as any).mockResolvedValue(
-        createMockRide({ customerId }),
-      );
+      (mockRideRepo.findById as any).mockResolvedValue(createMockRide({ customerId }));
 
       const req: any = {
         auth: { userId: driverUserId, role: 'driver' },
@@ -404,9 +402,7 @@ describe('INFURNUS Payments Module - Security & Reconciliation', () => {
     });
 
     it('permits an admin to initiate payment for a ride', async () => {
-      (mockRideRepo.findById as any).mockResolvedValue(
-        createMockRide({ customerId }),
-      );
+      (mockRideRepo.findById as any).mockResolvedValue(createMockRide({ customerId }));
 
       const req: any = {
         auth: { userId: adminUserId, role: 'admin' },
@@ -758,7 +754,11 @@ describe('INFURNUS Payments Module - Security & Reconciliation', () => {
       await controller.getById({ params: { paymentId: mockPayment.id } } as any, res, next);
       expect(res.status).toHaveBeenCalledWith(401);
 
-      await controller.capture({ params: { paymentId: mockPayment.id }, body: {} } as any, res, next);
+      await controller.capture(
+        { params: { paymentId: mockPayment.id }, body: {} } as any,
+        res,
+        next,
+      );
       expect(res.status).toHaveBeenCalledWith(401);
 
       await controller.listHistory({} as any, res, next);

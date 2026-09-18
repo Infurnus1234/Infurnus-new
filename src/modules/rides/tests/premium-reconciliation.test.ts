@@ -273,7 +273,11 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
       expect(completed.actualFuelCost).toBe(720);
       expect(completed.billing?.fuelRatePerKm).toBe(18);
       expect(completed.billing?.finalFare).toBe(3906);
-      expect(mockRideRepo.complete).toHaveBeenCalledWith('premium-ride-sec', 'driver-1', expect.anything());
+      expect(mockRideRepo.complete).toHaveBeenCalledWith(
+        'premium-ride-sec',
+        'driver-1',
+        expect.anything(),
+      );
     });
   });
 
