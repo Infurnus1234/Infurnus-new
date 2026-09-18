@@ -222,7 +222,7 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
 
     it('client-supplied fuel rate or final fare cannot manipulate server billing calculation', async () => {
       // Driver or client attempts to pass arbitrary low fuelRatePerKm or finalFare
-      const maliciousPayload = {
+      const _maliciousPayload = {
         fuelRatePerKm: 1, // Attempt to charge ₹1/km
         finalFare: 100, // Attempt to set ₹100 final fare
       };
@@ -255,7 +255,7 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
 
       const mockRideRepo = {
         // Repository signature does not take client-supplied fare or fuel rate
-        complete: vi.fn().mockImplementation((id: string, driverId: string) => {
+        complete: vi.fn().mockImplementation((_id: string, _driverId: string) => {
           // Ignores any external client payload
           return Promise.resolve(mockRide);
         }),

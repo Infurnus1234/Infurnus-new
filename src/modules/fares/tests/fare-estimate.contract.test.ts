@@ -19,7 +19,7 @@ describe('BUG-P3-01 & BUG-P3-03 & BUG-P3-05: Fare Estimate Parity & Contract Tes
 
   // Mock map provider simulating Google Maps
   const mockMapProvider: MapProvider = {
-    calculateRoute: async (origin: Coordinates, destination: Coordinates) => {
+    calculateRoute: async (_origin: Coordinates, _destination: Coordinates) => {
       // Simulate 10km, 15 minutes road route
       return {
         distanceMeters: 10000,

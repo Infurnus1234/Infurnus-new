@@ -19,4 +19,10 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    files: ['**/*.test.ts', '**/tests/**'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
 );

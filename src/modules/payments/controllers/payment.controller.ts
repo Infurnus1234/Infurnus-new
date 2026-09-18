@@ -153,8 +153,13 @@ export class PaymentController {
         data: payment,
         message: 'Payment initiated successfully',
       });
-    } catch (error: any) {
-      if (error?.code === '23505') {
+    } catch (error: unknown) {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code?: string }).code === '23505'
+      ) {
         res.status(409).json({
           success: false,
           message: 'An active payment already exists for this ride or idempotency key',
