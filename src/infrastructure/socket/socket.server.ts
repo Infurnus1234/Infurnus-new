@@ -318,7 +318,7 @@ export function createSocketServer(
             throw new Error('Driver authorization failed');
           }
 
-          const { rideId, status } = payload as Record<string, unknown>;
+          const { rideId, status, pin } = payload as Record<string, unknown>;
 
           if (typeof rideId !== 'string') {
             throw new Error('Ride identifier required');
@@ -330,6 +330,7 @@ export function createSocketServer(
             rideId,
             rideStatusSchema.parse(status),
             profileId,
+            typeof pin === 'string' ? pin.trim() : undefined,
           );
 
           io.to(rideRoom(rideId)).emit('ride:lifecycle_updated', {
@@ -348,12 +349,22 @@ export function createSocketServer(
           }
 
           ack?.({ success: true, data: ride });
-        } catch {
+        } catch (error: unknown) {
+          const errorCode =
+            typeof error === 'object' &&
+            error !== null &&
+            'code' in error &&
+            typeof (error as { code?: unknown }).code === 'string'
+              ? ((error as { code: string }).code)
+              : 'RIDE_TRANSITION_CONFLICT';
+          const errorMessage =
+            error instanceof Error ? error.message : 'Ride transition denied';
+
           ack?.({
             success: false,
             error: {
-              code: 'RIDE_TRANSITION_CONFLICT',
-              message: 'Ride transition denied',
+              code: errorCode,
+              message: errorMessage,
             },
           });
         }

@@ -23,6 +23,7 @@ class DriverRideRequestScreen extends ConsumerStatefulWidget {
 
 class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScreen> {
   final _rideIdController = TextEditingController();
+  final _pinController = TextEditingController();
   bool _showManualEntry = false;
 
   @override
@@ -39,6 +40,7 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
   @override
   void dispose() {
     _rideIdController.dispose();
+    _pinController.dispose();
     super.dispose();
   }
 
@@ -585,11 +587,61 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
         );
 
       case RideStatus.driverArrived:
-        return InfurnusButton(
-          text: 'Start Ride (In Progress)',
-          onPressed: (!isApproved || !isOnline)
-              ? null
-              : () => notifier.transitionStatus(ride.id, 'in_progress'),
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: Colors.amber[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.amber[300]!),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.pin, color: Colors.amber[900], size: 20),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Ask the passenger for their 4-digit pickup PIN to start the trip.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            InfurnusTextField(
+              label: 'Pickup PIN',
+              hintText: 'Enter 4-digit PIN',
+              controller: _pinController,
+              keyboardType: TextInputType.number,
+              prefixIcon: Icons.lock_outline,
+            ),
+            const SizedBox(height: 12),
+            InfurnusButton(
+              text: 'Verify PIN & Start Trip',
+              onPressed: (!isApproved || !isOnline)
+                  ? null
+                  : () {
+                      final pin = _pinController.text.trim();
+                      if (pin.length != 4) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Please enter a valid 4-digit PIN'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
+                      notifier.verifyPinAndStartRide(ride.id, pin);
+                    },
+            ),
+          ],
         );
 
       case RideStatus.inProgress:

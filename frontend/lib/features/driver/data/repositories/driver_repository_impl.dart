@@ -182,9 +182,20 @@ class DriverRepositoryImpl implements DriverRepository {
   }
 
   @override
-  Future<RideModel> transitionRide(String rideId, String status) async {
+  Future<RideModel> transitionRide(String rideId, String status, {String? pin}) async {
     try {
-      return await remoteDataSource.transitionRide(rideId, status);
+      return await remoteDataSource.transitionRide(rideId, status, pin: pin);
+    } on DioException catch (e) {
+      throw _handleDioException(e);
+    } catch (e) {
+      throw ServerFailure(e.toString());
+    }
+  }
+
+  @override
+  Future<bool> verifyPin(String rideId, String pin) async {
+    try {
+      return await remoteDataSource.verifyPin(rideId, pin);
     } on DioException catch (e) {
       throw _handleDioException(e);
     } catch (e) {

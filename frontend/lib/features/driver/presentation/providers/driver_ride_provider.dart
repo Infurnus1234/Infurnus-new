@@ -161,11 +161,11 @@ class DriverRideNotifier extends StateNotifier<DriverRideState> {
     }
   }
 
-  Future<void> transitionStatus(String rideId, String newStatus) async {
+  Future<void> transitionStatus(String rideId, String newStatus, {String? pin}) async {
     state = state.copyWith(isUpdatingStatus: true, errorMessage: null);
 
     try {
-      final ride = await ref.read(updateRideStatusUseCaseProvider).execute(rideId, newStatus);
+      final ride = await ref.read(updateRideStatusUseCaseProvider).execute(rideId, newStatus, pin: pin);
 
       state = state.copyWith(
         isUpdatingStatus: false,
@@ -176,8 +176,37 @@ class DriverRideNotifier extends StateNotifier<DriverRideState> {
     } catch (e) {
       state = state.copyWith(
         isUpdatingStatus: false,
-        errorMessage: e.toString(),
+        errorMessage: e.toString().replaceFirst('ServerFailure: ', ''),
       );
+    }
+  }
+
+  Future<bool> verifyPinAndStartRide(String rideId, String pin) async {
+    final trimmed = pin.trim();
+    if (trimmed.length != 4 || !RegExp(r'^\d{4}$').hasMatch(trimmed)) {
+      state = state.copyWith(errorMessage: 'Please enter a valid 4-digit pickup PIN');
+      return false;
+    }
+
+    state = state.copyWith(isUpdatingStatus: true, errorMessage: null);
+    try {
+      final ride = await ref.read(updateRideStatusUseCaseProvider).execute(
+        rideId,
+        'in_progress',
+        pin: trimmed,
+      );
+      state = state.copyWith(
+        isUpdatingStatus: false,
+        currentRide: ride,
+      );
+      _handleRideStateChange(ride.status);
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        isUpdatingStatus: false,
+        errorMessage: e.toString().replaceFirst('ServerFailure: ', ''),
+      );
+      return false;
     }
   }
 

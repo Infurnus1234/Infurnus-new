@@ -6,7 +6,7 @@ class UpdateRideStatusUseCase {
 
   UpdateRideStatusUseCase(this.repository);
 
-  Future<RideModel> execute(String rideId, String status) {
-    return repository.transitionRide(rideId, status);
+  Future<RideModel> execute(String rideId, String status, {String? pin}) {
+    return repository.transitionRide(rideId, status, pin: pin);
   }
 }

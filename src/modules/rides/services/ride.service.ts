@@ -146,17 +146,42 @@ export class RideService {
     driverProfileId: string,
     inputPin: string,
   ): Promise<{ verified: boolean }> {
+    if (typeof inputPin !== 'string' || !/^\d{4}$/.test(inputPin.trim())) {
+      throw new AppError('INVALID_PIN', 'PIN must be exactly 4 digits', 400);
+    }
+    const normalizedPin = inputPin.trim();
+
     const isAssigned = await this.repository.isAssignedDriverProfile(rideId, driverProfileId);
     if (!isAssigned) {
       throw new AppError('FORBIDDEN', 'Not assigned to this ride', 403);
     }
 
-    const storedPin = await this.repository.getRidePin(rideId);
-    if (!storedPin) {
-      throw new AppError('RIDE_NOT_FOUND', 'Ride not found', 404);
+    if (typeof this.repository.findById === 'function') {
+      const ride = await this.repository.findById(rideId);
+      if (!ride) {
+        throw new AppError('RIDE_NOT_FOUND', 'Ride not found', 404);
+      }
+
+      if (
+        ride.status === 'cancelled' ||
+        ride.status === 'completed' ||
+        ride.status === 'requested' ||
+        ride.status === 'searching'
+      ) {
+        throw new AppError(
+          'INVALID_RIDE_STATE',
+          `Cannot verify PIN for ride in '${ride.status}' status`,
+          409,
+        );
+      }
     }
 
-    if (storedPin !== inputPin) {
+    const storedPin = await this.repository.getRidePin(rideId);
+    if (!storedPin) {
+      throw new AppError('RIDE_NOT_FOUND', 'Ride not found or PIN not generated', 404);
+    }
+
+    if (storedPin !== normalizedPin) {
       throw new AppError('INVALID_PIN', 'Invalid ride verification PIN', 400);
     }
 
@@ -187,6 +212,45 @@ export class RideService {
         throw new AppError('FORBIDDEN', 'Assigned driver is required to verify PIN', 403);
       }
       await this.verifyRidePin(id, assignedDriverId, pin);
+    }
+
+    if (status === 'in_progress') {
+      if (!assignedDriverId) {
+        throw new AppError('FORBIDDEN', 'Assigned driver is required to start a ride', 403);
+      }
+
+      const isAssigned = await this.repository.isAssignedDriverProfile(id, assignedDriverId);
+      if (!isAssigned) {
+        throw new AppError('FORBIDDEN', 'Not assigned to this ride', 403);
+      }
+
+      if (typeof this.repository.findById === 'function') {
+        const currentRide = await this.repository.findById(id);
+        if (!currentRide) {
+          throw new AppError('RIDE_NOT_FOUND', 'Ride not found', 404);
+        }
+
+        if (currentRide.status !== 'driver_arrived' && currentRide.status !== 'in_progress') {
+          throw new AppError(
+            'RIDE_TRANSITION_CONFLICT',
+            `Cannot start ride from '${currentRide.status}' state`,
+            409,
+          );
+        }
+      }
+
+      if (pin !== undefined) {
+        await this.verifyRidePin(id, assignedDriverId, pin);
+      }
+
+      const isVerified = await this.repository.isPinVerified(id);
+      if (!isVerified) {
+        throw new AppError(
+          'PIN_VERIFICATION_REQUIRED',
+          'Ride pickup PIN must be verified before starting the trip',
+          409,
+        );
+      }
     }
 
     try {
