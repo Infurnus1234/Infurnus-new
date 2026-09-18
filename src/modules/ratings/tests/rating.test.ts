@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { RatingController } from '../controllers/rating.controller.js';
 import type { RatingRepository } from '../repositories/rating.repository.js';
-import type { CreateRatingData, DriverRatingSummary, Rating } from '../types/rating.js';
+import type { Rating } from '../types/rating.js';
 
 describe('INFURNUS Ratings Module', () => {
   const mockRating: Rating = {

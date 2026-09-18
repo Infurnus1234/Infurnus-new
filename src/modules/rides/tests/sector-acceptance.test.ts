@@ -3,7 +3,6 @@ import { PostgresDriverRepository } from '../repositories/driver.repository.js';
 import { PostgresRideRepository } from '../repositories/ride.repository.js';
 import { RideService } from '../services/ride.service.js';
 import { MatchingService } from '../services/matching.service.js';
-import { AppError } from '../../../common/errors/app-error.js';
 
 describe('Phase 4 Step 3: Sector & Category Matching and Acceptance Isolation', () => {
   describe('MatchingService & PostgresDriverRepository Sector Filtering', () => {
