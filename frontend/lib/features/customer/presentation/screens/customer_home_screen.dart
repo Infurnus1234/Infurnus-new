@@ -349,7 +349,15 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
                                 color: AppColors.primaryGreen.withValues(alpha: 0.1),
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(Icons.directions_car, color: AppColors.primaryGreen, size: 20),
+                              child: Icon(
+                                ride.sector == 'logistics'
+                                    ? Icons.local_shipping
+                                    : (ride.sector == 'service'
+                                        ? Icons.emergency
+                                        : (ride.sector == 'premium' ? Icons.stars : Icons.directions_car)),
+                                color: AppColors.primaryGreen,
+                                size: 20,
+                              ),
                             ),
                             const SizedBox(width: 14),
                             Expanded(
@@ -370,9 +378,9 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
                                 ],
                               ),
                             ),
-                            if (ride.fareEstimate != null)
+                            if (ride.status != model.RideStatus.cancelled && ride.displayFare > 0)
                               Text(
-                                '₹${ride.fareEstimate!.toStringAsFixed(0)}',
+                                '₹${ride.displayFare.toStringAsFixed(0)}',
                                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                               ),
                           ],

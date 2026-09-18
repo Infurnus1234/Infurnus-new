@@ -1,4 +1,5 @@
 import '../../data/models/fare_estimate_model.dart';
+import '../../data/models/fleet_vehicle_model.dart';
 import '../../data/models/ride_model.dart';
 
 abstract class RideRepository {
@@ -18,4 +19,5 @@ abstract class RideRepository {
     required String paymentMethod,
   });
   Future<List<Map<String, dynamic>>> listPayments({int? limit});
+  Future<List<FleetVehicleModel>> getFleet({String? sector, String? category});
 }

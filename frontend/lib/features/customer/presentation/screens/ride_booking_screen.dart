@@ -99,6 +99,10 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
 
   void _showFareBreakdownSheet(RideState state) {
     final estimate = state.fareEstimate;
+    final isService = state.selectedSector == 'service';
+    final isPremium = state.selectedSector == 'premium';
+    final isLogistics = state.selectedSector == 'logistics';
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -113,49 +117,102 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Itemized Fare Breakdown', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text(
+                    isService
+                        ? 'Trip-Based Service Breakdown'
+                        : (isPremium ? 'Premium Standby Estimate' : 'Itemized Fare Breakdown'),
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
                   IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
                 ],
               ),
               const SizedBox(height: 14),
-              _buildBreakdownRow('Base Fare', '₹${estimate?.baseAmount.toStringAsFixed(2) ?? "100.00"}'),
-              const SizedBox(height: 8),
-              _buildBreakdownRow(
-                'Distance Charge (${estimate?.distanceKm.toStringAsFixed(1) ?? "10.0"} km)',
-                '₹${estimate?.distanceAmount.toStringAsFixed(2) ?? "140.00"}',
-              ),
-              const SizedBox(height: 8),
-              _buildBreakdownRow(
-                'Time Charge (${estimate?.durationMinutes ?? 25} mins)',
-                '₹${estimate?.timeAmount.toStringAsFixed(2) ?? "50.00"}',
-              ),
-              if ((estimate?.waitingAmount ?? 0) > 0) ...[
+              if (estimate == null) ...[
+                _buildBreakdownRow('Status', 'Fare estimate calculating...'),
+              ] else if (isService) ...[
+                _buildBreakdownRow('Base Mobilization / Dispatch', '₹${estimate.baseAmount.toStringAsFixed(2)}'),
                 const SizedBox(height: 8),
-                _buildBreakdownRow('Waiting Charge (>3 min)', '₹${estimate!.waitingAmount!.toStringAsFixed(2)}'),
-              ],
-              if ((estimate?.weightAmount ?? 0) > 0) ...[
+                _buildBreakdownRow(
+                  'Service & Transit Charge (${estimate.distanceKm.toStringAsFixed(1)} km)',
+                  '₹${estimate.distanceAmount.toStringAsFixed(2)}',
+                ),
+                if ((estimate.taxAmount ?? 0) > 0) ...[
+                  const SizedBox(height: 8),
+                  _buildBreakdownRow('Taxes & Regulatory Fees (5% GST)', '₹${estimate.taxAmount!.toStringAsFixed(2)}'),
+                ],
                 const SizedBox(height: 8),
-                _buildBreakdownRow('Weight Surcharge (>20 kg)', '₹${estimate!.weightAmount!.toStringAsFixed(2)}'),
-              ],
-              if ((estimate?.loadingAmount ?? 0) > 0) ...[
+                Text(
+                  'Note: Service Vehicle is strictly trip & service based (no hourly rentals).',
+                  style: TextStyle(fontSize: 11, color: Colors.grey[600], fontStyle: FontStyle.italic),
+                ),
+              ] else if (isPremium) ...[
+                _buildBreakdownRow('Chauffeur Standby Package Base', '₹${estimate.baseAmount.toStringAsFixed(2)}'),
                 const SizedBox(height: 8),
-                _buildBreakdownRow('Loading & Unloading Helper', '₹${estimate!.loadingAmount!.toStringAsFixed(2)}'),
-              ],
-              if ((estimate?.fuelAmount ?? 0) > 0) ...[
+                _buildBreakdownRow(
+                  'Standby Duration Charge (~${estimate.durationMinutes} mins)',
+                  '₹${estimate.timeAmount.toStringAsFixed(2)}',
+                ),
+                if ((estimate.taxAmount ?? 0) > 0) ...[
+                  const SizedBox(height: 8),
+                  _buildBreakdownRow('Taxes & Regulatory Fees (5% GST)', '₹${estimate.taxAmount!.toStringAsFixed(2)}'),
+                ],
                 const SizedBox(height: 8),
-                _buildBreakdownRow('GPS Fuel Surcharge', '₹${estimate!.fuelAmount!.toStringAsFixed(2)}'),
-              ],
-              if ((estimate?.taxAmount ?? 0) > 0) ...[
+                Text(
+                  'Note: Actual GPS distance fuel cost will be reconciled post-trip.',
+                  style: TextStyle(fontSize: 11, color: Colors.grey[600], fontStyle: FontStyle.italic),
+                ),
+              ] else if (isLogistics) ...[
+                _buildBreakdownRow('Base Logistics Charge', '₹${estimate.baseAmount.toStringAsFixed(2)}'),
                 const SizedBox(height: 8),
-                _buildBreakdownRow('Taxes & Regulatory Fees (5% GST)', '₹${estimate!.taxAmount!.toStringAsFixed(2)}'),
+                _buildBreakdownRow(
+                  'Distance Charge (${estimate.distanceKm.toStringAsFixed(1)} km)',
+                  '₹${estimate.distanceAmount.toStringAsFixed(2)}',
+                ),
+                if ((estimate.weightAmount ?? 0) > 0) ...[
+                  const SizedBox(height: 8),
+                  _buildBreakdownRow('Weight Surcharge', '₹${estimate.weightAmount!.toStringAsFixed(2)}'),
+                ],
+                if ((estimate.loadingAmount ?? 0) > 0) ...[
+                  const SizedBox(height: 8),
+                  _buildBreakdownRow('Loading/Unloading Helper', '₹${estimate.loadingAmount!.toStringAsFixed(2)}'),
+                ],
+                if ((estimate.taxAmount ?? 0) > 0) ...[
+                  const SizedBox(height: 8),
+                  _buildBreakdownRow('Taxes & Regulatory Fees (5% GST)', '₹${estimate.taxAmount!.toStringAsFixed(2)}'),
+                ],
+              ] else ...[
+                _buildBreakdownRow('Base Fare', '₹${estimate.baseAmount.toStringAsFixed(2)}'),
+                const SizedBox(height: 8),
+                _buildBreakdownRow(
+                  'Distance Charge (${estimate.distanceKm.toStringAsFixed(1)} km)',
+                  '₹${estimate.distanceAmount.toStringAsFixed(2)}',
+                ),
+                const SizedBox(height: 8),
+                _buildBreakdownRow(
+                  'Time Charge (~${estimate.durationMinutes} mins)',
+                  '₹${estimate.timeAmount.toStringAsFixed(2)}',
+                ),
+                if ((estimate.waitingAmount ?? 0) > 0) ...[
+                  const SizedBox(height: 8),
+                  _buildBreakdownRow('Waiting Charge (>3 min)', '₹${estimate.waitingAmount!.toStringAsFixed(2)}'),
+                ],
+                if ((estimate.taxAmount ?? 0) > 0) ...[
+                  const SizedBox(height: 8),
+                  _buildBreakdownRow('Taxes & Regulatory Fees (5% GST)', '₹${estimate.taxAmount!.toStringAsFixed(2)}'),
+                ],
               ],
               const Divider(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Total Net Fare', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                   Text(
-                    '₹${state.fare?.toStringAsFixed(2) ?? "290.00"}',
+                    isPremium ? 'Total Booking Advance' : 'Total Fare',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  Text(
+                    state.fare != null
+                        ? '₹${state.fare!.toStringAsFixed(2)}'
+                        : (estimate != null ? '₹${estimate.grossAmount.toStringAsFixed(2)}' : '--'),
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: AppColors.primaryGreen),
                   ),
                 ],
@@ -563,30 +620,31 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
 
     if (state.selectedSector == 'passenger') {
       tiers = [
-        {'id': 'auto', 'name': 'Auto', 'icon': Icons.electric_rickshaw, 'eta': '3m', 'price': 140.0},
-        {'id': 'hatchback', 'name': 'Mini / Go', 'icon': Icons.directions_car, 'eta': '4m', 'price': 200.0},
-        {'id': 'sedan', 'name': 'Prime Sedan', 'icon': Icons.airport_shuttle, 'eta': '2m', 'price': 260.0},
-        {'id': 'suv', 'name': 'SUV 6-Seater', 'icon': Icons.directions_bus, 'eta': '6m', 'price': 350.0},
+        {'id': 'bike', 'name': 'Bike Taxi', 'icon': Icons.two_wheeler, 'eta': '3m'},
+        {'id': 'auto', 'name': 'Auto', 'icon': Icons.electric_rickshaw, 'eta': '3m'},
+        {'id': 'hatchback', 'name': 'Mini / Go', 'icon': Icons.directions_car, 'eta': '4m'},
+        {'id': 'sedan', 'name': 'Prime Sedan', 'icon': Icons.airport_shuttle, 'eta': '2m'},
+        {'id': 'suv', 'name': 'SUV 6-Seater', 'icon': Icons.directions_bus, 'eta': '6m'},
       ];
     } else if (state.selectedSector == 'logistics') {
       tiers = [
-        {'id': 'bike', 'name': 'Bike Express', 'icon': Icons.two_wheeler, 'eta': '5m', 'price': 120.0},
-        {'id': 'three_wheeler', 'name': '3-Wheeler', 'icon': Icons.electric_rickshaw, 'eta': '8m', 'price': 220.0},
-        {'id': 'mini_truck', 'name': 'Mini Truck 1T', 'icon': Icons.local_shipping, 'eta': '10m', 'price': 350.0},
+        {'id': 'bike', 'name': 'Bike Express', 'icon': Icons.two_wheeler, 'eta': '5m'},
+        {'id': 'three_wheeler', 'name': '3-Wheeler', 'icon': Icons.electric_rickshaw, 'eta': '8m'},
+        {'id': 'mini_truck', 'name': 'Mini Truck 1T', 'icon': Icons.local_shipping, 'eta': '10m'},
       ];
     } else if (state.selectedSector == 'service') {
       tiers = [
-        {'id': 'ambulance', 'name': 'Ambulance', 'icon': Icons.medical_services, 'eta': 'Priority', 'price': 750.0},
-        {'id': 'towing', 'name': 'Towing Van', 'icon': Icons.car_repair, 'eta': '12m', 'price': 900.0},
-        {'id': 'jcb', 'name': 'JCB Excavator', 'icon': Icons.agriculture, 'eta': 'Scheduled', 'price': 1400.0},
-        {'id': 'recovery', 'name': 'Recovery Vehicle', 'icon': Icons.rv_hookup, 'eta': '15m', 'price': 900.0},
-        {'id': 'roadside_service', 'name': 'Roadside Service', 'icon': Icons.build, 'eta': '15m', 'price': 600.0},
+        {'id': 'ambulance', 'name': 'Ambulance', 'icon': Icons.medical_services, 'eta': 'Priority'},
+        {'id': 'towing', 'name': 'Towing Van', 'icon': Icons.car_repair, 'eta': '12m'},
+        {'id': 'jcb', 'name': 'JCB Excavator', 'icon': Icons.agriculture, 'eta': 'Scheduled'},
+        {'id': 'recovery', 'name': 'Recovery Vehicle', 'icon': Icons.rv_hookup, 'eta': '15m'},
+        {'id': 'roadside_service', 'name': 'Roadside Service', 'icon': Icons.build, 'eta': '15m'},
       ];
     } else if (state.selectedSector == 'premium') {
       tiers = [
-        {'id': 'fortuner', 'name': 'Toyota Fortuner', 'icon': Icons.directions_car_filled, 'eta': 'Chauffeur', 'price': 4800.0},
-        {'id': 'thar', 'name': 'Mahindra Thar', 'icon': Icons.terrain, 'eta': 'Standby', 'price': 3800.0},
-        {'id': 'luxury_suv', 'name': 'BMW/Mercedes SUV', 'icon': Icons.stars, 'eta': 'VIP', 'price': 8800.0},
+        {'id': 'fortuner', 'name': 'Toyota Fortuner', 'icon': Icons.directions_car_filled, 'eta': 'Chauffeur'},
+        {'id': 'thar', 'name': 'Mahindra Thar', 'icon': Icons.terrain, 'eta': 'Standby'},
+        {'id': 'luxury_suv', 'name': 'BMW/Mercedes SUV', 'icon': Icons.stars, 'eta': 'VIP'},
       ];
     }
 
@@ -599,9 +657,18 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
         itemBuilder: (context, index) {
           final tier = tiers[index];
           final isSelected = state.selectedTier == tier['id'];
-          final displayPrice = state.fare != null && isSelected
-              ? state.fare!
-              : (tier['price'] as double);
+          final String displayPriceText;
+          if (isSelected) {
+            if (state.isEstimatingFare) {
+              displayPriceText = '...';
+            } else if (state.fare != null) {
+              displayPriceText = '₹${state.fare!.toStringAsFixed(0)}';
+            } else {
+              displayPriceText = 'View Est.';
+            }
+          } else {
+            displayPriceText = 'Select';
+          }
 
           return GestureDetector(
             onTap: () {
@@ -643,7 +710,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                     overflow: TextOverflow.ellipsis,
                   ),
                   Text(
-                    '₹${displayPrice.toStringAsFixed(0)}',
+                    displayPriceText,
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 13,
@@ -802,6 +869,34 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
             ],
           ),
         ),
+        if (ride?.pin != null && ride?.pinVerified != true) ...[
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.primaryDark,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Pickup PIN (share with driver):', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryGreen,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    ride!.pin!,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 2),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 16),
 
         Row(
@@ -969,8 +1064,10 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
 
   // --- Step 6: Ride Completed, Payment & Rating ---
   Widget _buildRideCompletedPanel(RideState state) {
-    final fare = state.currentRide?.fareEstimate ?? state.fare ?? 250.0;
+    final ride = state.currentRide;
+    final fare = ride?.finalFare ?? ride?.fareEstimate ?? state.fare ?? 0.0;
     final isPaid = state.paymentStatus == 'paid';
+    final isPremium = ride?.sector == 'premium';
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -992,21 +1089,56 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
         ),
         const SizedBox(height: 4),
         Center(
-          child: Text('Trip completed successfully', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+          child: Text(
+            isPremium ? 'Premium trip reconciled & completed' : 'Trip completed successfully',
+            style: TextStyle(color: Colors.grey[600], fontSize: 13),
+          ),
         ),
         const SizedBox(height: 16),
 
         // Fare Summary Card
         InfurnusCard(
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (isPremium) ...[
+                const Row(
+                  children: [
+                    Icon(Icons.receipt_long, color: AppColors.primaryDark, size: 18),
+                    SizedBox(width: 8),
+                    Text(
+                      'Final Reconciled Bill',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                _buildBreakdownRow(
+                  'Booking Estimate',
+                  ride?.fareEstimate != null ? '₹${ride!.fareEstimate!.toStringAsFixed(2)}' : '--',
+                ),
+                const SizedBox(height: 6),
+                _buildBreakdownRow(
+                  'Actual GPS Distance',
+                  '${((ride?.actualDistanceMeters ?? 0) / 1000.0).toStringAsFixed(1)} km',
+                ),
+                const SizedBox(height: 6),
+                _buildBreakdownRow(
+                  'Actual Fuel Cost (Server Reconciled)',
+                  '₹${ride?.actualFuelCost?.toStringAsFixed(2) ?? "0.00"}',
+                ),
+                const Divider(height: 16),
+              ],
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Total Trip Fare', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                      Text(
+                        isPremium ? 'Authoritative Final Fare' : 'Total Trip Fare',
+                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                      ),
                       const SizedBox(height: 4),
                       Text(
                         '₹${fare.toStringAsFixed(2)}',

@@ -4,6 +4,7 @@ import '../../../../core/errors/failures.dart';
 import '../../domain/repositories/ride_repository.dart';
 import '../datasources/ride_remote_data_source.dart';
 import '../models/fare_estimate_model.dart';
+import '../models/fleet_vehicle_model.dart';
 import '../models/ride_model.dart';
 
 class RideRepositoryImpl implements RideRepository {
@@ -110,6 +111,17 @@ class RideRepositoryImpl implements RideRepository {
     try {
       final list = await remoteDataSource.listPayments();
       return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    } on DioException catch (e) {
+      throw _handleDioException(e);
+    } catch (e) {
+      throw ServerFailure(e.toString());
+    }
+  }
+
+  @override
+  Future<List<FleetVehicleModel>> getFleet({String? sector, String? category}) async {
+    try {
+      return await remoteDataSource.getFleet(sector: sector, category: category);
     } on DioException catch (e) {
       throw _handleDioException(e);
     } catch (e) {

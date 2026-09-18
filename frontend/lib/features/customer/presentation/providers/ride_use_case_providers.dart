@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/usecases/cancel_ride_use_case.dart';
 import '../../domain/usecases/create_ride_use_case.dart';
 import '../../domain/usecases/estimate_fare_use_case.dart';
+import '../../domain/usecases/get_fleet_use_case.dart';
 import '../../domain/usecases/get_ride_use_case.dart';
 import '../../domain/usecases/list_rides_use_case.dart';
 import '../../domain/usecases/initiate_payment_use_case.dart';
@@ -47,5 +48,10 @@ final initiatePaymentUseCaseProvider = Provider<InitiatePaymentUseCase>((ref) {
 final listPaymentsUseCaseProvider = Provider<ListPaymentsUseCase>((ref) {
   final repository = ref.watch(rideRepositoryProvider);
   return ListPaymentsUseCase(repository);
+});
+
+final getFleetUseCaseProvider = Provider<GetFleetUseCase>((ref) {
+  final repository = ref.watch(rideRepositoryProvider);
+  return GetFleetUseCase(repository);
 });
 

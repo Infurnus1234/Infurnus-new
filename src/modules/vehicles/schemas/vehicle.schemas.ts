@@ -12,6 +12,13 @@ export const vehicleDriverQuerySchema = z
   })
   .strict();
 
+export const vehicleFleetQuerySchema = z
+  .object({
+    sector: z.enum(['passenger', 'logistics', 'service', 'premium']).optional(),
+    category: z.string().trim().min(1).max(50).optional(),
+  })
+  .strict();
+
 export const createVehicleSchema = z
   .object({
     driverProfileId: uuid,
@@ -51,4 +58,5 @@ export const deactivateVehicleSchema = z
 export type CreateVehicleInput = z.infer<typeof createVehicleSchema>;
 export type UpdateVehicleInput = z.infer<typeof updateVehicleSchema>;
 export type VehicleDriverQuery = z.infer<typeof vehicleDriverQuerySchema>;
+export type VehicleFleetQuery = z.infer<typeof vehicleFleetQuerySchema>;
 export type DeactivateVehicleInput = z.infer<typeof deactivateVehicleSchema>;
