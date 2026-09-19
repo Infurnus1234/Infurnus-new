@@ -18,7 +18,7 @@ class RentalsScreen extends ConsumerStatefulWidget {
 }
 
 class _RentalsScreenState extends ConsumerState<RentalsScreen> {
-  final _pickupController = TextEditingController(text: 'JW Marriott, Vittal Mallya Road');
+  final _pickupController = TextEditingController();
   String _selectedVehicle = 'fortuner';
   int _selectedHours = 4;
   DateTime _selectedDate = DateTime.now();

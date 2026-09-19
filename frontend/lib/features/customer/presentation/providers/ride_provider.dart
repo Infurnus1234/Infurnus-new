@@ -62,7 +62,7 @@ class RideState {
     this.pickupCoords,
     this.destinationCoords,
     this.selectedSector = 'passenger',
-    this.selectedTier = 'hatchback',
+    this.selectedTier = 'mini',
     this.fare,
     this.fareEstimate,
     this.distanceKm,
@@ -310,7 +310,7 @@ class RideNotifier extends StateNotifier<RideState> {
   }
 
   void selectSector(String sector) {
-    String defaultTier = 'hatchback';
+    String defaultTier = 'mini';
     if (sector == 'logistics') {
       defaultTier = 'mini_truck';
     } else if (sector == 'service') {
@@ -434,7 +434,7 @@ class RideNotifier extends StateNotifier<RideState> {
         'destination': {'latitude': destination.latitude, 'longitude': destination.longitude},
         'pickupAddress': state.pickup ?? 'Current Location',
         'destinationAddress': state.destination ?? 'Destination',
-        'fareEstimate': state.fare ?? 250.0,
+        if (state.fare != null) 'fareEstimate': state.fare!,
         'sector': state.selectedSector,
         'vehicleCategory': state.selectedTier,
       };
