@@ -35,6 +35,7 @@ import { CouponRedemptionService } from './modules/coupons/services/coupon-redem
 
 import { PostgresRatingRepository } from './modules/ratings/repositories/rating.repository.js';
 import { PostgresPaymentRepository } from './modules/payments/repositories/payment.repository.js';
+import { CashfreePaymentProvider } from './modules/payments/providers/cashfree.provider.js';
 import { PostgresFleetRepository } from './modules/fleet/repositories/fleet.repository.js';
 import { PostgresProviderBankRepository } from './modules/providers/repositories/provider-bank.repository.js';
 import { PostgresSupportRepository } from './modules/support/repositories/support.repository.js';
@@ -77,6 +78,16 @@ async function startServer() {
   const ratingRepository = new PostgresRatingRepository(pool);
 
   const paymentRepository = new PostgresPaymentRepository(pool);
+
+  const cashfreePaymentProvider =
+    env.CASHFREE_CLIENT_ID && env.CASHFREE_CLIENT_SECRET
+      ? new CashfreePaymentProvider({
+          clientId: env.CASHFREE_CLIENT_ID,
+          clientSecret: env.CASHFREE_CLIENT_SECRET,
+          apiVersion: env.CASHFREE_API_VERSION,
+          baseUrl: env.CASHFREE_BASE_URL,
+        })
+      : undefined;
 
   const fleetRepository = new PostgresFleetRepository(pool);
 
@@ -138,6 +149,7 @@ async function startServer() {
     fleetRepository,
     providerBankRepository,
     supportRepository,
+    cashfreePaymentProvider,
   );
 
   // ==========================================================

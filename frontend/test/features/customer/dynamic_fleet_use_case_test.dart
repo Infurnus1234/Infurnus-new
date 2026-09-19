@@ -68,6 +68,10 @@ class MockRideRepository implements RideRepository {
           {required String rideId, required double amount, required String paymentMethod}) =>
       throw UnimplementedError();
   @override
+  Future<Map<String, dynamic>> capturePayment(
+          {required String paymentId, String? providerPaymentId}) =>
+      throw UnimplementedError();
+  @override
   Future<List<Map<String, dynamic>>> listPayments({int? limit}) => throw UnimplementedError();
 }
 

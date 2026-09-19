@@ -1242,12 +1242,13 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                   child: Text('Select Payment Method', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                 ),
                 const SizedBox(height: 10),
-                Row(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
+                    _buildPaymentChip('cashfree', 'Cashfree PG', Icons.credit_card),
                     _buildPaymentChip('wallet', 'Wallet', Icons.account_balance_wallet),
-                    const SizedBox(width: 8),
                     _buildPaymentChip('upi', 'UPI', Icons.qr_code),
-                    const SizedBox(width: 8),
                     _buildPaymentChip('cash', 'Cash', Icons.money),
                   ],
                 ),

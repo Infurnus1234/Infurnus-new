@@ -118,6 +118,23 @@ const envSchema = z
     SENDMATOR_API_KEY: z.string().min(1, 'SENDMATOR_API_KEY must not be empty').optional(),
 
     // ============================================================
+    // Cashfree Payment Gateway
+    // ============================================================
+
+    CASHFREE_CLIENT_ID: z.string().min(1).optional(),
+
+    CASHFREE_CLIENT_SECRET: z.string().min(1).optional(),
+
+    CASHFREE_API_VERSION: z.string().min(1).default('2023-08-01'),
+
+    CASHFREE_BASE_URL: z.string().url().default('https://sandbox.cashfree.com/pg'),
+
+    // Cashfree Payouts
+    CASHFREE_PAYOUT_CLIENT_ID: z.string().min(1).optional(),
+
+    CASHFREE_PAYOUT_CLIENT_SECRET: z.string().min(1).optional(),
+
+    // ============================================================
     // Authentication challenge encryption
     // ============================================================
 

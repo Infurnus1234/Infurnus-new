@@ -18,6 +18,10 @@ abstract class RideRepository {
     required double amount,
     required String paymentMethod,
   });
+  Future<Map<String, dynamic>> capturePayment({
+    required String paymentId,
+    String? providerPaymentId,
+  });
   Future<List<Map<String, dynamic>>> listPayments({int? limit});
   Future<List<FleetVehicleModel>> getFleet({String? sector, String? category});
 }

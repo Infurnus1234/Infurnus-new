@@ -61,6 +61,7 @@ import { RatingController } from './modules/ratings/controllers/rating.controlle
 import { createRatingRouter } from './modules/ratings/routes/rating.routes.js';
 
 import type { PaymentRepository } from './modules/payments/repositories/payment.repository.js';
+import type { PaymentProvider } from './modules/payments/providers/payment.provider.js';
 import { PaymentController } from './modules/payments/controllers/payment.controller.js';
 import { createPaymentRouter } from './modules/payments/routes/payment.routes.js';
 
@@ -105,6 +106,7 @@ export function createApp(
   fleetRepository?: FleetRepository,
   providerBankRepository?: ProviderBankRepository,
   supportRepository?: SupportRepository,
+  paymentProvider?: PaymentProvider,
 ): express.Express;
 
 // ============================================================
@@ -138,6 +140,7 @@ export function createApp(
   fleetRepository?: FleetRepository,
   providerBankRepository?: ProviderBankRepository,
   supportRepository?: SupportRepository,
+  paymentProvider?: PaymentProvider,
 ) {
   const app = express();
 
@@ -157,7 +160,13 @@ export function createApp(
     }),
   );
 
-  app.use(express.json());
+  app.use(
+    express.json({
+      verify: (req, _res, buf) => {
+        (req as express.Request & { rawBody?: string }).rawBody = buf.toString('utf8');
+      },
+    }),
+  );
   app.use(cookieParser());
 
   app.get('/health', (_req, res) => {
@@ -318,6 +327,7 @@ export function createApp(
       paymentRepository,
       rideRepository,
       rentalRepository,
+      paymentProvider,
     );
 
     app.use('/payments', createPaymentRouter(paymentController));

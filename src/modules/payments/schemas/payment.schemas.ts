@@ -9,7 +9,7 @@ export const initiatePaymentSchema = z
     logisticsOrderId: uuid.optional(),
     amount: z.number().positive().optional(),
     currency: z.string().default('INR').optional(),
-    provider: z.enum(['wallet', 'cash', 'upi', 'card', 'razorpay']).default('wallet'),
+    provider: z.enum(['wallet', 'cash', 'upi', 'card', 'razorpay', 'cashfree']).default('wallet'),
     idempotencyKey: z.string().trim().min(1).max(255).optional(),
   })
   .strict()
@@ -28,5 +28,13 @@ export const capturePaymentSchema = z
   })
   .strict();
 
+export const refundPaymentSchema = z
+  .object({
+    amount: z.number().positive(),
+    reason: z.string().trim().min(1).max(500).optional(),
+  })
+  .strict();
+
 export type InitiatePaymentInput = z.infer<typeof initiatePaymentSchema>;
 export type CapturePaymentInput = z.infer<typeof capturePaymentSchema>;
+export type RefundPaymentInput = z.infer<typeof refundPaymentSchema>;

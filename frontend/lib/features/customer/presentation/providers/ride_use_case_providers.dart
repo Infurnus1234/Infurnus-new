@@ -6,6 +6,7 @@ import '../../domain/usecases/get_fleet_use_case.dart';
 import '../../domain/usecases/get_ride_use_case.dart';
 import '../../domain/usecases/list_rides_use_case.dart';
 import '../../domain/usecases/initiate_payment_use_case.dart';
+import '../../domain/usecases/capture_payment_use_case.dart';
 import '../../domain/usecases/list_payments_use_case.dart';
 import '../../domain/usecases/submit_rating_use_case.dart';
 import 'ride_repository_provider.dart';
@@ -43,6 +44,11 @@ final submitRatingUseCaseProvider = Provider<SubmitRatingUseCase>((ref) {
 final initiatePaymentUseCaseProvider = Provider<InitiatePaymentUseCase>((ref) {
   final repository = ref.watch(rideRepositoryProvider);
   return InitiatePaymentUseCase(repository);
+});
+
+final capturePaymentUseCaseProvider = Provider<CapturePaymentUseCase>((ref) {
+  final repository = ref.watch(rideRepositoryProvider);
+  return CapturePaymentUseCase(repository);
 });
 
 final listPaymentsUseCaseProvider = Provider<ListPaymentsUseCase>((ref) {
