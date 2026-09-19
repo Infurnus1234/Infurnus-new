@@ -2,13 +2,20 @@ import type { NextFunction, Request, Response } from 'express';
 import type { PaymentRepository } from '../repositories/payment.repository.js';
 import type { RideRepository } from '../../rides/repositories/ride.repository.js';
 import type { RentalRepository } from '../../rentals/repositories/rental.repository.js';
-import { capturePaymentSchema, initiatePaymentSchema } from '../schemas/payment.schemas.js';
+import type { PaymentProvider } from '../providers/payment.provider.js';
+import type { Payment } from '../types/payment.js';
+import {
+  capturePaymentSchema,
+  initiatePaymentSchema,
+  refundPaymentSchema,
+} from '../schemas/payment.schemas.js';
 
 export class PaymentController {
   constructor(
     private readonly paymentRepository: PaymentRepository,
     private readonly rideRepository?: RideRepository,
     private readonly rentalRepository?: RentalRepository,
+    private readonly paymentProvider?: PaymentProvider,
   ) {}
 
   initiate = async (req: Request, res: Response, next: NextFunction) => {
@@ -137,6 +144,14 @@ export class PaymentController {
         }
       }
 
+      if (input.provider === 'cashfree' && !this.paymentProvider) {
+        res.status(503).json({
+          success: false,
+          message: 'Payment provider cashfree is not configured or unavailable',
+        });
+        return;
+      }
+
       const payment = await this.paymentRepository.initiate({
         userId,
         rideId: input.rideId,
@@ -148,9 +163,47 @@ export class PaymentController {
         idempotencyKey: input.idempotencyKey,
       });
 
+      let paymentSessionId: string | null = null;
+      let providerOrderId: string | null = null;
+
+      if (input.provider === 'cashfree' && this.paymentProvider) {
+        try {
+          const orderResult = await this.paymentProvider.createOrder({
+            orderId: `order_${payment.id}`,
+            amount: payment.amount,
+            currency: payment.currency,
+            customerId: userId,
+            orderNote: input.rideId
+              ? `INFURNUS Ride ${input.rideId}`
+              : input.rentalId
+                ? `INFURNUS Rental ${input.rentalId}`
+                : 'INFURNUS Order',
+          });
+
+          paymentSessionId = orderResult.paymentSessionId ?? null;
+          providerOrderId = orderResult.providerOrderId;
+
+          if (this.paymentRepository.updateProviderOrder) {
+            await this.paymentRepository.updateProviderOrder(payment.id, providerOrderId);
+          }
+        } catch (err: unknown) {
+          const message =
+            err instanceof Error ? err.message : 'Payment gateway order creation failed';
+          res.status(502).json({
+            success: false,
+            message,
+          });
+          return;
+        }
+      }
+
       res.status(201).json({
         success: true,
-        data: payment,
+        data: {
+          ...payment,
+          providerOrderId: providerOrderId ?? payment.providerOrderId,
+          paymentSessionId,
+        },
         message: 'Payment initiated successfully',
       });
     } catch (error: unknown) {
@@ -225,9 +278,77 @@ export class PaymentController {
         return;
       }
 
+      let effectiveProviderPaymentId = input.providerPaymentId;
+
+      if (payment.provider === 'cashfree' && this.paymentProvider && payment.providerOrderId) {
+        try {
+          const statusResult = await this.paymentProvider.getPaymentStatus(payment.providerOrderId);
+
+          // Reconcile amount where available
+          if (
+            statusResult.orderAmount !== undefined &&
+            !isNaN(statusResult.orderAmount) &&
+            Math.abs(Number(statusResult.orderAmount) - Number(payment.amount)) > 0.01
+          ) {
+            res.status(400).json({
+              success: false,
+              message: `Payment amount mismatch: gateway expected ${statusResult.orderAmount}, payment is ${payment.amount}`,
+            });
+            return;
+          }
+
+          if (statusResult.orderStatus === 'FAILED') {
+            if (this.paymentRepository.markFailed) {
+              await this.paymentRepository.markFailed(
+                payment.id,
+                'Cashfree reported payment failure',
+              );
+            }
+            res.status(400).json({
+              success: false,
+              message: 'Payment cannot be captured: Cashfree order status is FAILED',
+            });
+            return;
+          }
+
+          if (statusResult.orderStatus === 'EXPIRED' || statusResult.orderStatus === 'TERMINATED') {
+            if (this.paymentRepository.markFailed) {
+              await this.paymentRepository.markFailed(
+                payment.id,
+                `Cashfree order ${statusResult.orderStatus.toLowerCase()}`,
+              );
+            }
+            res.status(400).json({
+              success: false,
+              message: `Payment cannot be captured: Cashfree order status is ${statusResult.orderStatus}`,
+            });
+            return;
+          }
+
+          if (statusResult.orderStatus !== 'PAID') {
+            res.status(400).json({
+              success: false,
+              message: `Payment cannot be captured: Cashfree order status is ${statusResult.orderStatus}`,
+            });
+            return;
+          }
+          if (!effectiveProviderPaymentId && statusResult.providerPaymentId) {
+            effectiveProviderPaymentId = statusResult.providerPaymentId;
+          }
+        } catch (err: unknown) {
+          const message =
+            err instanceof Error ? err.message : 'Failed to verify Cashfree payment status';
+          res.status(502).json({
+            success: false,
+            message,
+          });
+          return;
+        }
+      }
+
       const captured = await this.paymentRepository.capture({
         paymentId,
-        providerPaymentId: input.providerPaymentId,
+        providerPaymentId: effectiveProviderPaymentId,
       });
 
       if (!captured) {
@@ -295,6 +416,249 @@ export class PaymentController {
       res.json({
         success: true,
         data: payments,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  handleCashfreeWebhook = async (req: Request, res: Response, _next: NextFunction) => {
+    try {
+      if (!this.paymentProvider) {
+        res.status(503).json({ success: false, message: 'Payment provider unavailable' });
+        return;
+      }
+
+      const signature = req.headers['x-webhook-signature'] as string | undefined;
+      const timestamp = req.headers['x-webhook-timestamp'] as string | undefined;
+
+      if (!signature) {
+        res.status(400).json({ success: false, message: 'Missing webhook signature' });
+        return;
+      }
+
+      const rawBody = (req as Request & { rawBody?: string }).rawBody ?? JSON.stringify(req.body);
+
+      if (this.paymentProvider.verifyWebhookSignature) {
+        const isValid = this.paymentProvider.verifyWebhookSignature(rawBody, signature, timestamp);
+        if (!isValid) {
+          res.status(401).json({ success: false, message: 'Invalid webhook signature' });
+          return;
+        }
+      }
+
+      const event = req.body as {
+        type?: string;
+        event_time?: string;
+        data?: {
+          order?: {
+            order_id?: string;
+            order_amount?: number;
+            order_currency?: string;
+          };
+          payment?: {
+            cf_payment_id?: string | number;
+            payment_status?: string;
+            payment_amount?: number;
+            payment_currency?: string;
+            payment_message?: string;
+            payment_time?: string;
+          };
+        };
+      };
+
+      const orderId = event?.data?.order?.order_id;
+      if (!orderId) {
+        res.status(400).json({ success: false, message: 'Missing order_id in webhook payload' });
+        return;
+      }
+
+      // Locate existing payment record by provider_order_id or id
+      let payment: Payment | null = null;
+      if (this.paymentRepository.findByProviderOrderId) {
+        payment = await this.paymentRepository.findByProviderOrderId(orderId);
+      }
+      if (!payment) {
+        const strippedId = orderId.replace(/^order_/, '');
+        payment = await this.paymentRepository.findById(strippedId);
+      }
+
+      if (!payment) {
+        // Safe diagnostic response without sensitive secrets. Never create unauthorized payment.
+        res.status(200).json({
+          success: true,
+          message: 'Payment record not found for webhook order, ignored safely',
+        });
+        return;
+      }
+
+      const eventType = event.type ?? '';
+      const paymentStatus = event.data?.payment?.payment_status?.toUpperCase() ?? '';
+      const cfPaymentId = event.data?.payment?.cf_payment_id
+        ? String(event.data.payment.cf_payment_id)
+        : undefined;
+      const webhookAmount = Number(event.data?.payment?.payment_amount);
+
+      // Handle SUCCESS / PAID
+      if (eventType === 'PAYMENT_SUCCESS_WEBHOOK' || paymentStatus === 'SUCCESS') {
+        // 1. Idempotency check: Already CAPTURED
+        if (payment.status === 'CAPTURED') {
+          res.status(200).json({
+            success: true,
+            data: payment,
+            message: 'Payment already captured',
+          });
+          return;
+        }
+
+        // 2. Prevent illegal transition if already REFUNDED
+        if (payment.status === 'REFUNDED') {
+          res.status(200).json({
+            success: true,
+            message: 'Payment is already refunded, webhook ignored',
+          });
+          return;
+        }
+
+        // 3. Amount reconciliation check
+        if (!isNaN(webhookAmount) && Math.abs(webhookAmount - payment.amount) > 0.01) {
+          res.status(400).json({
+            success: false,
+            message: `Amount mismatch in webhook: expected ${payment.amount}, received ${webhookAmount}`,
+          });
+          return;
+        }
+
+        // 4. Capture payment
+        const captured = await this.paymentRepository.capture({
+          paymentId: payment.id,
+          providerPaymentId: cfPaymentId,
+        });
+
+        res.status(200).json({
+          success: true,
+          data: captured,
+          message: 'Payment captured successfully via webhook',
+        });
+        return;
+      }
+
+      // Handle FAILED
+      if (eventType === 'PAYMENT_FAILED_WEBHOOK' || paymentStatus === 'FAILED') {
+        if (payment.status === 'CAPTURED') {
+          res.status(200).json({
+            success: true,
+            message: 'Payment already captured, failure webhook ignored',
+          });
+          return;
+        }
+
+        if (this.paymentRepository.markFailed) {
+          await this.paymentRepository.markFailed(
+            payment.id,
+            event.data?.payment?.payment_message || 'Payment failed at gateway',
+          );
+        }
+
+        res.status(200).json({
+          success: true,
+          message: 'Payment marked failed via webhook',
+        });
+        return;
+      }
+
+      // Other events (e.g. USER_DROPPED, PENDING)
+      res.status(200).json({
+        success: true,
+        message: `Webhook event ${eventType} processed`,
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Internal webhook error';
+      res.status(500).json({ success: false, message });
+    }
+  };
+
+  refund = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const paymentId = req.params.paymentId as string;
+      const input = refundPaymentSchema.parse(req.body);
+      const role = req.auth?.role;
+
+      // Admin-only authorization
+      if (role !== 'admin') {
+        res.status(403).json({
+          success: false,
+          message: 'Forbidden: Only administrators can process refunds',
+        });
+        return;
+      }
+
+      const payment = await this.paymentRepository.findById(paymentId);
+      if (!payment) {
+        res.status(404).json({ success: false, message: 'Payment not found' });
+        return;
+      }
+
+      // Must be CAPTURED
+      if (payment.status === 'REFUNDED') {
+        res.status(409).json({
+          success: false,
+          message: 'Payment has already been refunded',
+        });
+        return;
+      }
+
+      if (payment.status !== 'CAPTURED') {
+        res.status(409).json({
+          success: false,
+          message: `Cannot refund payment in ${payment.status} state`,
+        });
+        return;
+      }
+
+      // Validate amount
+      if (input.amount > payment.amount) {
+        res.status(400).json({
+          success: false,
+          message: `Refund amount (${input.amount}) cannot exceed payment amount (${payment.amount})`,
+        });
+        return;
+      }
+
+      // Call gateway if provider is cashfree
+      if (payment.provider === 'cashfree' && this.paymentProvider && payment.providerOrderId) {
+        if (this.paymentProvider.refundPayment) {
+          try {
+            await this.paymentProvider.refundPayment({
+              providerOrderId: payment.providerOrderId,
+              refundAmount: input.amount,
+              refundId: `ref_${payment.id}_${Date.now()}`,
+              ...(input.reason ? { note: input.reason } : {}),
+            });
+          } catch (gatewayErr: unknown) {
+            const message =
+              gatewayErr instanceof Error ? gatewayErr.message : 'Gateway refund failed';
+            res.status(502).json({
+              success: false,
+              message,
+            });
+            return;
+          }
+        }
+      }
+
+      // Update database
+      if (!this.paymentRepository.refund) {
+        res.status(500).json({ success: false, message: 'Refund repository not supported' });
+        return;
+      }
+
+      const refunded = await this.paymentRepository.refund(paymentId, input.amount, input.reason);
+
+      res.status(200).json({
+        success: true,
+        data: refunded,
+        message: 'Payment refunded successfully',
       });
     } catch (error) {
       next(error);

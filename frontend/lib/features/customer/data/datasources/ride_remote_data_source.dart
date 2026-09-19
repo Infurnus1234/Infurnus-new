@@ -11,6 +11,7 @@ abstract class RideRemoteDataSource {
   Future<FareEstimateModel> estimateFare(Map<String, dynamic> data);
   Future<void> submitRating(String rideId, int rating, {String? review});
   Future<Map<String, dynamic>> initiatePayment(Map<String, dynamic> data);
+  Future<Map<String, dynamic>> capturePayment(String paymentId, {String? providerPaymentId});
   Future<List<dynamic>> listPayments();
   Future<List<FleetVehicleModel>> getFleet({String? sector, String? category});
 }
@@ -65,6 +66,17 @@ class RideRemoteDataSourceImpl implements RideRemoteDataSource {
   @override
   Future<Map<String, dynamic>> initiatePayment(Map<String, dynamic> data) async {
     final response = await _dio.post('/payments/initiate', data: data);
+    return response.data['data'];
+  }
+
+  @override
+  Future<Map<String, dynamic>> capturePayment(String paymentId, {String? providerPaymentId}) async {
+    final response = await _dio.post(
+      '/payments/$paymentId/capture',
+      data: {
+        if (providerPaymentId != null) 'providerPaymentId': providerPaymentId,
+      },
+    );
     return response.data['data'];
   }
 

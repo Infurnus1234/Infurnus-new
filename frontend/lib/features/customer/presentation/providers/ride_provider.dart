@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import '../../../../core/services/cashfree_checkout_service.dart';
 import '../../../../core/services/geocoding_service.dart';
 import '../../../../core/services/socket_service.dart';
 import '../../../../core/storage/secure_storage.dart';
@@ -540,22 +541,88 @@ class RideNotifier extends StateNotifier<RideState> {
     final rideId = state.currentRide?.id;
     if (rideId == null) return false;
 
-    state = state.copyWith(paymentStatus: 'processing');
+    state = state.copyWith(paymentStatus: 'processing', errorMessage: null);
 
     try {
-      final result = await ref.read(initiatePaymentUseCaseProvider).execute(
+      final initiateResult = await ref.read(initiatePaymentUseCaseProvider).execute(
         rideId: rideId,
         amount: amount,
         paymentMethod: paymentMethod,
       );
 
+      final paymentId = initiateResult['id']?.toString();
+      if (paymentId == null) {
+        throw Exception('Payment initiation did not return a valid payment ID');
+      }
+
       state = state.copyWith(
-        paymentStatus: 'paid',
-        paymentId: result['id']?.toString(),
+        paymentId: paymentId,
         paymentMethod: paymentMethod,
       );
-      fetchPaymentHistory();
-      return true;
+
+      if (paymentMethod.toLowerCase() == 'cashfree') {
+        final paymentSessionId = initiateResult['paymentSessionId']?.toString();
+        final providerOrderId = initiateResult['providerOrderId']?.toString();
+
+        if (paymentSessionId == null || paymentSessionId.isEmpty) {
+          throw Exception('Payment session ID not returned by gateway');
+        }
+
+        final checkoutService = ref.read(cashfreeCheckoutServiceProvider);
+        final checkoutResult = await checkoutService.startCheckout(
+          orderId: providerOrderId ?? 'order_$paymentId',
+          paymentSessionId: paymentSessionId,
+        );
+
+        if (checkoutResult.status == CashfreeCheckoutStatus.cancelled) {
+          state = state.copyWith(
+            paymentStatus: 'unpaid',
+            errorMessage: 'Payment was cancelled by user',
+          );
+          return false;
+        }
+
+        if (checkoutResult.status == CashfreeCheckoutStatus.failed) {
+          state = state.copyWith(
+            paymentStatus: 'unpaid',
+            errorMessage: checkoutResult.errorMessage ?? 'Payment failed at gateway',
+          );
+          return false;
+        }
+
+        // Server-side verification: Flutter callback alone never marks payment as paid.
+        final captureResult = await ref.read(capturePaymentUseCaseProvider).execute(
+          paymentId: paymentId,
+          providerPaymentId: checkoutResult.referenceId,
+        );
+
+        if (captureResult['status'] == 'CAPTURED') {
+          state = state.copyWith(
+            paymentStatus: 'paid',
+            errorMessage: null,
+          );
+          fetchPaymentHistory();
+          return true;
+        } else {
+          state = state.copyWith(
+            paymentStatus: 'unpaid',
+            errorMessage: 'Payment verification failed at server',
+          );
+          return false;
+        }
+      } else {
+        // Non-Cashfree provider (e.g. wallet/cash)
+        final captureResult = await ref.read(capturePaymentUseCaseProvider).execute(
+          paymentId: paymentId,
+        );
+
+        state = state.copyWith(
+          paymentStatus: captureResult['status'] == 'CAPTURED' ? 'paid' : 'unpaid',
+          errorMessage: null,
+        );
+        fetchPaymentHistory();
+        return captureResult['status'] == 'CAPTURED';
+      }
     } catch (e) {
       state = state.copyWith(paymentStatus: 'unpaid', errorMessage: e.toString());
       return false;

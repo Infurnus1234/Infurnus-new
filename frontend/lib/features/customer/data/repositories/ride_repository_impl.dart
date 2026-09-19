@@ -107,6 +107,23 @@ class RideRepositoryImpl implements RideRepository {
   }
 
   @override
+  Future<Map<String, dynamic>> capturePayment({
+    required String paymentId,
+    String? providerPaymentId,
+  }) async {
+    try {
+      return await remoteDataSource.capturePayment(
+        paymentId,
+        providerPaymentId: providerPaymentId,
+      );
+    } on DioException catch (e) {
+      throw _handleDioException(e);
+    } catch (e) {
+      throw ServerFailure(e.toString());
+    }
+  }
+
+  @override
   Future<List<Map<String, dynamic>>> listPayments({int? limit}) async {
     try {
       final list = await remoteDataSource.listPayments();

@@ -31,10 +31,15 @@ export interface InitiatePaymentData {
   amount: number;
   currency?: string | undefined;
   provider?: string | undefined;
+  providerOrderId?: string | undefined;
   idempotencyKey?: string | undefined;
 }
 
 export interface CapturePaymentData {
   paymentId: string;
   providerPaymentId?: string | undefined;
+}
+
+export interface InitiatePaymentResponse extends Payment {
+  paymentSessionId?: string | null;
 }

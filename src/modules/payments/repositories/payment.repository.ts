@@ -8,6 +8,10 @@ export interface PaymentRepository {
   findByRideId(rideId: string): Promise<Payment[]>;
   findActiveByRideId(rideId: string): Promise<Payment | null>;
   listForUser(userId: string, limit?: number): Promise<Payment[]>;
+  updateProviderOrder?(paymentId: string, providerOrderId: string): Promise<Payment | null>;
+  findByProviderOrderId?(providerOrderId: string): Promise<Payment | null>;
+  markFailed?(paymentId: string, failureReason?: string): Promise<Payment | null>;
+  refund?(paymentId: string, refundAmount: number, reason?: string): Promise<Payment | null>;
 }
 
 const paymentProjection = `
@@ -28,9 +32,9 @@ export class PostgresPaymentRepository implements PaymentRepository {
     const result = await this.pool.query<Payment>(
       `INSERT INTO payments (
          user_id, ride_id, rental_id, logistics_order_id,
-         amount, currency, provider, idempotency_key, status
+         amount, currency, provider, idempotency_key, provider_order_id, status
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'INITIATED')
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'INITIATED')
        RETURNING ${paymentProjection}`,
       [
         data.userId,
@@ -41,12 +45,26 @@ export class PostgresPaymentRepository implements PaymentRepository {
         data.currency ?? 'INR',
         data.provider ?? 'wallet',
         data.idempotencyKey ?? null,
+        data.providerOrderId ?? null,
       ],
     );
 
     const payment = result.rows[0];
     if (!payment) throw new Error('Failed to initiate payment');
     return payment;
+  }
+
+  async updateProviderOrder(paymentId: string, providerOrderId: string): Promise<Payment | null> {
+    const result = await this.pool.query<Payment>(
+      `UPDATE payments
+       SET provider_order_id = $2,
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING ${paymentProjection}`,
+      [paymentId, providerOrderId],
+    );
+
+    return result.rows[0] ?? null;
   }
 
   async capture(data: CapturePaymentData): Promise<Payment | null> {
@@ -103,5 +121,45 @@ export class PostgresPaymentRepository implements PaymentRepository {
       [userId, limit],
     );
     return result.rows;
+  }
+
+  async findByProviderOrderId(providerOrderId: string): Promise<Payment | null> {
+    const result = await this.pool.query<Payment>(
+      `SELECT ${paymentProjection}
+       FROM payments
+       WHERE provider_order_id = $1 OR id::text = $1
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [providerOrderId],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async markFailed(paymentId: string, failureReason?: string): Promise<Payment | null> {
+    const result = await this.pool.query<Payment>(
+      `UPDATE payments
+       SET status = 'FAILED',
+           failed_at = NOW(),
+           failure_reason = COALESCE($2, failure_reason, 'Payment failed'),
+           updated_at = NOW()
+       WHERE id = $1 AND status != 'CAPTURED'
+       RETURNING ${paymentProjection}`,
+      [paymentId, failureReason ?? null],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async refund(paymentId: string, _refundAmount: number, reason?: string): Promise<Payment | null> {
+    const result = await this.pool.query<Payment>(
+      `UPDATE payments
+       SET status = 'REFUNDED',
+           refunded_at = NOW(),
+           failure_reason = COALESCE($2, failure_reason),
+           updated_at = NOW()
+       WHERE id = $1 AND status = 'CAPTURED'
+       RETURNING ${paymentProjection}`,
+      [paymentId, reason ?? null],
+    );
+    return result.rows[0] ?? null;
   }
 }
