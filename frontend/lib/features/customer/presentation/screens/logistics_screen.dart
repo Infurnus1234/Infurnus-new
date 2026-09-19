@@ -39,9 +39,9 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
   void initState() {
     super.initState();
     final rideState = ref.read(rideProvider);
-    _pickupController.text = rideState.pickup ?? 'Warehouse 4, Indiranagar';
-    _dropController.text = rideState.destination ?? 'Logistics Hub, Electronic City';
-    _itemDescController.text = 'Commercial merchandise boxes';
+    _pickupController.text = rideState.pickup ?? '';
+    _dropController.text = rideState.destination ?? '';
+    _itemDescController.text = '';
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _detectCurrentLocation();

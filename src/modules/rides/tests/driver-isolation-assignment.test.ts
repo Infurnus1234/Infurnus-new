@@ -63,8 +63,9 @@ describe('Driver Zero-Fare Financial Isolation & Sanitization', () => {
     const history = await service.getDriverHistory('user-1', 20, true);
 
     expect(history.totalEarnings).toBe(0);
-    expect(history.rides[0]?.finalFare).toBeUndefined();
-    expect(history.rides[0]?.fareEstimate).toBeUndefined();
+    const ride = history.rides[0] as Record<string, unknown> | undefined;
+    expect(ride?.finalFare).toBeUndefined();
+    expect(ride?.fareEstimate).toBeUndefined();
   });
 });
 
@@ -121,11 +122,20 @@ describe('Driver Online Eligibility & Assignment Code Claiming', () => {
     const mockDriverRepo: Partial<DriverRepository> = {
       findProfileIdByUserId: vi.fn().mockResolvedValue('p-1'),
       verifyAssignmentCode: vi.fn().mockResolvedValue({
-        vehicleId: 'v-1',
-        make: 'Maruti',
-        model: 'Dzire',
-        plateNumber: 'KA-01-EQ-9999',
-        fleetOwnerName: 'Fleet Corp',
+        code: 'FLEET-54321',
+        vehicle: {
+          id: 'v-1',
+          make: 'Maruti',
+          model: 'Dzire',
+          plateNumber: 'KA-01-EQ-9999',
+          color: 'White',
+          sector: 'passenger',
+          category: 'sedan',
+        },
+        owner: {
+          id: 'o-1',
+          name: 'Fleet Corp',
+        },
       }),
       claimAssignmentCode: vi.fn().mockResolvedValue({
         vehicleId: 'v-1',
@@ -137,8 +147,8 @@ describe('Driver Online Eligibility & Assignment Code Claiming', () => {
 
     const service = new DriverService(mockDriverRepo as DriverRepository);
 
-    const info = await service.verifyAssignmentCode('u-1', 'FLEET-54321');
-    expect(info?.plateNumber).toBe('KA-01-EQ-9999');
+    const info = await service.verifyAssignmentCode('FLEET-54321');
+    expect(info?.vehicle.plateNumber).toBe('KA-01-EQ-9999');
 
     const claimed = await service.claimAssignmentCode('u-1', 'FLEET-54321');
     expect(claimed?.vehicleId).toBe('v-1');

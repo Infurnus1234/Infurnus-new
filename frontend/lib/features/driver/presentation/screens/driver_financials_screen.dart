@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_card.dart';
 import '../../../../shared/widgets/infurnus_error_view.dart';
@@ -212,7 +213,7 @@ class DriverFinancialsScreen extends ConsumerWidget {
 
   Widget _buildRideHistoryItem(RideModel ride, {bool showFare = false}) {
     final isCompleted = ride.status == RideStatus.completed;
-    final fare = ride.fareEstimate;
+    final fare = ride.displayFare;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -256,6 +257,11 @@ class DriverFinancialsScreen extends ConsumerWidget {
               ),
             ],
           ),
+          const SizedBox(height: 4),
+          Text(
+            '${ride.sector?.toUpperCase() ?? "PASSENGER"} • ${DateFormat('dd MMM yyyy, hh:mm a').format(ride.createdAt)}',
+            style: TextStyle(color: Colors.grey[600], fontSize: 12),
+          ),
           const SizedBox(height: 10),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -288,7 +294,7 @@ class DriverFinancialsScreen extends ConsumerWidget {
               ),
             ],
           ),
-          if (showFare && fare != null) ...[
+          if (showFare && fare > 0) ...[
             const Divider(height: 18),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,

@@ -694,7 +694,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
       tiers = [
         {'id': 'bike', 'name': 'Bike Taxi', 'icon': Icons.two_wheeler, 'eta': '3m'},
         {'id': 'auto', 'name': 'Auto', 'icon': Icons.electric_rickshaw, 'eta': '3m'},
-        {'id': 'hatchback', 'name': 'Mini / Go', 'icon': Icons.directions_car, 'eta': '4m'},
+        {'id': 'mini', 'name': 'Mini/Compact', 'icon': Icons.directions_car, 'eta': '4m'},
         {'id': 'sedan', 'name': 'Prime Sedan', 'icon': Icons.airport_shuttle, 'eta': '2m'},
         {'id': 'suv', 'name': 'SUV 6-Seater', 'icon': Icons.directions_bus, 'eta': '6m'},
       ];
