@@ -20,6 +20,7 @@ describe('Driver Zero-Fare Financial Isolation & Sanitization', () => {
       fareEstimate: 350.50,
       finalFare: 360.00,
       actualFuelCost: 45.20,
+      pin: '4321',
       pinVerified: true,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -29,11 +30,13 @@ describe('Driver Zero-Fare Financial Isolation & Sanitization', () => {
 
     expect(sanitized.id).toBe(rawRide.id);
     expect(sanitized.pickupAddress).toBe('MG Road, Bangalore');
-    // Financial data must NEVER reach driver
+    // Financial data & customer PIN must NEVER reach driver
     expect(sanitized.fareEstimate).toBeUndefined();
     expect(sanitized.finalFare).toBeUndefined();
     expect(sanitized.actualFuelCost).toBeUndefined();
     expect(sanitized.billing).toBeUndefined();
+    expect(sanitized.pin).toBeUndefined();
+    expect(sanitized.pinVerified).toBe(true);
   });
 
   it('hides total earnings and ride fares in driver history when isDriverRole is true', async () => {

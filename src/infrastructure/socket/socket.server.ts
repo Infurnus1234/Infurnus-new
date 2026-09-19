@@ -19,6 +19,7 @@ import type { RideRepository } from '../../modules/rides/repositories/ride.repos
 import type { RideService } from '../../modules/rides/services/ride.service.js';
 import type { RouteRecalculationService } from '../../modules/rides/services/route-recalculation.service.js';
 import type { Ride } from '../../modules/rides/types/ride.js';
+import { sanitizeRideForDriver } from '../../modules/rides/utils/ride-sanitizer.js';
 
 export interface RideSocketDependencies {
   driverService: DriverService;
@@ -58,6 +59,8 @@ export function createSocketServer(
       const sector = r.sector || 'passenger';
       const category = r.vehicleCategory;
 
+      const driverRide = sanitizeRideForDriver(r);
+
       if (r.pickup?.latitude != null && r.pickup?.longitude != null && rideDependencies.driverService?.nearby) {
         try {
           const candidates = await rideDependencies.driverService.nearby(
@@ -68,7 +71,7 @@ export function createSocketServer(
           );
           if (candidates && candidates.length > 0) {
             for (const candidate of candidates) {
-              io.to(driverUserRoom(candidate.userId)).emit('ride:incoming', { ride });
+              io.to(driverUserRoom(candidate.userId)).emit('ride:incoming', { ride: driverRide });
             }
             return;
           }
@@ -78,9 +81,9 @@ export function createSocketServer(
       }
 
       if (category) {
-        io.to(driverSectorCategoryRoom(sector, category)).emit('ride:incoming', { ride });
+        io.to(driverSectorCategoryRoom(sector, category)).emit('ride:incoming', { ride: driverRide });
       } else {
-        io.to(driverSectorRoom(sector)).emit('ride:incoming', { ride });
+        io.to(driverSectorRoom(sector)).emit('ride:incoming', { ride: driverRide });
       }
     };
 
