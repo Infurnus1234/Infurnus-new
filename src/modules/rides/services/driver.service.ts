@@ -35,7 +35,9 @@ export class DriverService {
 
   async getDriverHistory(userId: string, limit = 20, isDriverRole = false) {
     const profileId = await this.profileForUser(userId);
-    const rides = this.rideRepository ? await this.rideRepository.listForDriver(profileId, limit) : [];
+    const rides = this.rideRepository
+      ? await this.rideRepository.listForDriver(profileId, limit)
+      : [];
     const completedRides = rides.filter((r) => r.status === 'completed');
 
     if (isDriverRole) {
@@ -79,7 +81,10 @@ export class DriverService {
         );
       }
 
-      if (profile.licenseExpiry && new Date(profile.licenseExpiry).getTime() < this.clock().getTime()) {
+      if (
+        profile.licenseExpiry &&
+        new Date(profile.licenseExpiry).getTime() < this.clock().getTime()
+      ) {
         throw new AppError(
           'DOCUMENT_EXPIRED',
           'Driving license has expired. Please renew and re-upload before going online',
@@ -129,14 +134,22 @@ export class DriverService {
     await this.repository.markStale(profileId);
   }
 
-  async getActiveVehicleForUser(userId: string): Promise<{ sector: string; category: string } | null> {
-    return this.repository.findActiveVehicleByUserId ? this.repository.findActiveVehicleByUserId(userId) : null;
+  async getActiveVehicleForUser(
+    userId: string,
+  ): Promise<{ sector: string; category: string } | null> {
+    return this.repository.findActiveVehicleByUserId
+      ? this.repository.findActiveVehicleByUserId(userId)
+      : null;
   }
 
   async verifyAssignmentCode(code: string) {
     const preview = await this.repository.verifyAssignmentCode(code);
     if (!preview) {
-      throw new AppError('INVALID_ASSIGNMENT_CODE', 'Assignment code is invalid or has expired', 404);
+      throw new AppError(
+        'INVALID_ASSIGNMENT_CODE',
+        'Assignment code is invalid or has expired',
+        404,
+      );
     }
     return preview;
   }
@@ -147,7 +160,11 @@ export class DriverService {
       return await this.repository.claimAssignmentCode(code, userId, profileId);
     } catch (error) {
       if (error instanceof Error && error.message === 'ASSIGNMENT_CODE_INVALID') {
-        throw new AppError('INVALID_ASSIGNMENT_CODE', 'Assignment code is invalid, expired, or already claimed', 400);
+        throw new AppError(
+          'INVALID_ASSIGNMENT_CODE',
+          'Assignment code is invalid, expired, or already claimed',
+          400,
+        );
       }
       throw error;
     }
@@ -157,7 +174,11 @@ export class DriverService {
     const profileId = await this.profileForUser(userId);
     const updated = await this.repository.setActiveVehicle(profileId, vehicleId);
     if (!updated) {
-      throw new AppError('VEHICLE_NOT_ASSIGNED', 'Vehicle is not assigned to this driver or is inactive', 400);
+      throw new AppError(
+        'VEHICLE_NOT_ASSIGNED',
+        'Vehicle is not assigned to this driver or is inactive',
+        400,
+      );
     }
     return { success: true, message: 'Active vehicle updated' };
   }
@@ -193,4 +214,3 @@ export class DriverService {
     );
   }
 }
-

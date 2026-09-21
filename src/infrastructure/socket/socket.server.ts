@@ -61,7 +61,11 @@ export function createSocketServer(
 
       const driverRide = sanitizeRideForDriver(r);
 
-      if (r.pickup?.latitude != null && r.pickup?.longitude != null && rideDependencies.driverService?.nearby) {
+      if (
+        r.pickup?.latitude != null &&
+        r.pickup?.longitude != null &&
+        rideDependencies.driverService?.nearby
+      ) {
         try {
           const candidates = await rideDependencies.driverService.nearby(
             r.pickup.latitude,
@@ -81,13 +85,19 @@ export function createSocketServer(
       }
 
       if (category) {
-        io.to(driverSectorCategoryRoom(sector, category)).emit('ride:incoming', { ride: driverRide });
+        io.to(driverSectorCategoryRoom(sector, category)).emit('ride:incoming', {
+          ride: driverRide,
+        });
       } else {
         io.to(driverSectorRoom(sector)).emit('ride:incoming', { ride: driverRide });
       }
     };
 
-    const onRideAccepted = (ride: { id: string; sector?: string | null; vehicleCategory?: string | null }) => {
+    const onRideAccepted = (ride: {
+      id: string;
+      sector?: string | null;
+      vehicleCategory?: string | null;
+    }) => {
       const sector = ride.sector || 'passenger';
       const category = ride.vehicleCategory;
       if (category) {
@@ -116,8 +126,7 @@ export function createSocketServer(
 
       if (socket.data.auth?.role === 'driver') {
         let sector =
-          (socket.handshake.auth?.sector as string) ||
-          (socket.handshake.query?.sector as string);
+          (socket.handshake.auth?.sector as string) || (socket.handshake.query?.sector as string);
         let category =
           (socket.handshake.auth?.category as string) ||
           (socket.handshake.query?.category as string);
@@ -358,10 +367,9 @@ export function createSocketServer(
             error !== null &&
             'code' in error &&
             typeof (error as { code?: unknown }).code === 'string'
-              ? ((error as { code: string }).code)
+              ? (error as { code: string }).code
               : 'RIDE_TRANSITION_CONFLICT';
-          const errorMessage =
-            error instanceof Error ? error.message : 'Ride transition denied';
+          const errorMessage = error instanceof Error ? error.message : 'Ride transition denied';
 
           ack?.({
             success: false,

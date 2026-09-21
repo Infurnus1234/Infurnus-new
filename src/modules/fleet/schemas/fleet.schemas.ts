@@ -13,8 +13,16 @@ export const createFleetVehicleSchema = z
     year: z.number().int().min(1990).max(2035).optional(),
     fuelType: z.string().trim().max(30).optional(),
     seatingCapacity: z.number().int().min(1).max(100).optional(),
-    registrationDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    registrationExpiry: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    registrationDate: z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    registrationExpiry: z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
     isCommercial: z.boolean().default(true),
     permitDetails: z.string().trim().max(500).optional(),
   })
@@ -35,8 +43,16 @@ export const updateFleetVehicleSchema = z
     year: z.number().int().min(1990).max(2035).optional(),
     fuelType: z.string().trim().max(30).optional(),
     seatingCapacity: z.number().int().min(1).max(100).optional(),
-    registrationDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    registrationExpiry: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    registrationDate: z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    registrationExpiry: z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
     isCommercial: z.boolean().optional(),
     permitDetails: z.string().trim().max(500).optional(),
   })

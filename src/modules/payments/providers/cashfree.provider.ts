@@ -111,10 +111,13 @@ export class CashfreePaymentProvider implements PaymentProvider {
 
   async getPaymentStatus(providerOrderId: string): Promise<PaymentStatusResult> {
     try {
-      const response = await fetch(`${this.baseUrl}/orders/${encodeURIComponent(providerOrderId)}`, {
-        method: 'GET',
-        headers: this.getHeaders(),
-      });
+      const response = await fetch(
+        `${this.baseUrl}/orders/${encodeURIComponent(providerOrderId)}`,
+        {
+          method: 'GET',
+          headers: this.getHeaders(),
+        },
+      );
 
       if (!response.ok) {
         let gatewayMessage = `Cashfree order fetch failed with status ${response.status}`;

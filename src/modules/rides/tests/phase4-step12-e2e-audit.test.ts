@@ -81,7 +81,10 @@ describe('Phase 4 Step 12: End-to-End Validation & Final Audit Suite', () => {
       releaseBusy: vi.fn().mockResolvedValue(true),
     };
 
-    const rideService = new RideService(mockRideRepo as RideRepository, mockDriverRepo as DriverRepository);
+    const rideService = new RideService(
+      mockRideRepo as RideRepository,
+      mockDriverRepo as DriverRepository,
+    );
     const pinRes = await rideService.verifyRidePin('ride-e2e-001', 'driver-e2e-1', '5678');
     expect(pinRes.verified).toBe(true);
 
@@ -210,7 +213,9 @@ describe('Phase 4 Step 12: End-to-End Validation & Final Audit Suite', () => {
   it('7. PIN bypass rejection: transition to in_progress throws 409 PIN_VERIFICATION_REQUIRED', async () => {
     const mockRideRepo: Partial<RideRepository> = {
       isAssignedDriverProfile: vi.fn().mockResolvedValue(true),
-      findById: vi.fn().mockResolvedValue(mockRide({ status: 'driver_arrived', pinVerified: false })),
+      findById: vi
+        .fn()
+        .mockResolvedValue(mockRide({ status: 'driver_arrived', pinVerified: false })),
       isPinVerified: vi.fn().mockResolvedValue(false),
       transition: vi.fn(),
     };
@@ -249,7 +254,14 @@ describe('Phase 4 Step 12: End-to-End Validation & Final Audit Suite', () => {
     };
 
     const mockRideRepo: Partial<RideRepository> = {
-      findById: vi.fn().mockResolvedValue(mockRide({ id: testRideId, customerId: testCustId, status: 'completed', finalFare: 450.0 })),
+      findById: vi.fn().mockResolvedValue(
+        mockRide({
+          id: testRideId,
+          customerId: testCustId,
+          status: 'completed',
+          finalFare: 450.0,
+        }),
+      ),
     };
 
     const mockProvider = {
@@ -297,7 +309,10 @@ describe('Phase 4 Step 12: End-to-End Validation & Final Audit Suite', () => {
       clientSecret: 'super-secret-key',
     });
 
-    const rawBody = JSON.stringify({ type: 'PAYMENT_SUCCESS_WEBHOOK', data: { order: { order_id: 'ord-1' } } });
+    const rawBody = JSON.stringify({
+      type: 'PAYMENT_SUCCESS_WEBHOOK',
+      data: { order: { order_id: 'ord-1' } },
+    });
     const timestamp = '1726732800';
 
     const validSignature = crypto
