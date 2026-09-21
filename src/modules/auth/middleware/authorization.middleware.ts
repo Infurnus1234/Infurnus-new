@@ -8,7 +8,23 @@ export function requireRoles(...allowedRoles: string[]) {
       return;
     }
 
-    if (!allowedRoles.includes(req.auth.role)) {
+    const userRole = req.auth.role;
+    const mode = (req.headers['x-provider-mode'] as string | undefined)?.toLowerCase();
+
+    let effectiveRoles = [userRole];
+    if (userRole === 'driver_fleet_owner') {
+      if (mode === 'driver') {
+        effectiveRoles = ['driver'];
+      } else if (mode === 'fleet_owner') {
+        effectiveRoles = ['fleet_owner'];
+      } else {
+        effectiveRoles = ['driver', 'fleet_owner', 'driver_fleet_owner'];
+      }
+    }
+
+    const hasPermission = allowedRoles.some((role) => effectiveRoles.includes(role));
+
+    if (!hasPermission) {
       next(new AppError('FORBIDDEN', 'You do not have permission to perform this action', 403));
       return;
     }
@@ -16,3 +32,4 @@ export function requireRoles(...allowedRoles: string[]) {
     next();
   };
 }
+

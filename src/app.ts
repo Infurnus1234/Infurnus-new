@@ -56,6 +56,30 @@ import type { CouponRedemptionService } from './modules/coupons/services/coupon-
 import { CouponController } from './modules/coupons/controllers/coupon.controller.js';
 import { createCouponRouter } from './modules/coupons/routes/coupon.routes.js';
 
+import type { RatingRepository } from './modules/ratings/repositories/rating.repository.js';
+import { RatingController } from './modules/ratings/controllers/rating.controller.js';
+import { createRatingRouter } from './modules/ratings/routes/rating.routes.js';
+
+import type { PaymentRepository } from './modules/payments/repositories/payment.repository.js';
+import type { PaymentProvider } from './modules/payments/providers/payment.provider.js';
+import { PaymentController } from './modules/payments/controllers/payment.controller.js';
+import { createPaymentRouter } from './modules/payments/routes/payment.routes.js';
+
+import type { FleetRepository } from './modules/fleet/repositories/fleet.repository.js';
+import { FleetService } from './modules/fleet/services/fleet.service.js';
+import { FleetController } from './modules/fleet/controllers/fleet.controller.js';
+import { createFleetRouter } from './modules/fleet/routes/fleet.routes.js';
+
+import type { ProviderBankRepository } from './modules/providers/repositories/provider-bank.repository.js';
+import { ProviderService } from './modules/providers/services/provider.service.js';
+import { ProviderController } from './modules/providers/controllers/provider.controller.js';
+import { createProviderRouter } from './modules/providers/routes/provider.routes.js';
+
+import type { SupportRepository } from './modules/support/repositories/support.repository.js';
+import { SupportService } from './modules/support/services/support.service.js';
+import { SupportController } from './modules/support/controllers/support.controller.js';
+import { createSupportRouter } from './modules/support/routes/support.routes.js';
+
 export interface AppOptions {
   enableAuthRateLimiting?: boolean;
   enableAuthCsrfProtection?: boolean;
@@ -77,6 +101,12 @@ export function createApp(
   authOtpProvider?: OtpProvider,
   fareEstimateService?: FareEstimateService,
   couponRedemptionService?: CouponRedemptionService,
+  ratingRepository?: RatingRepository,
+  paymentRepository?: PaymentRepository,
+  fleetRepository?: FleetRepository,
+  providerBankRepository?: ProviderBankRepository,
+  supportRepository?: SupportRepository,
+  paymentProvider?: PaymentProvider,
 ): express.Express;
 
 // ============================================================
@@ -105,6 +135,12 @@ export function createApp(
   authOtpProvider?: OtpProvider,
   fareEstimateService?: FareEstimateService,
   couponRedemptionService?: CouponRedemptionService,
+  ratingRepository?: RatingRepository,
+  paymentRepository?: PaymentRepository,
+  fleetRepository?: FleetRepository,
+  providerBankRepository?: ProviderBankRepository,
+  supportRepository?: SupportRepository,
+  paymentProvider?: PaymentProvider,
 ) {
   const app = express();
 
@@ -124,7 +160,13 @@ export function createApp(
     }),
   );
 
-  app.use(express.json());
+  app.use(
+    express.json({
+      verify: (req, _res, buf) => {
+        (req as express.Request & { rawBody?: string }).rawBody = buf.toString('utf8');
+      },
+    }),
+  );
   app.use(cookieParser());
 
   app.get('/health', (_req, res) => {
@@ -227,7 +269,10 @@ export function createApp(
     const rideService = new RideService(rideRepository, driverRepository);
 
     const driverController = driverRepository
-      ? new DriverController(new DriverService(driverRepository), rideService)
+      ? new DriverController(
+          new DriverService(driverRepository, undefined, rideRepository),
+          rideService,
+        )
       : undefined;
 
     app.use('/rides', createRideRouter(new RideController(rideService), driverController));
@@ -261,6 +306,58 @@ export function createApp(
     const couponController = new CouponController(couponRedemptionService);
 
     app.use('/coupons', createCouponRouter(couponController));
+  }
+
+  // ==========================================================
+  // Ratings
+  // ==========================================================
+
+  if (ratingRepository) {
+    const ratingController = new RatingController(ratingRepository);
+
+    app.use('/ratings', createRatingRouter(ratingController));
+  }
+
+  // ==========================================================
+  // Payments
+  // ==========================================================
+
+  if (paymentRepository) {
+    const paymentController = new PaymentController(
+      paymentRepository,
+      rideRepository,
+      rentalRepository,
+      paymentProvider,
+    );
+
+    app.use('/payments', createPaymentRouter(paymentController));
+  }
+
+  // ==========================================================
+  // Fleet
+  // ==========================================================
+
+  if (fleetRepository) {
+    const fleetController = new FleetController(new FleetService(fleetRepository));
+    app.use('/fleet', createFleetRouter(fleetController));
+  }
+
+  // ==========================================================
+  // Provider Bank Details
+  // ==========================================================
+
+  if (providerBankRepository) {
+    const providerController = new ProviderController(new ProviderService(providerBankRepository));
+    app.use('/provider', createProviderRouter(providerController));
+  }
+
+  // ==========================================================
+  // Support Tickets
+  // ==========================================================
+
+  if (supportRepository) {
+    const supportController = new SupportController(new SupportService(supportRepository));
+    app.use('/support', createSupportRouter(supportController));
   }
 
   // ==========================================================

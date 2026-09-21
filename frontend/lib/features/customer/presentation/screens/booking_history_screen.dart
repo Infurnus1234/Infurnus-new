@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_card.dart';
+import '../../../../shared/widgets/infurnus_empty_state.dart';
 import '../../../../shared/widgets/infurnus_error_view.dart';
 import '../providers/ride_provider.dart';
 import '../../data/models/ride_model.dart' as model;
@@ -42,7 +43,13 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
           onRetry: () => ref.read(rideProvider.notifier).fetchRideHistory(),
         );
       }
-      return const Center(child: Text('No bookings found'));
+      return InfurnusEmptyState(
+        icon: Icons.receipt_long_rounded,
+        title: 'No bookings yet',
+        description: 'Your completed rides, logistics orders, and service requests will appear here.',
+        actionLabel: 'Book a Ride',
+        onAction: () => context.push('/ride-booking'),
+      );
     }
 
     return RefreshIndicator(
@@ -65,10 +72,17 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppColors.primaryGreen.withOpacity(0.1),
+                      color: AppColors.primaryGreen.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.directions_car, color: AppColors.primaryGreen),
+                    child: Icon(
+                      ride.sector == 'logistics'
+                          ? Icons.local_shipping
+                          : (ride.sector == 'service'
+                              ? Icons.emergency
+                              : (ride.sector == 'premium' ? Icons.stars : Icons.directions_car)),
+                      color: AppColors.primaryGreen,
+                    ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -76,23 +90,35 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          ride.destinationAddress ?? 'Ride to ${ride.destination.latitude}, ${ride.destination.longitude}',
+                          ride.destinationAddress ??
+                              'Ride to ${ride.destination.latitude.toStringAsFixed(3)}, ${ride.destination.longitude.toStringAsFixed(3)}',
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          DateFormat('dd MMM yyyy, hh:mm a').format(ride.createdAt),
-                          style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                          '${ride.sector?.toUpperCase() ?? "PASSENGER"} • ${DateFormat('dd MMM yyyy, hh:mm a').format(ride.createdAt)}',
+                          style: TextStyle(color: Colors.grey[600], fontSize: 12),
                         ),
+                        if (ride.sector == 'premium' && ride.status == model.RideStatus.completed && ride.actualDistanceMeters != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            'Actual: ${((ride.actualDistanceMeters ?? 0) / 1000.0).toStringAsFixed(1)} km • ₹${ride.actualFuelCost?.toStringAsFixed(0) ?? "0"} fuel',
+                            style: TextStyle(color: Colors.amber[900], fontSize: 11, fontWeight: FontWeight.w500),
+                          ),
+                        ],
                       ],
                     ),
                   ),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      // Fare is not available in RideModel yet
+                      if (ride.status != model.RideStatus.cancelled && ride.displayFare > 0)
+                        Text(
+                          '₹${ride.displayFare.toStringAsFixed(0)}',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
                       const SizedBox(height: 4),
                       Text(
                         _formatStatus(ride.status),

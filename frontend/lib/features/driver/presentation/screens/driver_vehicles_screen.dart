@@ -7,6 +7,7 @@ import '../../../../shared/widgets/infurnus_loader.dart';
 import '../../../../shared/widgets/infurnus_text_field.dart';
 import '../providers/driver_dashboard_provider.dart';
 import '../providers/driver_providers.dart';
+import '../../data/models/driver_profile_model.dart';
 import '../../data/models/vehicle_model.dart';
 
 class DriverVehiclesScreen extends ConsumerStatefulWidget {
@@ -27,6 +28,8 @@ class _DriverVehiclesScreenState extends ConsumerState<DriverVehiclesScreen> {
   bool _isLoading = false;
   bool _isSubmitting = false;
   String? _errorMessage;
+
+  DriverProfileModel? _driverProfile;
 
   @override
   void initState() {
@@ -56,6 +59,15 @@ class _DriverVehiclesScreenState extends ConsumerState<DriverVehiclesScreen> {
     });
 
     try {
+      // Auto-fetch driver profile to eliminate manual UUID entry
+      try {
+        final profile = await ref.read(getDriverProfileUseCaseProvider).execute();
+        if (profile != null) {
+          _driverProfile = profile;
+          _driverProfileIdController.text = profile.id;
+        }
+      } catch (_) {}
+
       final list = await ref.read(listVehiclesUseCaseProvider).execute(partner.id);
       if (mounted) {
         setState(() {
@@ -166,11 +178,38 @@ class _DriverVehiclesScreenState extends ConsumerState<DriverVehiclesScreen> {
                           children: [
                             const Text('Register New Vehicle', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                             const SizedBox(height: 12),
-                            InfurnusTextField(
-                              label: 'Driver Profile UUID',
-                              hintText: 'Enter driverProfileId',
-                              controller: _driverProfileIdController,
-                            ),
+                            if (_driverProfile != null)
+                              Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.green[50],
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.green[200]!),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.check_circle, color: AppColors.primaryGreen, size: 16),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Auto-linked Driver Profile: ${_driverProfile!.licenseNumber}',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.primaryGreen,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            else
+                              InfurnusTextField(
+                                label: 'Driver Profile UUID',
+                                hintText: 'Enter driverProfileId',
+                                controller: _driverProfileIdController,
+                              ),
                             const SizedBox(height: 12),
                             Row(
                               children: [

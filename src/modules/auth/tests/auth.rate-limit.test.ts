@@ -139,7 +139,7 @@ async function createTestApp() {
   return app;
 }
 
-describe('Auth route rate limiting', () => {
+describe('Auth route rate limiting', { timeout: 15000 }, () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

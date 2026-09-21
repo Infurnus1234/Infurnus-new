@@ -47,7 +47,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
   @override
   Future<LoginChallengeResponse> loginEmail(LoginRequest request) async {
-    final response = await _dio.post('/auth/login/email', data: request.toJson());
+    final response = await _dio.post('/auth/login', data: request.toJson());
     return LoginChallengeResponse.fromJson(response.data['data']);
   }
 
@@ -59,7 +59,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
   @override
   Future<AuthResponse> verifyLoginEmail(VerifyLoginRequest request) async {
-    final response = await _dio.post('/auth/login/email/verify', data: request.toJson());
+    final response = await _dio.post('/auth/login/verify', data: request.toJson());
     return AuthResponse.fromJson(response.data['data']);
   }
 
@@ -71,7 +71,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
   @override
   Future<LoginChallengeResponse> resendLoginEmailOtp(ResendLoginRequest request) async {
-    final response = await _dio.post('/auth/login/email/resend', data: request.toJson());
+    final response = await _dio.post('/auth/login/resend', data: request.toJson());
     return LoginChallengeResponse.fromJson(response.data['data']);
   }
 

@@ -9,14 +9,30 @@ export class MatchingService {
     private readonly maps?: MapProvider,
   ) {}
 
-  async findBestDriver(pickup: Coordinates): Promise<DriverCandidate | null> {
-    const candidates = await this.drivers.findNearbyEligible(
-      pickup.latitude,
-      pickup.longitude,
-      env.DRIVER_SEARCH_RADIUS_METERS,
-      env.MAX_DRIVER_MATCH_CANDIDATES,
-      new Date(Date.now() - env.DRIVER_LOCATION_STALE_SECONDS * 1000),
-    );
+  async findBestDriver(
+    pickup: Coordinates,
+    sector?: string,
+    vehicleCategory?: string,
+  ): Promise<DriverCandidate | null> {
+    const staleBefore = new Date(Date.now() - env.DRIVER_LOCATION_STALE_SECONDS * 1000);
+    const candidates =
+      sector !== undefined || vehicleCategory !== undefined
+        ? await this.drivers.findNearbyEligible(
+            pickup.latitude,
+            pickup.longitude,
+            env.DRIVER_SEARCH_RADIUS_METERS,
+            env.MAX_DRIVER_MATCH_CANDIDATES,
+            staleBefore,
+            sector,
+            vehicleCategory,
+          )
+        : await this.drivers.findNearbyEligible(
+            pickup.latitude,
+            pickup.longitude,
+            env.DRIVER_SEARCH_RADIUS_METERS,
+            env.MAX_DRIVER_MATCH_CANDIDATES,
+            staleBefore,
+          );
 
     if (candidates.length === 0) return null;
     if (!this.maps) return candidates[0] ?? null;

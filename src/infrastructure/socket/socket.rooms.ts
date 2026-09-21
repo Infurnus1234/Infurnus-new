@@ -3,6 +3,10 @@ import type { Socket } from 'socket.io';
 import { getAuthenticatedSocket } from './socket.authorization.js';
 
 export const rideRoom = (rideId: string): string => `ride:${rideId}`;
+export const driverSectorRoom = (sector: string): string => `drivers:sector:${sector}`;
+export const driverSectorCategoryRoom = (sector: string, category: string): string =>
+  `drivers:sector:${sector}:${category}`;
+export const driverUserRoom = (userId: string): string => `driver:user:${userId}`;
 
 export async function joinAuthorizedRideRoom(
   socket: Socket,

@@ -24,24 +24,120 @@ export class FareCalculatorService {
     this.validateInput(input);
     this.validatePricing();
 
-    const distanceAmount = this.calculateDistanceAmount(input.distanceMeters);
+    let baseAmount = this.pricing.baseFare;
+    let distanceAmount = this.calculateDistanceAmount(input.distanceMeters);
+    let timeAmount = this.calculateTimeAmount(input.durationSeconds);
+    let waitingAmount: number | undefined;
+    let weightAmount: number | undefined;
+    let loadingAmount: number | undefined;
+    let fuelAmount: number | undefined;
+    let taxAmount: number | undefined;
 
-    const timeAmount = this.calculateTimeAmount(input.durationSeconds);
+    // Sector-specific adjustments
+    if (input.sector === 'logistics') {
+      if (input.vehicleCategory === 'bike') {
+        baseAmount = Math.round(this.pricing.baseFare * 0.6);
+        distanceAmount = Math.round(distanceAmount * 0.7);
+      } else if (input.vehicleCategory === 'mini_truck') {
+        baseAmount = Math.round(this.pricing.baseFare * 2.5);
+        distanceAmount = Math.round(distanceAmount * 1.8);
+      }
 
-    const grossAmount = this.pricing.baseFare + distanceAmount + timeAmount;
+      if (input.weightKg !== undefined && input.weightKg > 20) {
+        weightAmount = Math.round((input.weightKg - 20) * 500);
+      }
+
+      if (input.hasLoadingAssistance) {
+        loadingAmount = 15000;
+      }
+    } else if (input.sector === 'service') {
+      if (input.vehicleCategory === 'ambulance') {
+        baseAmount = 50000;
+        distanceAmount = this.roundMoney((input.distanceMeters * 2500) / 1000, 'distanceAmount');
+      } else if (
+        input.vehicleCategory === 'towing' ||
+        input.vehicleCategory === 'towing_van' ||
+        input.vehicleCategory === 'recovery' ||
+        input.vehicleCategory === 'recovery_vehicle'
+      ) {
+        baseAmount = 60000;
+        distanceAmount = this.roundMoney((input.distanceMeters * 3000) / 1000, 'distanceAmount');
+      } else if (
+        input.vehicleCategory === 'roadside_service' ||
+        input.vehicleCategory === 'roadside_service_vehicle' ||
+        input.vehicleCategory === 'roadside_recovery' ||
+        input.vehicleCategory === 'roadside'
+      ) {
+        baseAmount = 60000;
+        distanceAmount = this.roundMoney((input.distanceMeters * 3000) / 1000, 'distanceAmount');
+      } else if (input.vehicleCategory === 'jcb') {
+        // JCB trip-based pricing: Flat mobilization/base charge (120,000 paise / ₹1,200) + distance charge (4,000 paise/km / ₹40/km)
+        baseAmount = 120000;
+        distanceAmount = this.roundMoney((input.distanceMeters * 4000) / 1000, 'distanceAmount');
+      } else {
+        baseAmount = 60000;
+        distanceAmount = this.roundMoney((input.distanceMeters * 3000) / 1000, 'distanceAmount');
+      }
+    } else if (input.sector === 'premium') {
+      const hours = Math.max(1, input.rentalHours || 1);
+      baseAmount = hours * 100000;
+      timeAmount = 0;
+
+      const fuelRate = input.fuelRatePerKm !== undefined && input.fuelRatePerKm > 0 ? input.fuelRatePerKm : 1500;
+      fuelAmount = this.roundMoney((input.distanceMeters * fuelRate) / 1000, 'fuelAmount');
+      distanceAmount = 0;
+    } else if (input.sector === 'passenger') {
+      if (input.vehicleCategory === 'auto') {
+        baseAmount = Math.round(baseAmount * 0.7);
+        distanceAmount = Math.round(distanceAmount * 0.7);
+      } else if (input.vehicleCategory === 'sedan') {
+        baseAmount = Math.round(baseAmount * 1.25);
+        distanceAmount = Math.round(distanceAmount * 1.25);
+      } else if (input.vehicleCategory === 'suv') {
+        baseAmount = Math.round(baseAmount * 1.6);
+        distanceAmount = Math.round(distanceAmount * 1.6);
+      }
+    }
+
+    if (input.waitingMinutes !== undefined && input.waitingMinutes > 3) {
+      waitingAmount = Math.round((input.waitingMinutes - 3) * 200);
+    }
+
+    const subtotal =
+      baseAmount +
+      distanceAmount +
+      timeAmount +
+      (waitingAmount ?? 0) +
+      (weightAmount ?? 0) +
+      (loadingAmount ?? 0) +
+      (fuelAmount ?? 0);
+
+    if (input.sector !== undefined && input.sector !== 'passenger') {
+      taxAmount = Math.round(subtotal * 0.05);
+    }
+
+    const grossAmount = subtotal + (taxAmount ?? 0);
 
     this.assertSafeMoney(grossAmount, 'grossAmount');
 
-    return {
+    const result: FareCalculationResult = {
       distanceMeters: input.distanceMeters,
       durationSeconds: input.durationSeconds,
-      baseAmount: this.pricing.baseFare,
+      baseAmount,
       distanceAmount,
       timeAmount,
       grossAmount,
       currency: this.pricing.currency,
       pricingVersion: this.pricing.pricingVersion,
     };
+
+    if (waitingAmount !== undefined) result.waitingAmount = waitingAmount;
+    if (weightAmount !== undefined) result.weightAmount = weightAmount;
+    if (loadingAmount !== undefined) result.loadingAmount = loadingAmount;
+    if (fuelAmount !== undefined) result.fuelAmount = fuelAmount;
+    if (taxAmount !== undefined) result.taxAmount = taxAmount;
+
+    return result;
   }
 
   private calculateDistanceAmount(distanceMeters: number): number {

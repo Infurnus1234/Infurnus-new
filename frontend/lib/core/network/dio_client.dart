@@ -70,6 +70,12 @@ final dioProvider = Provider<Dio>((ref) {
           options.headers['Authorization'] = 'Bearer $accessToken';
         }
 
+        // 2b. Attach Provider Mode (for DRIVER_FLEET_OWNER mode switching)
+        final providerMode = await storage.read(key: 'provider_mode');
+        if (providerMode != null && providerMode.isNotEmpty) {
+          options.headers['X-Provider-Mode'] = providerMode;
+        }
+
         // 3. Attach CSRF Header (Only for /auth path as per backend)
         if (options.path.startsWith('/auth')) {
           await _addCsrfHeader(dio, options);

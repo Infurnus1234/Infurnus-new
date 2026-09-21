@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+
 import '../../core/services/map_service.dart';
 import '../../core/services/location_service.dart';
 import '../../features/customer/data/models/route_model.dart';
@@ -40,7 +41,9 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap> {
   Future<void> _fetchInitialLocation() async {
     // Only fetch current location if we don't have ride-specific coordinates
     if (widget.pickup == null && widget.destination == null) {
-      final position = await ref.read(locationServiceProvider).getCurrentPosition();
+      final position = await ref
+          .read(locationServiceProvider)
+          .getCurrentPosition();
       if (position != null && mounted) {
         setState(() {
           _currentLocation = LatLng(position.latitude, position.longitude);
@@ -67,7 +70,9 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap> {
           markerId: 'pickup',
           position: widget.pickup!,
           title: 'Pickup Location',
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueGreen,
+          ),
         ),
       );
     }
@@ -87,9 +92,14 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap> {
       markers.add(
         _mapService.createMarker(
           markerId: 'driver',
-          position: LatLng(widget.driverLocation!.latitude, widget.driverLocation!.longitude),
+          position: LatLng(
+            widget.driverLocation!.latitude,
+            widget.driverLocation!.longitude,
+          ),
           title: 'Driver',
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueAzure,
+          ),
         ),
       );
     }
@@ -105,14 +115,15 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap> {
     }
 
     // Determine center for the fallback camera position
-    final LatLng fallbackCenter = _currentLocation ?? const LatLng(0, 0);
+    final LatLng fallbackCenter =
+        widget.pickup ?? _currentLocation ?? const LatLng(20.5937, 78.9629);
+    final double defaultZoom =
+        (widget.pickup != null || _currentLocation != null) ? 14.0 : 5.0;
 
     return GoogleMap(
-      initialCameraPosition: widget.initialCameraPosition ??
-          CameraPosition(
-            target: fallbackCenter,
-            zoom: _currentLocation != null ? 14.0 : 2.0,
-          ),
+      initialCameraPosition:
+          widget.initialCameraPosition ??
+          CameraPosition(target: fallbackCenter, zoom: defaultZoom),
       markers: markers,
       polylines: polylines,
       onMapCreated: (controller) {
@@ -141,7 +152,12 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap> {
     if (widget.pickup != null) points.add(widget.pickup!);
     if (widget.destination != null) points.add(widget.destination!);
     if (widget.driverLocation != null) {
-      points.add(LatLng(widget.driverLocation!.latitude, widget.driverLocation!.longitude));
+      points.add(
+        LatLng(
+          widget.driverLocation!.latitude,
+          widget.driverLocation!.longitude,
+        ),
+      );
     }
 
     if (points.length >= 2) {

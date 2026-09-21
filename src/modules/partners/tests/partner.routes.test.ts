@@ -41,6 +41,10 @@ class InMemoryPartnerRepository implements PartnerRepository {
     return this.partners.get(id) ?? null;
   }
 
+  async findByUserId(userId: string) {
+    return [...this.partners.values()].find((p) => p.userId === userId) ?? null;
+  }
+
   async findAll(filters: {
     approvalStatus?: PartnerApprovalStatus;
     availabilityStatus?: PartnerAvailabilityStatus;
@@ -101,6 +105,11 @@ describe('Partners API', () => {
           .set('authorization', `Bearer ${partnerToken}`)
       ).status,
     ).toBe(200);
+    const meResponse = await request(app)
+      .get('/partners/me')
+      .set('authorization', `Bearer ${partnerToken}`);
+    expect(meResponse.status).toBe(200);
+    expect(meResponse.body.data.userId).toBe(partner.userId);
     const updated = await request(app)
       .patch(`/partners/${partnerId}`)
       .send({

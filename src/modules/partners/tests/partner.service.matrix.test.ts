@@ -20,6 +20,7 @@ function repository(): PartnerRepository {
   return {
     create: vi.fn().mockResolvedValue(partner),
     findById: vi.fn().mockResolvedValue(partner),
+    findByUserId: vi.fn().mockResolvedValue(partner),
     findAll: vi.fn().mockResolvedValue([partner]),
     update: vi.fn().mockResolvedValue(partner),
   };

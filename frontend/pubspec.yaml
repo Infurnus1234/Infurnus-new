@@ -50,6 +50,7 @@ dependencies:
   cookie_jar: ^4.0.9
   dio_cookie_manager: ^3.5.0
   path_provider: ^2.1.6
+  flutter_cashfree_pg_sdk: ^2.4.0+52
 
 dev_dependencies:
   flutter_test:

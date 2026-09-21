@@ -4,6 +4,7 @@ import type {
   DeactivateVehicleInput,
   UpdateVehicleInput,
   VehicleDriverQuery,
+  VehicleFleetQuery,
 } from '../schemas/vehicle.schemas.js';
 import type { VehicleRepository } from '../repositories/vehicle.repository.js';
 
@@ -29,6 +30,10 @@ export class VehicleService {
       throw new AppError('DRIVER_PROFILE_NOT_FOUND', 'Driver profile not found', 404);
     }
     return this.repository.findByDriver(query.driverProfileId, query.activeOnly);
+  }
+
+  async listFleet(query: VehicleFleetQuery) {
+    return this.repository.listFleet(query.sector, query.category);
   }
 
   async updateVehicle(id: string, data: UpdateVehicleInput) {

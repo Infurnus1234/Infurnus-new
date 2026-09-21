@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/storage/secure_storage.dart';
 import '../../../auth/presentation/providers/user_provider.dart';
+import '../../data/models/driver_profile_model.dart';
 import '../../data/models/partner_document_model.dart';
 import '../../data/models/partner_model.dart';
 import 'driver_providers.dart';
@@ -11,6 +12,7 @@ class DriverOnboardingState {
   final String? errorMessage;
   final String? successMessage;
   final PartnerModel? partner;
+  final DriverProfileModel? driverProfile;
   final List<PartnerDocumentModel> documents;
 
   DriverOnboardingState({
@@ -19,6 +21,7 @@ class DriverOnboardingState {
     this.errorMessage,
     this.successMessage,
     this.partner,
+    this.driverProfile,
     this.documents = const [],
   });
 
@@ -28,6 +31,7 @@ class DriverOnboardingState {
     String? errorMessage,
     String? successMessage,
     PartnerModel? partner,
+    DriverProfileModel? driverProfile,
     List<PartnerDocumentModel>? documents,
   }) {
     return DriverOnboardingState(
@@ -36,6 +40,7 @@ class DriverOnboardingState {
       errorMessage: errorMessage,
       successMessage: successMessage,
       partner: partner ?? this.partner,
+      driverProfile: driverProfile ?? this.driverProfile,
       documents: documents ?? this.documents,
     );
   }
@@ -50,20 +55,42 @@ class DriverOnboardingNotifier extends StateNotifier<DriverOnboardingState> {
     state = state.copyWith(isLoading: true, errorMessage: null);
 
     try {
-      final storage = ref.read(secureStorageProvider);
-      final partnerId = await storage.read(key: 'partner_id');
-
-      if (partnerId == null || partnerId.isEmpty) {
-        state = state.copyWith(isLoading: false, partner: null, documents: []);
-        return;
+      PartnerModel? partner;
+      // 1. Try to load partner for the authenticated user
+      try {
+        partner = await ref.read(getMyPartnerUseCaseProvider).execute();
+        if (partner != null) {
+          await ref.read(secureStorageProvider).write(key: 'partner_id', value: partner.id);
+        }
+      } catch (_) {
+        // Fallback to reading partner_id from storage if available
+        final storage = ref.read(secureStorageProvider);
+        final partnerId = await storage.read(key: 'partner_id');
+        if (partnerId != null && partnerId.isNotEmpty) {
+          try {
+            partner = await ref.read(getPartnerUseCaseProvider).execute(partnerId);
+          } catch (_) {}
+        }
       }
 
-      final partner = await ref.read(getPartnerUseCaseProvider).execute(partnerId);
-      final docs = await ref.read(listPartnerDocumentsUseCaseProvider).execute(partnerId);
+      // 2. Try to load driver profile
+      DriverProfileModel? driverProfile;
+      try {
+        driverProfile = await ref.read(getDriverProfileUseCaseProvider).execute();
+      } catch (_) {}
+
+      // 3. Load partner documents if partner exists
+      List<PartnerDocumentModel> docs = [];
+      if (partner != null) {
+        try {
+          docs = await ref.read(listPartnerDocumentsUseCaseProvider).execute(partner.id);
+        } catch (_) {}
+      }
 
       state = state.copyWith(
         isLoading: false,
         partner: partner,
+        driverProfile: driverProfile,
         documents: docs,
       );
     } catch (e) {
@@ -103,6 +130,53 @@ class DriverOnboardingNotifier extends StateNotifier<DriverOnboardingState> {
         isSubmitting: false,
         partner: partner,
         successMessage: 'Partner profile created successfully!',
+      );
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        isSubmitting: false,
+        errorMessage: e.toString(),
+      );
+      return false;
+    }
+  }
+
+  Future<bool> upsertDriverProfile({
+    required String licenseNumber,
+    required String licenseExpiry,
+    String? dob,
+    String? gender,
+    String? address,
+    String? city,
+    String? stateName,
+    String? pinCode,
+    String? emergencyContactName,
+    String? emergencyContactPhone,
+  }) async {
+    state = state.copyWith(isSubmitting: true, errorMessage: null, successMessage: null);
+
+    try {
+      final profileData = {
+        'licenseNumber': licenseNumber.trim(),
+        'licenseExpiry': licenseExpiry.trim(),
+        if (dob != null && dob.isNotEmpty) 'dob': dob.trim(),
+        if (gender != null && gender.isNotEmpty) 'gender': gender.trim(),
+        if (address != null && address.isNotEmpty) 'address': address.trim(),
+        if (city != null && city.isNotEmpty) 'city': city.trim(),
+        if (stateName != null && stateName.isNotEmpty) 'state': stateName.trim(),
+        if (pinCode != null && pinCode.isNotEmpty) 'pinCode': pinCode.trim(),
+        if (emergencyContactName != null && emergencyContactName.isNotEmpty)
+          'emergencyContactName': emergencyContactName.trim(),
+        if (emergencyContactPhone != null && emergencyContactPhone.isNotEmpty)
+          'emergencyContactPhone': emergencyContactPhone.trim(),
+      };
+
+      final profile = await ref.read(upsertDriverProfileUseCaseProvider).execute(profileData);
+
+      state = state.copyWith(
+        isSubmitting: false,
+        driverProfile: profile,
+        successMessage: 'Driver profile saved successfully!',
       );
       return true;
     } catch (e) {
@@ -155,17 +229,28 @@ class DriverOnboardingNotifier extends StateNotifier<DriverOnboardingState> {
   }
 
   Future<bool> registerVehicle({
-    required String driverProfileId,
+    String? driverProfileId,
     required String make,
     required String model,
     String? color,
     required String plateNumber,
   }) async {
+    final resolvedProfileId = (driverProfileId != null && driverProfileId.isNotEmpty)
+        ? driverProfileId
+        : state.driverProfile?.id;
+
+    if (resolvedProfileId == null || resolvedProfileId.isEmpty) {
+      state = state.copyWith(
+        errorMessage: 'Driver profile required. Please enter driver details first.',
+      );
+      return false;
+    }
+
     state = state.copyWith(isSubmitting: true, errorMessage: null, successMessage: null);
 
     try {
       final vehicleData = {
-        'driverProfileId': driverProfileId,
+        'driverProfileId': resolvedProfileId,
         'make': make.trim(),
         'model': model.trim(),
         if (color != null && color.isNotEmpty) 'color': color.trim(),

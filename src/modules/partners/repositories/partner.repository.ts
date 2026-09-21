@@ -10,6 +10,7 @@ import type {
 export interface PartnerRepository {
   create(data: CreatePartnerData): Promise<Partner>;
   findById(id: string): Promise<Partner | null>;
+  findByUserId(userId: string): Promise<Partner | null>;
   findAll(filters: {
     approvalStatus?: PartnerApprovalStatus | undefined;
     availabilityStatus?: PartnerAvailabilityStatus | undefined;
@@ -42,6 +43,14 @@ export class PostgresPartnerRepository implements PartnerRepository {
     const result = await this.pool.query<Partner>(
       `SELECT ${partnerProjection} FROM partners WHERE id = $1`,
       [id],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async findByUserId(userId: string): Promise<Partner | null> {
+    const result = await this.pool.query<Partner>(
+      `SELECT ${partnerProjection} FROM partners WHERE user_id = $1`,
+      [userId],
     );
     return result.rows[0] ?? null;
   }

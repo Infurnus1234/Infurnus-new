@@ -198,13 +198,45 @@ try {
 
         to_regclass(
           'public.login_challenges_one_active_per_user_uidx'
-        ) AS "loginChallengeActiveUniqueIndex"
+        ) AS "loginChallengeActiveUniqueIndex",
+
+        to_regclass(
+          'public.ride_location_breadcrumbs'
+        ) AS "breadcrumbsTable",
+
+        to_regclass(
+          'public.idx_breadcrumbs_location_gist'
+        ) AS "breadcrumbsGistIndex",
+
+        to_regclass(
+          'public.uq_payments_active_ride'
+        ) AS "paymentsActiveUniqueIndex",
+
+        (
+          SELECT conname
+          FROM pg_constraint
+          WHERE conname = 'fk_payments_rides'
+        ) AS "paymentsRideForeignKey",
+
+        (
+          SELECT conname
+          FROM pg_constraint
+          WHERE conname = 'rides_sector_check'
+        ) AS "ridesSectorCheck",
+
+        (
+          SELECT column_name
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'rides'
+            AND column_name = 'actual_fuel_cost'
+        ) AS "ridesFuelCostColumn"
     `);
 
     const checksRow = checks.rows[0]!;
 
     if (
-      checksRow.migrationCount !== '23' ||
+      checksRow.migrationCount !== '30' ||
       !checksRow.rides ||
       checksRow.postgis !== 'postgis' ||
       !checksRow.rideIndex ||
@@ -219,12 +251,18 @@ try {
       checksRow.otpProviderExpiryColumn !== 'otp_provider_expires_at' ||
       checksRow.pendingSignupEmailColumn !== 'email' ||
       !checksRow.pendingSignupEmailIndex ||
-      checksRow.usersPhoneNullable !== 'NO' ||
+      checksRow.usersPhoneNullable !== 'YES' ||
       !checksRow.loginChallenges ||
       !checksRow.loginChallengeUserIndex ||
       !checksRow.loginChallengeProviderSessionIndex ||
       !checksRow.loginChallengeExpiryIndex ||
-      !checksRow.loginChallengeActiveUniqueIndex
+      !checksRow.loginChallengeActiveUniqueIndex ||
+      !checksRow.breadcrumbsTable ||
+      !checksRow.breadcrumbsGistIndex ||
+      !checksRow.paymentsActiveUniqueIndex ||
+      !checksRow.paymentsRideForeignKey ||
+      !checksRow.ridesSectorCheck ||
+      !checksRow.ridesFuelCostColumn
     ) {
       throw new Error(`Migration verification failed: ${JSON.stringify(checksRow)}`);
     }
