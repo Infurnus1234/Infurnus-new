@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { RentalService } from '../services/rental.service.js';
 
+vi.mock('../../../infrastructure/database/postgres.js', () => ({
+  withTransaction: vi.fn(async (callback) => callback({} as never)),
+}));
+
 describe('RentalService lifecycle', () => {
   it('allows PENDING to CONFIRMED', async () => {
     const rental = {

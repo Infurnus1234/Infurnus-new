@@ -9,6 +9,26 @@ const now = new Date('2026-09-08T10:00:00.000Z');
 function repository(overrides: Partial<DriverRepository> = {}): DriverRepository {
   return {
     findProfileIdByUserId: vi.fn().mockResolvedValue(profileId),
+    findProfileByUserId: vi.fn().mockResolvedValue({
+      id: profileId,
+      userId,
+      licenseNumber: 'DL-12345',
+      licenseExpiry: '2030-01-01',
+      verificationStatus: 'approved',
+      createdAt: now,
+      updatedAt: now,
+    }),
+    upsertProfile: vi.fn().mockImplementation((uid, input) =>
+      Promise.resolve({
+        id: profileId,
+        userId: uid,
+        licenseNumber: input.licenseNumber,
+        licenseExpiry: input.licenseExpiry,
+        verificationStatus: 'pending',
+        createdAt: now,
+        updatedAt: now,
+      }),
+    ),
     getAvailability: vi.fn().mockResolvedValue('unavailable'),
     updateAvailability: vi.fn().mockResolvedValue(true),
     setBusy: vi.fn().mockResolvedValue(true),
@@ -16,6 +36,10 @@ function repository(overrides: Partial<DriverRepository> = {}): DriverRepository
     updateLocation: vi.fn().mockResolvedValue(true),
     markStale: vi.fn().mockResolvedValue(true),
     findNearbyEligible: vi.fn().mockResolvedValue([]),
+    verifyAssignmentCode: vi.fn().mockResolvedValue(null),
+    claimAssignmentCode: vi.fn().mockResolvedValue(null),
+    setActiveVehicle: vi.fn().mockResolvedValue(true),
+    getAssignedVehicle: vi.fn().mockResolvedValue(null),
     ...overrides,
   };
 }
@@ -103,5 +127,39 @@ describe('DriverService', () => {
       expect.any(Number),
       new Date(now.getTime() - 30_000),
     );
+  });
+
+  it('retrieves and upserts driver profile', async () => {
+    const repo = repository();
+    const service = new DriverService(repo, () => now);
+
+    const profile = await service.getProfile(userId);
+    expect(profile.id).toBe(profileId);
+    expect(profile.licenseNumber).toBe('DL-12345');
+
+    const upserted = await service.upsertProfile(userId, {
+      licenseNumber: 'DL-99999',
+      licenseExpiry: '2032-05-15',
+    });
+    expect(upserted.licenseNumber).toBe('DL-99999');
+    expect(repo.upsertProfile).toHaveBeenCalled();
+  });
+
+  it('retrieves driver history and aggregates earnings', async () => {
+    const repo = repository();
+    const mockRideRepo = {
+      listForDriver: vi.fn().mockResolvedValue([
+        { id: 'ride-1', status: 'completed' },
+        { id: 'ride-2', status: 'completed' },
+        { id: 'ride-3', status: 'cancelled' },
+      ]),
+    } as any;
+
+    const service = new DriverService(repo, () => now, mockRideRepo);
+    const history = await service.getDriverHistory(userId);
+
+    expect(history.totalTrips).toBe(2);
+    expect(history.totalEarnings).toBe(300);
+    expect(history.rides.length).toBe(3);
   });
 });

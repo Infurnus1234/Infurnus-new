@@ -4,7 +4,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_FARE_PRICING } from '../config/fare.config.js';
 import { FareController } from '../controllers/fare.controller.js';
 import { FareCalculatorService } from '../services/fare-calculator.service.js';
-import { FareEstimateService } from '../services/fare-estimate.service.js';
+import {
+  FareEstimateService,
+  type FallbackRouteConfig,
+} from '../services/fare-estimate.service.js';
 
 import type { Coordinates, MapProvider, RouteResult } from '../../rides/providers/map.provider.js';
 
@@ -251,7 +254,10 @@ describe('INFURNUS Fare Module', () => {
       pricingVersion: 'test-v1',
     };
 
-    function createService(route: RouteResult | null) {
+    function createService(
+      route: RouteResult | null,
+      fallbackConfig: FallbackRouteConfig = { allowFallback: false },
+    ) {
       const calculateRoute = vi.fn().mockResolvedValue(route);
 
       const mapProvider: MapProvider = {
@@ -264,7 +270,7 @@ describe('INFURNUS Fare Module', () => {
       const fareCalculator = new FareCalculatorService(pricing);
 
       return {
-        service: new FareEstimateService(mapProvider, fareCalculator),
+        service: new FareEstimateService(mapProvider, fareCalculator, fallbackConfig),
         calculateRoute,
       };
     }
@@ -292,11 +298,12 @@ describe('INFURNUS Fare Module', () => {
         grossAmount: 9500,
         currency: 'INR',
         pricingVersion: 'test-v1',
+        routeSource: 'google_maps_road',
       });
     });
 
-    it('throws when the map provider cannot calculate a route', async () => {
-      const { service, calculateRoute } = createService(null);
+    it('throws when the map provider cannot calculate a route and fallback is disabled', async () => {
+      const { service, calculateRoute } = createService(null, { allowFallback: false });
 
       await expect(service.estimate(origin, destination)).rejects.toThrow(
         'Route could not be calculated',
@@ -319,8 +326,18 @@ describe('INFURNUS Fare Module', () => {
       expect(result.durationSeconds).toBe(2345);
     });
 
-    it('does not calculate a fare when route calculation fails', async () => {
-      const { service } = createService(null);
+    it('falls back to haversine estimation when map provider fails and fallback is enabled', async () => {
+      const { service } = createService(null, { allowFallback: true });
+
+      const result = await service.estimate(origin, destination);
+
+      expect(result.routeSource).toBe('haversine_estimated');
+      expect(result.straightLineDistanceMeters).toBeGreaterThan(0);
+      expect(result.grossAmount).toBeGreaterThan(0);
+    });
+
+    it('does not calculate a fare when route calculation fails and fallback is disabled', async () => {
+      const { service } = createService(null, { allowFallback: false });
 
       await expect(service.estimate(origin, destination)).rejects.toThrow(
         'Route could not be calculated',

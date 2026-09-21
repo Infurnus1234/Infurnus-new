@@ -28,6 +28,55 @@ class RideLocation {
   }
 }
 
+class DriverDetails {
+  final String id;
+  final String name;
+  final String? phone;
+  final double? rating;
+  final String? photoUrl;
+
+  DriverDetails({
+    required this.id,
+    required this.name,
+    this.phone,
+    this.rating,
+    this.photoUrl,
+  });
+
+  factory DriverDetails.fromJson(Map<String, dynamic> json) {
+    return DriverDetails(
+      id: (json['id'] as String?) ?? '',
+      name: (json['name'] as String?) ?? '',
+      phone: json['phone'] as String?,
+      rating: (json['rating'] as num?)?.toDouble(),
+      photoUrl: json['photoUrl'] as String?,
+    );
+  }
+}
+
+class VehicleDetails {
+  final String make;
+  final String model;
+  final String? color;
+  final String plateNumber;
+
+  VehicleDetails({
+    required this.make,
+    required this.model,
+    this.color,
+    required this.plateNumber,
+  });
+
+  factory VehicleDetails.fromJson(Map<String, dynamic> json) {
+    return VehicleDetails(
+      make: (json['make'] as String?) ?? '',
+      model: (json['model'] as String?) ?? '',
+      color: json['color'] as String?,
+      plateNumber: (json['plateNumber'] as String?) ?? '',
+    );
+  }
+}
+
 class RideModel {
   final String id;
   final String customerId;
@@ -37,12 +86,27 @@ class RideModel {
   final RideLocation destination;
   final String? pickupAddress;
   final String? destinationAddress;
+  final double? fareEstimate;
+  final double? finalFare;
+  final int? actualDistanceMeters;
+  final double? actualFuelCost;
+  final String? sector;
+  final String? vehicleCategory;
+  final Map<String, dynamic>? goods;
+  final Map<String, dynamic>? serviceDetails;
+  final Map<String, dynamic>? rentalDetails;
+  final String? pin;
+  final bool? pinVerified;
+  final DriverDetails? driverDetails;
+  final VehicleDetails? vehicleDetails;
   final RideStatus status;
   final String? cancellationReason;
   final DateTime? cancelledAt;
   final DateTime? completedAt;
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  double get displayFare => finalFare ?? fareEstimate ?? 0.0;
 
   RideModel({
     required this.id,
@@ -53,6 +117,19 @@ class RideModel {
     required this.destination,
     this.pickupAddress,
     this.destinationAddress,
+    this.fareEstimate,
+    this.finalFare,
+    this.actualDistanceMeters,
+    this.actualFuelCost,
+    this.sector,
+    this.vehicleCategory,
+    this.goods,
+    this.serviceDetails,
+    this.rentalDetails,
+    this.pin,
+    this.pinVerified,
+    this.driverDetails,
+    this.vehicleDetails,
     required this.status,
     this.cancellationReason,
     this.cancelledAt,
@@ -71,6 +148,29 @@ class RideModel {
       destination: RideLocation.fromJson(json['destination'] as Map<String, dynamic>),
       pickupAddress: json['pickupAddress'] as String?,
       destinationAddress: json['destinationAddress'] as String?,
+      fareEstimate: json['fareEstimate'] != null
+          ? (json['fareEstimate'] as num).toDouble()
+          : (json['fare'] != null ? (json['fare'] as num).toDouble() : null),
+      finalFare: json['finalFare'] != null ? (json['finalFare'] as num).toDouble() : null,
+      actualDistanceMeters: json['actualDistanceMeters'] != null
+          ? (json['actualDistanceMeters'] as num).toInt()
+          : null,
+      actualFuelCost: json['actualFuelCost'] != null
+          ? (json['actualFuelCost'] as num).toDouble()
+          : null,
+      sector: json['sector'] as String?,
+      vehicleCategory: json['vehicleCategory'] as String?,
+      goods: json['goods'] != null ? Map<String, dynamic>.from(json['goods'] as Map) : null,
+      serviceDetails: json['serviceDetails'] != null ? Map<String, dynamic>.from(json['serviceDetails'] as Map) : null,
+      rentalDetails: json['rentalDetails'] != null ? Map<String, dynamic>.from(json['rentalDetails'] as Map) : null,
+      pin: json['pin'] as String?,
+      pinVerified: json['pinVerified'] as bool?,
+      driverDetails: json['driverDetails'] != null
+          ? DriverDetails.fromJson(json['driverDetails'] as Map<String, dynamic>)
+          : null,
+      vehicleDetails: json['vehicleDetails'] != null
+          ? VehicleDetails.fromJson(json['vehicleDetails'] as Map<String, dynamic>)
+          : null,
       status: _parseStatus(json['status'] as String),
       cancellationReason: json['cancellationReason'] as String?,
       cancelledAt: json['cancelledAt'] != null ? DateTime.parse(json['cancelledAt'] as String) : null,

@@ -20,6 +20,50 @@ export const createRideSchema = z
     destination: location,
     pickupAddress: z.string().trim().min(1).max(500).optional(),
     destinationAddress: z.string().trim().min(1).max(500).optional(),
+    fareEstimate: z.number().positive().optional(),
+    sector: z.enum(['passenger', 'logistics', 'service', 'premium']).optional(),
+    vehicleCategory: z.string().trim().min(1).max(50).optional(),
+    goods: z
+      .object({
+        itemType: z.string().trim().min(1).max(100).optional(),
+        category: z.string().trim().min(1).max(100).optional(),
+        description: z.string().trim().min(1).max(500).optional(),
+        weightKg: z.number().nonnegative().optional(),
+        quantity: z.number().int().positive().optional(),
+        hasLoadingAssistance: z.boolean().optional(),
+        loadingAssistance: z.boolean().optional(),
+      })
+      .optional(),
+    serviceDetails: z
+      .object({
+        serviceType: z
+          .enum([
+            'ambulance',
+            'towing',
+            'towing_van',
+            'jcb',
+            'recovery',
+            'recovery_vehicle',
+            'roadside_service',
+            'roadside_service_vehicle',
+            'roadside_recovery',
+            'roadside',
+          ])
+          .optional(),
+        emergencyLevel: z.string().optional(),
+        description: z.string().optional(),
+        notes: z.string().optional(),
+      })
+      .optional(),
+    rentalDetails: z
+      .object({
+        startDate: z.string().optional(),
+        startTime: z.string().optional(),
+        hours: z.number().positive().optional(),
+        rentalHours: z.number().positive().optional(),
+        fuelRatePerKm: z.number().nonnegative().optional(),
+      })
+      .optional(),
   })
   .strict();
 
@@ -27,6 +71,40 @@ export const fareEstimateSchema = z
   .object({
     pickup: location,
     destination: location,
+    sector: z.enum(['passenger', 'logistics', 'service', 'premium']).optional(),
+    vehicleCategory: z.string().trim().min(1).max(50).optional(),
+    waitingMinutes: z.number().nonnegative().optional(),
+    weightKg: z.number().nonnegative().optional(),
+    hasLoadingAssistance: z.boolean().optional(),
+    rentalHours: z.number().positive().optional(),
+    fuelRatePerKm: z.number().nonnegative().optional(),
+    goods: z
+      .object({
+        itemType: z.string().trim().min(1).max(100).optional(),
+        category: z.string().trim().min(1).max(100).optional(),
+        description: z.string().trim().min(1).max(500).optional(),
+        weightKg: z.number().nonnegative().optional(),
+        quantity: z.number().int().positive().optional(),
+        hasLoadingAssistance: z.boolean().optional(),
+        loadingAssistance: z.boolean().optional(),
+      })
+      .optional(),
+    serviceDetails: z
+      .object({
+        serviceType: z.string().optional(),
+        emergencyLevel: z.string().optional(),
+        description: z.string().optional(),
+        notes: z.string().optional(),
+      })
+      .optional(),
+    rentalDetails: z
+      .object({
+        startDate: z.string().optional(),
+        startTime: z.string().optional(),
+        hours: z.number().positive().optional(),
+        fuelRatePerKm: z.number().nonnegative().optional(),
+      })
+      .optional(),
   })
   .strict();
 

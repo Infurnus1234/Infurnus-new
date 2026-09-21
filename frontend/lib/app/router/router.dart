@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/splash/presentation/screens/splash_screen.dart';
+import '../../features/onboarding/presentation/screens/onboarding_screen.dart';
 import '../../features/auth/presentation/screens/welcome_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/signup_screen.dart';
@@ -22,6 +24,11 @@ import '../../features/driver/presentation/screens/driver_profile_screen.dart';
 import '../../features/driver/presentation/screens/driver_documents_screen.dart';
 import '../../features/driver/presentation/screens/driver_vehicles_screen.dart';
 import '../../features/driver/presentation/screens/driver_notifications_screen.dart';
+import '../../features/driver/presentation/screens/fleet_dashboard_screen.dart';
+import '../../features/driver/presentation/screens/fleet_vehicles_screen.dart';
+import '../../features/driver/presentation/screens/fleet_drivers_screen.dart';
+import '../../features/driver/presentation/screens/provider_bank_account_screen.dart';
+import '../../features/driver/presentation/screens/support_tickets_screen.dart';
 import '../../features/customer/presentation/screens/rentals_screen.dart';
 import '../../features/customer/presentation/screens/logistics_screen.dart';
 import '../../features/ai_assistant/presentation/screens/ai_assistant_screen.dart';
@@ -62,6 +69,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/welcome',
         builder: (context, state) => const WelcomeScreen(),
+      ),
+      GoRoute(
+        path: '/onboarding',
+        builder: (context, state) => const OnboardingScreen(),
       ),
       GoRoute(
         path: '/login',
@@ -108,6 +119,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const DriverDashboardScreen(),
       ),
       GoRoute(
+        path: '/driver/dashboard',
+        redirect: (_, __) => '/driver-dashboard',
+      ),
+      GoRoute(
         path: '/driver-onboarding',
         builder: (context, state) => const DriverOnboardingScreen(),
       ),
@@ -134,6 +149,26 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/driver-notifications',
         builder: (context, state) => const DriverNotificationsScreen(),
+      ),
+      GoRoute(
+        path: '/fleet-dashboard',
+        builder: (context, state) => const FleetDashboardScreen(),
+      ),
+      GoRoute(
+        path: '/fleet-vehicles',
+        builder: (context, state) => const FleetVehiclesScreen(),
+      ),
+      GoRoute(
+        path: '/fleet-drivers',
+        builder: (context, state) => const FleetDriversScreen(),
+      ),
+      GoRoute(
+        path: '/provider-bank-account',
+        builder: (context, state) => const ProviderBankAccountScreen(),
+      ),
+      GoRoute(
+        path: '/support-tickets',
+        builder: (context, state) => const SupportTicketsScreen(),
       ),
       GoRoute(
         path: '/rentals',
@@ -170,7 +205,8 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final status = notifier.status;
       
-      final isLoggingIn = state.matchedLocation == '/welcome' ||
+      final isAuthFlow = state.matchedLocation == '/welcome' ||
+                         state.matchedLocation == '/onboarding' ||
                          state.matchedLocation == '/login' || 
                          state.matchedLocation == '/otp' || 
                          state.matchedLocation == '/signup' ||
@@ -182,44 +218,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (status == AuthStatus.initial) return isSplash ? null : '/splash';
       
       if (status == AuthStatus.unauthenticated) {
-        return isLoggingIn ? null : '/welcome';
+        return isAuthFlow ? null : '/welcome';
       }
 
       if (status == AuthStatus.authenticated) {
-        if (isLoggingIn || isSplash) return '/customer-home';
+        if (isAuthFlow || isSplash) return '/customer-home';
       }
 
       return null;
     },
   );
 });
-
-class SplashScreen extends ConsumerWidget {
-  const SplashScreen({super.key});
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return const Scaffold(
-      backgroundColor: Colors.white,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              'INFURNUS',
-              style: TextStyle(
-                fontSize: 32, 
-                fontWeight: FontWeight.bold, 
-                color: Color(0xFF00C853),
-                letterSpacing: 4,
-              ),
-            ),
-            SizedBox(height: 20),
-            CircularProgressIndicator(
-              color: Color(0xFF00C853),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

@@ -33,6 +33,13 @@ import { PostgresCouponRepository } from './modules/coupons/repositories/coupon.
 import { CouponCalculatorService } from './modules/coupons/services/coupon-calculator.service.js';
 import { CouponRedemptionService } from './modules/coupons/services/coupon-redemption.service.js';
 
+import { PostgresRatingRepository } from './modules/ratings/repositories/rating.repository.js';
+import { PostgresPaymentRepository } from './modules/payments/repositories/payment.repository.js';
+import { CashfreePaymentProvider } from './modules/payments/providers/cashfree.provider.js';
+import { PostgresFleetRepository } from './modules/fleet/repositories/fleet.repository.js';
+import { PostgresProviderBankRepository } from './modules/providers/repositories/provider-bank.repository.js';
+import { PostgresSupportRepository } from './modules/support/repositories/support.repository.js';
+
 async function startServer() {
   // ==========================================================
   // Database
@@ -67,6 +74,26 @@ async function startServer() {
   const rentalRepository = new PostgresRentalRepository(pool);
 
   const couponRepository = new PostgresCouponRepository(pool);
+
+  const ratingRepository = new PostgresRatingRepository(pool);
+
+  const paymentRepository = new PostgresPaymentRepository(pool);
+
+  const cashfreePaymentProvider =
+    env.CASHFREE_CLIENT_ID && env.CASHFREE_CLIENT_SECRET
+      ? new CashfreePaymentProvider({
+          clientId: env.CASHFREE_CLIENT_ID,
+          clientSecret: env.CASHFREE_CLIENT_SECRET,
+          apiVersion: env.CASHFREE_API_VERSION,
+          baseUrl: env.CASHFREE_BASE_URL,
+        })
+      : undefined;
+
+  const fleetRepository = new PostgresFleetRepository(pool);
+
+  const providerBankRepository = new PostgresProviderBankRepository(pool);
+
+  const supportRepository = new PostgresSupportRepository(pool);
 
   // ==========================================================
   // Map provider
@@ -103,10 +130,6 @@ async function startServer() {
 
   // ==========================================================
   // Express application
-  //
-  // authOtpProvider is passed explicitly as the 9th argument.
-  // fareEstimateService is passed as the 10th argument.
-  // couponRedemptionService is passed as the 11th argument.
   // ==========================================================
 
   const app = createApp(
@@ -121,6 +144,12 @@ async function startServer() {
     otpProvider,
     fareEstimateService,
     couponRedemptionService,
+    ratingRepository,
+    paymentRepository,
+    fleetRepository,
+    providerBankRepository,
+    supportRepository,
+    cashfreePaymentProvider,
   );
 
   // ==========================================================
@@ -135,7 +164,7 @@ async function startServer() {
 
   const rideService = new RideService(rideRepository, driverRepository);
 
-  const driverService = new DriverService(driverRepository);
+  const driverService = new DriverService(driverRepository, undefined, rideRepository);
 
   const routeRecalculationService = new RouteRecalculationService(googleMapsProvider);
 

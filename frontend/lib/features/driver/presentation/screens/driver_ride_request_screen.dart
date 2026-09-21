@@ -23,18 +23,24 @@ class DriverRideRequestScreen extends ConsumerStatefulWidget {
 
 class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScreen> {
   final _rideIdController = TextEditingController();
+  final _pinController = TextEditingController();
+  bool _showManualEntry = false;
 
   @override
   void initState() {
     super.initState();
     if (widget.initialRideId != null) {
       _rideIdController.text = widget.initialRideId!;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(driverRideProvider.notifier).acceptRide(widget.initialRideId!);
+      });
     }
   }
 
   @override
   void dispose() {
     _rideIdController.dispose();
+    _pinController.dispose();
     super.dispose();
   }
 
@@ -62,6 +68,13 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh available rides',
+            onPressed: () => ref.read(driverRideProvider.notifier).fetchAvailableRides(),
+          ),
+        ],
       ),
       body: Stack(
         children: [
@@ -88,43 +101,22 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
                       _buildErrorBanner(driverRideState.errorMessage!),
 
                     if (currentRide == null) ...[
-                      const Text(
-                        'Accept Ride Request',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Enter a ride ID to accept and start processing the ride.',
-                        style: TextStyle(color: Colors.grey, fontSize: 13),
-                      ),
-                      const SizedBox(height: 16),
-                      InfurnusTextField(
-                        label: 'Ride UUID',
-                        hintText: 'Enter ride ID',
-                        controller: _rideIdController,
-                      ),
-                      const SizedBox(height: 16),
-                      InfurnusButton(
-                        text: 'Accept Ride',
-                        isLoading: driverRideState.isAccepting,
-                        onPressed: (!isApproved || !isOnline)
-                            ? null
-                            : () {
-                                final rideId = _rideIdController.text.trim();
-                                if (rideId.isEmpty) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Please enter a valid Ride ID')),
-                                  );
-                                  return;
-                                }
-                                ref.read(driverRideProvider.notifier).acceptRide(rideId);
-                              },
+                      _buildIncomingRequestsSection(
+                        driverRideState,
+                        isApproved,
+                        isOnline,
                       ),
                     ] else ...[
                       // Active Ride Information & Lifecycle Actions
                       _buildActiveRideDetails(currentRide),
                       const SizedBox(height: 16),
-                      _buildLifecycleActionButtons(context, currentRide, driverRideState, isApproved, isOnline),
+                      _buildLifecycleActionButtons(
+                        context,
+                        currentRide,
+                        driverRideState,
+                        isApproved,
+                        isOnline,
+                      ),
                     ],
                   ],
                 ),
@@ -171,6 +163,218 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
     );
   }
 
+  Widget _buildIncomingRequestsSection(
+    DriverRideState state,
+    bool isApproved,
+    bool isOnline,
+  ) {
+    if (state.isLoadingAvailable && state.availableRides.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 24),
+        child: Center(
+          child: Column(
+            children: [
+              CircularProgressIndicator(color: AppColors.primaryGreen),
+              SizedBox(height: 12),
+              Text('Checking for ride requests...', style: TextStyle(color: Colors.grey, fontSize: 13)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (state.availableRides.isEmpty) {
+      return Column(
+        children: [
+          const SizedBox(height: 8),
+          const Icon(Icons.radar, size: 48, color: AppColors.primaryGreen),
+          const SizedBox(height: 12),
+          const Text(
+            'Searching for nearby rides...',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Stay online. Incoming ride requests will appear here automatically in real-time.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey, fontSize: 12),
+          ),
+          const SizedBox(height: 16),
+          InfurnusOutlinedButton(
+            text: 'Refresh Feed',
+            onPressed: () => ref.read(driverRideProvider.notifier).fetchAvailableRides(),
+          ),
+          const SizedBox(height: 8),
+          _buildManualEntryToggle(isApproved, isOnline, state),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Incoming Requests (${state.availableRides.length})',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.primaryGreen.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.flash_on, size: 14, color: AppColors.primaryGreen),
+                  SizedBox(width: 4),
+                  Text('LIVE', style: TextStyle(color: AppColors.primaryGreen, fontSize: 11, fontWeight: FontWeight.bold)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        ...state.availableRides.map((ride) => _buildRideCard(ride, isApproved, isOnline, state)),
+        _buildManualEntryToggle(isApproved, isOnline, state),
+      ],
+    );
+  }
+
+  Widget _buildRideCard(
+    RideModel ride,
+    bool isApproved,
+    bool isOnline,
+    DriverRideState state,
+  ) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey[200]!),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Ride #${ride.id.substring(0, 8)}',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              if (ride.fareEstimate != null)
+                Text(
+                  '₹${ride.fareEstimate!.toStringAsFixed(0)}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: AppColors.primaryGreen,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _locationRow(
+            Icons.my_location,
+            'Pickup',
+            ride.pickupAddress ?? '${ride.pickup.latitude.toStringAsFixed(4)}, ${ride.pickup.longitude.toStringAsFixed(4)}',
+            AppColors.primaryGreen,
+          ),
+          const SizedBox(height: 6),
+          _locationRow(
+            Icons.location_on,
+            'Destination',
+            ride.destinationAddress ?? '${ride.destination.latitude.toStringAsFixed(4)}, ${ride.destination.longitude.toStringAsFixed(4)}',
+            Colors.red,
+          ),
+          if (ride.sector == 'logistics' || ride.goods != null) ...[
+            const SizedBox(height: 8),
+            _buildLogisticsCargoDetails(ride),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: InfurnusOutlinedButton(
+                  text: 'Decline',
+                  onPressed: () => ref.read(driverRideProvider.notifier).dismissRide(ride.id),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: InfurnusButton(
+                  text: 'Accept',
+                  isLoading: state.isAccepting,
+                  onPressed: (!isApproved || !isOnline)
+                      ? null
+                      : () => ref.read(driverRideProvider.notifier).acceptRide(ride.id),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildManualEntryToggle(bool isApproved, bool isOnline, DriverRideState state) {
+    return Column(
+      children: [
+        Center(
+          child: TextButton(
+            onPressed: () {
+              setState(() {
+                _showManualEntry = !_showManualEntry;
+              });
+            },
+            child: Text(
+              _showManualEntry ? 'Hide manual entry' : 'Enter Ride ID manually',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ),
+        ),
+        if (_showManualEntry) ...[
+          const SizedBox(height: 8),
+          InfurnusTextField(
+            label: 'Ride UUID',
+            hintText: 'Enter ride ID',
+            controller: _rideIdController,
+          ),
+          const SizedBox(height: 8),
+          InfurnusButton(
+            text: 'Accept by ID',
+            isLoading: state.isAccepting,
+            onPressed: (!isApproved || !isOnline)
+                ? null
+                : () {
+                    final rideId = _rideIdController.text.trim();
+                    if (rideId.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please enter a valid Ride ID')),
+                      );
+                      return;
+                    }
+                    ref.read(driverRideProvider.notifier).acceptRide(rideId);
+                  },
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _buildActiveRideDetails(RideModel ride) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -196,7 +400,141 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
         _locationRow(Icons.my_location, 'Pickup', ride.pickupAddress ?? '${ride.pickup.latitude}, ${ride.pickup.longitude}', AppColors.primaryGreen),
         const SizedBox(height: 8),
         _locationRow(Icons.location_on, 'Destination', ride.destinationAddress ?? '${ride.destination.latitude}, ${ride.destination.longitude}', Colors.red),
+        if (ride.sector == 'logistics' || ride.goods != null) ...[
+          const SizedBox(height: 8),
+          _buildLogisticsCargoDetails(ride),
+        ],
       ],
+    );
+  }
+
+  Widget _buildLogisticsCargoDetails(RideModel ride) {
+    final goods = ride.goods ?? {};
+    final category = goods['category'] ?? goods['itemType'] ?? 'General Cargo';
+    final description = goods['description'] ?? goods['notes'] ?? 'Standard freight';
+    final weight = goods['weightKg'] ?? goods['weight'] ?? 0;
+    final quantity = goods['quantity'] ?? goods['qty'] ?? 1;
+    final bool hasHelper = goods['hasLoadingAssistance'] == true || goods['loadingAssistance'] == true;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF8E1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFFFD54F)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.local_shipping, size: 16, color: Color(0xFFE65100)),
+              const SizedBox(width: 6),
+              const Text(
+                'LOGISTICS CARGO DETAILS',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFFE65100),
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFE082),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  category.toString(),
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF4E342E),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Item: ',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Colors.black87),
+              ),
+              Expanded(
+                child: Text(
+                  description.toString(),
+                  style: const TextStyle(fontSize: 12, color: Colors.black87),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    const Icon(Icons.scale, size: 14, color: Colors.black54),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Weight: $weight kg',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.black87),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Row(
+                  children: [
+                    const Icon(Icons.inventory_2, size: 14, color: Colors.black54),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Quantity: $quantity',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.black87),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            decoration: BoxDecoration(
+              color: hasHelper ? Colors.green[50] : Colors.grey[100],
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: hasHelper ? Colors.green[300]! : Colors.grey[300]!),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  hasHelper ? Icons.check_circle : Icons.info_outline,
+                  size: 13,
+                  color: hasHelper ? Colors.green[800] : Colors.grey[700],
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  hasHelper
+                      ? 'Loading/Unloading Assistance: REQUIRED (+ Helper included)'
+                      : 'Loading Assistance: NOT REQUIRED (Driver transport only)',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: hasHelper ? Colors.green[900] : Colors.grey[800],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -249,11 +587,61 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
         );
 
       case RideStatus.driverArrived:
-        return InfurnusButton(
-          text: 'Start Ride (In Progress)',
-          onPressed: (!isApproved || !isOnline)
-              ? null
-              : () => notifier.transitionStatus(ride.id, 'in_progress'),
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: Colors.amber[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.amber[300]!),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.pin, color: Colors.amber[900], size: 20),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Ask the passenger for their 4-digit pickup PIN to start the trip.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            InfurnusTextField(
+              label: 'Pickup PIN',
+              hintText: 'Enter 4-digit PIN',
+              controller: _pinController,
+              keyboardType: TextInputType.number,
+              prefixIcon: Icons.lock_outline,
+            ),
+            const SizedBox(height: 12),
+            InfurnusButton(
+              text: 'Verify PIN & Start Trip',
+              onPressed: (!isApproved || !isOnline)
+                  ? null
+                  : () {
+                      final pin = _pinController.text.trim();
+                      if (pin.length != 4) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Please enter a valid 4-digit PIN'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
+                      notifier.verifyPinAndStartRide(ride.id, pin);
+                    },
+            ),
+          ],
         );
 
       case RideStatus.inProgress:

@@ -19,4 +19,31 @@ export interface DriverCandidate {
   verificationStatus: string;
   activeRideCount: number;
   locationRecordedAt: Date;
+  sector?: string;
+  vehicleCategory?: string;
 }
+
+export interface DriverProfile {
+  id: string;
+  userId: string;
+  licenseNumber: string;
+  licenseExpiry: string;
+  licenseDocumentKey?: string | null;
+  vehicleRcDocumentKey?: string | null;
+  profilePhotoKey?: string | null;
+  verificationStatus: string;
+  rejectionReason?: string | null;
+  availabilityStatus?: DriverAvailabilityStatus | null;
+  dob?: string | null;
+  gender?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  pinCode?: string | null;
+  emergencyContactName?: string | null;
+  emergencyContactPhone?: string | null;
+  activeVehicleId?: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+

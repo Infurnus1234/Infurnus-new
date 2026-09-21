@@ -38,6 +38,15 @@ class InMemoryAdminRepository implements AdminRepository {
       },
     });
   }
+  verifyDriver() {
+    return Promise.resolve(true);
+  }
+  verifyVehicle() {
+    return Promise.resolve(true);
+  }
+  verifyDocument() {
+    return Promise.resolve(true);
+  }
 }
 
 describe('Admin API authorization', () => {
