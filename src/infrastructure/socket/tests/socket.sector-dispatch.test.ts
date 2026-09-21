@@ -84,7 +84,8 @@ describe('Socket.IO Sector-Constrained Driver Dispatch', () => {
     socketServer = createSocketServer(httpServer, dependencies);
     await new Promise<void>((resolve) => httpServer?.listen(0, '127.0.0.1', () => resolve()));
     const address = httpServer.address();
-    if (!address || typeof address === 'string') throw new Error('Failed to start test HTTP server');
+    if (!address || typeof address === 'string')
+      throw new Error('Failed to start test HTTP server');
     const port = address.port;
 
     const createDriverClient = async (userId: string) => {
@@ -206,7 +207,8 @@ describe('Socket.IO Sector-Constrained Driver Dispatch', () => {
     socketServer = createSocketServer(httpServer, dependencies);
     await new Promise<void>((resolve) => httpServer?.listen(0, '127.0.0.1', () => resolve()));
     const address = httpServer.address();
-    if (!address || typeof address === 'string') throw new Error('Failed to start test HTTP server');
+    if (!address || typeof address === 'string')
+      throw new Error('Failed to start test HTTP server');
     const port = address.port;
 
     const createDriverClient = async (userId: string) => {

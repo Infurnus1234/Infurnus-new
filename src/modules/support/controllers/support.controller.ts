@@ -1,9 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import { AppError } from '../../../common/errors/app-error.js';
-import {
-  createSupportTicketSchema,
-  supportTicketIdSchema,
-} from '../schemas/support.schemas.js';
+import { createSupportTicketSchema, supportTicketIdSchema } from '../schemas/support.schemas.js';
 import type { SupportService } from '../services/support.service.js';
 
 export class SupportController {

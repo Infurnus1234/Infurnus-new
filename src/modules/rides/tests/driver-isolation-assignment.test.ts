@@ -17,9 +17,9 @@ describe('Driver Zero-Fare Financial Isolation & Sanitization', () => {
       destinationLatitude: 12.9784,
       destinationLongitude: 77.6408,
       status: 'driver_assigned',
-      fareEstimate: 350.50,
-      finalFare: 360.00,
-      actualFuelCost: 45.20,
+      fareEstimate: 350.5,
+      finalFare: 360.0,
+      actualFuelCost: 45.2,
       pin: '4321',
       pinVerified: true,
       createdAt: new Date(),
@@ -90,9 +90,9 @@ describe('Driver Online Eligibility & Assignment Code Claiming', () => {
 
     const service = new DriverService(mockDriverRepo as DriverRepository);
 
-    await expect(
-      service.updateAvailability('u-1', { status: 'available' }),
-    ).rejects.toThrow('Only eligible and approved drivers can go online');
+    await expect(service.updateAvailability('u-1', { status: 'available' })).rejects.toThrow(
+      'Only eligible and approved drivers can go online',
+    );
 
     expect(mockDriverRepo.updateAvailability).not.toHaveBeenCalled();
   });
@@ -114,9 +114,9 @@ describe('Driver Online Eligibility & Assignment Code Claiming', () => {
 
     const service = new DriverService(mockDriverRepo as DriverRepository);
 
-    await expect(
-      service.updateAvailability('u-1', { status: 'available' }),
-    ).rejects.toThrow('Driving license has expired');
+    await expect(service.updateAvailability('u-1', { status: 'available' })).rejects.toThrow(
+      'Driving license has expired',
+    );
 
     expect(mockDriverRepo.updateAvailability).not.toHaveBeenCalled();
   });

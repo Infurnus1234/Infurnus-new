@@ -36,7 +36,8 @@ export class PartnerService {
 
   async getMyPartner(actor: AuthenticatedUser) {
     const partner = await this.repository.findByUserId(actor.userId);
-    if (!partner) throw new AppError('PARTNER_NOT_FOUND', 'Partner not found for current user', 404);
+    if (!partner)
+      throw new AppError('PARTNER_NOT_FOUND', 'Partner not found for current user', 404);
     return partner;
   }
 

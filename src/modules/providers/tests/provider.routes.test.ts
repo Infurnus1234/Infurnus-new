@@ -6,33 +6,39 @@ import type { ProviderBankRepository } from '../repositories/provider-bank.repos
 import type { ProviderBankAccount } from '../types/provider.js';
 
 class MockProviderBankRepository implements ProviderBankRepository {
-  getBankAccount = vi.fn().mockImplementation(async (userId: string) => ({
-    id: '11111111-e29b-41d4-a716-446655440000',
-    userId,
-    accountHolderName: 'Abhishek Kumar',
-    accountNumberMasked: '••••••••1234',
-    accountNumberLast4: '1234',
-    ifscCode: 'SBIN0001234',
-    bankName: 'State Bank of India',
-    upiId: 'abhi@okhdfcbank',
-    isVerified: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  } as ProviderBankAccount));
+  getBankAccount = vi.fn().mockImplementation(
+    async (userId: string) =>
+      ({
+        id: '11111111-e29b-41d4-a716-446655440000',
+        userId,
+        accountHolderName: 'Abhishek Kumar',
+        accountNumberMasked: '••••••••1234',
+        accountNumberLast4: '1234',
+        ifscCode: 'SBIN0001234',
+        bankName: 'State Bank of India',
+        upiId: 'abhi@okhdfcbank',
+        isVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }) as ProviderBankAccount,
+  );
 
-  upsertBankAccount = vi.fn().mockImplementation(async (userId: string, input) => ({
-    id: '11111111-e29b-41d4-a716-446655440000',
-    userId,
-    accountHolderName: input.accountHolderName,
-    accountNumberMasked: `••••••••${input.accountNumber.slice(-4)}`,
-    accountNumberLast4: input.accountNumber.slice(-4),
-    ifscCode: input.ifscCode,
-    bankName: input.bankName,
-    upiId: input.upiId ?? null,
-    isVerified: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  } as ProviderBankAccount));
+  upsertBankAccount = vi.fn().mockImplementation(
+    async (userId: string, input) =>
+      ({
+        id: '11111111-e29b-41d4-a716-446655440000',
+        userId,
+        accountHolderName: input.accountHolderName,
+        accountNumberMasked: `••••••••${input.accountNumber.slice(-4)}`,
+        accountNumberLast4: input.accountNumber.slice(-4),
+        ifscCode: input.ifscCode,
+        bankName: input.bankName,
+        upiId: input.upiId ?? null,
+        isVerified: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }) as ProviderBankAccount,
+  );
 }
 
 describe('Provider Bank Account API', () => {

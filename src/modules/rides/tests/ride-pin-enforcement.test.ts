@@ -50,7 +50,9 @@ describe('Phase 4 Step 8: Strict PIN Enforcement & Lifecycle Protection', () => 
     it('rejects direct transition to in_progress if PIN has not been verified (409 PIN_VERIFICATION_REQUIRED)', async () => {
       const mockRepo: Partial<RideRepository> = {
         isAssignedDriverProfile: vi.fn().mockResolvedValue(true),
-        findById: vi.fn().mockResolvedValue(createMockRide({ status: 'driver_arrived', pinVerified: false })),
+        findById: vi
+          .fn()
+          .mockResolvedValue(createMockRide({ status: 'driver_arrived', pinVerified: false })),
         isPinVerified: vi.fn().mockResolvedValue(false),
         transition: vi.fn(),
       };
@@ -68,14 +70,18 @@ describe('Phase 4 Step 8: Strict PIN Enforcement & Lifecycle Protection', () => 
       let isVerified = false;
       const mockRepo: Partial<RideRepository> = {
         isAssignedDriverProfile: vi.fn().mockResolvedValue(true),
-        findById: vi.fn().mockResolvedValue(createMockRide({ status: 'driver_arrived', pinVerified: false })),
+        findById: vi
+          .fn()
+          .mockResolvedValue(createMockRide({ status: 'driver_arrived', pinVerified: false })),
         isPinVerified: vi.fn().mockImplementation(async () => isVerified),
         getRidePin: vi.fn().mockResolvedValue('6789'),
         markPinVerified: vi.fn().mockImplementation(async () => {
           isVerified = true;
           return true;
         }),
-        transition: vi.fn().mockResolvedValue(createMockRide({ status: 'in_progress', pinVerified: true })),
+        transition: vi
+          .fn()
+          .mockResolvedValue(createMockRide({ status: 'in_progress', pinVerified: true })),
       };
 
       const service = new RideService(mockRepo as RideRepository);
@@ -167,7 +173,9 @@ describe('Phase 4 Step 8: Strict PIN Enforcement & Lifecycle Protection', () => 
           isVerified = true;
           return true;
         }),
-        transition: vi.fn().mockResolvedValue(createMockRide({ status: 'in_progress', pinVerified: true })),
+        transition: vi
+          .fn()
+          .mockResolvedValue(createMockRide({ status: 'in_progress', pinVerified: true })),
       };
 
       const service = new RideService(mockRepo as RideRepository);
@@ -180,22 +188,38 @@ describe('Phase 4 Step 8: Strict PIN Enforcement & Lifecycle Protection', () => 
 
       expect(ride.status).toBe('in_progress');
       expect(isVerified).toBe(true);
-      expect(mockRepo.transition).toHaveBeenCalledWith('ride-pin-test-uuid', 'in_progress', 'driver-uuid-1');
+      expect(mockRepo.transition).toHaveBeenCalledWith(
+        'ride-pin-test-uuid',
+        'in_progress',
+        'driver-uuid-1',
+      );
     });
 
     it('successfully starts ride when PIN was already verified in a prior step', async () => {
       const mockRepo: Partial<RideRepository> = {
         isAssignedDriverProfile: vi.fn().mockResolvedValue(true),
-        findById: vi.fn().mockResolvedValue(createMockRide({ status: 'driver_arrived', pinVerified: true })),
+        findById: vi
+          .fn()
+          .mockResolvedValue(createMockRide({ status: 'driver_arrived', pinVerified: true })),
         isPinVerified: vi.fn().mockResolvedValue(true),
-        transition: vi.fn().mockResolvedValue(createMockRide({ status: 'in_progress', pinVerified: true })),
+        transition: vi
+          .fn()
+          .mockResolvedValue(createMockRide({ status: 'in_progress', pinVerified: true })),
       };
 
       const service = new RideService(mockRepo as RideRepository);
-      const ride = await service.transitionRide('ride-pin-test-uuid', 'in_progress', 'driver-uuid-1');
+      const ride = await service.transitionRide(
+        'ride-pin-test-uuid',
+        'in_progress',
+        'driver-uuid-1',
+      );
 
       expect(ride.status).toBe('in_progress');
-      expect(mockRepo.transition).toHaveBeenCalledWith('ride-pin-test-uuid', 'in_progress', 'driver-uuid-1');
+      expect(mockRepo.transition).toHaveBeenCalledWith(
+        'ride-pin-test-uuid',
+        'in_progress',
+        'driver-uuid-1',
+      );
     });
   });
 
@@ -203,7 +227,9 @@ describe('Phase 4 Step 8: Strict PIN Enforcement & Lifecycle Protection', () => 
     it('idempotently verifies PIN when already marked verified', async () => {
       const mockRepo: Partial<RideRepository> = {
         isAssignedDriverProfile: vi.fn().mockResolvedValue(true),
-        findById: vi.fn().mockResolvedValue(createMockRide({ status: 'driver_arrived', pinVerified: true })),
+        findById: vi
+          .fn()
+          .mockResolvedValue(createMockRide({ status: 'driver_arrived', pinVerified: true })),
         getRidePin: vi.fn().mockResolvedValue('6789'),
         markPinVerified: vi.fn().mockResolvedValue(true),
       };
@@ -219,7 +245,9 @@ describe('Phase 4 Step 8: Strict PIN Enforcement & Lifecycle Protection', () => 
     it('rejects transition to in_progress from status other than driver_arrived', async () => {
       const mockRepo: Partial<RideRepository> = {
         isAssignedDriverProfile: vi.fn().mockResolvedValue(true),
-        findById: vi.fn().mockResolvedValue(createMockRide({ status: 'driver_arriving', pinVerified: true })),
+        findById: vi
+          .fn()
+          .mockResolvedValue(createMockRide({ status: 'driver_arriving', pinVerified: true })),
         isPinVerified: vi.fn().mockResolvedValue(true),
         transition: vi.fn(),
       };
@@ -297,7 +325,11 @@ describe('Phase 4 Step 8: Strict PIN Enforcement & Lifecycle Protection', () => 
             isVerified = true;
             return true;
           }),
-          transition: vi.fn().mockResolvedValue(createMockRide({ sector, status: 'in_progress', pinVerified: true })),
+          transition: vi
+            .fn()
+            .mockResolvedValue(
+              createMockRide({ sector, status: 'in_progress', pinVerified: true }),
+            ),
         };
 
         const service = new RideService(mockRepo as RideRepository);

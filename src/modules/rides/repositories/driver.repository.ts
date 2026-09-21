@@ -215,7 +215,9 @@ export class PostgresDriverRepository implements DriverRepository {
     return result.rowCount === 1;
   }
 
-  async findActiveVehicleByUserId(userId: string): Promise<{ sector: string; category: string } | null> {
+  async findActiveVehicleByUserId(
+    userId: string,
+  ): Promise<{ sector: string; category: string } | null> {
     const result = await this.pool.query<{ sector: string; category: string }>(
       `SELECT COALESCE(v.sector, 'passenger') AS "sector", COALESCE(v.category, 'sedan') AS "category"
        FROM driver_profiles dp
@@ -273,7 +275,15 @@ export class PostgresDriverRepository implements DriverRepository {
        GROUP BY dp.id, dp.user_id, v.id, pickup.point, v.sector, v.category
        ORDER BY ST_Distance(dp.last_location, pickup.point), dp.id
        LIMIT $4`,
-      [longitude, latitude, radiusMeters, limit, staleBefore, sector ?? null, vehicleCategory ?? null],
+      [
+        longitude,
+        latitude,
+        radiusMeters,
+        limit,
+        staleBefore,
+        sector ?? null,
+        vehicleCategory ?? null,
+      ],
     );
     return result.rows;
   }
@@ -354,7 +364,12 @@ export class PostgresDriverRepository implements DriverRepository {
         [driverUserId, assignmentCode.id],
       );
 
-      const vehicleRes = await client.query<{ id: string; make: string; model: string; plate_number: string }>(
+      const vehicleRes = await client.query<{
+        id: string;
+        make: string;
+        model: string;
+        plate_number: string;
+      }>(
         `UPDATE vehicles
          SET driver_profile_id = $1, is_active = TRUE, updated_at = NOW()
          WHERE id = $2
@@ -434,4 +449,3 @@ export class PostgresDriverRepository implements DriverRepository {
     return result.rows[0] ?? null;
   }
 }
-

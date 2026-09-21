@@ -75,6 +75,21 @@ try {
       loginChallengeProviderSessionIndex: string | null;
       loginChallengeExpiryIndex: string | null;
       loginChallengeActiveUniqueIndex: string | null;
+
+      breadcrumbsTable: string | null;
+      breadcrumbsGistIndex: string | null;
+
+      paymentsActiveUniqueIndex: string | null;
+      paymentsRideForeignKey: string | null;
+
+      ridesSectorCheck: string | null;
+      ridesFuelCostColumn: string | null;
+
+      resendOtpSessions: string | null;
+      resendOtpSessionTokenUniqueIndex: string | null;
+      resendOtpSessionEmailIndex: string | null;
+      resendOtpSessionExpiryIndex: string | null;
+      resendOtpSessionActiveEmailIndex: string | null;
     }>(`
       SELECT
         (
@@ -230,13 +245,37 @@ try {
           WHERE table_schema = 'public'
             AND table_name = 'rides'
             AND column_name = 'actual_fuel_cost'
-        ) AS "ridesFuelCostColumn"
+        ) AS "ridesFuelCostColumn",
+
+        to_regclass(
+          'public.resend_otp_sessions'
+        ) AS "resendOtpSessions",
+
+        (
+          SELECT indexname
+          FROM pg_indexes
+          WHERE schemaname = 'public'
+            AND tablename = 'resend_otp_sessions'
+            AND indexname = 'resend_otp_sessions_session_token_hash_key'
+        ) AS "resendOtpSessionTokenUniqueIndex",
+
+        to_regclass(
+          'public.idx_resend_otp_sessions_email'
+        ) AS "resendOtpSessionEmailIndex",
+
+        to_regclass(
+          'public.idx_resend_otp_sessions_expires_at'
+        ) AS "resendOtpSessionExpiryIndex",
+
+        to_regclass(
+          'public.idx_resend_otp_sessions_active_email'
+        ) AS "resendOtpSessionActiveEmailIndex"
     `);
 
     const checksRow = checks.rows[0]!;
 
     if (
-      checksRow.migrationCount !== '30' ||
+      checksRow.migrationCount !== '31' ||
       !checksRow.rides ||
       checksRow.postgis !== 'postgis' ||
       !checksRow.rideIndex ||
@@ -262,7 +301,12 @@ try {
       !checksRow.paymentsActiveUniqueIndex ||
       !checksRow.paymentsRideForeignKey ||
       !checksRow.ridesSectorCheck ||
-      !checksRow.ridesFuelCostColumn
+      !checksRow.ridesFuelCostColumn ||
+      !checksRow.resendOtpSessions ||
+      !checksRow.resendOtpSessionTokenUniqueIndex ||
+      !checksRow.resendOtpSessionEmailIndex ||
+      !checksRow.resendOtpSessionExpiryIndex ||
+      !checksRow.resendOtpSessionActiveEmailIndex
     ) {
       throw new Error(`Migration verification failed: ${JSON.stringify(checksRow)}`);
     }

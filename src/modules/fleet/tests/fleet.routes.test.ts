@@ -81,7 +81,11 @@ describe('Fleet API authorization and routes', () => {
   });
 
   it('allows driver_fleet_owner in fleet_owner mode to access fleet dashboard', async () => {
-    const token = await signAccessToken({ sub: driverFleetOwnerId, role: 'driver_fleet_owner', type: 'access' });
+    const token = await signAccessToken({
+      sub: driverFleetOwnerId,
+      role: 'driver_fleet_owner',
+      type: 'access',
+    });
     const res = await request(app)
       .get('/fleet/dashboard')
       .set('authorization', `Bearer ${token}`)
@@ -91,7 +95,11 @@ describe('Fleet API authorization and routes', () => {
   });
 
   it('forbids driver_fleet_owner when x-provider-mode is set to driver', async () => {
-    const token = await signAccessToken({ sub: driverFleetOwnerId, role: 'driver_fleet_owner', type: 'access' });
+    const token = await signAccessToken({
+      sub: driverFleetOwnerId,
+      role: 'driver_fleet_owner',
+      type: 'access',
+    });
     const res = await request(app)
       .get('/fleet/dashboard')
       .set('authorization', `Bearer ${token}`)

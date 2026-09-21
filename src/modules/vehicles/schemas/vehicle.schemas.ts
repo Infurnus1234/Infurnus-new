@@ -26,7 +26,10 @@ export const createVehicleSchema = z
     model: vehicleText.max(50),
     color: z.string().trim().min(1).max(30).optional(),
     plateNumber,
-    sector: z.enum(['passenger', 'logistics', 'service', 'premium']).default('passenger').optional(),
+    sector: z
+      .enum(['passenger', 'logistics', 'service', 'premium'])
+      .default('passenger')
+      .optional(),
     category: z.string().trim().min(1).max(50).default('sedan').optional(),
     fuelRatePerKm: z.number().nonnegative().default(0).optional(),
     loadCapacityKg: z.number().nonnegative().default(0).optional(),

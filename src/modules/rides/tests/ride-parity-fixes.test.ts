@@ -114,9 +114,7 @@ describe('BUG-P3-02 & BUG-P3-04: Parity Fixes — Real Details & Secure PIN', ()
 
     it('driver listing masks the PIN (pin is null)', async () => {
       const mockRepo: Partial<RideRepository> = {
-        listAvailable: vi.fn().mockResolvedValue([
-          createMockRide({ pin: null }),
-        ]),
+        listAvailable: vi.fn().mockResolvedValue([createMockRide({ pin: null })]),
       };
 
       const service = new RideService(mockRepo as RideRepository);
@@ -152,9 +150,9 @@ describe('BUG-P3-02 & BUG-P3-04: Parity Fixes — Real Details & Secure PIN', ()
 
       const service = new RideService(mockRepo as RideRepository);
 
-      await expect(
-        service.verifyRidePin('ride-uuid-1', 'driver-uuid-1', '0000'),
-      ).rejects.toThrow('Invalid ride verification PIN');
+      await expect(service.verifyRidePin('ride-uuid-1', 'driver-uuid-1', '0000')).rejects.toThrow(
+        'Invalid ride verification PIN',
+      );
       expect(mockRepo.markPinVerified).not.toHaveBeenCalled();
     });
 
@@ -176,9 +174,7 @@ describe('BUG-P3-02 & BUG-P3-04: Parity Fixes — Real Details & Secure PIN', ()
         isAssignedDriverProfile: vi.fn().mockResolvedValue(true),
         getRidePin: vi.fn().mockResolvedValue('7391'),
         markPinVerified: vi.fn().mockResolvedValue(true),
-        transition: vi.fn().mockResolvedValue(
-          createMockRide({ status: 'driver_arrived' }),
-        ),
+        transition: vi.fn().mockResolvedValue(createMockRide({ status: 'driver_arrived' })),
       };
 
       const service = new RideService(mockRepo as RideRepository);

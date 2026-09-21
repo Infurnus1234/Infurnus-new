@@ -166,7 +166,11 @@ export class PostgresAdminRepository implements AdminRepository {
     };
   }
 
-  async verifyDriver(driverId: string, status: string, _rejectionReason?: string): Promise<boolean> {
+  async verifyDriver(
+    driverId: string,
+    status: string,
+    _rejectionReason?: string,
+  ): Promise<boolean> {
     const res = await this.pool.query(
       `UPDATE driver_profiles
        SET verification_status = $1, updated_at = NOW()
@@ -177,7 +181,11 @@ export class PostgresAdminRepository implements AdminRepository {
     return (res.rowCount ?? 0) > 0;
   }
 
-  async verifyVehicle(vehicleId: string, status: string, _rejectionReason?: string): Promise<boolean> {
+  async verifyVehicle(
+    vehicleId: string,
+    status: string,
+    _rejectionReason?: string,
+  ): Promise<boolean> {
     const res = await this.pool.query(
       `UPDATE vehicles
        SET verification_status = $1, updated_at = NOW()

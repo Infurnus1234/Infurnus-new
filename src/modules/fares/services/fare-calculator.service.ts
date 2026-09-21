@@ -83,7 +83,8 @@ export class FareCalculatorService {
       baseAmount = hours * 100000;
       timeAmount = 0;
 
-      const fuelRate = input.fuelRatePerKm !== undefined && input.fuelRatePerKm > 0 ? input.fuelRatePerKm : 1500;
+      const fuelRate =
+        input.fuelRatePerKm !== undefined && input.fuelRatePerKm > 0 ? input.fuelRatePerKm : 1500;
       fuelAmount = this.roundMoney((input.distanceMeters * fuelRate) / 1000, 'fuelAmount');
       distanceAmount = 0;
     } else if (input.sector === 'passenger') {

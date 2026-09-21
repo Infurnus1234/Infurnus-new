@@ -48,7 +48,10 @@ export class PostgresProviderBankRepository implements ProviderBankRepository {
     };
   }
 
-  async upsertBankAccount(userId: string, input: UpsertBankAccountInput): Promise<ProviderBankAccount> {
+  async upsertBankAccount(
+    userId: string,
+    input: UpsertBankAccountInput,
+  ): Promise<ProviderBankAccount> {
     const last4 = input.accountNumber.slice(-4);
     const encrypted = Buffer.from(input.accountNumber, 'utf-8').toString('base64');
 
