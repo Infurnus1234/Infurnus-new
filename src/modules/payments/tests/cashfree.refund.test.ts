@@ -113,7 +113,9 @@ describe('Payment Refund Lifecycle & Authorization', () => {
       await controller.refund(req, res, vi.fn());
 
       expect(res.status).toHaveBeenCalledWith(404);
-      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ message: 'Payment not found' }));
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'Payment not found' }),
+      );
     });
 
     it('rejects refund if payment is in INITIATED state', async () => {

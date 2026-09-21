@@ -17,15 +17,30 @@ export function createRideRouter(controller: RideController, driverController?: 
 
     router.get('/driver/current-trip', requireRoles('driver'), driverController.getCurrentTrip);
 
-    router.get('/driver/assigned-vehicle', requireRoles('driver'), driverController.getAssignedVehicle);
-    router.post('/driver/assignment/verify-code', requireRoles('driver'), driverController.verifyAssignmentCode);
-    router.post('/driver/assignment/claim-code', requireRoles('driver'), driverController.claimAssignmentCode);
-    router.post('/driver/active-vehicle', requireRoles('driver'), driverController.setActiveVehicle);
+    router.get(
+      '/driver/assigned-vehicle',
+      requireRoles('driver'),
+      driverController.getAssignedVehicle,
+    );
+    router.post(
+      '/driver/assignment/verify-code',
+      requireRoles('driver'),
+      driverController.verifyAssignmentCode,
+    );
+    router.post(
+      '/driver/assignment/claim-code',
+      requireRoles('driver'),
+      driverController.claimAssignmentCode,
+    );
+    router.post(
+      '/driver/active-vehicle',
+      requireRoles('driver'),
+      driverController.setActiveVehicle,
+    );
     router.post('/:id/accept', requireRoles('driver'), driverController.accept);
     router.post('/:id/complete', requireRoles('driver'), driverController.complete);
     router.post('/:id/status', requireRoles('driver'), driverController.transition);
     router.post('/:id/verify-pin', requireRoles('driver'), driverController.verifyPin);
-
   }
   router.post('/', controller.create);
   router.get('/', controller.list);

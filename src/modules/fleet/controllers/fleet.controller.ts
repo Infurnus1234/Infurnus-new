@@ -32,7 +32,9 @@ export class FleetController {
     try {
       const input = createFleetVehicleSchema.parse(req.body);
       const vehicle = await this.fleetService.createVehicle(req.auth!.userId, input);
-      res.status(201).json({ success: true, data: vehicle, message: 'Vehicle created successfully' });
+      res
+        .status(201)
+        .json({ success: true, data: vehicle, message: 'Vehicle created successfully' });
     } catch (error) {
       next(error);
     }

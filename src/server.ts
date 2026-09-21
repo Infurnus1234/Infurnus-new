@@ -25,6 +25,9 @@ import { PostgresRentalRepository } from './modules/rentals/repositories/rental.
 
 import { SendmatorOtpProvider } from './modules/auth/providers/sendmator-otp.provider.js';
 import { DevOtpProvider } from './modules/auth/providers/dev-otp.provider.js';
+import { ResendOtpProvider } from './modules/auth/providers/resend-otp.provider.js';
+import { FallbackOtpProvider } from './modules/auth/providers/fallback-otp.provider.js';
+import { PostgresResendOtpSessionRepository } from './modules/auth/repositories/resend-otp.repository.js';
 
 import { FareCalculatorService } from './modules/fares/services/fare-calculator.service.js';
 import { FareEstimateService } from './modules/fares/services/fare-estimate.service.js';
@@ -51,7 +54,15 @@ async function startServer() {
   // OTP provider
   // ==========================================================
 
-  const otpProvider = env.SENDMATOR_API_KEY ? new SendmatorOtpProvider() : new DevOtpProvider();
+  const sendmatorProvider = env.SENDMATOR_API_KEY ? new SendmatorOtpProvider() : undefined;
+
+  const resendOtpProvider = env.RESEND_API_KEY
+    ? new ResendOtpProvider(new PostgresResendOtpSessionRepository(pool))
+    : undefined;
+
+  const otpProvider = sendmatorProvider
+    ? new FallbackOtpProvider(sendmatorProvider, resendOtpProvider)
+    : new DevOtpProvider();
 
   // ==========================================================
   // Repositories

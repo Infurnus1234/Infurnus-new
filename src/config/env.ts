@@ -108,6 +108,7 @@ const envSchema = z
         if (val.toLowerCase() === 'false') return false;
         if (val.toLowerCase() === 'true') return true;
       }
+
       return val;
     }, z.coerce.boolean().default(true)),
 
@@ -116,6 +117,17 @@ const envSchema = z
     // ============================================================
 
     SENDMATOR_API_KEY: z.string().min(1, 'SENDMATOR_API_KEY must not be empty').optional(),
+
+    // ============================================================
+    // Resend Email Provider
+    // ============================================================
+
+    RESEND_API_KEY: z.string().min(1, 'RESEND_API_KEY must not be empty').optional(),
+
+    RESEND_FROM_EMAIL: z
+      .string()
+      .email('RESEND_FROM_EMAIL must be a valid email address')
+      .default('onboarding@resend.dev'),
 
     // ============================================================
     // Cashfree Payment Gateway
