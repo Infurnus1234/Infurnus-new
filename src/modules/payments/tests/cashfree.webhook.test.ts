@@ -75,12 +75,18 @@ describe('Cashfree Webhook Handling & Reconciliation', () => {
         };
         return Promise.resolve(currentPaymentState);
       }),
-      findById: vi.fn().mockImplementation((id) =>
-        id === mockPayment.id ? Promise.resolve(currentPaymentState) : Promise.resolve(null),
-      ),
-      findByProviderOrderId: vi.fn().mockImplementation((orderId) =>
-        orderId === providerOrderId ? Promise.resolve(currentPaymentState) : Promise.resolve(null),
-      ),
+      findById: vi
+        .fn()
+        .mockImplementation((id) =>
+          id === mockPayment.id ? Promise.resolve(currentPaymentState) : Promise.resolve(null),
+        ),
+      findByProviderOrderId: vi
+        .fn()
+        .mockImplementation((orderId) =>
+          orderId === providerOrderId
+            ? Promise.resolve(currentPaymentState)
+            : Promise.resolve(null),
+        ),
       markFailed: vi.fn().mockImplementation((id, reason) => {
         currentPaymentState = {
           ...currentPaymentState,
@@ -106,7 +112,9 @@ describe('Cashfree Webhook Handling & Reconciliation', () => {
         orderCurrency: 'INR',
         providerPaymentId: 'cf_pay_998877',
       }),
-      verifyWebhookSignature: vi.fn().mockImplementation((_raw, sig) => sig === 'valid_mock_signature'),
+      verifyWebhookSignature: vi
+        .fn()
+        .mockImplementation((_raw, sig) => sig === 'valid_mock_signature'),
     };
 
     controller = new PaymentController(mockRepo, undefined, undefined, mockProvider);
@@ -252,10 +260,7 @@ describe('Cashfree Webhook Handling & Reconciliation', () => {
 
       await controller.handleCashfreeWebhook(req, res, vi.fn());
 
-      expect(mockRepo.markFailed).toHaveBeenCalledWith(
-        mockPayment.id,
-        'Insufficient balance',
-      );
+      expect(mockRepo.markFailed).toHaveBeenCalledWith(mockPayment.id, 'Insufficient balance');
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({

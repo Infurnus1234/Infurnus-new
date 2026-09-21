@@ -83,16 +83,9 @@ const envSchema = z
 
     GOOGLE_MAPS_API_KEY: z.string().min(1).optional(),
 
-    GOOGLE_ROUTE_RECALCULATION_INTERVAL_SECONDS: z.coerce
-      .number()
-      .int()
-      .positive()
-      .default(30),
+    GOOGLE_ROUTE_RECALCULATION_INTERVAL_SECONDS: z.coerce.number().int().positive().default(30),
 
-    GOOGLE_ROUTE_RECALCULATION_DISTANCE_METERS: z.coerce
-      .number()
-      .positive()
-      .default(500),
+    GOOGLE_ROUTE_RECALCULATION_DISTANCE_METERS: z.coerce.number().positive().default(500),
 
     GOOGLE_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
 
@@ -126,13 +119,10 @@ const envSchema = z
     SENDMATOR_API_KEY: z.string().min(1, 'SENDMATOR_API_KEY must not be empty').optional(),
 
     // ============================================================
-    // Resend
+    // Resend Email Provider
     // ============================================================
 
-    RESEND_API_KEY: z
-      .string()
-      .min(1, 'RESEND_API_KEY must not be empty')
-      .optional(),
+    RESEND_API_KEY: z.string().min(1, 'RESEND_API_KEY must not be empty').optional(),
 
     RESEND_FROM_EMAIL: z
       .string()
@@ -179,10 +169,7 @@ const envSchema = z
       ),
   })
   .superRefine((config, ctx) => {
-    if (
-      config.AUTH_REFRESH_COOKIE_SAME_SITE === 'none' &&
-      !config.AUTH_REFRESH_COOKIE_SECURE
-    ) {
+    if (config.AUTH_REFRESH_COOKIE_SAME_SITE === 'none' && !config.AUTH_REFRESH_COOKIE_SECURE) {
       ctx.addIssue({
         code: 'custom',
         path: ['AUTH_REFRESH_COOKIE_SECURE'],
@@ -190,10 +177,7 @@ const envSchema = z
       });
     }
 
-    if (
-      config.AUTH_CSRF_COOKIE_SAME_SITE === 'none' &&
-      !config.AUTH_CSRF_COOKIE_SECURE
-    ) {
+    if (config.AUTH_CSRF_COOKIE_SAME_SITE === 'none' && !config.AUTH_CSRF_COOKIE_SECURE) {
       ctx.addIssue({
         code: 'custom',
         path: ['AUTH_CSRF_COOKIE_SECURE'],

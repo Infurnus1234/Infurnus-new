@@ -46,4 +46,3 @@ export interface DriverProfile {
   createdAt: Date;
   updatedAt: Date;
 }
-

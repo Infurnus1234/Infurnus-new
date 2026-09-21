@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { createApp } from '../../../app.js';
 
 vi.mock('../../../infrastructure/database/postgres.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../../infrastructure/database/postgres.js')>();
+  const actual =
+    await importOriginal<typeof import('../../../infrastructure/database/postgres.js')>();
   return {
     ...actual,
     withTransaction: vi.fn(async (callback) => callback({} as never)),

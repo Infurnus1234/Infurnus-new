@@ -19,10 +19,9 @@ export class PostgresRatingRepository implements RatingRepository {
     // If driverProfileId is not provided, look it up from the ride
     let driverProfileId = data.driverProfileId;
     if (!driverProfileId) {
-      const rideRes = await this.pool.query(
-        'SELECT assigned_driver_id FROM rides WHERE id = $1',
-        [data.rideId],
-      );
+      const rideRes = await this.pool.query('SELECT assigned_driver_id FROM rides WHERE id = $1', [
+        data.rideId,
+      ]);
       driverProfileId = rideRes.rows[0]?.assigned_driver_id;
     }
 

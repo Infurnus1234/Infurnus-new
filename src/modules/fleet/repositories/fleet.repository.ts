@@ -1,8 +1,5 @@
 import type { Pool } from 'pg';
-import type {
-  CreateFleetVehicleInput,
-  UpdateFleetVehicleInput,
-} from '../schemas/fleet.schemas.js';
+import type { CreateFleetVehicleInput, UpdateFleetVehicleInput } from '../schemas/fleet.schemas.js';
 import type {
   FleetDashboardMetrics,
   FleetDriver,
@@ -15,9 +12,16 @@ export interface FleetRepository {
   getDashboard(ownerId: string): Promise<FleetDashboardMetrics>;
   listVehicles(ownerId: string): Promise<FleetVehicle[]>;
   createVehicle(ownerId: string, input: CreateFleetVehicleInput): Promise<FleetVehicle>;
-  updateVehicle(ownerId: string, vehicleId: string, input: UpdateFleetVehicleInput): Promise<FleetVehicle | null>;
+  updateVehicle(
+    ownerId: string,
+    vehicleId: string,
+    input: UpdateFleetVehicleInput,
+  ): Promise<FleetVehicle | null>;
   deactivateVehicle(ownerId: string, vehicleId: string): Promise<boolean>;
-  generateAssignmentCode(ownerId: string, vehicleId: string): Promise<{ code: string; expiresAt: Date }>;
+  generateAssignmentCode(
+    ownerId: string,
+    vehicleId: string,
+  ): Promise<{ code: string; expiresAt: Date }>;
   unassignDriver(ownerId: string, vehicleId: string): Promise<boolean>;
   listDrivers(ownerId: string): Promise<FleetDriver[]>;
   listTrips(ownerId: string, limit?: number): Promise<FleetTrip[]>;
@@ -185,15 +189,16 @@ export class PostgresFleetRepository implements FleetRepository {
       permitDetails: row.permitDetails,
       verificationStatus: row.verificationStatus,
       isActive: row.isActive,
-      assignedDriver: row.driverProfileId && row.driverUserId
-        ? {
-            id: row.driverProfileId,
-            userId: row.driverUserId,
-            name: row.driverName ?? 'Driver',
-            phone: row.driverPhone ?? '',
-            availabilityStatus: row.driverAvailability,
-          }
-        : null,
+      assignedDriver:
+        row.driverProfileId && row.driverUserId
+          ? {
+              id: row.driverProfileId,
+              userId: row.driverUserId,
+              name: row.driverName ?? 'Driver',
+              phone: row.driverPhone ?? '',
+              availabilityStatus: row.driverAvailability,
+            }
+          : null,
       activeAssignmentCode: row.activeCode,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
@@ -306,10 +311,10 @@ export class PostgresFleetRepository implements FleetRepository {
     vehicleId: string,
   ): Promise<{ code: string; expiresAt: Date }> {
     // Check vehicle belongs to owner
-    const check = await this.pool.query(
-      `SELECT id FROM vehicles WHERE id = $1 AND owner_id = $2`,
-      [vehicleId, ownerId],
-    );
+    const check = await this.pool.query(`SELECT id FROM vehicles WHERE id = $1 AND owner_id = $2`, [
+      vehicleId,
+      ownerId,
+    ]);
     if (check.rowCount !== 1) {
       throw new Error('VEHICLE_NOT_FOUND');
     }
@@ -523,7 +528,7 @@ export class PostgresFleetRepository implements FleetRepository {
 
     const row = result.rows[0];
     const thisMonthRevenue = parseFloat(row?.thisMonthRevenue ?? '0');
-    const commission = thisMonthRevenue * 0.10; // 10% platform commission standard
+    const commission = thisMonthRevenue * 0.1; // 10% platform commission standard
 
     return {
       todayRevenue: parseFloat(row?.todayRevenue ?? '0'),

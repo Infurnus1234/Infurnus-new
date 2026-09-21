@@ -114,7 +114,7 @@ export class RideService {
         const actualDistanceKm = Math.round((actualDistanceMeters / 1000) * 100) / 100;
         const actualFuelCost = Number(ride.actualFuelCost ?? 0);
         const subtotal = hourlyBase + actualFuelCost;
-        const taxAmount = Math.round((subtotal * 0.05) * 100) / 100;
+        const taxAmount = Math.round(subtotal * 0.05 * 100) / 100;
         const finalFare = Number(ride.finalFare ?? Math.round((subtotal + taxAmount) * 100) / 100);
 
         ride.billing = {
@@ -122,7 +122,8 @@ export class RideService {
           hourlyRate,
           bookedHours,
           hourlyBase,
-          fuelRatePerKm: actualDistanceKm > 0 ? Math.round((actualFuelCost / actualDistanceKm) * 100) / 100 : 15,
+          fuelRatePerKm:
+            actualDistanceKm > 0 ? Math.round((actualFuelCost / actualDistanceKm) * 100) / 100 : 15,
           actualDistanceKm,
           actualDistanceMeters,
           actualFuelCost,
@@ -189,12 +190,7 @@ export class RideService {
     return { verified: true };
   }
 
-  async transitionRide(
-    id: string,
-    status: RideStatus,
-    assignedDriverId?: string,
-    pin?: string,
-  ) {
+  async transitionRide(id: string, status: RideStatus, assignedDriverId?: string, pin?: string) {
     if (status === 'completed') {
       if (!assignedDriverId) {
         throw new AppError(

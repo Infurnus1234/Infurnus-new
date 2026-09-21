@@ -89,7 +89,11 @@ export class AdminController {
       const { id } = adminIdSchema.parse(req.params);
       const { status, rejectionReason } = req.body;
       const result = await this.service.verifyDriver(id, status, rejectionReason);
-      res.json({ success: true, data: result, message: `Driver verification status updated to ${status}` });
+      res.json({
+        success: true,
+        data: result,
+        message: `Driver verification status updated to ${status}`,
+      });
     } catch (error) {
       next(error);
     }
@@ -100,7 +104,11 @@ export class AdminController {
       const { id } = adminIdSchema.parse(req.params);
       const { status, rejectionReason } = req.body;
       const result = await this.service.verifyVehicle(id, status, rejectionReason);
-      res.json({ success: true, data: result, message: `Vehicle verification status updated to ${status}` });
+      res.json({
+        success: true,
+        data: result,
+        message: `Vehicle verification status updated to ${status}`,
+      });
     } catch (error) {
       next(error);
     }
@@ -111,7 +119,11 @@ export class AdminController {
       const { id } = adminIdSchema.parse(req.params);
       const { status, comments } = req.body;
       const result = await this.service.verifyDocument(id, status, comments);
-      res.json({ success: true, data: result, message: `Document verification status updated to ${status}` });
+      res.json({
+        success: true,
+        data: result,
+        message: `Document verification status updated to ${status}`,
+      });
     } catch (error) {
       next(error);
     }

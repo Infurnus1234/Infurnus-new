@@ -71,13 +71,12 @@ export class DriverController {
       const profileId = await this.driverService.profileForUser(req.auth!.userId);
       const status = rideStatusSchema.parse(req.body.status);
       const pin = typeof req.body.pin === 'string' ? req.body.pin.trim() : undefined;
-      const ride = await this.rideService.transitionRide(
-        id,
-        status,
-        profileId,
-        pin,
-      );
-      res.json({ success: true, data: sanitizeRideForDriver(ride), message: 'Ride status updated' });
+      const ride = await this.rideService.transitionRide(id, status, profileId, pin);
+      res.json({
+        success: true,
+        data: sanitizeRideForDriver(ride),
+        message: 'Ride status updated',
+      });
     } catch (error) {
       next(error);
     }
@@ -198,4 +197,3 @@ export class DriverController {
     }
   };
 }
-

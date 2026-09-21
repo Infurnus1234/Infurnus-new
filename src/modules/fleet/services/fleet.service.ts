@@ -1,8 +1,5 @@
 import type { FleetRepository } from '../repositories/fleet.repository.js';
-import type {
-  CreateFleetVehicleInput,
-  UpdateFleetVehicleInput,
-} from '../schemas/fleet.schemas.js';
+import type { CreateFleetVehicleInput, UpdateFleetVehicleInput } from '../schemas/fleet.schemas.js';
 import type {
   FleetDashboardMetrics,
   FleetDriver,

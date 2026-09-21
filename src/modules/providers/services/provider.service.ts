@@ -9,7 +9,10 @@ export class ProviderService {
     return this.bankRepo.getBankAccount(userId);
   }
 
-  async upsertBankAccount(userId: string, input: UpsertBankAccountInput): Promise<ProviderBankAccount> {
+  async upsertBankAccount(
+    userId: string,
+    input: UpsertBankAccountInput,
+  ): Promise<ProviderBankAccount> {
     return this.bankRepo.upsertBankAccount(userId, input);
   }
 }

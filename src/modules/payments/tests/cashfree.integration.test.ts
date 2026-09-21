@@ -457,9 +457,7 @@ describe('INFURNUS Payments - Cashfree Provider Integration', () => {
 
       await controller.initiate(req, res, vi.fn());
 
-      expect(mockRepo.initiate).toHaveBeenCalledWith(
-        expect.objectContaining({ amount: 500.0 }),
-      );
+      expect(mockRepo.initiate).toHaveBeenCalledWith(expect.objectContaining({ amount: 500.0 }));
       expect(mockProvider.createOrder).toHaveBeenCalledWith(
         expect.objectContaining({ amount: 500.0 }),
       );
@@ -477,9 +475,7 @@ describe('INFURNUS Payments - Cashfree Provider Integration', () => {
 
       await controller.initiate(req, res, vi.fn());
 
-      expect(mockRepo.initiate).toHaveBeenCalledWith(
-        expect.objectContaining({ amount: 850.0 }),
-      );
+      expect(mockRepo.initiate).toHaveBeenCalledWith(expect.objectContaining({ amount: 850.0 }));
       expect(mockProvider.createOrder).toHaveBeenCalledWith(
         expect.objectContaining({ amount: 850.0 }),
       );
@@ -497,9 +493,7 @@ describe('INFURNUS Payments - Cashfree Provider Integration', () => {
 
       await controller.initiate(req, res, vi.fn());
 
-      expect(mockRepo.initiate).toHaveBeenCalledWith(
-        expect.objectContaining({ amount: 1200.0 }),
-      );
+      expect(mockRepo.initiate).toHaveBeenCalledWith(expect.objectContaining({ amount: 1200.0 }));
       expect(mockProvider.createOrder).toHaveBeenCalledWith(
         expect.objectContaining({ amount: 1200.0 }),
       );
@@ -523,9 +517,7 @@ describe('INFURNUS Payments - Cashfree Provider Integration', () => {
 
       await controller.initiate(req, res, vi.fn());
 
-      expect(mockRepo.initiate).toHaveBeenCalledWith(
-        expect.objectContaining({ amount: 3622.5 }),
-      );
+      expect(mockRepo.initiate).toHaveBeenCalledWith(expect.objectContaining({ amount: 3622.5 }));
       expect(mockProvider.createOrder).toHaveBeenCalledWith(
         expect.objectContaining({ amount: 3622.5 }),
       );

@@ -11,14 +11,24 @@ export class FareController {
 
       const sector = input.sector;
       const vehicleCategory = input.vehicleCategory ?? input.serviceDetails?.serviceType;
-      const waitingMinutes = sector === 'passenger' || sector === undefined ? input.waitingMinutes : undefined;
-      const weightKg = sector === 'logistics' || sector === undefined ? (input.weightKg ?? input.goods?.weightKg) : undefined;
+      const waitingMinutes =
+        sector === 'passenger' || sector === undefined ? input.waitingMinutes : undefined;
+      const weightKg =
+        sector === 'logistics' || sector === undefined
+          ? (input.weightKg ?? input.goods?.weightKg)
+          : undefined;
       const hasLoadingAssistance =
         sector === 'logistics' || sector === undefined
-          ? (input.hasLoadingAssistance ?? input.goods?.hasLoadingAssistance ?? input.goods?.loadingAssistance)
+          ? (input.hasLoadingAssistance ??
+            input.goods?.hasLoadingAssistance ??
+            input.goods?.loadingAssistance)
           : undefined;
-      const rentalHours = sector === 'premium' ? (input.rentalHours ?? input.rentalDetails?.hours) : undefined;
-      const fuelRatePerKm = sector === 'premium' ? (input.fuelRatePerKm ?? input.rentalDetails?.fuelRatePerKm) : undefined;
+      const rentalHours =
+        sector === 'premium' ? (input.rentalHours ?? input.rentalDetails?.hours) : undefined;
+      const fuelRatePerKm =
+        sector === 'premium'
+          ? (input.fuelRatePerKm ?? input.rentalDetails?.fuelRatePerKm)
+          : undefined;
 
       const hasOptions =
         sector !== undefined ||

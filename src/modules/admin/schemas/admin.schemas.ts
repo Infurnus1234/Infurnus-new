@@ -60,20 +60,26 @@ export type AdminUsersQuery = z.infer<typeof adminUsersQuerySchema>;
 export type AdminPartnersQuery = z.infer<typeof adminPartnersQuerySchema>;
 export type AdminVehiclesQuery = z.infer<typeof adminVehiclesQuerySchema>;
 
-export const verifyDriverSchema = z.object({
-  status: z.enum(['approved', 'rejected', 'pending', 'suspended']),
-  rejectionReason: z.string().trim().max(500).optional(),
-}).strict();
+export const verifyDriverSchema = z
+  .object({
+    status: z.enum(['approved', 'rejected', 'pending', 'suspended']),
+    rejectionReason: z.string().trim().max(500).optional(),
+  })
+  .strict();
 
-export const verifyVehicleSchema = z.object({
-  status: z.enum(['approved', 'rejected', 'pending', 'suspended']),
-  rejectionReason: z.string().trim().max(500).optional(),
-}).strict();
+export const verifyVehicleSchema = z
+  .object({
+    status: z.enum(['approved', 'rejected', 'pending', 'suspended']),
+    rejectionReason: z.string().trim().max(500).optional(),
+  })
+  .strict();
 
-export const verifyDocumentSchema = z.object({
-  status: z.enum(['APPROVED', 'REJECTED', 'PENDING', 'VERIFIED']),
-  comments: z.string().trim().max(500).optional(),
-}).strict();
+export const verifyDocumentSchema = z
+  .object({
+    status: z.enum(['APPROVED', 'REJECTED', 'PENDING', 'VERIFIED']),
+    comments: z.string().trim().max(500).optional(),
+  })
+  .strict();
 
 export type VerifyDriverInput = z.infer<typeof verifyDriverSchema>;
 export type VerifyVehicleInput = z.infer<typeof verifyVehicleSchema>;
