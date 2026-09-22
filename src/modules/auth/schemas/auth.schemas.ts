@@ -178,3 +178,76 @@ export const resendLoginOtpSchema = z
     challengeId: z.string().uuid('Invalid login challenge ID'),
   })
   .strict();
+
+// ============================================================
+// Forgot Password
+// ============================================================
+
+export const forgotPasswordSchema = z
+  .object({
+    email: emailSchema,
+  })
+  .strict();
+
+// ============================================================
+// Password Reset
+// ============================================================
+
+export const resetPasswordSchema = z
+  .object({
+    challengeId: z.string().uuid('Invalid password reset challenge ID'),
+
+    otp: z.string().regex(/^\d{6}$/, 'OTP must be 6 digits'),
+
+    newPassword: passwordSchema,
+
+    confirmPassword: z
+      .string()
+      .min(1, 'Please confirm your password'),
+  })
+  .strict()
+  .superRefine((data, ctx) => {
+    if (data.newPassword !== data.confirmPassword) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['confirmPassword'],
+        message: 'Passwords do not match',
+      });
+    }
+  });
+
+// ============================================================
+// Change Password
+// ============================================================
+
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z
+      .string()
+      .min(1, 'Current password is required')
+      .max(128, 'Current password must not exceed 128 characters'),
+
+    newPassword: passwordSchema,
+
+    confirmPassword: z
+      .string()
+      .min(1, 'Please confirm your password'),
+  })
+  .strict()
+  .superRefine((data, ctx) => {
+    if (data.newPassword !== data.confirmPassword) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['confirmPassword'],
+        message: 'Passwords do not match',
+      });
+    }
+
+    if (data.currentPassword === data.newPassword) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['newPassword'],
+        message: 'New password must be different from current password',
+      });
+    }
+  });
