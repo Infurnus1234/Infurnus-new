@@ -151,7 +151,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(24),
                             child: Image.asset(
-                              'assets/images/logo.png',
+                              'assets/images/logo.jpg',
                               fit: BoxFit.contain,
                               errorBuilder: (context, error, stackTrace) =>
                                   const InfurnusBrandMark(
