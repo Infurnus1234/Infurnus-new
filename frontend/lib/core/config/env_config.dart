@@ -14,7 +14,7 @@ class EnvConfig {
   });
 
   // Dynamic configuration via compile-time environment flags:
-  // flutter run --dart-define=API_URL=https://api.infurnus.com
+  // flutter run --dart-define=API_URL=http://192.168.1.19:3001
   // flutter build apk --release --dart-define=ENVIRONMENT=prod
   static const String _definedApiUrl =
       String.fromEnvironment('API_URL');
@@ -26,8 +26,7 @@ class EnvConfig {
       String.fromEnvironment('ENVIRONMENT', defaultValue: '');
 
   static EnvConfig get active {
-    // 1. Production defaults in release mode
-    // when no explicit dev/staging flag is passed
+    // 1. Production defaults in release mode when no explicit flag is passed
     if (_definedEnv == 'prod' ||
         (kReleaseMode &&
             _definedEnv.isEmpty &&
@@ -58,24 +57,20 @@ class EnvConfig {
     }
 
     // 3. Local development default
-    // Physical Android device + adb reverse
     return dev;
   }
 
-  // Local development
-  // Physical Android phone:
-  // adb reverse tcp:3000 tcp:3000
+  // Local development for physical Wi-Fi device or LAN
   static const EnvConfig dev = EnvConfig(
-    baseUrl: 'http://127.0.0.1:3000',
-    socketUrl: 'http://127.0.0.1:3000',
+    baseUrl: 'http://192.168.1.19:3001',
+    socketUrl: 'http://192.168.1.19:3001',
     environment: Environment.dev,
   );
 
-  // Android Emulator
-  // 10.0.2.2 points to the host computer
+  // Android Emulator (10.0.2.2 points to host)
   static const EnvConfig emulator = EnvConfig(
-    baseUrl: 'http://10.0.2.2:3000',
-    socketUrl: 'http://10.0.2.2:3000',
+    baseUrl: 'http://10.0.2.2:3001',
+    socketUrl: 'http://10.0.2.2:3001',
     environment: Environment.emulator,
   );
 
