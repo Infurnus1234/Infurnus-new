@@ -96,7 +96,11 @@ async function startServer() {
           clientId: env.CASHFREE_CLIENT_ID,
           clientSecret: env.CASHFREE_CLIENT_SECRET,
           apiVersion: env.CASHFREE_API_VERSION,
-          baseUrl: env.CASHFREE_BASE_URL,
+          baseUrl:
+            env.CASHFREE_ENV === 'production' &&
+            env.CASHFREE_BASE_URL === 'https://sandbox.cashfree.com/pg'
+              ? 'https://api.cashfree.com/pg'
+              : env.CASHFREE_BASE_URL,
         })
       : undefined;
 

@@ -45,35 +45,48 @@ class WelcomeScreen extends StatelessWidget {
                     child: Column(
                       children: [
                         Container(
-                          padding: const EdgeInsets.all(12),
+                          width: 76,
+                          height: 76,
                           decoration: BoxDecoration(
-                            color: AppColors.primaryGreen,
-                            borderRadius: BorderRadius.circular(12),
+                            color: Colors.black,
+                            borderRadius: BorderRadius.circular(18),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.emeraldNeon.withValues(alpha: 0.45),
+                                blurRadius: 28,
+                                spreadRadius: 2,
+                              ),
+                            ],
                           ),
-                          child: const Text(
-                            'N',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(18),
+                            child: Image.asset(
+                              'assets/images/logo.png',
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  const Icon(Icons.flash_on,
+                                      color: AppColors.emeraldNeon, size: 36),
                             ),
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 14),
                         const Text(
                           'INFURNUS',
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 2,
+                            fontSize: 26,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 3,
                           ),
                         ),
-                        const Text(
+                        const SizedBox(height: 4),
+                        Text(
                           'Move • Rent • Deliver',
                           style: TextStyle(
-                            color: Colors.white70,
+                            color: AppColors.emeraldNeon.withValues(alpha: 0.85),
                             fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 1.5,
                           ),
                         ),
                       ],

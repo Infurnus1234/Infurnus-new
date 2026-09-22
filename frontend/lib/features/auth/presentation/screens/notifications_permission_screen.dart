@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../shared/widgets/infurnus_brand_mark.dart';
 
 class NotificationsPermissionScreen extends StatelessWidget {
   const NotificationsPermissionScreen({super.key});
@@ -23,35 +24,10 @@ class NotificationsPermissionScreen extends StatelessWidget {
           child: Column(
             children: [
               // Logo
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryGreen,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Text(
-                      'N',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'INFURNUS',
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1,
-                    ),
-                  ),
-                ],
+              const InfurnusBrandMark(
+                iconSize: 32,
+                fontSize: 14,
+                spacing: 8,
               ),
               const SizedBox(height: 32),
               const Text(
@@ -83,7 +59,7 @@ class NotificationsPermissionScreen extends StatelessWidget {
                         width: 150,
                         height: 150,
                         decoration: BoxDecoration(
-                          color: AppColors.primaryGreen.withOpacity(0.1),
+                          color: AppColors.primaryGreen.withValues(alpha: 0.1),
                           shape: BoxShape.circle,
                         ),
                       ),

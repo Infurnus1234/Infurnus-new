@@ -3,6 +3,8 @@ import { z } from 'zod';
 
 const envSchema = z
   .object({
+    NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
+
     PORT: z.coerce.number().int().positive().default(3000),
 
     DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
@@ -124,14 +126,20 @@ const envSchema = z
 
     RESEND_API_KEY: z.string().min(1, 'RESEND_API_KEY must not be empty').optional(),
 
+<<<<<<< HEAD
     RESEND_FROM_EMAIL: z
       .string()
       .email('RESEND_FROM_EMAIL must be a valid email address')
       .default('onboarding@resend.dev'),
+=======
+    RESEND_FROM_EMAIL: z.string().min(1).optional(),
+>>>>>>> 96e87ec (Complete production readiness and frontend polish)
 
     // ============================================================
     // Cashfree Payment Gateway
     // ============================================================
+
+    CASHFREE_ENV: z.enum(['sandbox', 'production']).default('sandbox'),
 
     CASHFREE_CLIENT_ID: z.string().min(1).optional(),
 
@@ -184,6 +192,47 @@ const envSchema = z
         message: 'AUTH_CSRF_COOKIE_SECURE must be true when SameSite is none',
       });
     }
+
+    if (config.NODE_ENV === 'production') {
+      if (
+        config.JWT_ACCESS_SECRET === 'replace-with-a-random-secret-at-least-32-characters' ||
+        config.JWT_ACCESS_SECRET.includes('replace-with')
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['JWT_ACCESS_SECRET'],
+          message: 'JWT_ACCESS_SECRET must not use placeholder values in production',
+        });
+      }
+
+      if (!config.AUTH_REFRESH_COOKIE_SECURE) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['AUTH_REFRESH_COOKIE_SECURE'],
+          message: 'AUTH_REFRESH_COOKIE_SECURE must be true in production',
+        });
+      }
+
+      if (!config.AUTH_CSRF_COOKIE_SECURE) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['AUTH_CSRF_COOKIE_SECURE'],
+          message: 'AUTH_CSRF_COOKIE_SECURE must be true in production',
+        });
+      }
+
+      if (config.CASHFREE_ENV === 'production') {
+        if (!config.CASHFREE_CLIENT_ID || !config.CASHFREE_CLIENT_SECRET) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['CASHFREE_CLIENT_ID'],
+            message:
+              'CASHFREE_CLIENT_ID and CASHFREE_CLIENT_SECRET are required when CASHFREE_ENV is production',
+          });
+        }
+      }
+    }
   });
 
 export const env = envSchema.parse(process.env);
+
