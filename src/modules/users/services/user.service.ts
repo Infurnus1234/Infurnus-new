@@ -1,4 +1,5 @@
 import { AppError } from '../../../common/errors/app-error.js';
+import type { LogoutService } from '../../auth/services/logout.service.js';
 import type {
   CreateAddressInput,
   UpdateAddressInput,
@@ -9,7 +10,10 @@ import type { UserRepository } from '../repositories/user.repository.js';
 import type { UpdateUserData } from '../types/user.js';
 
 export class UserService {
-  constructor(private readonly repository: UserRepository) {}
+  constructor(
+    private readonly repository: UserRepository,
+    private readonly logoutService: LogoutService,
+  ) {}
 
   async getUser(id: string) {
     const user = await this.repository.findById(id);
@@ -55,6 +59,16 @@ export class UserService {
 
       throw error;
     }
+  }
+
+  async deleteAccount(id: string): Promise<void> {
+    const deleted = await this.repository.softDelete(id);
+
+    if (!deleted) {
+      throw new AppError('USER_NOT_FOUND', 'User not found', 404);
+    }
+
+    await this.logoutService.logoutAllForUser(id);
   }
 
   async createAddress(userId: string, data: CreateAddressInput) {

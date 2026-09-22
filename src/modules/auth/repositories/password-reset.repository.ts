@@ -1,79 +1,128 @@
-import { pool } from '../../../infrastructure/database/postgres.js';
+import type { Pool } from 'pg';
+
+export interface PasswordResetUser {
+  id: string;
+  email: string;
+}
 
 export interface CreatePasswordResetChallengeData {
   userId: string;
   email: string;
-  otpProvider: string;
+  sessionTokenHash: string;
   providerSessionId: string;
-  encryptedProviderSessionToken: string;
-  providerExpiresAt: Date;
+  providerSessionTokenEncrypted: string;
   expiresAt: Date;
-  lastOtpSentAt: Date;
+  lastSentAt: Date;
 }
 
 export interface PasswordResetChallenge {
   id: string;
   userId: string;
   email: string;
-  otpProvider: string;
+  sessionTokenHash: string;
   providerSessionId: string;
-  encryptedProviderSessionToken: string;
-  providerExpiresAt: Date;
+  providerSessionTokenEncrypted: string;
+  attempts: number;
+  maxAttempts: number;
   expiresAt: Date;
+  lastSentAt: Date;
   verifiedAt: Date | null;
   consumedAt: Date | null;
 }
 
 export interface PasswordResetRepository {
+  findActiveUserByEmail(email: string): Promise<PasswordResetUser | null>;
+
   create(data: CreatePasswordResetChallengeData): Promise<{ id: string }>;
 
-  findActiveById(id: string): Promise<PasswordResetChallenge | null>;
+  findBySessionTokenHash(sessionTokenHash: string): Promise<PasswordResetChallenge | null>;
 
-  consume(id: string): Promise<boolean>;
+  markVerified(sessionTokenHash: string): Promise<boolean>;
+
+  resend(
+    sessionTokenHash: string,
+    providerSessionId: string,
+    providerSessionTokenEncrypted: string,
+    expiresAt: Date,
+    lastSentAt: Date,
+  ): Promise<boolean>;
+
+  consume(sessionTokenHash: string): Promise<boolean>;
 }
 
-export class PostgresPasswordResetRepository
-  implements PasswordResetRepository
-{
-  async create(
-    data: CreatePasswordResetChallengeData,
-  ): Promise<{ id: string }> {
-    // Remove expired active challenges for this user first.
-    await pool.query(
+export class PostgresPasswordResetRepository implements PasswordResetRepository {
+  constructor(private readonly pool: Pool) {}
+
+  async findActiveUserByEmail(email: string): Promise<PasswordResetUser | null> {
+    const result = await this.pool.query<PasswordResetUser>(
       `
-        DELETE FROM password_reset_challenges
-        WHERE user_id = $1
-          AND consumed_at IS NULL
-          AND verified_at IS NULL
-          AND expires_at <= NOW()
+        SELECT
+          id,
+          email
+        FROM users
+        WHERE email = $1
+          AND deleted_at IS NULL
+        LIMIT 1
       `,
-      [data.userId],
+      [email],
     );
 
-    const result = await pool.query<{ id: string }>(
+    return result.rows[0] ?? null;
+  }
+
+  async create(data: CreatePasswordResetChallengeData): Promise<{ id: string }> {
+    const result = await this.pool.query<{ id: string }>(
       `
         INSERT INTO password_reset_challenges (
           user_id,
           email,
-          otp_provider,
+          session_token_hash,
           provider_session_id,
-          encrypted_provider_session_token,
-          provider_expires_at,
+          provider_session_token_encrypted,
           expires_at,
-          last_otp_sent_at
+          last_sent_at,
+          attempts,
+          verified_at,
+          consumed_at,
+          updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        VALUES (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          $6,
+          $7,
+          0,
+          NULL,
+          NULL,
+          NOW()
+        )
+        ON CONFLICT (user_id)
+        WHERE consumed_at IS NULL
+        DO UPDATE SET
+          email = EXCLUDED.email,
+          session_token_hash = EXCLUDED.session_token_hash,
+          provider_session_id = EXCLUDED.provider_session_id,
+          provider_session_token_encrypted =
+            EXCLUDED.provider_session_token_encrypted,
+          expires_at = EXCLUDED.expires_at,
+          last_sent_at = EXCLUDED.last_sent_at,
+          attempts = 0,
+          verified_at = NULL,
+          consumed_at = NULL,
+          updated_at = NOW()
         RETURNING id
       `,
       [
         data.userId,
         data.email,
-        data.otpProvider,
+        data.sessionTokenHash,
         data.providerSessionId,
-        data.encryptedProviderSessionToken,
-        data.providerExpiresAt,
+        data.providerSessionTokenEncrypted,
         data.expiresAt,
-        data.lastOtpSentAt,
+        data.lastSentAt,
       ],
     );
 
@@ -83,55 +132,96 @@ export class PostgresPasswordResetRepository
       throw new Error('Failed to create password reset challenge');
     }
 
-    return { id: row.id };
+    return {
+      id: row.id,
+    };
   }
 
-  async findActiveById(
-    id: string,
-  ): Promise<PasswordResetChallenge | null> {
-    const result = await pool.query<PasswordResetChallenge>(
+  async findBySessionTokenHash(sessionTokenHash: string): Promise<PasswordResetChallenge | null> {
+    const result = await this.pool.query<PasswordResetChallenge>(
       `
         SELECT
           id,
           user_id AS "userId",
           email,
-          otp_provider AS "otpProvider",
+          TRIM(session_token_hash) AS "sessionTokenHash",
           provider_session_id AS "providerSessionId",
-          encrypted_provider_session_token AS
-            "encryptedProviderSessionToken",
-          provider_expires_at AS "providerExpiresAt",
+          provider_session_token_encrypted
+            AS "providerSessionTokenEncrypted",
+          attempts,
+          max_attempts AS "maxAttempts",
           expires_at AS "expiresAt",
+          last_sent_at AS "lastSentAt",
           verified_at AS "verifiedAt",
           consumed_at AS "consumedAt"
         FROM password_reset_challenges
-        WHERE id = $1
-          AND consumed_at IS NULL
-          AND verified_at IS NULL
-          AND expires_at > NOW()
-          AND provider_expires_at > NOW()
+        WHERE session_token_hash = $1
         LIMIT 1
       `,
-      [id],
+      [sessionTokenHash],
     );
 
     return result.rows[0] ?? null;
   }
 
-  async consume(id: string): Promise<boolean> {
-    const result = await pool.query(
+  async markVerified(sessionTokenHash: string): Promise<boolean> {
+    const result = await this.pool.query(
       `
         UPDATE password_reset_challenges
         SET
           verified_at = NOW(),
-          consumed_at = NOW(),
           updated_at = NOW()
-        WHERE id = $1
+        WHERE session_token_hash = $1
           AND consumed_at IS NULL
           AND verified_at IS NULL
           AND expires_at > NOW()
-          AND provider_expires_at > NOW()
       `,
-      [id],
+      [sessionTokenHash],
+    );
+
+    return result.rowCount === 1;
+  }
+
+  async resend(
+    sessionTokenHash: string,
+    providerSessionId: string,
+    providerSessionTokenEncrypted: string,
+    expiresAt: Date,
+    lastSentAt: Date,
+  ): Promise<boolean> {
+    const result = await this.pool.query(
+      `
+        UPDATE password_reset_challenges
+        SET
+          provider_session_id = $2,
+          provider_session_token_encrypted = $3,
+          attempts = 0,
+          expires_at = $4,
+          last_sent_at = $5,
+          verified_at = NULL,
+          consumed_at = NULL,
+          updated_at = NOW()
+        WHERE session_token_hash = $1
+          AND consumed_at IS NULL
+      `,
+      [sessionTokenHash, providerSessionId, providerSessionTokenEncrypted, expiresAt, lastSentAt],
+    );
+
+    return result.rowCount === 1;
+  }
+
+  async consume(sessionTokenHash: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `
+        UPDATE password_reset_challenges
+        SET
+          consumed_at = NOW(),
+          updated_at = NOW()
+        WHERE session_token_hash = $1
+          AND consumed_at IS NULL
+          AND verified_at IS NOT NULL
+      `,
+      [sessionTokenHash],
     );
 
     return result.rowCount === 1;

@@ -9,6 +9,8 @@ import { env } from './config/env.js';
 import { createAuthController } from './modules/auth/controllers/auth.controller.js';
 import type { OtpProvider } from './modules/auth/providers/otp.provider.js';
 import { createAuthRouter } from './modules/auth/routes/auth.routes.js';
+import { PostgresRefreshTokenRepository } from './modules/auth/repositories/refresh-token.repository.js';
+import { LogoutService } from './modules/auth/services/logout.service.js';
 
 import { PartnerController } from './modules/partners/controllers/partner.controller.js';
 import type { PartnerRepository } from './modules/partners/repositories/partner.repository.js';
@@ -79,6 +81,12 @@ import type { SupportRepository } from './modules/support/repositories/support.r
 import { SupportService } from './modules/support/services/support.service.js';
 import { SupportController } from './modules/support/controllers/support.controller.js';
 import { createSupportRouter } from './modules/support/routes/support.routes.js';
+
+// ============================================================
+// Notifications
+// ============================================================
+
+import { createDeviceTokenRouter } from './modules/notifications/device-tokens/routes/device-token.routes.js';
 
 export interface AppOptions {
   enableAuthRateLimiting?: boolean;
@@ -171,7 +179,12 @@ export function createApp(
       },
     }),
   );
+
   app.use(cookieParser());
+
+  // ==========================================================
+  // Health
+  // ==========================================================
 
   // Liveness health check
   app.get('/health', (_req, res) => {
@@ -189,6 +202,7 @@ export function createApp(
     try {
       if (options.readinessCheck) {
         const isReady = await options.readinessCheck();
+
         if (!isReady) {
           res.status(503).json({
             success: false,
@@ -201,6 +215,7 @@ export function createApp(
         }
       } else if (env.NODE_ENV !== 'test') {
         const { checkDatabaseConnection } = await import('./infrastructure/database/postgres.js');
+
         await checkDatabaseConnection();
       }
 
@@ -222,6 +237,10 @@ export function createApp(
       });
     }
   });
+
+  // ==========================================================
+  // Repository/service composition
+  // ==========================================================
 
   let partnerRepository: PartnerRepository | undefined;
   let vehicleRepository: VehicleRepository | undefined;
@@ -263,7 +282,8 @@ export function createApp(
   // ==========================================================
 
   if (repository) {
-    const controller = new UserController(new UserService(repository));
+    const logoutService = new LogoutService(new PostgresRefreshTokenRepository());
+    const controller = new UserController(new UserService(repository, logoutService));
 
     app.use('/users', createUserRouter(controller));
   }
@@ -386,6 +406,7 @@ export function createApp(
 
   if (fleetRepository) {
     const fleetController = new FleetController(new FleetService(fleetRepository));
+
     app.use('/fleet', createFleetRouter(fleetController));
   }
 
@@ -395,6 +416,7 @@ export function createApp(
 
   if (providerBankRepository) {
     const providerController = new ProviderController(new ProviderService(providerBankRepository));
+
     app.use('/provider', createProviderRouter(providerController));
   }
 
@@ -404,8 +426,15 @@ export function createApp(
 
   if (supportRepository) {
     const supportController = new SupportController(new SupportService(supportRepository));
+
     app.use('/support', createSupportRouter(supportController));
   }
+
+  // ==========================================================
+  // Notification Device Tokens
+  // ==========================================================
+
+  app.use('/notifications/devices', createDeviceTokenRouter());
 
   // ==========================================================
   // Authentication
@@ -417,6 +446,7 @@ export function createApp(
     '/auth',
     createAuthRouter(authController, {
       enableRateLimiting: options.enableAuthRateLimiting ?? true,
+
       enableCsrfProtection: options.enableAuthCsrfProtection ?? true,
     }),
   );

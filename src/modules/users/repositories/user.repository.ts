@@ -15,6 +15,7 @@ export interface UserRepository {
   create(data: CreateUserData): Promise<PublicUser>;
   findById(id: string): Promise<PublicUser | null>;
   update(id: string, data: UpdateUserData): Promise<PublicUser | null>;
+  softDelete(id: string): Promise<boolean>;
   createAddress(userId: string, data: CreateAddressData): Promise<UserAddress>;
   updateAddress(
     userId: string,
@@ -165,22 +166,35 @@ export class PostgresUserRepository implements UserRepository {
     return result.rows[0] ?? null;
   }
 
+  async softDelete(id: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `UPDATE users
+       SET deleted_at = NOW(),
+           updated_at = NOW()
+       WHERE id = $1
+         AND deleted_at IS NULL`,
+      [id],
+    );
+
+    return result.rowCount === 1;
+  }
+
   async createAddress(userId: string, data: CreateAddressData): Promise<UserAddress> {
     const result = await this.pool.query<UserAddress>(
       `INSERT INTO user_addresses
-         (
-           user_id,
-           label,
-           address_line_1,
-           address_line_2,
-           city,
-           state,
-           postal_code,
-           country,
-           latitude,
-           longitude,
-           is_default
-         )
+       (
+         user_id,
+         label,
+         address_line_1,
+         address_line_2,
+         city,
+         state,
+         postal_code,
+         country,
+         latitude,
+         longitude,
+         is_default
+       )
        SELECT
          $1,
          $2,

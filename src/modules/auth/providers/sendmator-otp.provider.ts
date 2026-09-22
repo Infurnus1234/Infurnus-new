@@ -57,38 +57,13 @@ export class SendmatorOtpProvider implements OtpProvider {
         channelsSent: response.channels_sent,
       });
 
-      const sessionId = response.session_id;
-      const sessionToken = response.session_token;
-      const expiresAt = response.expires_at;
-
-      if (
-        typeof sessionId !== 'string' ||
-        sessionId.length === 0 ||
-        typeof sessionToken !== 'string' ||
-        sessionToken.length === 0 ||
-        typeof expiresAt !== 'string' ||
-        expiresAt.length === 0
-      ) {
-        throw new AppError(
-          'OTP_PROVIDER_INVALID_RESPONSE',
-          'OTP provider returned an invalid session response',
-          502,
-        );
-      }
-
-      return {
-        sessionId,
-        sessionToken,
-        expiresAt,
-      };
+      return this.parseSendResponse(response);
     } catch (error: unknown) {
+      this.logProviderError('Sendmator SMS OTP send failed', error);
+
       if (error instanceof AppError) {
         throw error;
       }
-
-      console.error('Sendmator SMS OTP send failed', {
-        errorType: error instanceof Error ? error.constructor.name : typeof error,
-      });
 
       throw new AppError('OTP_PROVIDER_SEND_FAILED', 'Failed to send verification code', 502);
     }
@@ -111,13 +86,11 @@ export class SendmatorOtpProvider implements OtpProvider {
 
       return this.parseVerificationResponse(response);
     } catch (error: unknown) {
+      this.logProviderError('Sendmator SMS OTP verification failed', error);
+
       if (error instanceof AppError) {
         throw error;
       }
-
-      console.error('Sendmator SMS OTP verification failed', {
-        errorType: error instanceof Error ? error.constructor.name : typeof error,
-      });
 
       throw new AppError('OTP_PROVIDER_VERIFY_FAILED', 'Failed to verify verification code', 502);
     }
@@ -153,38 +126,13 @@ export class SendmatorOtpProvider implements OtpProvider {
         channelsSent: response.channels_sent,
       });
 
-      const sessionId = response.session_id;
-      const sessionToken = response.session_token;
-      const expiresAt = response.expires_at;
-
-      if (
-        typeof sessionId !== 'string' ||
-        sessionId.length === 0 ||
-        typeof sessionToken !== 'string' ||
-        sessionToken.length === 0 ||
-        typeof expiresAt !== 'string' ||
-        expiresAt.length === 0
-      ) {
-        throw new AppError(
-          'OTP_PROVIDER_INVALID_RESPONSE',
-          'OTP provider returned an invalid session response',
-          502,
-        );
-      }
-
-      return {
-        sessionId,
-        sessionToken,
-        expiresAt,
-      };
+      return this.parseSendResponse(response);
     } catch (error: unknown) {
+      this.logProviderError('Sendmator email OTP send failed', error);
+
       if (error instanceof AppError) {
         throw error;
       }
-
-      console.error('Sendmator email OTP send failed', {
-        errorType: error instanceof Error ? error.constructor.name : typeof error,
-      });
 
       throw new AppError('OTP_PROVIDER_SEND_FAILED', 'Failed to send verification code', 502);
     }
@@ -207,13 +155,11 @@ export class SendmatorOtpProvider implements OtpProvider {
 
       return this.parseVerificationResponse(response);
     } catch (error: unknown) {
+      this.logProviderError('Sendmator email OTP verification failed', error);
+
       if (error instanceof AppError) {
         throw error;
       }
-
-      console.error('Sendmator email OTP verification failed', {
-        errorType: error instanceof Error ? error.constructor.name : typeof error,
-      });
 
       throw new AppError('OTP_PROVIDER_VERIFY_FAILED', 'Failed to verify verification code', 502);
     }
@@ -226,7 +172,42 @@ export class SendmatorOtpProvider implements OtpProvider {
   }
 
   // ============================================================
-  // Shared Verification Response Validation
+  // SEND RESPONSE VALIDATION
+  // ============================================================
+
+  private parseSendResponse(response: SendmatorSendResponse): {
+    sessionId: string;
+    sessionToken: string;
+    expiresAt: string;
+  } {
+    const sessionId = response.session_id;
+    const sessionToken = response.session_token;
+    const expiresAt = response.expires_at;
+
+    if (
+      typeof sessionId !== 'string' ||
+      sessionId.length === 0 ||
+      typeof sessionToken !== 'string' ||
+      sessionToken.length === 0 ||
+      typeof expiresAt !== 'string' ||
+      expiresAt.length === 0
+    ) {
+      throw new AppError(
+        'OTP_PROVIDER_INVALID_RESPONSE',
+        'OTP provider returned an invalid session response',
+        502,
+      );
+    }
+
+    return {
+      sessionId,
+      sessionToken,
+      expiresAt,
+    };
+  }
+
+  // ============================================================
+  // VERIFICATION RESPONSE VALIDATION
   // ============================================================
 
   private parseVerificationResponse(response: SendmatorVerifyResponse): {
@@ -255,7 +236,7 @@ export class SendmatorOtpProvider implements OtpProvider {
   }
 
   // ============================================================
-  // Shared Resend
+  // RESEND
   // ============================================================
 
   private async resendOtp(
@@ -279,19 +260,64 @@ export class SendmatorOtpProvider implements OtpProvider {
         );
       }
 
+      console.info(`Sendmator ${channel} OTP resend completed`, {
+        expiresAtPresent: true,
+      });
+
       return {
         expiresAt,
       };
     } catch (error: unknown) {
+      this.logProviderError(`Sendmator ${channel} OTP resend failed`, error);
+
       if (error instanceof AppError) {
         throw error;
       }
 
-      console.error(`Sendmator ${channel} OTP resend failed`, {
-        errorType: error instanceof Error ? error.constructor.name : typeof error,
-      });
-
       throw new AppError('OTP_PROVIDER_RESEND_FAILED', 'Failed to resend verification code', 502);
     }
+  }
+
+  // ============================================================
+  // SAFE PROVIDER ERROR LOGGING
+  // ============================================================
+
+  private logProviderError(context: string, error: unknown): void {
+    if (error instanceof AppError) {
+      console.error(context, {
+        errorType: 'AppError',
+        code: error.code,
+        statusCode: error.statusCode,
+        message: error.message,
+      });
+
+      return;
+    }
+
+    if (error instanceof Error) {
+      const providerError = error as Error & {
+        status?: number;
+        statusCode?: number;
+        code?: string;
+        type?: string;
+        name?: string;
+      };
+
+      console.error(context, {
+        errorType: error.constructor.name,
+        name: providerError.name,
+        code: providerError.code,
+        type: providerError.type,
+        status: providerError.status,
+        statusCode: providerError.statusCode,
+        message: providerError.message,
+      });
+
+      return;
+    }
+
+    console.error(context, {
+      errorType: typeof error,
+    });
   }
 }

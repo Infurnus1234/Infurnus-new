@@ -89,6 +89,10 @@ class InMemoryUserRepository implements UserRepository {
     return this.users.get(id) ?? null;
   }
 
+  async softDelete(id: string): Promise<boolean> {
+    return this.users.delete(id);
+  }
+
   async update(id: string, data: UpdateUserData): Promise<PublicUser | null> {
     const existing = this.users.get(id);
 
