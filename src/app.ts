@@ -83,6 +83,7 @@ import { createSupportRouter } from './modules/support/routes/support.routes.js'
 export interface AppOptions {
   enableAuthRateLimiting?: boolean;
   enableAuthCsrfProtection?: boolean;
+  readinessCheck?: () => Promise<boolean>;
 }
 
 // ============================================================
@@ -146,10 +147,12 @@ export function createApp(
 
   app.use(helmet());
 
+  const allowedOrigins = env.CORS_ORIGIN.split(',').map((origin) => origin.trim());
+
   app.use(
     cors({
       origin: (origin, callback) => {
-        if (!origin || origin === env.CORS_ORIGIN) {
+        if (!origin || allowedOrigins.includes(origin)) {
           callback(null, true);
           return;
         }
@@ -162,6 +165,7 @@ export function createApp(
 
   app.use(
     express.json({
+      limit: '1mb',
       verify: (req, _res, buf) => {
         (req as express.Request & { rawBody?: string }).rawBody = buf.toString('utf8');
       },
@@ -169,13 +173,54 @@ export function createApp(
   );
   app.use(cookieParser());
 
+  // Liveness health check
   app.get('/health', (_req, res) => {
     res.json({
       success: true,
       data: {
         status: 'ok',
+        uptime: Math.floor(process.uptime()),
       },
     });
+  });
+
+  // Readiness health check (database connectivity verification)
+  app.get(['/health/ready', '/ready'], async (_req, res) => {
+    try {
+      if (options.readinessCheck) {
+        const isReady = await options.readinessCheck();
+        if (!isReady) {
+          res.status(503).json({
+            success: false,
+            error: {
+              code: 'SERVICE_UNAVAILABLE',
+              message: 'Database check failed',
+            },
+          });
+          return;
+        }
+      } else if (env.NODE_ENV !== 'test') {
+        const { checkDatabaseConnection } = await import('./infrastructure/database/postgres.js');
+        await checkDatabaseConnection();
+      }
+
+      res.json({
+        success: true,
+        data: {
+          status: 'ok',
+          ready: true,
+          database: 'connected',
+        },
+      });
+    } catch {
+      res.status(503).json({
+        success: false,
+        error: {
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'Database connection check failed',
+        },
+      });
+    }
   });
 
   let partnerRepository: PartnerRepository | undefined;
@@ -208,6 +253,8 @@ export function createApp(
 
     if (third && 'create' in third) {
       vehicleRepository = third;
+    } else if (third) {
+      options = third;
     }
   }
 
