@@ -34,7 +34,7 @@ describe('Health & Readiness endpoints', () => {
   it('GET /health/ready returns 503 when DB readiness fails', async () => {
     const readinessCheck = vi.fn().mockResolvedValueOnce(false);
 
-    const app = createApp(undefined, undefined, {
+    const app = createApp({} as any, undefined, {
       readinessCheck,
     });
 
