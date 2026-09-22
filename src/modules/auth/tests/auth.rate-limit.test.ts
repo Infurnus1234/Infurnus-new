@@ -75,6 +75,30 @@ const mockHandlers = {
       data: { status: 'login-resend-email-ok' },
     });
   }),
+  forgotPassword: vi.fn((_req, res) => {
+    res.status(200).json({
+      success: true,
+      data: { status: 'forgot-password-ok' },
+    });
+  }),
+
+  resetPassword: vi.fn((_req, res) => {
+    res.status(200).json({
+      success: true,
+      data: { status: 'reset-password-ok' },
+    });
+  }),
+
+  changePassword: vi.fn((_req, res) => {
+    res.status(200).json({
+      success: true,
+      data: { status: 'change-password-ok' },
+    });
+  }),
+
+  deleteAccount: vi.fn((_req, res) => {
+    res.status(204).send();
+  }),
 
   refresh: vi.fn((_req, res) => {
     res.status(200).json({

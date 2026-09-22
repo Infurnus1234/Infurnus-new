@@ -140,6 +140,32 @@ const mockHandlers = {
       },
     });
   }),
+  forgotPassword: vi.fn((_req, res) => {
+    res.status(200).json({
+      success: true,
+      data: {
+        challengeId: 'challenge-id',
+      },
+    });
+  }),
+
+  resetPassword: vi.fn((_req, res) => {
+    res.status(200).json({
+      success: true,
+      message: 'Password reset successfully',
+    });
+  }),
+
+  changePassword: vi.fn((_req, res) => {
+    res.status(200).json({
+      success: true,
+      message: 'Password changed successfully',
+    });
+  }),
+
+  deleteAccount: vi.fn((_req, res) => {
+    res.status(204).send();
+  }),
 
   refresh: vi.fn((_req, res) => {
     res.cookie('infurnus_refresh_token', 'rotated-refresh-token', {
