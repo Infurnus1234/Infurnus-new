@@ -27,25 +27,33 @@ class InfurnusBrandMark extends StatelessWidget {
           width: iconSize,
           height: iconSize,
           decoration: BoxDecoration(
-            color: AppColors.primaryGreen,
-            borderRadius: BorderRadius.circular(iconSize * 0.28),
+            color: Colors.black,
+            borderRadius: BorderRadius.circular(iconSize * 0.22),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primaryGreen.withValues(alpha: 0.3),
+                color: AppColors.emeraldNeon.withValues(alpha: 0.38),
                 blurRadius: iconSize * 0.35,
-                offset: Offset(0, iconSize * 0.12),
+                spreadRadius: 0.5,
               ),
             ],
           ),
-          alignment: Alignment.center,
-          child: Text(
-            'N',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: iconSize * 0.58,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0,
-              height: 1.0,
+          clipBehavior: Clip.antiAlias,
+          child: Image.asset(
+            'assets/images/logo.jpg',
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) => Container(
+              color: AppColors.primaryGreen,
+              alignment: Alignment.center,
+              child: Text(
+                'N',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: iconSize * 0.58,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0,
+                  height: 1.0,
+                ),
+              ),
             ),
           ),
         ),

@@ -3,6 +3,8 @@ import { z } from 'zod';
 
 const envSchema = z
   .object({
+    NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
+
     PORT: z.coerce.number().int().positive().default(3000),
 
     DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
@@ -65,7 +67,11 @@ const envSchema = z
 
     AUTH_OTP_RESEND_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
 
-    AUTH_OTP_RESEND_COOLDOWN_SECONDS: z.coerce.number().int().positive().default(60),
+    AUTH_OTP_RESEND_COOLDOWN_SECONDS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(60),
 
     AUTH_REFRESH_RATE_LIMIT_WINDOW_MS: z.coerce
       .number()
@@ -83,17 +89,41 @@ const envSchema = z
 
     GOOGLE_MAPS_API_KEY: z.string().min(1).optional(),
 
-    GOOGLE_ROUTE_RECALCULATION_INTERVAL_SECONDS: z.coerce.number().int().positive().default(30),
+    GOOGLE_ROUTE_RECALCULATION_INTERVAL_SECONDS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(30),
 
-    GOOGLE_ROUTE_RECALCULATION_DISTANCE_METERS: z.coerce.number().positive().default(500),
+    GOOGLE_ROUTE_RECALCULATION_DISTANCE_METERS: z.coerce
+      .number()
+      .positive()
+      .default(500),
 
-    GOOGLE_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+    GOOGLE_REQUEST_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(5000),
 
-    GOOGLE_MAX_RETRIES: z.coerce.number().int().min(0).max(3).default(2),
+    GOOGLE_MAX_RETRIES: z.coerce
+      .number()
+      .int()
+      .min(0)
+      .max(3)
+      .default(2),
 
-    GOOGLE_PLACES_MIN_QUERY_LENGTH: z.coerce.number().int().min(1).default(3),
+    GOOGLE_PLACES_MIN_QUERY_LENGTH: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .default(3),
 
-    GOOGLE_PLACES_MIN_INTERVAL_MS: z.coerce.number().int().min(0).default(300),
+    GOOGLE_PLACES_MIN_INTERVAL_MS: z.coerce
+      .number()
+      .int()
+      .min(0)
+      .default(300),
 
     AUTH_LOGOUT_RATE_LIMIT_WINDOW_MS: z.coerce
       .number()
@@ -101,28 +131,41 @@ const envSchema = z
       .positive()
       .default(15 * 60 * 1000),
 
-    AUTH_LOGOUT_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(30),
+    AUTH_LOGOUT_RATE_LIMIT_MAX: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(30),
 
-    AUTH_RATE_LIMIT_ENABLED: z.preprocess((val) => {
-      if (typeof val === 'string') {
-        if (val.toLowerCase() === 'false') return false;
-        if (val.toLowerCase() === 'true') return true;
-      }
+    AUTH_RATE_LIMIT_ENABLED: z.preprocess(
+      (val) => {
+        if (typeof val === 'string') {
+          if (val.toLowerCase() === 'false') return false;
+          if (val.toLowerCase() === 'true') return true;
+        }
 
-      return val;
-    }, z.coerce.boolean().default(true)),
+        return val;
+      },
+      z.coerce.boolean().default(true),
+    ),
 
     // ============================================================
     // Sendmator
     // ============================================================
 
-    SENDMATOR_API_KEY: z.string().min(1, 'SENDMATOR_API_KEY must not be empty').optional(),
+    SENDMATOR_API_KEY: z
+      .string()
+      .min(1, 'SENDMATOR_API_KEY must not be empty')
+      .optional(),
 
     // ============================================================
     // Resend Email Provider
     // ============================================================
 
-    RESEND_API_KEY: z.string().min(1, 'RESEND_API_KEY must not be empty').optional(),
+    RESEND_API_KEY: z
+      .string()
+      .min(1, 'RESEND_API_KEY must not be empty')
+      .optional(),
 
     RESEND_FROM_EMAIL: z
       .string()
@@ -133,18 +176,40 @@ const envSchema = z
     // Cashfree Payment Gateway
     // ============================================================
 
-    CASHFREE_CLIENT_ID: z.string().min(1).optional(),
+    CASHFREE_ENV: z
+      .enum(['sandbox', 'production'])
+      .default('sandbox'),
 
-    CASHFREE_CLIENT_SECRET: z.string().min(1).optional(),
+    CASHFREE_CLIENT_ID: z
+      .string()
+      .min(1)
+      .optional(),
 
-    CASHFREE_API_VERSION: z.string().min(1).default('2023-08-01'),
+    CASHFREE_CLIENT_SECRET: z
+      .string()
+      .min(1)
+      .optional(),
 
-    CASHFREE_BASE_URL: z.string().url().default('https://sandbox.cashfree.com/pg'),
+    CASHFREE_API_VERSION: z
+      .string()
+      .min(1)
+      .default('2023-08-01'),
+
+    CASHFREE_BASE_URL: z
+      .string()
+      .url()
+      .default('https://sandbox.cashfree.com/pg'),
 
     // Cashfree Payouts
-    CASHFREE_PAYOUT_CLIENT_ID: z.string().min(1).optional(),
+    CASHFREE_PAYOUT_CLIENT_ID: z
+      .string()
+      .min(1)
+      .optional(),
 
-    CASHFREE_PAYOUT_CLIENT_SECRET: z.string().min(1).optional(),
+    CASHFREE_PAYOUT_CLIENT_SECRET: z
+      .string()
+      .min(1)
+      .optional(),
 
     // ============================================================
     // Authentication challenge encryption
@@ -164,25 +229,81 @@ const envSchema = z
           }
         },
         {
-          message: 'AUTH_OTP_ENCRYPTION_KEY must be a base64-encoded 32-byte key',
+          message:
+            'AUTH_OTP_ENCRYPTION_KEY must be a base64-encoded 32-byte key',
         },
       ),
   })
   .superRefine((config, ctx) => {
-    if (config.AUTH_REFRESH_COOKIE_SAME_SITE === 'none' && !config.AUTH_REFRESH_COOKIE_SECURE) {
+    if (
+      config.AUTH_REFRESH_COOKIE_SAME_SITE === 'none' &&
+      !config.AUTH_REFRESH_COOKIE_SECURE
+    ) {
       ctx.addIssue({
         code: 'custom',
         path: ['AUTH_REFRESH_COOKIE_SECURE'],
-        message: 'AUTH_REFRESH_COOKIE_SECURE must be true when SameSite is none',
+        message:
+          'AUTH_REFRESH_COOKIE_SECURE must be true when SameSite is none',
       });
     }
 
-    if (config.AUTH_CSRF_COOKIE_SAME_SITE === 'none' && !config.AUTH_CSRF_COOKIE_SECURE) {
+    if (
+      config.AUTH_CSRF_COOKIE_SAME_SITE === 'none' &&
+      !config.AUTH_CSRF_COOKIE_SECURE
+    ) {
       ctx.addIssue({
         code: 'custom',
         path: ['AUTH_CSRF_COOKIE_SECURE'],
-        message: 'AUTH_CSRF_COOKIE_SECURE must be true when SameSite is none',
+        message:
+          'AUTH_CSRF_COOKIE_SECURE must be true when SameSite is none',
       });
+    }
+
+    if (config.NODE_ENV === 'production') {
+      if (
+        config.JWT_ACCESS_SECRET ===
+          'replace-with-a-random-secret-at-least-32-characters' ||
+        config.JWT_ACCESS_SECRET.includes('replace-with')
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['JWT_ACCESS_SECRET'],
+          message:
+            'JWT_ACCESS_SECRET must not use placeholder values in production',
+        });
+      }
+
+      if (!config.AUTH_REFRESH_COOKIE_SECURE) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['AUTH_REFRESH_COOKIE_SECURE'],
+          message:
+            'AUTH_REFRESH_COOKIE_SECURE must be true in production',
+        });
+      }
+
+      if (!config.AUTH_CSRF_COOKIE_SECURE) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['AUTH_CSRF_COOKIE_SECURE'],
+          message:
+            'AUTH_CSRF_COOKIE_SECURE must be true in production',
+        });
+      }
+
+      if (config.CASHFREE_ENV === 'production') {
+        if (
+          !config.CASHFREE_CLIENT_ID ||
+          !config.CASHFREE_CLIENT_SECRET
+        ) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['CASHFREE_CLIENT_ID'],
+            message:
+              'CASHFREE_CLIENT_ID and CASHFREE_CLIENT_SECRET are required when CASHFREE_ENV is production',
+          });
+        }
+      }
     }
   });
 
