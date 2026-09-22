@@ -1,16 +1,21 @@
 import { Router } from 'express';
 
 import type { AuthControllerDependencies } from '../controllers/auth.controller.js';
+
 import { createAuthHandlers } from '../controllers/auth.controller.js';
 
 import { requireAuth } from '../middleware/auth.middleware.js';
+
 import { requireCsrf } from '../middleware/csrf.middleware.js';
 
 import {
+  authForgotPasswordRateLimiter,
   authLoginRateLimiter,
   authLogoutRateLimiter,
   authOtpResendRateLimiter,
   authOtpVerifyRateLimiter,
+  authPasswordResetRateLimiter,
+  authPasswordResetVerifyRateLimiter,
   authRefreshRateLimiter,
   authSignupRateLimiter,
 } from '../middleware/rate-limit.middleware.js';
@@ -30,9 +35,15 @@ export function createAuthRouter(
     signup,
     verifySignup,
     resendSignupOtp,
+
     login,
     verifyLogin,
     resendLoginOtp,
+
+    forgotPassword,
+    verifyPasswordResetOtp,
+    resetPassword,
+
     refresh,
     logout,
     logoutAll,
@@ -105,6 +116,55 @@ export function createAuthRouter(
     '/login/resend',
     ...(enableRateLimiting ? [authOtpResendRateLimiter] : []),
     resendLoginOtp,
+  );
+
+  // ==========================================================
+  // POST /auth/forgot-password
+  //
+  // Public endpoint.
+  //
+  // Sends a password reset OTP through the configured
+  // OTP provider.
+  //
+  // No authentication or CSRF protection is required.
+  // ==========================================================
+
+  router.post(
+    '/forgot-password',
+    ...(enableRateLimiting ? [authForgotPasswordRateLimiter] : []),
+    forgotPassword,
+  );
+
+  // ==========================================================
+  // POST /auth/forgot-password/verify
+  //
+  // Public endpoint.
+  //
+  // Verifies the password reset OTP.
+  //
+  // No authentication or CSRF protection is required.
+  // ==========================================================
+
+  router.post(
+    '/forgot-password/verify',
+    ...(enableRateLimiting ? [authPasswordResetVerifyRateLimiter] : []),
+    verifyPasswordResetOtp,
+  );
+
+  // ==========================================================
+  // POST /auth/reset-password
+  //
+  // Public endpoint.
+  //
+  // Requires a previously verified password reset session.
+  //
+  // No authentication or CSRF protection is required.
+  // ==========================================================
+
+  router.post(
+    '/reset-password',
+    ...(enableRateLimiting ? [authPasswordResetRateLimiter] : []),
+    resetPassword,
   );
 
   // ==========================================================

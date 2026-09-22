@@ -77,13 +77,6 @@ const mockHandlers = {
     });
   }),
 
-  // ----------------------------------------------------------
-  // POST /auth/login/verify
-  //
-  // Required by createAuthRouter so the router can be
-  // constructed successfully in this test.
-  // ----------------------------------------------------------
-
   verifyLogin: vi.fn((_req, res) => {
     res.cookie('infurnus_refresh_token', refreshToken, {
       httpOnly: true,
@@ -114,13 +107,6 @@ const mockHandlers = {
     });
   }),
 
-  // ----------------------------------------------------------
-  // POST /auth/login/resend
-  //
-  // Required by createAuthRouter so the router can be
-  // constructed successfully in this test.
-  // ----------------------------------------------------------
-
   resendLoginOtp: vi.fn((_req, res) => {
     res.status(200).json({
       success: true,
@@ -137,6 +123,36 @@ const mockHandlers = {
       data: {
         challengeId: 'challenge-id',
         expiresAt: new Date().toISOString(),
+      },
+    });
+  }),
+
+  forgotPassword: vi.fn((_req, res) => {
+    res.status(200).json({
+      success: true,
+      data: {
+        message: 'Password reset code sent.',
+        resetSessionToken: 'reset-session-token',
+        expiresAt: new Date().toISOString(),
+      },
+    });
+  }),
+
+  verifyPasswordResetOtp: vi.fn((_req, res) => {
+    res.status(200).json({
+      success: true,
+      data: {
+        resetSessionToken: 'verified-reset-session-token',
+        expiresAt: new Date().toISOString(),
+      },
+    });
+  }),
+
+  resetPassword: vi.fn((_req, res) => {
+    res.status(200).json({
+      success: true,
+      data: {
+        message: 'Password reset successfully.',
       },
     });
   }),
@@ -240,11 +256,8 @@ describe('Auth cookie strategy', () => {
     const cookieHeader = getCookieHeader(response);
 
     expect(cookieHeader).toContain('infurnus_refresh_token=');
-
     expect(cookieHeader).toContain('HttpOnly');
-
     expect(cookieHeader).toContain('SameSite=Strict');
-
     expect(cookieHeader).toContain('Path=/auth');
   });
 
@@ -263,11 +276,8 @@ describe('Auth cookie strategy', () => {
     const cookieHeader = getCookieHeader(response);
 
     expect(cookieHeader).toContain('infurnus_refresh_token=');
-
     expect(cookieHeader).toContain('HttpOnly');
-
     expect(cookieHeader).toContain('SameSite=Strict');
-
     expect(cookieHeader).toContain('Path=/auth');
   });
 
@@ -320,13 +330,9 @@ describe('Auth cookie strategy', () => {
     const cookieHeader = getCookieHeader(response);
 
     expect(cookieHeader).toContain('infurnus_refresh_token=');
-
     expect(cookieHeader).toContain('Expires=Thu, 01 Jan 1970 00:00:00 GMT');
-
     expect(cookieHeader).toContain('HttpOnly');
-
     expect(cookieHeader).toContain('SameSite=Strict');
-
     expect(cookieHeader).toContain('Path=/auth');
   });
 });

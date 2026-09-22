@@ -36,32 +36,83 @@ export function createRateLimiter({ windowMs, limit, keyGenerator }: RateLimiter
   });
 }
 
+// ============================================================
+// Login
+// ============================================================
+
 export const authLoginRateLimiter = createRateLimiter({
   windowMs: env.AUTH_LOGIN_RATE_LIMIT_WINDOW_MS,
   limit: env.AUTH_LOGIN_RATE_LIMIT_MAX,
 });
+
+// ============================================================
+// Signup
+// ============================================================
 
 export const authSignupRateLimiter = createRateLimiter({
   windowMs: env.AUTH_SIGNUP_RATE_LIMIT_WINDOW_MS,
   limit: env.AUTH_SIGNUP_RATE_LIMIT_MAX,
 });
 
+// ============================================================
+// OTP Verification
+// ============================================================
+
 export const authOtpVerifyRateLimiter = createRateLimiter({
   windowMs: env.AUTH_OTP_VERIFY_RATE_LIMIT_WINDOW_MS,
   limit: env.AUTH_OTP_VERIFY_RATE_LIMIT_MAX,
 });
+
+// ============================================================
+// OTP Resend
+// ============================================================
 
 export const authOtpResendRateLimiter = createRateLimiter({
   windowMs: env.AUTH_OTP_RESEND_RATE_LIMIT_WINDOW_MS,
   limit: env.AUTH_OTP_RESEND_RATE_LIMIT_MAX,
 });
 
+// ============================================================
+// Refresh Token
+// ============================================================
+
 export const authRefreshRateLimiter = createRateLimiter({
   windowMs: env.AUTH_REFRESH_RATE_LIMIT_WINDOW_MS,
   limit: env.AUTH_REFRESH_RATE_LIMIT_MAX,
 });
 
+// ============================================================
+// Logout
+// ============================================================
+
 export const authLogoutRateLimiter = createRateLimiter({
   windowMs: env.AUTH_LOGOUT_RATE_LIMIT_WINDOW_MS,
   limit: env.AUTH_LOGOUT_RATE_LIMIT_MAX,
+});
+
+// ============================================================
+// Forgot Password
+// ============================================================
+
+export const authForgotPasswordRateLimiter = createRateLimiter({
+  windowMs: env.AUTH_FORGOT_PASSWORD_RATE_LIMIT_WINDOW_MS,
+  limit: env.AUTH_FORGOT_PASSWORD_RATE_LIMIT_MAX,
+});
+
+// ============================================================
+// Forgot Password OTP Verification
+// ============================================================
+
+export const authPasswordResetVerifyRateLimiter = createRateLimiter({
+  windowMs: env.AUTH_PASSWORD_RESET_VERIFY_RATE_LIMIT_WINDOW_MS,
+  limit: env.AUTH_PASSWORD_RESET_VERIFY_RATE_LIMIT_MAX,
+});
+
+// ============================================================
+// Password Reset
+// ============================================================
+
+export const authPasswordResetRateLimiter = createRateLimiter({
+  windowMs: env.AUTH_PASSWORD_RESET_RATE_LIMIT_WINDOW_MS,
+  limit: env.AUTH_PASSWORD_RESET_RATE_LIMIT_MAX,
 });

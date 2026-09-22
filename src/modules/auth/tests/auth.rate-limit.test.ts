@@ -40,10 +40,6 @@ const mockHandlers = {
     });
   }),
 
-  // ----------------------------------------------------------
-  // POST /auth/login/verify
-  // ----------------------------------------------------------
-
   verifyLogin: vi.fn((_req, res) => {
     res.status(200).json({
       success: true,
@@ -58,10 +54,6 @@ const mockHandlers = {
     });
   }),
 
-  // ----------------------------------------------------------
-  // POST /auth/login/resend
-  // ----------------------------------------------------------
-
   resendLoginOtp: vi.fn((_req, res) => {
     res.status(200).json({
       success: true,
@@ -73,6 +65,36 @@ const mockHandlers = {
     res.status(200).json({
       success: true,
       data: { status: 'login-resend-email-ok' },
+    });
+  }),
+
+  forgotPassword: vi.fn((_req, res) => {
+    res.status(200).json({
+      success: true,
+      data: {
+        message: 'Password reset code sent.',
+        resetSessionToken: 'reset-session-token',
+        expiresAt: new Date().toISOString(),
+      },
+    });
+  }),
+
+  verifyPasswordResetOtp: vi.fn((_req, res) => {
+    res.status(200).json({
+      success: true,
+      data: {
+        resetSessionToken: 'verified-reset-session-token',
+        expiresAt: new Date().toISOString(),
+      },
+    });
+  }),
+
+  resetPassword: vi.fn((_req, res) => {
+    res.status(200).json({
+      success: true,
+      data: {
+        message: 'Password reset successfully.',
+      },
     });
   }),
 
@@ -111,6 +133,7 @@ vi.mock('../controllers/auth.controller.js', () => ({
 
 vi.mock('../../../config/env.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../config/env.js')>();
+
   return {
     ...actual,
     env: {

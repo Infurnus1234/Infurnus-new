@@ -178,3 +178,48 @@ export const resendLoginOtpSchema = z
     challengeId: z.string().uuid('Invalid login challenge ID'),
   })
   .strict();
+
+// ============================================================
+// Forgot Password
+// ============================================================
+
+export const forgotPasswordSchema = z
+  .object({
+    email: emailSchema,
+  })
+  .strict();
+
+// ============================================================
+// Forgot Password OTP Verification
+// ============================================================
+
+export const verifyPasswordResetOtpSchema = z
+  .object({
+    resetSessionToken: z.string().regex(/^[a-f0-9]{64}$/i, 'Invalid password reset session'),
+
+    otp: z.string().regex(/^\d{6}$/, 'OTP must be 6 digits'),
+  })
+  .strict();
+
+// ============================================================
+// Reset Password
+// ============================================================
+
+export const resetPasswordSchema = z
+  .object({
+    resetSessionToken: z.string().regex(/^[a-f0-9]{64}$/i, 'Invalid password reset session'),
+
+    password: passwordSchema,
+
+    confirmPassword: z.string().min(1, 'Please confirm your password'),
+  })
+  .strict()
+  .superRefine((data, ctx) => {
+    if (data.password !== data.confirmPassword) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['confirmPassword'],
+        message: 'Passwords do not match',
+      });
+    }
+  });

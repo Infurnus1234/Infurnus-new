@@ -10,17 +10,22 @@ import type { OtpProvider } from '../providers/otp.provider.js';
 import { PostgresAuthUserRepository } from '../repositories/auth-user.repository.js';
 import { PostgresLoginChallengeRepository } from '../repositories/login-challenge.repository.js';
 import { PostgresLoginRepository } from '../repositories/login.repository.js';
+import { PostgresPasswordResetRepository } from '../repositories/password-reset.repository.js';
 import { PostgresPendingSignupRepository } from '../repositories/pending-signup.repository.js';
 import { PostgresRefreshTokenRepository } from '../repositories/refresh-token.repository.js';
 import { PostgresSignupCompletionRepository } from '../repositories/signup-completion.repository.js';
 import { PostgresSignupUserRepository } from '../repositories/signup-user.repository.js';
+import { PostgresUserCredentialsRepository } from '../repositories/user-credentials.repository.js';
 
 import {
+  forgotPasswordSchema,
   loginSchema,
   resendLoginOtpSchema,
   resendSignupOtpSchema,
+  resetPasswordSchema,
   signupSchema,
   verifyLoginOtpSchema,
+  verifyPasswordResetOtpSchema,
   verifySignupOtpSchema,
 } from '../schemas/auth.schemas.js';
 
@@ -29,6 +34,7 @@ import { LoginService } from '../services/login.service.js';
 import { LoginVerificationService } from '../services/login-verification.service.js';
 import { LogoutService } from '../services/logout.service.js';
 import { OtpResendService } from '../services/otp-resend.service.js';
+import { PasswordResetService } from '../services/password-reset.service.js';
 import { RefreshTokenService } from '../services/refresh-token.service.js';
 import { SessionService } from '../services/session.service.js';
 import { SignupService } from '../services/signup.service.js';
@@ -36,9 +42,7 @@ import { SignupVerificationService } from '../services/signup-verification.servi
 import { TokenService } from '../services/token.service.js';
 
 import { clearCsrfTokenCookie, setCsrfTokenCookie } from '../utils/csrf-cookie.js';
-
 import { generateCsrfToken } from '../utils/csrf.js';
-
 import { clearRefreshTokenCookie, setRefreshTokenCookie } from '../utils/refresh-cookie.js';
 
 // ============================================================
@@ -53,6 +57,8 @@ export interface AuthControllerDependencies {
   loginService: LoginService;
   loginVerificationService: LoginVerificationService;
   loginResendService: LoginResendService;
+
+  passwordResetService: PasswordResetService;
 
   refreshTokenService: RefreshTokenService;
   logoutService: LogoutService;
@@ -81,6 +87,10 @@ export function createAuthController(
   const loginChallengeRepository = new PostgresLoginChallengeRepository(pool);
 
   const authUserRepository = new PostgresAuthUserRepository();
+
+  const passwordResetRepository = new PostgresPasswordResetRepository(pool);
+
+  const userCredentialsRepository = new PostgresUserCredentialsRepository();
 
   // ==========================================================
   // Signup services
@@ -119,6 +129,17 @@ export function createAuthController(
   );
 
   // ==========================================================
+  // Password reset service
+  // ==========================================================
+
+  const passwordResetService = new PasswordResetService(
+    passwordResetRepository,
+    userCredentialsRepository,
+    refreshTokenRepository,
+    otpProvider,
+  );
+
+  // ==========================================================
   // Token / session services
   // ==========================================================
 
@@ -138,6 +159,8 @@ export function createAuthController(
     loginService,
     loginVerificationService,
     loginResendService,
+
+    passwordResetService,
 
     refreshTokenService,
     logoutService,
@@ -160,6 +183,8 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
     loginService,
     loginVerificationService,
     loginResendService,
+
+    passwordResetService,
 
     refreshTokenService,
     logoutService,
@@ -416,6 +441,91 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
   }
 
   // ==========================================================
+  // POST /auth/forgot-password
+  // ==========================================================
+
+  async function forgotPassword(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const input = forgotPasswordSchema.parse(req.body);
+
+      const result = await passwordResetService.forgotPassword(input.email);
+
+      res.status(200).json({
+        success: true,
+        data: {
+          message: result.message,
+
+          ...(result.resetSessionToken !== undefined
+            ? {
+                resetSessionToken: result.resetSessionToken,
+              }
+            : {}),
+
+          ...(result.expiresAt !== undefined
+            ? {
+                expiresAt: result.expiresAt,
+              }
+            : {}),
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ==========================================================
+  // POST /auth/forgot-password/verify
+  // ==========================================================
+
+  async function verifyPasswordResetOtp(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const input = verifyPasswordResetOtpSchema.parse(req.body);
+
+      const result = await passwordResetService.verifyOtp(input.resetSessionToken, input.otp);
+
+      res.status(200).json({
+        success: true,
+        data: {
+          resetSessionToken: result.resetSessionToken,
+          expiresAt: result.expiresAt,
+          verified: true,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ==========================================================
+  // POST /auth/reset-password
+  // ==========================================================
+
+  async function resetPassword(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const input = resetPasswordSchema.parse(req.body);
+
+      const result = await passwordResetService.resetPassword(
+        input.resetSessionToken,
+        input.password,
+        input.confirmPassword,
+      );
+
+      res.status(200).json({
+        success: true,
+        data: {
+          message: result.message,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ==========================================================
   // POST /auth/refresh
   // ==========================================================
 
@@ -565,6 +675,10 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
     verifyLogin,
     resendLoginOtp,
 
+    forgotPassword,
+    verifyPasswordResetOtp,
+    resetPassword,
+
     refresh,
     logout,
     logoutAll,
@@ -596,6 +710,12 @@ export const login = defaultAuthHandlers.login;
 export const verifyLogin = defaultAuthHandlers.verifyLogin;
 
 export const resendLoginOtp = defaultAuthHandlers.resendLoginOtp;
+
+export const forgotPassword = defaultAuthHandlers.forgotPassword;
+
+export const verifyPasswordResetOtp = defaultAuthHandlers.verifyPasswordResetOtp;
+
+export const resetPassword = defaultAuthHandlers.resetPassword;
 
 export const refresh = defaultAuthHandlers.refresh;
 

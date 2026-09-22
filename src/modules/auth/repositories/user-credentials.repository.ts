@@ -4,6 +4,8 @@ export interface UserCredentialsRepository {
   create(userId: string, passwordHash: string): Promise<void>;
 
   findPasswordHashByUserId(userId: string): Promise<string | null>;
+
+  updatePasswordHash(userId: string, passwordHash: string): Promise<void>;
 }
 
 export class PostgresUserCredentialsRepository implements UserCredentialsRepository {
@@ -33,5 +35,20 @@ export class PostgresUserCredentialsRepository implements UserCredentialsReposit
     );
 
     return result.rows[0]?.passwordHash ?? null;
+  }
+
+  async updatePasswordHash(userId: string, passwordHash: string): Promise<void> {
+    const result = await pool.query(
+      `
+        UPDATE user_credentials
+        SET password_hash = $2
+        WHERE user_id = $1
+      `,
+      [userId, passwordHash],
+    );
+
+    if (result.rowCount !== 1) {
+      throw new Error('User credentials not found');
+    }
   }
 }
