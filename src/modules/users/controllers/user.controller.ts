@@ -1,5 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 
+import { clearCsrfTokenCookie } from '../../auth/utils/csrf-cookie.js';
+import { clearRefreshTokenCookie } from '../../auth/utils/refresh-cookie.js';
 import {
   createAddressSchema,
   updateAddressSchema,
@@ -42,6 +44,21 @@ export class UserController {
         data: user,
         message: 'User updated',
       });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  deleteAccount = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      const { id } = userIdSchema.parse(request.params);
+
+      await this.service.deleteAccount(id);
+
+      clearRefreshTokenCookie(response);
+      clearCsrfTokenCookie(response);
+
+      response.status(204).send();
     } catch (error) {
       next(error);
     }

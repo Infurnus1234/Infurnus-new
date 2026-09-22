@@ -40,20 +40,15 @@ import {
   resetPasswordSchema,
   signupSchema,
   verifyLoginOtpSchema,
+  verifyPasswordResetOtpSchema,
   verifySignupOtpSchema,
 } from '../schemas/auth.schemas.js';
 
-import {
-  clearCsrfTokenCookie,
-  setCsrfTokenCookie,
-} from '../utils/csrf-cookie.js';
+import { clearCsrfTokenCookie, setCsrfTokenCookie } from '../utils/csrf-cookie.js';
 
 import { generateCsrfToken } from '../utils/csrf.js';
 
-import {
-  clearRefreshTokenCookie,
-  setRefreshTokenCookie,
-} from '../utils/refresh-cookie.js';
+import { clearRefreshTokenCookie, setRefreshTokenCookie } from '../utils/refresh-cookie.js';
 
 // ============================================================
 // Controller dependencies
@@ -88,47 +83,25 @@ export interface AuthControllerDependencies {
 export function createAuthController(
   otpProvider: OtpProvider = new DevOtpProvider(),
 ): AuthControllerDependencies {
-  const pendingSignupRepository =
-    new PostgresPendingSignupRepository();
+  const pendingSignupRepository = new PostgresPendingSignupRepository();
 
-  const signupUserRepository =
-    new PostgresSignupUserRepository();
+  const signupUserRepository = new PostgresSignupUserRepository();
 
-  const signupCompletionRepository =
-    new PostgresSignupCompletionRepository();
+  const signupCompletionRepository = new PostgresSignupCompletionRepository();
 
-  const refreshTokenRepository =
-    new PostgresRefreshTokenRepository();
+  const refreshTokenRepository = new PostgresRefreshTokenRepository();
 
-  const loginRepository =
-    new PostgresLoginRepository();
+  const loginRepository = new PostgresLoginRepository();
 
-  const loginChallengeRepository =
-    new PostgresLoginChallengeRepository(pool);
+  const loginChallengeRepository = new PostgresLoginChallengeRepository(pool);
 
-  const authUserRepository =
-    new PostgresAuthUserRepository();
+  const authUserRepository = new PostgresAuthUserRepository();
 
-  const accountRepository =
-    new PostgresAccountRepository();
+  const accountRepository = new PostgresAccountRepository();
 
-  const passwordResetRepository =
-    new PostgresPasswordResetRepository();
+  const passwordResetRepository = new PostgresPasswordResetRepository(pool);
 
-  const userCredentialsRepository =
-    new PostgresUserCredentialsRepository();
-
-  const passwordResetService =
-    new PasswordResetService(
-      accountRepository,
-      passwordResetRepository,
-      otpProvider,
-    );
-
-  const changePasswordService =
-    new ChangePasswordService(
-      userCredentialsRepository,
-    );
+  const userCredentialsRepository = new PostgresUserCredentialsRepository();
 
   // ==========================================================
   // Signup services
@@ -140,59 +113,56 @@ export function createAuthController(
     signupUserRepository,
   );
 
-  const signupVerificationService =
-    new SignupVerificationService(
-      pendingSignupRepository,
-      signupCompletionRepository,
-      otpProvider,
-    );
+  const signupVerificationService = new SignupVerificationService(
+    pendingSignupRepository,
+    signupCompletionRepository,
+    otpProvider,
+  );
 
-  const otpResendService =
-    new OtpResendService(
-      pendingSignupRepository,
-      otpProvider,
-    );
+  const otpResendService = new OtpResendService(pendingSignupRepository, otpProvider);
 
   // ==========================================================
   // Login services
   // ==========================================================
 
-  const loginService =
-    new LoginService(
-      loginRepository,
-      loginChallengeRepository,
-      otpProvider,
-    );
+  const loginService = new LoginService(loginRepository, loginChallengeRepository, otpProvider);
 
-  const loginVerificationService =
-    new LoginVerificationService(
-      loginChallengeRepository,
-      authUserRepository,
-      otpProvider,
-    );
+  const loginVerificationService = new LoginVerificationService(
+    loginChallengeRepository,
+    authUserRepository,
+    otpProvider,
+  );
 
-  const loginResendService =
-    new LoginResendService(
-      loginChallengeRepository,
-      otpProvider,
-      env.AUTH_OTP_RESEND_COOLDOWN_SECONDS,
-    );
+  const loginResendService = new LoginResendService(
+    loginChallengeRepository,
+    otpProvider,
+    env.AUTH_OTP_RESEND_COOLDOWN_SECONDS,
+  );
+
+  // ==========================================================
+  // Password services
+  // ==========================================================
+
+  const changePasswordService = new ChangePasswordService(userCredentialsRepository);
+
+  const passwordResetService = new PasswordResetService(
+    passwordResetRepository,
+    userCredentialsRepository,
+    refreshTokenRepository,
+    otpProvider,
+  );
 
   // ==========================================================
   // Token / session services
   // ==========================================================
 
-  const refreshTokenService =
-    new RefreshTokenService(refreshTokenRepository);
+  const refreshTokenService = new RefreshTokenService(refreshTokenRepository);
 
-  const logoutService =
-    new LogoutService(refreshTokenRepository);
+  const logoutService = new LogoutService(refreshTokenRepository);
 
-  const sessionService =
-    new SessionService(refreshTokenRepository);
+  const sessionService = new SessionService(refreshTokenRepository);
 
-  const tokenService =
-    new TokenService();
+  const tokenService = new TokenService();
 
   return {
     signupService,
@@ -202,6 +172,7 @@ export function createAuthController(
     changePasswordService,
 
     accountRepository,
+
     loginService,
     loginVerificationService,
     loginResendService,
@@ -220,9 +191,7 @@ export function createAuthController(
 // Auth handlers
 // ============================================================
 
-export function createAuthHandlers(
-  dependencies: AuthControllerDependencies,
-) {
+export function createAuthHandlers(dependencies: AuthControllerDependencies) {
   const {
     signupService,
     signupVerificationService,
@@ -249,11 +218,7 @@ export function createAuthHandlers(
   // POST /auth/signup
   // ==========================================================
 
-  async function signup(
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> {
+  async function signup(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const input = signupSchema.parse(req.body);
 
@@ -261,13 +226,9 @@ export function createAuthHandlers(
         firstName: input.firstName,
         lastName: input.lastName,
 
-        ...(input.email !== undefined
-          ? { email: input.email }
-          : {}),
+        ...(input.email !== undefined ? { email: input.email } : {}),
 
-        ...(input.phone !== undefined
-          ? { phone: input.phone }
-          : {}),
+        ...(input.phone !== undefined ? { phone: input.phone } : {}),
 
         password: input.password,
         role: input.role,
@@ -290,45 +251,25 @@ export function createAuthHandlers(
   // POST /auth/signup/verify
   // ==========================================================
 
-  async function verifySignup(
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> {
+  async function verifySignup(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const input =
-        verifySignupOtpSchema.parse(req.body);
+      const input = verifySignupOtpSchema.parse(req.body);
 
-      const result =
-        await signupVerificationService.verify(
-          input.signupId,
-          input.otp,
-        );
+      const result = await signupVerificationService.verify(input.signupId, input.otp);
 
-      const accessToken =
-        await tokenService.createAccessToken({
-          userId: result.userId,
-          role: result.role,
-        });
+      const accessToken = await tokenService.createAccessToken({
+        userId: result.userId,
+        role: result.role,
+      });
 
-      const refreshToken =
-        await refreshTokenService.create(
-          result.userId,
-          {
-            userAgent: req.get('user-agent') ?? null,
-            ipAddress: req.ip ?? null,
-          },
-        );
+      const refreshToken = await refreshTokenService.create(result.userId, {
+        userAgent: req.get('user-agent') ?? null,
+        ipAddress: req.ip ?? null,
+      });
 
-      setRefreshTokenCookie(
-        res,
-        refreshToken.refreshToken,
-      );
+      setRefreshTokenCookie(res, refreshToken.refreshToken);
 
-      setCsrfTokenCookie(
-        res,
-        generateCsrfToken(),
-      );
+      setCsrfTokenCookie(res, generateCsrfToken());
 
       res.status(200).json({
         success: true,
@@ -347,19 +288,11 @@ export function createAuthHandlers(
   // POST /auth/signup/resend
   // ==========================================================
 
-  async function resendSignupOtp(
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> {
+  async function resendSignupOtp(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const input =
-        resendSignupOtpSchema.parse(req.body);
+      const input = resendSignupOtpSchema.parse(req.body);
 
-      const result =
-        await otpResendService.resend(
-          input.signupId,
-        );
+      const result = await otpResendService.resend(input.signupId);
 
       res.status(200).json({
         success: true,
@@ -378,27 +311,17 @@ export function createAuthHandlers(
   // POST /auth/login
   // ==========================================================
 
-  async function login(
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> {
+  async function login(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const input =
-        loginSchema.parse(req.body);
+      const input = loginSchema.parse(req.body);
 
-      const result =
-        await loginService.authenticate({
-          ...(input.email !== undefined
-            ? { email: input.email }
-            : {}),
+      const result = await loginService.authenticate({
+        ...(input.email !== undefined ? { email: input.email } : {}),
 
-          ...(input.phone !== undefined
-            ? { phone: input.phone }
-            : {}),
+        ...(input.phone !== undefined ? { phone: input.phone } : {}),
 
-          password: input.password,
-        });
+        password: input.password,
+      });
 
       res.status(200).json({
         success: true,
@@ -416,45 +339,25 @@ export function createAuthHandlers(
   // POST /auth/login/verify
   // ==========================================================
 
-  async function verifyLogin(
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> {
+  async function verifyLogin(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const input =
-        verifyLoginOtpSchema.parse(req.body);
+      const input = verifyLoginOtpSchema.parse(req.body);
 
-      const result =
-        await loginVerificationService.verify(
-          input.challengeId,
-          input.otp,
-        );
+      const result = await loginVerificationService.verify(input.challengeId, input.otp);
 
-      const accessToken =
-        await tokenService.createAccessToken({
-          userId: result.userId,
-          role: result.role,
-        });
+      const accessToken = await tokenService.createAccessToken({
+        userId: result.userId,
+        role: result.role,
+      });
 
-      const refreshToken =
-        await refreshTokenService.create(
-          result.userId,
-          {
-            userAgent: req.get('user-agent') ?? null,
-            ipAddress: req.ip ?? null,
-          },
-        );
+      const refreshToken = await refreshTokenService.create(result.userId, {
+        userAgent: req.get('user-agent') ?? null,
+        ipAddress: req.ip ?? null,
+      });
 
-      setRefreshTokenCookie(
-        res,
-        refreshToken.refreshToken,
-      );
+      setRefreshTokenCookie(res, refreshToken.refreshToken);
 
-      setCsrfTokenCookie(
-        res,
-        generateCsrfToken(),
-      );
+      setCsrfTokenCookie(res, generateCsrfToken());
 
       res.status(200).json({
         success: true,
@@ -473,19 +376,11 @@ export function createAuthHandlers(
   // POST /auth/login/resend
   // ==========================================================
 
-  async function resendLoginOtp(
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> {
+  async function resendLoginOtp(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const input =
-        resendLoginOtpSchema.parse(req.body);
+      const input = resendLoginOtpSchema.parse(req.body);
 
-      const result =
-        await loginResendService.resend(
-          input.challengeId,
-        );
+      const result = await loginResendService.resend(input.challengeId);
 
       res.status(200).json({
         success: true,
@@ -503,24 +398,55 @@ export function createAuthHandlers(
   // POST /auth/forgot-password
   // ==========================================================
 
-  async function forgotPassword(
+  async function forgotPassword(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const input = forgotPasswordSchema.parse(req.body);
+
+      const result = await passwordResetService.forgotPassword(input.email);
+
+      res.status(200).json({
+        success: true,
+        data: {
+          message: result.message,
+
+          ...(result.resetSessionToken !== undefined
+            ? {
+                resetSessionToken: result.resetSessionToken,
+              }
+            : {}),
+
+          ...(result.expiresAt !== undefined
+            ? {
+                expiresAt: result.expiresAt,
+              }
+            : {}),
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ==========================================================
+  // POST /auth/forgot-password/verify
+  // ==========================================================
+
+  async function verifyPasswordResetOtp(
     req: Request,
     res: Response,
     next: NextFunction,
   ): Promise<void> {
     try {
-      const input =
-        forgotPasswordSchema.parse(req.body);
+      const input = verifyPasswordResetOtpSchema.parse(req.body);
 
-      const result =
-        await passwordResetService.requestReset(
-          input.email,
-        );
+      const result = await passwordResetService.verifyOtp(input.resetSessionToken, input.otp);
 
       res.status(200).json({
         success: true,
         data: {
-          challengeId: result.challengeId,
+          resetSessionToken: result.resetSessionToken,
+          expiresAt: result.expiresAt,
+          verified: true,
         },
       });
     } catch (error) {
@@ -532,24 +458,21 @@ export function createAuthHandlers(
   // POST /auth/reset-password
   // ==========================================================
 
-  async function resetPassword(
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> {
+  async function resetPassword(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const input =
-        resetPasswordSchema.parse(req.body);
+      const input = resetPasswordSchema.parse(req.body);
 
-      await passwordResetService.resetPassword(
-        input.challengeId,
-        input.otp,
-        input.newPassword,
+      const result = await passwordResetService.resetPassword(
+        input.resetSessionToken,
+        input.password,
+        input.confirmPassword,
       );
 
       res.status(200).json({
         success: true,
-        message: 'Password reset successfully',
+        data: {
+          message: result.message,
+        },
       });
     } catch (error) {
       next(error);
@@ -560,22 +483,13 @@ export function createAuthHandlers(
   // POST /auth/change-password
   // ==========================================================
 
-  async function changePassword(
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> {
+  async function changePassword(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       if (!req.auth?.userId) {
-        throw new AppError(
-          'AUTHENTICATION_REQUIRED',
-          'Authentication required',
-          401,
-        );
+        throw new AppError('AUTHENTICATION_REQUIRED', 'Authentication required', 401);
       }
 
-      const input =
-        changePasswordSchema.parse(req.body);
+      const input = changePasswordSchema.parse(req.body);
 
       await changePasswordService.changePassword(
         req.auth.userId,
@@ -596,31 +510,18 @@ export function createAuthHandlers(
   // DELETE /auth/account
   // ==========================================================
 
-  async function deleteAccount(
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> {
+  async function deleteAccount(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       if (!req.auth?.userId) {
-        throw new AppError(
-          'AUTHENTICATION_REQUIRED',
-          'Authentication required',
-          401,
-        );
+        throw new AppError('AUTHENTICATION_REQUIRED', 'Authentication required', 401);
       }
 
       const userId = req.auth.userId;
 
-      const deleted =
-        await accountRepository.softDelete(userId);
+      const deleted = await accountRepository.softDelete(userId);
 
       if (!deleted) {
-        throw new AppError(
-          'ACCOUNT_DELETE_FAILED',
-          'Unable to delete account',
-          500,
-        );
+        throw new AppError('ACCOUNT_DELETE_FAILED', 'Unable to delete account', 500);
       }
 
       await logoutService.logoutAllForUser(userId);
@@ -638,69 +539,35 @@ export function createAuthHandlers(
   // POST /auth/refresh
   // ==========================================================
 
-  async function refresh(
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> {
+  async function refresh(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const rawRefreshToken =
-        req.cookies?.[
-        env.AUTH_REFRESH_COOKIE_NAME
-        ];
+      const rawRefreshToken = req.cookies?.[env.AUTH_REFRESH_COOKIE_NAME];
 
-      if (
-        typeof rawRefreshToken !== 'string' ||
-        !rawRefreshToken
-      ) {
-        throw new AppError(
-          'INVALID_REFRESH_TOKEN',
-          'Invalid refresh token',
-          401,
-        );
+      if (typeof rawRefreshToken !== 'string' || !rawRefreshToken) {
+        throw new AppError('INVALID_REFRESH_TOKEN', 'Invalid refresh token', 401);
       }
 
-      const rotated =
-        await refreshTokenService.rotate(
-          rawRefreshToken,
-          {
-            userAgent:
-              req.get('user-agent') ?? null,
-            ipAddress: req.ip ?? null,
-          },
-        );
+      const rotated = await refreshTokenService.rotate(rawRefreshToken, {
+        userAgent: req.get('user-agent') ?? null,
+        ipAddress: req.ip ?? null,
+      });
 
-      const identity =
-        await authUserRepository.findIdentityById(
-          rotated.userId,
-        );
+      const identity = await authUserRepository.findIdentityById(rotated.userId);
 
       if (!identity) {
-        throw new AppError(
-          'INVALID_USER',
-          'User not found',
-          401,
-        );
+        throw new AppError('INVALID_USER', 'User not found', 401);
       }
 
       if (identity.status !== 'active') {
-        throw new AppError(
-          'ACCOUNT_NOT_ACTIVE',
-          'Account is not active',
-          401,
-        );
+        throw new AppError('ACCOUNT_NOT_ACTIVE', 'Account is not active', 401);
       }
 
-      const accessToken =
-        await tokenService.createAccessToken({
-          userId: rotated.userId,
-          role: identity.role,
-        });
+      const accessToken = await tokenService.createAccessToken({
+        userId: rotated.userId,
+        role: identity.role,
+      });
 
-      setRefreshTokenCookie(
-        res,
-        rotated.refreshToken,
-      );
+      setRefreshTokenCookie(res, rotated.refreshToken);
 
       res.status(200).json({
         success: true,
@@ -718,31 +585,15 @@ export function createAuthHandlers(
   // POST /auth/logout
   // ==========================================================
 
-  async function logout(
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> {
+  async function logout(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const rawRefreshToken =
-        req.cookies?.[
-        env.AUTH_REFRESH_COOKIE_NAME
-        ];
+      const rawRefreshToken = req.cookies?.[env.AUTH_REFRESH_COOKIE_NAME];
 
-      if (
-        typeof rawRefreshToken !== 'string' ||
-        !rawRefreshToken
-      ) {
-        throw new AppError(
-          'INVALID_REFRESH_TOKEN',
-          'Invalid refresh token',
-          401,
-        );
+      if (typeof rawRefreshToken !== 'string' || !rawRefreshToken) {
+        throw new AppError('INVALID_REFRESH_TOKEN', 'Invalid refresh token', 401);
       }
 
-      await logoutService.logout(
-        rawRefreshToken,
-      );
+      await logoutService.logout(rawRefreshToken);
 
       clearRefreshTokenCookie(res);
       clearCsrfTokenCookie(res);
@@ -757,23 +608,13 @@ export function createAuthHandlers(
   // POST /auth/logout-all
   // ==========================================================
 
-  async function logoutAll(
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> {
+  async function logoutAll(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       if (!req.auth?.userId) {
-        throw new AppError(
-          'AUTHENTICATION_REQUIRED',
-          'Authentication required',
-          401,
-        );
+        throw new AppError('AUTHENTICATION_REQUIRED', 'Authentication required', 401);
       }
 
-      await logoutService.logoutAllForUser(
-        req.auth.userId,
-      );
+      await logoutService.logoutAllForUser(req.auth.userId);
 
       clearRefreshTokenCookie(res);
       clearCsrfTokenCookie(res);
@@ -788,24 +629,13 @@ export function createAuthHandlers(
   // GET /auth/sessions
   // ==========================================================
 
-  async function listSessions(
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> {
+  async function listSessions(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       if (!req.auth?.userId) {
-        throw new AppError(
-          'AUTHENTICATION_REQUIRED',
-          'Authentication required',
-          401,
-        );
+        throw new AppError('AUTHENTICATION_REQUIRED', 'Authentication required', 401);
       }
 
-      const sessions =
-        await sessionService.listActiveSessions(
-          req.auth.userId,
-        );
+      const sessions = await sessionService.listActiveSessions(req.auth.userId);
 
       res.status(200).json({
         success: true,
@@ -822,38 +652,19 @@ export function createAuthHandlers(
   // DELETE /auth/sessions/:sessionId
   // ==========================================================
 
-  async function revokeSession(
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> {
+  async function revokeSession(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       if (!req.auth?.userId) {
-        throw new AppError(
-          'AUTHENTICATION_REQUIRED',
-          'Authentication required',
-          401,
-        );
+        throw new AppError('AUTHENTICATION_REQUIRED', 'Authentication required', 401);
       }
 
-      const sessionId =
-        req.params.sessionId;
+      const sessionId = req.params.sessionId;
 
-      if (
-        typeof sessionId !== 'string' ||
-        !sessionId
-      ) {
-        throw new AppError(
-          'INVALID_SESSION',
-          'Invalid session',
-          400,
-        );
+      if (typeof sessionId !== 'string' || !sessionId) {
+        throw new AppError('INVALID_SESSION', 'Invalid session', 400);
       }
 
-      await sessionService.revokeSession(
-        req.auth.userId,
-        sessionId,
-      );
+      await sessionService.revokeSession(req.auth.userId, sessionId);
 
       res.status(204).send();
     } catch (error) {
@@ -875,7 +686,9 @@ export function createAuthHandlers(
     resendLoginOtp,
 
     forgotPassword,
+    verifyPasswordResetOtp,
     resetPassword,
+
     changePassword,
     deleteAccount,
 
@@ -891,59 +704,42 @@ export function createAuthHandlers(
 // Default controller / handlers
 // ============================================================
 
-export const defaultAuthController =
-  createAuthController();
+export const defaultAuthController = createAuthController();
 
-export const defaultAuthHandlers =
-  createAuthHandlers(
-    defaultAuthController,
-  );
+export const defaultAuthHandlers = createAuthHandlers(defaultAuthController);
 
 // ============================================================
 // Default exported handlers
 // ============================================================
 
-export const signup =
-  defaultAuthHandlers.signup;
+export const signup = defaultAuthHandlers.signup;
 
-export const verifySignup =
-  defaultAuthHandlers.verifySignup;
+export const verifySignup = defaultAuthHandlers.verifySignup;
 
-export const resendSignupOtp =
-  defaultAuthHandlers.resendSignupOtp;
+export const resendSignupOtp = defaultAuthHandlers.resendSignupOtp;
 
-export const login =
-  defaultAuthHandlers.login;
+export const login = defaultAuthHandlers.login;
 
-export const verifyLogin =
-  defaultAuthHandlers.verifyLogin;
+export const verifyLogin = defaultAuthHandlers.verifyLogin;
 
-export const resendLoginOtp =
-  defaultAuthHandlers.resendLoginOtp;
+export const resendLoginOtp = defaultAuthHandlers.resendLoginOtp;
 
-export const forgotPassword =
-  defaultAuthHandlers.forgotPassword;
+export const forgotPassword = defaultAuthHandlers.forgotPassword;
 
-export const resetPassword =
-  defaultAuthHandlers.resetPassword;
+export const verifyPasswordResetOtp = defaultAuthHandlers.verifyPasswordResetOtp;
 
-export const changePassword =
-  defaultAuthHandlers.changePassword;
+export const resetPassword = defaultAuthHandlers.resetPassword;
 
-export const deleteAccount =
-  defaultAuthHandlers.deleteAccount;
+export const changePassword = defaultAuthHandlers.changePassword;
 
-export const refresh =
-  defaultAuthHandlers.refresh;
+export const deleteAccount = defaultAuthHandlers.deleteAccount;
 
-export const logout =
-  defaultAuthHandlers.logout;
+export const refresh = defaultAuthHandlers.refresh;
 
-export const logoutAll =
-  defaultAuthHandlers.logoutAll;
+export const logout = defaultAuthHandlers.logout;
 
-export const listSessions =
-  defaultAuthHandlers.listSessions;
+export const logoutAll = defaultAuthHandlers.logoutAll;
 
-export const revokeSession =
-  defaultAuthHandlers.revokeSession;
+export const listSessions = defaultAuthHandlers.listSessions;
+
+export const revokeSession = defaultAuthHandlers.revokeSession;
