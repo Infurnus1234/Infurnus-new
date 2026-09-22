@@ -30,9 +30,16 @@ export function createAuthRouter(
     signup,
     verifySignup,
     resendSignupOtp,
+
     login,
     verifyLogin,
     resendLoginOtp,
+
+    forgotPassword,
+    resetPassword,
+    changePassword,
+    deleteAccount,
+
     refresh,
     logout,
     logoutAll,
@@ -40,14 +47,23 @@ export function createAuthRouter(
     revokeSession,
   } = createAuthHandlers(dependencies);
 
-  const enableRateLimiting = options.enableRateLimiting ?? true;
-  const enableCsrfProtection = options.enableCsrfProtection ?? true;
+  const enableRateLimiting =
+    options.enableRateLimiting ?? true;
+
+  const enableCsrfProtection =
+    options.enableCsrfProtection ?? true;
 
   // ==========================================================
   // POST /auth/signup
   // ==========================================================
 
-  router.post('/signup', ...(enableRateLimiting ? [authSignupRateLimiter] : []), signup);
+  router.post(
+    '/signup',
+    ...(enableRateLimiting
+      ? [authSignupRateLimiter]
+      : []),
+    signup,
+  );
 
   // ==========================================================
   // POST /auth/signup/verify
@@ -55,7 +71,9 @@ export function createAuthRouter(
 
   router.post(
     '/signup/verify',
-    ...(enableRateLimiting ? [authOtpVerifyRateLimiter] : []),
+    ...(enableRateLimiting
+      ? [authOtpVerifyRateLimiter]
+      : []),
     verifySignup,
   );
 
@@ -65,46 +83,93 @@ export function createAuthRouter(
 
   router.post(
     '/signup/resend',
-    ...(enableRateLimiting ? [authOtpResendRateLimiter] : []),
+    ...(enableRateLimiting
+      ? [authOtpResendRateLimiter]
+      : []),
     resendSignupOtp,
   );
 
   // ==========================================================
   // POST /auth/login
-  //
-  // Supports:
-  // - email login
-  // - phone login
-  // - email + phone login
-  //
-  // OTP channel is determined by the login service.
   // ==========================================================
 
-  router.post('/login', ...(enableRateLimiting ? [authLoginRateLimiter] : []), login);
+  router.post(
+    '/login',
+    ...(enableRateLimiting
+      ? [authLoginRateLimiter]
+      : []),
+    login,
+  );
 
   // ==========================================================
   // POST /auth/login/verify
-  //
-  // Authentication is completed here after successful
-  // OTP verification.
   // ==========================================================
 
   router.post(
     '/login/verify',
-    ...(enableRateLimiting ? [authOtpVerifyRateLimiter] : []),
+    ...(enableRateLimiting
+      ? [authOtpVerifyRateLimiter]
+      : []),
     verifyLogin,
   );
 
   // ==========================================================
   // POST /auth/login/resend
-  //
-  // OTP channel is determined from the stored login challenge.
   // ==========================================================
 
   router.post(
     '/login/resend',
-    ...(enableRateLimiting ? [authOtpResendRateLimiter] : []),
+    ...(enableRateLimiting
+      ? [authOtpResendRateLimiter]
+      : []),
     resendLoginOtp,
+  );
+
+  // ==========================================================
+  // POST /auth/forgot-password
+  // ==========================================================
+
+  router.post(
+    '/forgot-password',
+    ...(enableRateLimiting
+      ? [authLoginRateLimiter]
+      : []),
+    forgotPassword,
+  );
+
+  // ==========================================================
+  // POST /auth/reset-password
+  // ==========================================================
+
+  router.post(
+    '/reset-password',
+    ...(enableRateLimiting
+      ? [authOtpVerifyRateLimiter]
+      : []),
+    resetPassword,
+  );
+
+  // POST /auth/change-password
+  router.post(
+    '/change-password',
+    requireAuth,
+    changePassword,
+  );
+
+  // ==========================================================
+  // DELETE /auth/account
+  // ==========================================================
+
+  router.delete(
+    '/account',
+    ...(enableRateLimiting
+      ? [authLogoutRateLimiter]
+      : []),
+    requireAuth,
+    ...(enableCsrfProtection
+      ? [requireCsrf]
+      : []),
+    deleteAccount,
   );
 
   // ==========================================================
@@ -113,8 +178,12 @@ export function createAuthRouter(
 
   router.post(
     '/refresh',
-    ...(enableRateLimiting ? [authRefreshRateLimiter] : []),
-    ...(enableCsrfProtection ? [requireCsrf] : []),
+    ...(enableRateLimiting
+      ? [authRefreshRateLimiter]
+      : []),
+    ...(enableCsrfProtection
+      ? [requireCsrf]
+      : []),
     refresh,
   );
 
@@ -124,8 +193,12 @@ export function createAuthRouter(
 
   router.post(
     '/logout',
-    ...(enableRateLimiting ? [authLogoutRateLimiter] : []),
-    ...(enableCsrfProtection ? [requireCsrf] : []),
+    ...(enableRateLimiting
+      ? [authLogoutRateLimiter]
+      : []),
+    ...(enableCsrfProtection
+      ? [requireCsrf]
+      : []),
     logout,
   );
 
@@ -135,9 +208,13 @@ export function createAuthRouter(
 
   router.post(
     '/logout-all',
-    ...(enableRateLimiting ? [authLogoutRateLimiter] : []),
+    ...(enableRateLimiting
+      ? [authLogoutRateLimiter]
+      : []),
     requireAuth,
-    ...(enableCsrfProtection ? [requireCsrf] : []),
+    ...(enableCsrfProtection
+      ? [requireCsrf]
+      : []),
     logoutAll,
   );
 
@@ -145,7 +222,11 @@ export function createAuthRouter(
   // GET /auth/sessions
   // ==========================================================
 
-  router.get('/sessions', requireAuth, listSessions);
+  router.get(
+    '/sessions',
+    requireAuth,
+    listSessions,
+  );
 
   // ==========================================================
   // DELETE /auth/sessions/:sessionId
@@ -153,9 +234,13 @@ export function createAuthRouter(
 
   router.delete(
     '/sessions/:sessionId',
-    ...(enableRateLimiting ? [authLogoutRateLimiter] : []),
+    ...(enableRateLimiting
+      ? [authLogoutRateLimiter]
+      : []),
     requireAuth,
-    ...(enableCsrfProtection ? [requireCsrf] : []),
+    ...(enableCsrfProtection
+      ? [requireCsrf]
+      : []),
     revokeSession,
   );
 
