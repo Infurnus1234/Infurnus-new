@@ -11,12 +11,9 @@ describe('Health & Readiness endpoints', () => {
     const response = await request(app).get('/health');
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({
-      success: true,
-      data: {
-        status: 'ok',
-      },
-    });
+    expect(response.body.success).toBe(true);
+    expect(response.body.data.status).toBe('ok');
+    expect(typeof response.body.data.uptime).toBe('number');
   });
 
   it('GET /health/ready returns 200 when DB readiness succeeds', async () => {
@@ -27,22 +24,19 @@ describe('Health & Readiness endpoints', () => {
     const response = await request(app).get('/health/ready');
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({
-      success: true,
-      data: {
-        status: 'ok',
-      },
-    });
+    expect(response.body.success).toBe(true);
+    expect(response.body.data.status).toBe('ok');
+    expect(response.body.data.ready).toBe(true);
 
     checkDbSpy.mockRestore();
   });
 
   it('GET /health/ready returns 503 when DB readiness fails', async () => {
-    const checkDbSpy = vi
-      .spyOn(dbModule, 'checkDatabaseConnection')
-      .mockRejectedValueOnce(new Error('Database connection failed'));
+    const readinessCheck = vi.fn().mockResolvedValueOnce(false);
 
-    const app = createApp();
+    const app = createApp(undefined, undefined, {
+      readinessCheck,
+    });
 
     const response = await request(app).get('/health/ready');
 
@@ -51,10 +45,8 @@ describe('Health & Readiness endpoints', () => {
       success: false,
       error: {
         code: 'SERVICE_UNAVAILABLE',
-        message: 'Service unavailable',
+        message: 'Database check failed',
       },
     });
-
-    checkDbSpy.mockRestore();
   });
 });

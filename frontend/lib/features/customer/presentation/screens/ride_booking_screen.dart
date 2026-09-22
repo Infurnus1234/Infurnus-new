@@ -491,13 +491,16 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Chauffeur Standby Package', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                    Text(_getFuelNoticeText(state), style: const TextStyle(fontSize: 11, color: Colors.black54)),
-                  ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Chauffeur Standby Package', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      Text(_getFuelNoticeText(state), style: const TextStyle(fontSize: 11, color: Colors.black54)),
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 8),
                 GestureDetector(
                   onTap: () => context.push('/rentals'),
                   child: const Text('Configure >', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 12)),

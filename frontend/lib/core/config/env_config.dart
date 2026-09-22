@@ -60,10 +60,10 @@ class EnvConfig {
     return dev;
   }
 
-  // Local development for physical Wi-Fi device or LAN
+  // Local development for physical Android device via USB adb reverse or LAN
   static const EnvConfig dev = EnvConfig(
-    baseUrl: 'http://192.168.1.19:3001',
-    socketUrl: 'http://192.168.1.19:3001',
+    baseUrl: 'http://127.0.0.1:3001',
+    socketUrl: 'http://127.0.0.1:3001',
     environment: Environment.dev,
   );
 
