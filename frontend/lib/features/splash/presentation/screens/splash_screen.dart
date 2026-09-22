@@ -109,53 +109,101 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     });
 
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Spacer(flex: 3),
-              // Animated Brand Mark
-              ScaleTransition(
-                scale: _scaleAnimation,
-                child: FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: const InfurnusBrandMark(
-                    iconSize: 64,
-                    fontSize: 30,
-                    spacing: 14,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              // Animated Tagline
-              FadeTransition(
-                opacity: _taglineFadeAnimation,
-                child: Text(
-                  'Move. Deliver. Serve.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 2.5,
-                    color: Colors.grey[600],
-                  ),
-                ),
-              ),
-              const Spacer(flex: 3),
-              // Subtle fast-spin bottom loader
-              SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.2,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    AppColors.primaryGreen.withValues(alpha: 0.8),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 36),
+      backgroundColor: AppColors.logoBackground,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment(0, -0.1),
+            radius: 0.95,
+            colors: [
+              Color(0xFF091A10), // subtle ambient emerald halo matching logo glow
+              Color(0xFF000000), // deep pitch black matching logo canvas
             ],
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Spacer(flex: 3),
+                // Animated Brand Mark & Hero Logo
+                ScaleTransition(
+                  scale: _scaleAnimation,
+                  child: FadeTransition(
+                    opacity: _fadeAnimation,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 112,
+                          height: 112,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.emeraldNeon.withValues(alpha: 0.4),
+                                blurRadius: 40,
+                                spreadRadius: 4,
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(24),
+                            child: Image.asset(
+                              'assets/images/logo.jpg',
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  const InfurnusBrandMark(
+                                iconSize: 84,
+                                showText: false,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        const Text(
+                          'INFURNUS',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 32,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 3.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // Animated Tagline
+                FadeTransition(
+                  opacity: _taglineFadeAnimation,
+                  child: Text(
+                    'Move. Deliver. Serve.',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 2.8,
+                      color: AppColors.emeraldNeon.withValues(alpha: 0.9),
+                    ),
+                  ),
+                ),
+                const Spacer(flex: 3),
+                // Emerald neon spinning bottom loader
+                const SizedBox(
+                  width: 26,
+                  height: 26,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      AppColors.emeraldNeon,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 40),
+              ],
+            ),
           ),
         ),
       ),

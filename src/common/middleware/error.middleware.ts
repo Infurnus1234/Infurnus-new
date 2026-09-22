@@ -38,6 +38,27 @@ export function errorMiddleware(err: unknown, _req: Request, res: Response, _nex
   }
 
   // ==========================================================
+  // HTTP / Body Parser errors (e.g. 413 Payload Too Large)
+  // ==========================================================
+
+  if (
+    typeof err === 'object' &&
+    err !== null &&
+    (('status' in err && (err as { status: unknown }).status === 413) ||
+      ('statusCode' in err && (err as { statusCode: unknown }).statusCode === 413))
+  ) {
+    res.status(413).json({
+      success: false,
+      error: {
+        code: 'PAYLOAD_TOO_LARGE',
+        message: 'Request payload exceeds maximum allowed size',
+      },
+    });
+
+    return;
+  }
+
+  // ==========================================================
   // Unexpected server errors
   //
   // Never expose internal error details to the client.

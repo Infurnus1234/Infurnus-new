@@ -90,7 +90,6 @@ void main() {
         ),
       );
 
-      expect(find.text('N'), findsOneWidget);
       expect(find.text('INFURNUS'), findsOneWidget);
     });
   });
