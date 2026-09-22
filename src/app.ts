@@ -217,7 +217,7 @@ export function createApp(
         success: false,
         error: {
           code: 'SERVICE_UNAVAILABLE',
-          message: 'Database connection check failed',
+          message: 'Service unavailable',
         },
       });
     }
