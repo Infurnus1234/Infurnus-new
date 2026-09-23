@@ -18,6 +18,14 @@ export function createAdminRouter(controller: AdminController) {
   router.get('/reports/partners', controller.listPartners);
   router.get('/reports/vehicles', controller.listVehicles);
 
+  // Fleet Analytics & Live Vehicle Management
+  router.get('/fleet/analytics', controller.getFleetAnalyticsSummary);
+  router.get('/fleet/states', controller.getStateFleetAnalytics);
+  router.get('/fleet/states/:state/cities', controller.getCityFleetAnalytics);
+  router.get('/fleet/map', controller.getLiveFleetVehicles);
+  router.get('/fleet/vehicles', controller.getLiveFleetVehicles);
+  router.get('/fleet/vehicles/:id', controller.getLiveFleetVehicleDetails);
+
   router.post('/drivers/:id/verify', controller.verifyDriver);
   router.post('/vehicles/:id/verify', controller.verifyVehicle);
   router.post('/documents/:id/verify', controller.verifyDocument);

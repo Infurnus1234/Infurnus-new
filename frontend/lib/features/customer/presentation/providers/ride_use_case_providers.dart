@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../domain/usecases/cancel_ride_use_case.dart';
 import '../../domain/usecases/create_ride_use_case.dart';
 import '../../domain/usecases/estimate_fare_use_case.dart';
@@ -60,4 +61,3 @@ final getFleetUseCaseProvider = Provider<GetFleetUseCase>((ref) {
   final repository = ref.watch(rideRepositoryProvider);
   return GetFleetUseCase(repository);
 });
-

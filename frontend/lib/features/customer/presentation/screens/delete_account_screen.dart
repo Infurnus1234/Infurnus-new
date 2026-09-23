@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_button.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
@@ -17,7 +18,11 @@ class DeleteAccountScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 64),
+            const Icon(
+              Icons.warning_amber_rounded,
+              color: Colors.red,
+              size: 64,
+            ),
             const SizedBox(height: 24),
             const Text(
               'Are you sure you want to delete your account?',
@@ -42,7 +47,10 @@ class DeleteAccountScreen extends ConsumerWidget {
               width: double.infinity,
               child: TextButton(
                 onPressed: () => context.pop(),
-                child: const Text('Cancel', style: TextStyle(color: AppColors.textPrimary)),
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(color: AppColors.textPrimary),
+                ),
               ),
             ),
           ],

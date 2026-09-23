@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../../core/network/dio_client.dart';
 import '../../data/datasources/ride_remote_data_source.dart';
 import '../../data/repositories/ride_repository_impl.dart';

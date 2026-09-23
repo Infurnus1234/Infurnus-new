@@ -4,6 +4,7 @@ import {
   adminPartnersQuerySchema,
   adminUsersQuerySchema,
   adminVehiclesQuerySchema,
+  fleetQuerySchema,
 } from '../schemas/admin.schemas.js';
 import type { AdminService } from '../services/admin.service.js';
 
@@ -124,6 +125,60 @@ export class AdminController {
         data: result,
         message: `Document verification status updated to ${status}`,
       });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  // --- Fleet Analytics Endpoints ---
+
+  getFleetAnalyticsSummary = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const filters = fleetQuerySchema.parse(req.query);
+      const data = await this.service.getFleetAnalyticsSummary(filters);
+      res.json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getStateFleetAnalytics = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const filters = fleetQuerySchema.parse(req.query);
+      const data = await this.service.getStateFleetAnalytics(filters);
+      res.json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getCityFleetAnalytics = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const filters = fleetQuerySchema.parse(req.query);
+      const rawState = req.params.state;
+      const state = (typeof rawState === 'string' ? rawState : filters.state) || 'Bihar';
+      const data = await this.service.getCityFleetAnalytics(state, filters);
+      res.json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getLiveFleetVehicles = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const filters = fleetQuerySchema.parse(req.query);
+      const data = await this.service.getLiveFleetVehicles(filters);
+      res.json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getLiveFleetVehicleDetails = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = adminIdSchema.parse(req.params);
+      const data = await this.service.getLiveFleetVehicleDetails(id);
+      res.json({ success: true, data });
     } catch (error) {
       next(error);
     }

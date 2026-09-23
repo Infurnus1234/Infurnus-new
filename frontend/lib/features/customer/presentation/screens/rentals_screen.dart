@@ -2,10 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+
 import '../../../../core/services/location_service.dart';
-import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_button.dart';
-import '../../../../shared/widgets/infurnus_card.dart';
 import '../../data/models/fleet_vehicle_model.dart';
 import '../providers/ride_provider.dart';
 import '../providers/ride_use_case_providers.dart';
@@ -18,6 +17,14 @@ class RentalsScreen extends ConsumerStatefulWidget {
 }
 
 class _RentalsScreenState extends ConsumerState<RentalsScreen> {
+  static const Color mainBg = Color(0xFF000000);
+  static const Color cardBg = Color(0xFF111111);
+  static const Color borderCard = Color(0xFF262626);
+  static const Color textWhite = Color(0xFFFFFFFF);
+  static const Color textGray = Color(0xFFA1A1AA);
+  static const Color brandGreen = Color(0xFF22C55E);
+  static const Color goldAccent = Color(0xFFFACC15);
+
   final _pickupController = TextEditingController();
   String _selectedVehicle = 'fortuner';
   int _selectedHours = 4;
@@ -70,7 +77,9 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
     try {
       final pos = await ref.read(locationServiceProvider).getCurrentPosition();
       if (pos != null && mounted) {
-        ref.read(rideProvider.notifier).setPickupCoords(
+        ref
+            .read(rideProvider.notifier)
+            .setPickupCoords(
               LatLng(pos.latitude, pos.longitude),
               address: 'Current Location',
             );
@@ -96,7 +105,9 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
 
   void _syncToRideProvider() {
     final car = _currentCar;
-    ref.read(rideProvider.notifier).setRoute(
+    ref
+        .read(rideProvider.notifier)
+        .setRoute(
           _pickupController.text.trim(),
           'Hourly Standby / As Directed',
         );
@@ -138,13 +149,13 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
   IconData _getVehicleIcon(String category) {
     switch (category.toLowerCase()) {
       case 'fortuner':
-        return Icons.directions_car_filled;
+        return Icons.directions_car_filled_rounded;
       case 'thar':
-        return Icons.terrain;
+        return Icons.terrain_rounded;
       case 'luxury_suv':
-        return Icons.stars;
+        return Icons.stars_rounded;
       default:
-        return Icons.directions_car;
+        return Icons.directions_car_rounded;
     }
   }
 
@@ -156,12 +167,15 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
     final estimatedAdvance = rideState.fare;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: mainBg,
       appBar: AppBar(
-        title: const Text('Premium & Luxury Fleet'),
+        title: const Text(
+          'Premium & Luxury Fleet',
+          style: TextStyle(color: textWhite, fontWeight: FontWeight.bold),
+        ),
         elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        backgroundColor: const Color(0xFF050505),
+        foregroundColor: textWhite,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -172,18 +186,26 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.primaryDark,
-                borderRadius: BorderRadius.circular(16),
+                color: cardBg,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: goldAccent.withValues(alpha: 0.4)),
               ),
               child: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: Colors.amber.withValues(alpha: 0.2),
+                      color: const Color(0xFF1F1A00),
                       shape: BoxShape.circle,
+                      border: Border.all(
+                        color: goldAccent.withValues(alpha: 0.3),
+                      ),
                     ),
-                    child: const Icon(Icons.stars, color: Colors.amber, size: 28),
+                    child: const Icon(
+                      Icons.stars_rounded,
+                      color: goldAccent,
+                      size: 28,
+                    ),
                   ),
                   const SizedBox(width: 14),
                   const Expanded(
@@ -192,12 +214,16 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                       children: [
                         Text(
                           'Hourly Chauffeur Service',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                          style: TextStyle(
+                            color: textWhite,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
                         ),
                         SizedBox(height: 4),
                         Text(
                           'Dedicated luxury vehicle with standby driver. Fuel billed on actual distance.',
-                          style: TextStyle(color: Colors.white70, fontSize: 12),
+                          style: TextStyle(color: textGray, fontSize: 12),
                         ),
                       ],
                     ),
@@ -211,12 +237,22 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Choose Your Vehicle', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                const Text(
+                  'Choose Your Vehicle',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: textWhite,
+                  ),
+                ),
                 if (_isLoadingFleet)
                   const SizedBox(
                     width: 16,
                     height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryGreen),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: brandGreen,
+                    ),
                   ),
               ],
             ),
@@ -226,30 +262,35 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 32),
                 child: Center(
-                  child: CircularProgressIndicator(color: AppColors.primaryGreen),
+                  child: CircularProgressIndicator(color: brandGreen),
                 ),
               )
             else if (_fleetError != null)
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.red[50],
+                  color: const Color(0xFF3A1111),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.red[200]!),
+                  border: Border.all(
+                    color: const Color(0xFFEF4444).withValues(alpha: 0.4),
+                  ),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.error_outline, color: Colors.red),
+                    const Icon(Icons.error_outline, color: Color(0xFFEF4444)),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         'Unable to load active fleet: $_fleetError',
-                        style: const TextStyle(color: Colors.red, fontSize: 13),
+                        style: const TextStyle(color: textWhite, fontSize: 13),
                       ),
                     ),
                     TextButton(
                       onPressed: _fetchFleet,
-                      child: const Text('Retry'),
+                      child: const Text(
+                        'Retry',
+                        style: TextStyle(color: brandGreen),
+                      ),
                     ),
                   ],
                 ),
@@ -259,22 +300,30 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: Colors.grey[50],
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey[200]!),
+                  color: cardBg,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: borderCard),
                 ),
-                child: Column(
+                child: const Column(
                   children: [
-                    Icon(Icons.directions_car_outlined, size: 40, color: Colors.grey[400]),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'No premium vehicles currently available',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    Icon(
+                      Icons.directions_car_outlined,
+                      size: 40,
+                      color: textGray,
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: 8),
+                    Text(
+                      'No premium vehicles currently available',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: textWhite,
+                      ),
+                    ),
+                    SizedBox(height: 4),
                     Text(
                       'All luxury fleet units are currently on assignment.',
-                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                      style: TextStyle(color: textGray, fontSize: 12),
                     ),
                   ],
                 ),
@@ -293,10 +342,10 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                     margin: const EdgeInsets.only(bottom: 12),
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: isSelected ? Colors.amber[50] : Colors.white,
-                      borderRadius: BorderRadius.circular(14),
+                      color: isSelected ? const Color(0xFF1F1A00) : cardBg,
+                      borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: isSelected ? Colors.amber[800]! : Colors.grey[200]!,
+                        color: isSelected ? goldAccent : borderCard,
                         width: isSelected ? 2 : 1,
                       ),
                     ),
@@ -304,8 +353,13 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                       children: [
                         CircleAvatar(
                           radius: 24,
-                          backgroundColor: isSelected ? Colors.amber[100] : Colors.grey[100],
-                          child: Icon(icon, color: isSelected ? Colors.amber[900] : Colors.grey[800]),
+                          backgroundColor: isSelected
+                              ? goldAccent.withValues(alpha: 0.2)
+                              : const Color(0xFF1A1A1A),
+                          child: Icon(
+                            icon,
+                            color: isSelected ? goldAccent : textWhite,
+                          ),
                         ),
                         const SizedBox(width: 14),
                         Expanded(
@@ -314,12 +368,19 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                             children: [
                               Text(
                                 '${item.make} ${item.model}',
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                  color: textWhite,
+                                ),
                               ),
                               const SizedBox(height: 2),
                               Text(
                                 '${item.category.toUpperCase()} • Chauffeur Standby',
-                                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                                style: const TextStyle(
+                                  color: textGray,
+                                  fontSize: 12,
+                                ),
                               ),
                             ],
                           ),
@@ -329,12 +390,16 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                           children: [
                             Text(
                               '₹${item.fuelRatePerKm.toStringAsFixed(0)}/km',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.amber[900]),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                                color: goldAccent,
+                              ),
                             ),
                             const SizedBox(height: 2),
-                            Text(
+                            const Text(
                               'fuel rate',
-                              style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                              style: TextStyle(fontSize: 11, color: textGray),
                             ),
                           ],
                         ),
@@ -346,20 +411,39 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
             const SizedBox(height: 20),
 
             // Pickup & Schedule
-            const Text('Trip Schedule & Pickup', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const Text(
+              'Trip Schedule & Pickup',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: textWhite,
+              ),
+            ),
             const SizedBox(height: 12),
-            InfurnusCard(
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: borderCard),
+              ),
               child: Column(
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.location_on, color: Colors.red, size: 20),
+                      const Icon(
+                        Icons.location_on_rounded,
+                        color: Color(0xFFEF4444),
+                        size: 20,
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: TextField(
                           controller: _pickupController,
+                          style: const TextStyle(color: textWhite),
                           decoration: const InputDecoration(
                             hintText: 'Pickup Location',
+                            hintStyle: TextStyle(color: textGray),
                             border: InputBorder.none,
                             isDense: true,
                           ),
@@ -367,27 +451,40 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.gps_fixed, size: 18, color: AppColors.primaryGreen),
+                        icon: const Icon(
+                          Icons.gps_fixed_rounded,
+                          size: 18,
+                          color: brandGreen,
+                        ),
                         onPressed: _detectCurrentLocation,
                       ),
                     ],
                   ),
-                  const Divider(),
+                  const Divider(color: borderCard),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       TextButton.icon(
-                        icon: const Icon(Icons.calendar_today, size: 18, color: AppColors.primaryDark),
+                        icon: const Icon(
+                          Icons.calendar_today_rounded,
+                          size: 18,
+                          color: brandGreen,
+                        ),
                         label: Text(
                           '${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}',
-                          style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryDark),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: textWhite,
+                          ),
                         ),
                         onPressed: () async {
                           final picked = await showDatePicker(
                             context: context,
                             initialDate: _selectedDate,
                             firstDate: DateTime.now(),
-                            lastDate: DateTime.now().add(const Duration(days: 30)),
+                            lastDate: DateTime.now().add(
+                              const Duration(days: 30),
+                            ),
                           );
                           if (picked != null) {
                             setState(() => _selectedDate = picked);
@@ -396,10 +493,17 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                         },
                       ),
                       TextButton.icon(
-                        icon: const Icon(Icons.access_time, size: 18, color: AppColors.primaryDark),
+                        icon: const Icon(
+                          Icons.access_time_rounded,
+                          size: 18,
+                          color: brandGreen,
+                        ),
                         label: Text(
                           _selectedTime.format(context),
-                          style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryDark),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: textWhite,
+                          ),
                         ),
                         onPressed: () async {
                           final picked = await showTimePicker(
@@ -420,7 +524,14 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
             const SizedBox(height: 24),
 
             // Number of Hours
-            const Text('Booking Duration', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const Text(
+              'Booking Duration',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: textWhite,
+              ),
+            ),
             const SizedBox(height: 12),
             Row(
               children: [2, 4, 8, 12].map((hrs) {
@@ -435,15 +546,18 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                       margin: const EdgeInsets.symmetric(horizontal: 4),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
-                        color: isSelected ? AppColors.primaryDark : Colors.grey[100],
-                        borderRadius: BorderRadius.circular(10),
+                        color: isSelected ? const Color(0xFF1F1A00) : cardBg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSelected ? goldAccent : borderCard,
+                        ),
                       ),
                       child: Column(
                         children: [
                           Text(
                             '$hrs Hrs',
                             style: TextStyle(
-                              color: isSelected ? Colors.white : Colors.black87,
+                              color: isSelected ? goldAccent : textWhite,
                               fontWeight: FontWeight.bold,
                               fontSize: 14,
                             ),
@@ -452,7 +566,7 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                           Text(
                             'Standby',
                             style: TextStyle(
-                              color: isSelected ? Colors.amber : Colors.grey[600],
+                              color: isSelected ? goldAccent : textGray,
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
                             ),
@@ -470,24 +584,40 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.grey[50],
+                color: cardBg,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.grey[200]!),
+                border: Border.all(color: borderCard),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Billing Structure', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  const Text(
+                    'Billing Structure',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: textWhite,
+                    ),
+                  ),
                   const SizedBox(height: 10),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Base Package ($_selectedHours hours standby)', style: TextStyle(color: Colors.grey[700], fontSize: 13)),
+                      Text(
+                        'Base Package ($_selectedHours hours standby)',
+                        style: const TextStyle(color: textGray, fontSize: 13),
+                      ),
                       Text(
                         rideState.fareEstimate?.baseAmount != null
                             ? '₹${rideState.fareEstimate!.baseAmount.toStringAsFixed(2)}'
-                            : (estimatedAdvance != null ? '₹${estimatedAdvance.toStringAsFixed(2)}' : 'Calculating...'),
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            : (estimatedAdvance != null
+                                  ? '₹${estimatedAdvance.toStringAsFixed(2)}'
+                                  : 'Calculating...'),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          color: textWhite,
+                        ),
                       ),
                     ],
                   ),
@@ -495,10 +625,17 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Configured Fuel Rate', style: TextStyle(color: Colors.grey[700], fontSize: 13)),
+                      const Text(
+                        'Configured Fuel Rate',
+                        style: TextStyle(color: textGray, fontSize: 13),
+                      ),
                       Text(
                         '₹${fuelRate.toStringAsFixed(2)} / km',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primaryGreen),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          color: goldAccent,
+                        ),
                       ),
                     ],
                   ),
@@ -506,23 +643,43 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Fuel Cost Policy', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                      const Text(
+                        'Fuel Cost Policy',
+                        style: TextStyle(color: textGray, fontSize: 12),
+                      ),
                       Text(
                         'Billed on actual GPS distance',
-                        style: TextStyle(color: Colors.grey[600], fontSize: 12, fontStyle: FontStyle.italic),
+                        style: TextStyle(
+                          color: textGray.withValues(alpha: 0.8),
+                          fontSize: 12,
+                          fontStyle: FontStyle.italic,
+                        ),
                       ),
                     ],
                   ),
-                  const Divider(height: 20),
+                  const Divider(height: 20, color: borderCard),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Total Package Advance', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                      const Text(
+                        'Total Package Advance',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                          color: textWhite,
+                        ),
+                      ),
                       Text(
                         estimatedAdvance != null
                             ? '₹${estimatedAdvance.toStringAsFixed(2)}'
-                            : (rideState.isEstimatingFare ? 'Calculating...' : '--'),
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: AppColors.primaryDark),
+                            : (rideState.isEstimatingFare
+                                  ? 'Calculating...'
+                                  : '--'),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 20,
+                          color: brandGreen,
+                        ),
                       ),
                     ],
                   ),

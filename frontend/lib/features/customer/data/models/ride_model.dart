@@ -16,9 +16,9 @@ class RideLocation {
   RideLocation({required this.latitude, required this.longitude});
 
   Map<String, dynamic> toJson() => {
-        'latitude': latitude,
-        'longitude': longitude,
-      };
+    'latitude': latitude,
+    'longitude': longitude,
+  };
 
   factory RideLocation.fromJson(Map<String, dynamic> json) {
     return RideLocation(
@@ -145,13 +145,17 @@ class RideModel {
       assignedDriverId: json['assignedDriverId'] as String?,
       assignedVehicleId: json['assignedVehicleId'] as String?,
       pickup: RideLocation.fromJson(json['pickup'] as Map<String, dynamic>),
-      destination: RideLocation.fromJson(json['destination'] as Map<String, dynamic>),
+      destination: RideLocation.fromJson(
+        json['destination'] as Map<String, dynamic>,
+      ),
       pickupAddress: json['pickupAddress'] as String?,
       destinationAddress: json['destinationAddress'] as String?,
       fareEstimate: json['fareEstimate'] != null
           ? (json['fareEstimate'] as num).toDouble()
           : (json['fare'] != null ? (json['fare'] as num).toDouble() : null),
-      finalFare: json['finalFare'] != null ? (json['finalFare'] as num).toDouble() : null,
+      finalFare: json['finalFare'] != null
+          ? (json['finalFare'] as num).toDouble()
+          : null,
       actualDistanceMeters: json['actualDistanceMeters'] != null
           ? (json['actualDistanceMeters'] as num).toInt()
           : null,
@@ -160,21 +164,35 @@ class RideModel {
           : null,
       sector: json['sector'] as String?,
       vehicleCategory: json['vehicleCategory'] as String?,
-      goods: json['goods'] != null ? Map<String, dynamic>.from(json['goods'] as Map) : null,
-      serviceDetails: json['serviceDetails'] != null ? Map<String, dynamic>.from(json['serviceDetails'] as Map) : null,
-      rentalDetails: json['rentalDetails'] != null ? Map<String, dynamic>.from(json['rentalDetails'] as Map) : null,
+      goods: json['goods'] != null
+          ? Map<String, dynamic>.from(json['goods'] as Map)
+          : null,
+      serviceDetails: json['serviceDetails'] != null
+          ? Map<String, dynamic>.from(json['serviceDetails'] as Map)
+          : null,
+      rentalDetails: json['rentalDetails'] != null
+          ? Map<String, dynamic>.from(json['rentalDetails'] as Map)
+          : null,
       pin: json['pin'] as String?,
       pinVerified: json['pinVerified'] as bool?,
       driverDetails: json['driverDetails'] != null
-          ? DriverDetails.fromJson(json['driverDetails'] as Map<String, dynamic>)
+          ? DriverDetails.fromJson(
+              json['driverDetails'] as Map<String, dynamic>,
+            )
           : null,
       vehicleDetails: json['vehicleDetails'] != null
-          ? VehicleDetails.fromJson(json['vehicleDetails'] as Map<String, dynamic>)
+          ? VehicleDetails.fromJson(
+              json['vehicleDetails'] as Map<String, dynamic>,
+            )
           : null,
       status: _parseStatus(json['status'] as String),
       cancellationReason: json['cancellationReason'] as String?,
-      cancelledAt: json['cancelledAt'] != null ? DateTime.parse(json['cancelledAt'] as String) : null,
-      completedAt: json['completedAt'] != null ? DateTime.parse(json['completedAt'] as String) : null,
+      cancelledAt: json['cancelledAt'] != null
+          ? DateTime.parse(json['cancelledAt'] as String)
+          : null,
+      completedAt: json['completedAt'] != null
+          ? DateTime.parse(json['completedAt'] as String)
+          : null,
       createdAt: DateTime.parse(json['createdAt'] as String),
       updatedAt: DateTime.parse(json['updatedAt'] as String),
     );
@@ -182,15 +200,24 @@ class RideModel {
 
   static RideStatus _parseStatus(String status) {
     switch (status) {
-      case 'requested': return RideStatus.requested;
-      case 'searching': return RideStatus.searching;
-      case 'driver_assigned': return RideStatus.driverAssigned;
-      case 'driver_arriving': return RideStatus.driverArriving;
-      case 'driver_arrived': return RideStatus.driverArrived;
-      case 'in_progress': return RideStatus.inProgress;
-      case 'completed': return RideStatus.completed;
-      case 'cancelled': return RideStatus.cancelled;
-      default: return RideStatus.requested;
+      case 'requested':
+        return RideStatus.requested;
+      case 'searching':
+        return RideStatus.searching;
+      case 'driver_assigned':
+        return RideStatus.driverAssigned;
+      case 'driver_arriving':
+        return RideStatus.driverArriving;
+      case 'driver_arrived':
+        return RideStatus.driverArrived;
+      case 'in_progress':
+        return RideStatus.inProgress;
+      case 'completed':
+        return RideStatus.completed;
+      case 'cancelled':
+        return RideStatus.cancelled;
+      default:
+        return RideStatus.requested;
     }
   }
 }

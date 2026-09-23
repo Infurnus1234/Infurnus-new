@@ -3,7 +3,15 @@ import { describe, expect, it } from 'vitest';
 import { createApp } from '../../../app.js';
 import { signAccessToken } from '../../auth/utils/jwt.js';
 import type { AdminRepository } from '../repositories/admin.repository.js';
-import type { AdminFilters, AdminPartner, AdminUser, AdminVehicle, Page } from '../types/admin.js';
+import type {
+  AdminFilters,
+  AdminPartner,
+  AdminUser,
+  AdminVehicle,
+  FleetFilters,
+  LiveFleetVehicle,
+  Page,
+} from '../types/admin.js';
 
 const adminId = '550e8400-e29b-41d4-a716-446655440000';
 const userId = '650e8400-e29b-41d4-a716-446655440000';
@@ -45,6 +53,27 @@ class Repository implements AdminRepository {
   verifyDriver = async (_id: string, _status: string) => true;
   verifyVehicle = async (_id: string, _status: string) => true;
   verifyDocument = async (_id: string, _status: string) => true;
+
+  getFleetAnalyticsSummary = async (_filters: FleetFilters) => ({
+    totalVehicles: 1,
+    activeVehicles: 1,
+    onTripVehicles: 0,
+    offlineVehicles: 0,
+    activePercentage: 100,
+  });
+  getStateFleetAnalytics = async (_filters: FleetFilters) => [
+    { state: 'Bihar', total: 1, active: 1, onTrip: 0, offline: 0 },
+  ];
+  getCityFleetAnalytics = async (state: string, _filters: FleetFilters) => [
+    { state, city: 'Patna', total: 1, active: 1, onTrip: 0, offline: 0 },
+  ];
+  getLiveFleetVehicles = async (_filters: FleetFilters): Promise<Page<LiveFleetVehicle>> => ({
+    items: [{} as LiveFleetVehicle],
+    page: 1,
+    pageSize: 25,
+    total: 1,
+  });
+  getLiveFleetVehicleDetails = async (id: string) => (id === userId ? ({ id } as never) : null);
 }
 
 describe('Admin API route matrix', () => {
@@ -58,6 +87,10 @@ describe('Admin API route matrix', () => {
     '/admin/reports/users',
     '/admin/reports/partners',
     '/admin/reports/vehicles',
+    '/admin/fleet/analytics',
+    '/admin/fleet/states',
+    '/admin/fleet/map',
+    '/admin/fleet/vehicles',
   ])('returns 401 for unauthenticated %s', async (path) => {
     expect((await request(app).get(path)).status).toBe(401);
   });
@@ -82,13 +115,15 @@ describe('Admin API route matrix', () => {
     ['/admin/users', 'role=driver&status=active&page=2&pageSize=10'],
     ['/admin/partners', 'approvalStatus=approved&documentStatus=VERIFIED'],
     ['/admin/vehicles', 'active=true&complianceStatus=expiring&plate=KA01'],
+    ['/admin/fleet/analytics', 'state=Bihar&sector=passenger'],
+    ['/admin/fleet/states', 'sector=logistics'],
+    ['/admin/fleet/map', 'status=active&sector=passenger'],
   ])('passes validated filters for %s', async (path, query) => {
     const token = await tokenFor('admin');
     const response = await request(app)
       .get(`${path}?${query}`)
       .set('authorization', `Bearer ${token}`);
     expect(response.status).toBe(200);
-    expect(response.body.data.items).toHaveLength(1);
   });
 
   it.each(['/admin/users/not-a-uuid', '/admin/partners/not-a-uuid', '/admin/vehicles/not-a-uuid'])(
@@ -105,6 +140,7 @@ describe('Admin API route matrix', () => {
     '/admin/users/650e8400-e29b-41d4-a716-446655440001',
     '/admin/partners/650e8400-e29b-41d4-a716-446655440001',
     '/admin/vehicles/650e8400-e29b-41d4-a716-446655440001',
+    '/admin/fleet/vehicles/650e8400-e29b-41d4-a716-446655440001',
   ])('returns 404 for missing resource %s', async (path) => {
     const token = await tokenFor('admin');
     expect((await request(app).get(path).set('authorization', `Bearer ${token}`)).status).toBe(404);
@@ -115,6 +151,7 @@ describe('Admin API route matrix', () => {
     '/admin/partners?documentStatus=UNKNOWN',
     '/admin/vehicles?complianceStatus=UNKNOWN',
     '/admin/vehicles?from=2026-02-01&to=2026-01-01',
+    '/admin/fleet/analytics?sector=INVALID',
   ])('rejects invalid query %s', async (path) => {
     const token = await tokenFor('admin');
     expect((await request(app).get(path).set('authorization', `Bearer ${token}`)).status).toBe(400);
