@@ -275,7 +275,7 @@ try {
     const checksRow = checks.rows[0]!;
 
     if (
-      checksRow.migrationCount !== '31' ||
+      checksRow.migrationCount !== '36' ||
       !checksRow.rides ||
       checksRow.postgis !== 'postgis' ||
       !checksRow.rideIndex ||
