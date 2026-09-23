@@ -55,7 +55,9 @@ describe('AdminService', () => {
       code: 'VEHICLE_NOT_FOUND',
       statusCode: 404,
     });
-    await expect(service.getLiveFleetVehicleDetails('850e8400-e29b-41d4-a716-446655440001')).rejects.toMatchObject({
+    await expect(
+      service.getLiveFleetVehicleDetails('850e8400-e29b-41d4-a716-446655440001'),
+    ).rejects.toMatchObject({
       code: 'VEHICLE_NOT_FOUND',
       statusCode: 404,
     });
