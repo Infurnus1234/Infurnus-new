@@ -33,13 +33,13 @@ class FleetVehicleModel {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'make': make,
-        'model': model,
-        'color': color,
-        'sector': sector,
-        'category': category,
-        'fuelRatePerKm': fuelRatePerKm,
-        'loadCapacityKg': loadCapacityKg,
-      };
+    'id': id,
+    'make': make,
+    'model': model,
+    'color': color,
+    'sector': sector,
+    'category': category,
+    'fuelRatePerKm': fuelRatePerKm,
+    'loadCapacityKg': loadCapacityKg,
+  };
 }

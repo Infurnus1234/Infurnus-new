@@ -94,3 +94,61 @@ export interface AdminDashboard {
     fitnessExpiringOrExpired: number;
   };
 }
+
+export interface FleetAnalyticsSummary {
+  totalVehicles: number;
+  activeVehicles: number;
+  onTripVehicles: number;
+  offlineVehicles: number;
+  activePercentage: number;
+}
+
+export interface StateFleetAnalytics {
+  state: string;
+  total: number;
+  active: number;
+  onTrip: number;
+  offline: number;
+}
+
+export interface CityFleetAnalytics {
+  state: string;
+  city: string;
+  total: number;
+  active: number;
+  onTrip: number;
+  offline: number;
+}
+
+export interface LiveFleetVehicle {
+  id: string;
+  plateNumber: string;
+  make: string;
+  model: string;
+  color: string | null;
+  sector: string;
+  category: string;
+  status: 'active' | 'on_trip' | 'offline' | 'registered';
+  driverId: string | null;
+  driverName: string | null;
+  driverPhone: string | null;
+  state: string;
+  city: string;
+  latitude: number | null;
+  longitude: number | null;
+  lastLocationAt: string | null;
+  currentRideId: string | null;
+  verificationStatus: string;
+  createdAt: string;
+}
+
+export interface FleetFilters {
+  state?: string | undefined;
+  city?: string | undefined;
+  sector?: string | undefined;
+  category?: string | undefined;
+  status?: string | undefined;
+  search?: string | undefined;
+  page?: number | undefined;
+  pageSize?: number | undefined;
+}

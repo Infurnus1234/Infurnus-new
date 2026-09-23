@@ -47,6 +47,28 @@ class InMemoryAdminRepository implements AdminRepository {
   verifyDocument() {
     return Promise.resolve(true);
   }
+
+  getFleetAnalyticsSummary() {
+    return Promise.resolve({
+      totalVehicles: 0,
+      activeVehicles: 0,
+      onTripVehicles: 0,
+      offlineVehicles: 0,
+      activePercentage: 0,
+    });
+  }
+  getStateFleetAnalytics() {
+    return Promise.resolve([]);
+  }
+  getCityFleetAnalytics() {
+    return Promise.resolve([]);
+  }
+  getLiveFleetVehicles() {
+    return Promise.resolve(emptyPage);
+  }
+  getLiveFleetVehicleDetails() {
+    return Promise.resolve(null);
+  }
 }
 
 describe('Admin API authorization', () => {

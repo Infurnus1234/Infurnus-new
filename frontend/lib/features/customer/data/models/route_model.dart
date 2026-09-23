@@ -18,8 +18,8 @@ class RouteModel {
   }
 
   Map<String, dynamic> toJson() => {
-        'distanceMeters': distanceMeters,
-        'durationSeconds': durationSeconds,
-        if (encodedPolyline != null) 'encodedPolyline': encodedPolyline,
-      };
+    'distanceMeters': distanceMeters,
+    'durationSeconds': durationSeconds,
+    if (encodedPolyline != null) 'encodedPolyline': encodedPolyline,
+  };
 }

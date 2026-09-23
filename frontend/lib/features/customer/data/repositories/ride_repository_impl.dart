@@ -1,5 +1,7 @@
 import 'dart:io';
+
 import 'package:dio/dio.dart';
+
 import '../../../../core/errors/failures.dart';
 import '../../domain/repositories/ride_repository.dart';
 import '../datasources/ride_remote_data_source.dart';
@@ -74,11 +76,7 @@ class RideRepositoryImpl implements RideRepository {
     String? review,
   }) async {
     try {
-      await remoteDataSource.submitRating(
-        rideId,
-        rating,
-        review: review,
-      );
+      await remoteDataSource.submitRating(rideId, rating, review: review);
       return {'success': true};
     } on DioException catch (e) {
       throw _handleDioException(e);
@@ -136,9 +134,15 @@ class RideRepositoryImpl implements RideRepository {
   }
 
   @override
-  Future<List<FleetVehicleModel>> getFleet({String? sector, String? category}) async {
+  Future<List<FleetVehicleModel>> getFleet({
+    String? sector,
+    String? category,
+  }) async {
     try {
-      return await remoteDataSource.getFleet(sector: sector, category: category);
+      return await remoteDataSource.getFleet(
+        sector: sector,
+        category: category,
+      );
     } on DioException catch (e) {
       throw _handleDioException(e);
     } catch (e) {
@@ -152,7 +156,7 @@ class RideRepositoryImpl implements RideRepository {
         e.error is SocketException) {
       return NetworkFailure();
     }
-    
+
     final message = e.response?.data?['message'] ?? e.message;
     return ServerFailure(message.toString());
   }

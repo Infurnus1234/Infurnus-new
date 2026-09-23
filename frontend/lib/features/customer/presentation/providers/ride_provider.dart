@@ -1,6 +1,8 @@
 import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+
 import '../../../../core/services/cashfree_checkout_service.dart';
 import '../../../../core/services/geocoding_service.dart';
 import '../../../../core/services/socket_service.dart';
@@ -10,7 +12,16 @@ import '../../data/models/ride_model.dart' as model;
 import '../../data/models/route_model.dart';
 import 'ride_use_case_providers.dart';
 
-enum RideStatus { initial, searching, matched, arrived, active, completed, cancelled, error }
+enum RideStatus {
+  initial,
+  searching,
+  matched,
+  arrived,
+  active,
+  completed,
+  cancelled,
+  error,
+}
 
 class DriverLocation {
   final double latitude;
@@ -166,7 +177,9 @@ class RideNotifier extends StateNotifier<RideState> {
 
   void _subscribeToSocketEvents() {
     _eventSubscription?.cancel();
-    _eventSubscription = ref.read(socketServiceProvider).eventStream.listen((event) {
+    _eventSubscription = ref.read(socketServiceProvider).eventStream.listen((
+      event,
+    ) {
       _handleSocketEvent(event);
     });
   }
@@ -204,7 +217,11 @@ class RideNotifier extends StateNotifier<RideState> {
               lastDriverLocation: DriverLocation(
                 latitude: (locationData['latitude'] as num).toDouble(),
                 longitude: (locationData['longitude'] as num).toDouble(),
-                timestamp: DateTime.tryParse(locationData['timestamp']?.toString() ?? '') ?? DateTime.now(),
+                timestamp:
+                    DateTime.tryParse(
+                      locationData['timestamp']?.toString() ?? '',
+                    ) ??
+                    DateTime.now(),
               ),
             );
           }
@@ -228,7 +245,9 @@ class RideNotifier extends StateNotifier<RideState> {
   Future<void> _ensureSocketConnected() async {
     final socketService = ref.read(socketServiceProvider);
     if (socketService.currentState != SocketConnectionState.connected) {
-      final token = await ref.read(secureStorageProvider).read(key: 'auth_token');
+      final token = await ref
+          .read(secureStorageProvider)
+          .read(key: 'auth_token');
       if (token != null) {
         socketService.connect(token);
       }
@@ -244,7 +263,12 @@ class RideNotifier extends StateNotifier<RideState> {
     }
   }
 
-  void setRoute(String pickup, String dest, {LatLng? pickupCoords, LatLng? destCoords}) {
+  void setRoute(
+    String pickup,
+    String dest, {
+    LatLng? pickupCoords,
+    LatLng? destCoords,
+  }) {
     state = state.copyWith(
       pickup: pickup,
       destination: dest,
@@ -263,7 +287,9 @@ class RideNotifier extends StateNotifier<RideState> {
   Future<bool> geocodeAndSetPickup(String address) async {
     final trimmed = address.trim();
     if (trimmed.isEmpty) return false;
-    final coords = await ref.read(geocodingServiceProvider).geocodeAddress(trimmed);
+    final coords = await ref
+        .read(geocodingServiceProvider)
+        .geocodeAddress(trimmed);
     if (coords != null) {
       setPickupCoords(coords, address: trimmed);
       return true;
@@ -278,7 +304,9 @@ class RideNotifier extends StateNotifier<RideState> {
   Future<bool> geocodeAndSetDestination(String address) async {
     final trimmed = address.trim();
     if (trimmed.isEmpty) return false;
-    final coords = await ref.read(geocodingServiceProvider).geocodeAddress(trimmed);
+    final coords = await ref
+        .read(geocodingServiceProvider)
+        .geocodeAddress(trimmed);
     if (coords != null) {
       setDestinationCoords(coords, address: trimmed);
       return true;
@@ -320,10 +348,7 @@ class RideNotifier extends StateNotifier<RideState> {
       defaultTier = 'fortuner';
     }
 
-    state = state.copyWith(
-      selectedSector: sector,
-      selectedTier: defaultTier,
-    );
+    state = state.copyWith(selectedSector: sector, selectedTier: defaultTier);
     estimateRouteFare();
   }
 
@@ -365,7 +390,10 @@ class RideNotifier extends StateNotifier<RideState> {
     try {
       final payload = <String, dynamic>{
         'pickup': {'latitude': pickup.latitude, 'longitude': pickup.longitude},
-        'destination': {'latitude': destination.latitude, 'longitude': destination.longitude},
+        'destination': {
+          'latitude': destination.latitude,
+          'longitude': destination.longitude,
+        },
         'sector': state.selectedSector,
         'vehicleCategory': state.selectedTier,
       };
@@ -375,9 +403,11 @@ class RideNotifier extends StateNotifier<RideState> {
         if (state.goods!['weightKg'] != null) {
           payload['weightKg'] = state.goods!['weightKg'];
         }
-        if (state.goods!['hasLoadingAssistance'] != null || state.goods!['loadingAssistance'] != null) {
+        if (state.goods!['hasLoadingAssistance'] != null ||
+            state.goods!['loadingAssistance'] != null) {
           payload['hasLoadingAssistance'] =
-              state.goods!['hasLoadingAssistance'] ?? state.goods!['loadingAssistance'];
+              state.goods!['hasLoadingAssistance'] ??
+              state.goods!['loadingAssistance'];
         }
       }
       if (state.serviceDetails != null) {
@@ -396,7 +426,9 @@ class RideNotifier extends StateNotifier<RideState> {
         payload['waitingMinutes'] = state.waitingMinutes;
       }
 
-      final estimate = await ref.read(estimateFareUseCaseProvider).execute(payload);
+      final estimate = await ref
+          .read(estimateFareUseCaseProvider)
+          .execute(payload);
 
       state = state.copyWith(
         fareEstimate: estimate,
@@ -432,7 +464,10 @@ class RideNotifier extends StateNotifier<RideState> {
 
       final data = <String, dynamic>{
         'pickup': {'latitude': pickup.latitude, 'longitude': pickup.longitude},
-        'destination': {'latitude': destination.latitude, 'longitude': destination.longitude},
+        'destination': {
+          'latitude': destination.latitude,
+          'longitude': destination.longitude,
+        },
         'pickupAddress': state.pickup ?? 'Current Location',
         'destinationAddress': state.destination ?? 'Destination',
         if (state.fare != null) 'fareEstimate': state.fare!,
@@ -461,13 +496,18 @@ class RideNotifier extends StateNotifier<RideState> {
       await _ensureSocketConnected();
       ref.read(socketServiceProvider).joinRide(ride.id);
     } catch (e) {
-      state = state.copyWith(status: RideStatus.error, errorMessage: e.toString());
+      state = state.copyWith(
+        status: RideStatus.error,
+        errorMessage: e.toString(),
+      );
     }
   }
 
   Future<void> fetchRideHistory() async {
     try {
-      final history = await ref.read(listRidesUseCaseProvider).execute(limit: 20);
+      final history = await ref
+          .read(listRidesUseCaseProvider)
+          .execute(limit: 20);
       state = state.copyWith(history: history);
     } catch (e) {
       state = state.copyWith(errorMessage: e.toString());
@@ -499,17 +539,13 @@ class RideNotifier extends StateNotifier<RideState> {
     if (rideId == null) return;
 
     try {
-      final ride = await ref.read(cancelRideUseCaseProvider).execute(
-            rideId,
-            'Cancelled by user',
-          );
+      final ride = await ref
+          .read(cancelRideUseCaseProvider)
+          .execute(rideId, 'Cancelled by user');
 
       ref.read(socketServiceProvider).leaveRide(rideId);
 
-      state = state.copyWith(
-        status: RideStatus.cancelled,
-        currentRide: ride,
-      );
+      state = state.copyWith(status: RideStatus.cancelled, currentRide: ride);
       fetchRideHistory();
     } catch (e) {
       state = state.copyWith(errorMessage: e.toString());
@@ -526,29 +562,36 @@ class RideNotifier extends StateNotifier<RideState> {
 
     if (rideId != null) {
       try {
-        await ref.read(submitRatingUseCaseProvider).execute(
-          rideId: rideId,
-          rating: rating,
-          review: comment.trim().isNotEmpty ? comment.trim() : null,
-        );
+        await ref
+            .read(submitRatingUseCaseProvider)
+            .execute(
+              rideId: rideId,
+              rating: rating,
+              review: comment.trim().isNotEmpty ? comment.trim() : null,
+            );
       } catch (_) {
         // Non-blocking fallback
       }
     }
   }
 
-  Future<bool> initiateTripPayment({required double amount, required String paymentMethod}) async {
+  Future<bool> initiateTripPayment({
+    required double amount,
+    required String paymentMethod,
+  }) async {
     final rideId = state.currentRide?.id;
     if (rideId == null) return false;
 
     state = state.copyWith(paymentStatus: 'processing', errorMessage: null);
 
     try {
-      final initiateResult = await ref.read(initiatePaymentUseCaseProvider).execute(
-        rideId: rideId,
-        amount: amount,
-        paymentMethod: paymentMethod,
-      );
+      final initiateResult = await ref
+          .read(initiatePaymentUseCaseProvider)
+          .execute(
+            rideId: rideId,
+            amount: amount,
+            paymentMethod: paymentMethod,
+          );
 
       final paymentId = initiateResult['id']?.toString();
       if (paymentId == null) {
@@ -585,22 +628,22 @@ class RideNotifier extends StateNotifier<RideState> {
         if (checkoutResult.status == CashfreeCheckoutStatus.failed) {
           state = state.copyWith(
             paymentStatus: 'unpaid',
-            errorMessage: checkoutResult.errorMessage ?? 'Payment failed at gateway',
+            errorMessage:
+                checkoutResult.errorMessage ?? 'Payment failed at gateway',
           );
           return false;
         }
 
         // Server-side verification: Flutter callback alone never marks payment as paid.
-        final captureResult = await ref.read(capturePaymentUseCaseProvider).execute(
-          paymentId: paymentId,
-          providerPaymentId: checkoutResult.referenceId,
-        );
+        final captureResult = await ref
+            .read(capturePaymentUseCaseProvider)
+            .execute(
+              paymentId: paymentId,
+              providerPaymentId: checkoutResult.referenceId,
+            );
 
         if (captureResult['status'] == 'CAPTURED') {
-          state = state.copyWith(
-            paymentStatus: 'paid',
-            errorMessage: null,
-          );
+          state = state.copyWith(paymentStatus: 'paid', errorMessage: null);
           fetchPaymentHistory();
           return true;
         } else {
@@ -612,26 +655,33 @@ class RideNotifier extends StateNotifier<RideState> {
         }
       } else {
         // Non-Cashfree provider (e.g. wallet/cash)
-        final captureResult = await ref.read(capturePaymentUseCaseProvider).execute(
-          paymentId: paymentId,
-        );
+        final captureResult = await ref
+            .read(capturePaymentUseCaseProvider)
+            .execute(paymentId: paymentId);
 
         state = state.copyWith(
-          paymentStatus: captureResult['status'] == 'CAPTURED' ? 'paid' : 'unpaid',
+          paymentStatus: captureResult['status'] == 'CAPTURED'
+              ? 'paid'
+              : 'unpaid',
           errorMessage: null,
         );
         fetchPaymentHistory();
         return captureResult['status'] == 'CAPTURED';
       }
     } catch (e) {
-      state = state.copyWith(paymentStatus: 'unpaid', errorMessage: e.toString());
+      state = state.copyWith(
+        paymentStatus: 'unpaid',
+        errorMessage: e.toString(),
+      );
       return false;
     }
   }
 
   Future<void> fetchPaymentHistory() async {
     try {
-      final payments = await ref.read(listPaymentsUseCaseProvider).execute(limit: 20);
+      final payments = await ref
+          .read(listPaymentsUseCaseProvider)
+          .execute(limit: 20);
       state = state.copyWith(recentPayments: payments);
     } catch (_) {}
   }

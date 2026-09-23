@@ -36,6 +36,7 @@ import '../../features/customer/presentation/screens/legal_document_screen.dart'
 import '../../features/customer/presentation/screens/delete_account_screen.dart';
 import '../../features/customer/presentation/screens/booking_history_screen.dart';
 import '../../features/support/presentation/screens/support_screen.dart';
+import '../../features/admin/presentation/screens/fleet_analytics_dashboard_screen.dart';
 
 class RouterNotifier extends ChangeNotifier {
   final Ref _ref;
@@ -177,6 +178,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/logistics',
         builder: (context, state) => const LogisticsScreen(),
+      ),
+      GoRoute(
+        path: '/admin/fleet-analytics',
+        builder: (context, state) => const FleetAnalyticsDashboardScreen(),
       ),
       GoRoute(
         path: '/ai-assistant/:role',

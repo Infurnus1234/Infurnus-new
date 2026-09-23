@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+
 import '../../../../core/services/location_service.dart';
-import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_button.dart';
 import '../../../../shared/widgets/infurnus_card.dart';
 import '../../../../shared/widgets/infurnus_text_field.dart';
@@ -17,13 +17,21 @@ class LogisticsScreen extends ConsumerStatefulWidget {
 }
 
 class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
+  static const Color mainBg = Color(0xFF000000);
+  static const Color cardBg = Color(0xFF111111);
+  static const Color borderCard = Color(0xFF262626);
+  static const Color textWhite = Color(0xFFFFFFFF);
+  static const Color textGray = Color(0xFFA1A1AA);
+  static const Color brandGreen = Color(0xFF22C55E);
+  static const Color logisticsOrange = Color(0xFFF59E0B);
+
   final _pickupController = TextEditingController();
   final _dropController = TextEditingController();
   final _itemDescController = TextEditingController();
   final _weightController = TextEditingController(text: '15');
   final _quantityController = TextEditingController(text: '1');
 
-  String _selectedVehicle = 'mini_truck'; // 'bike', 'three_wheeler', 'mini_truck'
+  String _selectedVehicle = 'mini_truck';
   String _selectedCategory = 'General Goods';
   bool _needLoadingHelper = false;
 
@@ -53,7 +61,9 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
     try {
       final pos = await ref.read(locationServiceProvider).getCurrentPosition();
       if (pos != null && mounted) {
-        ref.read(rideProvider.notifier).setPickupCoords(
+        ref
+            .read(rideProvider.notifier)
+            .setPickupCoords(
               LatLng(pos.latitude, pos.longitude),
               address: 'Current Location',
             );
@@ -77,10 +87,9 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
     final weight = double.tryParse(_weightController.text.trim()) ?? 15.0;
     final qty = int.tryParse(_quantityController.text.trim()) ?? 1;
 
-    ref.read(rideProvider.notifier).setRoute(
-          _pickupController.text.trim(),
-          _dropController.text.trim(),
-        );
+    ref
+        .read(rideProvider.notifier)
+        .setRoute(_pickupController.text.trim(), _dropController.text.trim());
     ref.read(rideProvider.notifier).selectSector('logistics');
     ref.read(rideProvider.notifier).selectTier(_selectedVehicle);
     ref.read(rideProvider.notifier).setGoods({
@@ -93,9 +102,12 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
   }
 
   void _handleBooking() {
-    if (_pickupController.text.trim().isEmpty || _dropController.text.trim().isEmpty) {
+    if (_pickupController.text.trim().isEmpty ||
+        _dropController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter pickup and delivery addresses')),
+        const SnackBar(
+          content: Text('Please enter pickup and delivery addresses'),
+        ),
       );
       return;
     }
@@ -111,12 +123,15 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
     final estimate = rideState.fareEstimate;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: mainBg,
       appBar: AppBar(
-        title: const Text('Logistics & Freight'),
+        title: const Text(
+          'Logistics & Freight',
+          style: TextStyle(color: textWhite, fontWeight: FontWeight.bold),
+        ),
         elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        backgroundColor: const Color(0xFF050505),
+        foregroundColor: textWhite,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -125,20 +140,30 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
           children: [
             // Header info pill
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
-                color: Colors.orange[50],
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.orange[200]!),
+                color: const Color(0xFF3A290A),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: logisticsOrange.withValues(alpha: 0.4),
+                ),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.local_shipping, color: Colors.orange[800], size: 24),
+                  const Icon(
+                    Icons.local_shipping_rounded,
+                    color: logisticsOrange,
+                    size: 24,
+                  ),
                   const SizedBox(width: 12),
-                  Expanded(
+                  const Expanded(
                     child: Text(
                       'On-demand intra-city freight with live GPS tracking and verified cargo drivers.',
-                      style: TextStyle(color: Colors.orange[900], fontSize: 12, fontWeight: FontWeight.w500),
+                      style: TextStyle(
+                        color: textWhite,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                 ],
@@ -147,26 +172,40 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
             const SizedBox(height: 20),
 
             // Route addresses
-            const Text('Pickup & Delivery Location', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const Text(
+              'Pickup & Delivery Location',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: textWhite,
+              ),
+            ),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: Colors.grey[50],
+                color: cardBg,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.grey[200]!),
+                border: Border.all(color: borderCard),
               ),
               child: Column(
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.upload, color: AppColors.primaryGreen, size: 20),
+                      const Icon(
+                        Icons.upload_rounded,
+                        color: brandGreen,
+                        size: 20,
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: TextField(
                           controller: _pickupController,
+                          style: const TextStyle(color: textWhite),
                           decoration: const InputDecoration(
-                            hintText: 'Pickup Address (Warehouse / Shop / Home)',
+                            hintText:
+                                'Pickup Address (Warehouse / Shop / Home)',
+                            hintStyle: TextStyle(color: textGray),
                             border: InputBorder.none,
                             isDense: true,
                           ),
@@ -174,21 +213,31 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.gps_fixed, size: 18, color: AppColors.primaryGreen),
+                        icon: const Icon(
+                          Icons.gps_fixed_rounded,
+                          size: 18,
+                          color: brandGreen,
+                        ),
                         onPressed: _detectCurrentLocation,
                       ),
                     ],
                   ),
-                  const Divider(height: 16),
+                  const Divider(height: 16, color: borderCard),
                   Row(
                     children: [
-                      const Icon(Icons.download, color: Colors.orange, size: 20),
+                      const Icon(
+                        Icons.download_rounded,
+                        color: logisticsOrange,
+                        size: 20,
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: TextField(
                           controller: _dropController,
+                          style: const TextStyle(color: textWhite),
                           decoration: const InputDecoration(
                             hintText: 'Delivery Destination Address',
+                            hintStyle: TextStyle(color: textGray),
                             border: InputBorder.none,
                             isDense: true,
                           ),
@@ -203,7 +252,14 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
             const SizedBox(height: 24),
 
             // Vehicle Category Selector
-            const Text('Select Freight Vehicle', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const Text(
+              'Select Freight Vehicle',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: textWhite,
+              ),
+            ),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -211,41 +267,76 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
                   id: 'bike',
                   title: 'Bike Express',
                   capacity: 'Up to 20 kg',
-                  icon: Icons.two_wheeler,
+                  icon: Icons.two_wheeler_rounded,
                 ),
                 const SizedBox(width: 10),
                 _buildVehicleOption(
                   id: 'three_wheeler',
                   title: '3-Wheeler',
                   capacity: 'Up to 300 kg',
-                  icon: Icons.electric_rickshaw,
+                  icon: Icons.electric_rickshaw_rounded,
                 ),
                 const SizedBox(width: 10),
                 _buildVehicleOption(
                   id: 'mini_truck',
                   title: 'Mini Truck 1T',
                   capacity: 'Up to 1000 kg',
-                  icon: Icons.local_shipping,
+                  icon: Icons.local_shipping_rounded,
                 ),
               ],
             ),
             const SizedBox(height: 24),
 
             // Item Details
-            const Text('Cargo & Parcel Information', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const Text(
+              'Cargo & Parcel Information',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: textWhite,
+              ),
+            ),
             const SizedBox(height: 12),
-            InfurnusCard(
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: borderCard),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   DropdownButtonFormField<String>(
                     initialValue: _selectedCategory,
+                    dropdownColor: cardBg,
+                    style: const TextStyle(color: textWhite),
                     decoration: const InputDecoration(
                       labelText: 'Item Category',
+                      labelStyle: TextStyle(color: textGray),
                       border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      enabledBorder: OutlineInputBorder(
+                        borderSide: BorderSide(color: borderCard),
+                      ),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                     ),
-                    items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c, style: const TextStyle(fontSize: 14)))).toList(),
+                    items: _categories
+                        .map(
+                          (c) => DropdownMenuItem(
+                            value: c,
+                            child: Text(
+                              c,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: textWhite,
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
                     onChanged: (val) {
                       if (val != null) {
                         setState(() => _selectedCategory = val);
@@ -287,10 +378,20 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
                   const SizedBox(height: 14),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('Driver Loading & Unloading Help', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                    subtitle: const Text('Helper assistance for heavy goods (server rate applies)', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    title: const Text(
+                      'Driver Loading & Unloading Help',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: textWhite,
+                      ),
+                    ),
+                    subtitle: const Text(
+                      'Helper assistance for heavy goods (server rate applies)',
+                      style: TextStyle(fontSize: 12, color: textGray),
+                    ),
                     value: _needLoadingHelper,
-                    activeThumbColor: AppColors.primaryGreen,
+                    activeThumbColor: brandGreen,
                     onChanged: (val) {
                       setState(() => _needLoadingHelper = val);
                       _recalculateFare();
@@ -302,21 +403,31 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
             const SizedBox(height: 24),
 
             // Itemized Fare Breakdown Card
-            const Text('Itemized Fare Breakdown', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const Text(
+              'Itemized Fare Breakdown',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: textWhite,
+              ),
+            ),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.grey[50],
+                color: cardBg,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.grey[200]!),
+                border: Border.all(color: borderCard),
               ),
               child: Column(
                 children: [
                   if (estimate == null) ...[
                     _buildFareRow('Status', 'Fare estimate calculating...'),
                   ] else ...[
-                    _buildFareRow('Base Logistics Charge', '₹${estimate.baseAmount.toStringAsFixed(2)}'),
+                    _buildFareRow(
+                      'Base Logistics Charge',
+                      '₹${estimate.baseAmount.toStringAsFixed(2)}',
+                    ),
                     const SizedBox(height: 6),
                     _buildFareRow(
                       'Distance Charge (${estimate.distanceKm.toStringAsFixed(1)} km)',
@@ -324,27 +435,50 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
                     ),
                     if ((estimate.weightAmount ?? 0) > 0) ...[
                       const SizedBox(height: 6),
-                      _buildFareRow('Weight Surcharge (>20kg)', '₹${estimate.weightAmount!.toStringAsFixed(2)}'),
+                      _buildFareRow(
+                        'Weight Surcharge (>20kg)',
+                        '₹${estimate.weightAmount!.toStringAsFixed(2)}',
+                      ),
                     ],
-                    if (_needLoadingHelper && (estimate.loadingAmount ?? 0) > 0) ...[
+                    if (_needLoadingHelper &&
+                        (estimate.loadingAmount ?? 0) > 0) ...[
                       const SizedBox(height: 6),
-                      _buildFareRow('Loading/Unloading Helper', '₹${estimate.loadingAmount!.toStringAsFixed(2)}'),
+                      _buildFareRow(
+                        'Loading/Unloading Helper',
+                        '₹${estimate.loadingAmount!.toStringAsFixed(2)}',
+                      ),
                     ],
                     if ((estimate.taxAmount ?? 0) > 0) ...[
                       const SizedBox(height: 6),
-                      _buildFareRow('Goods & Service Tax (5% GST)', '₹${estimate.taxAmount!.toStringAsFixed(2)}'),
+                      _buildFareRow(
+                        'Goods & Service Tax (5% GST)',
+                        '₹${estimate.taxAmount!.toStringAsFixed(2)}',
+                      ),
                     ],
                   ],
-                  const Divider(height: 20),
+                  const Divider(height: 20, color: borderCard),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Total Estimated Fare', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      const Text(
+                        'Total Estimated Fare',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: textWhite,
+                        ),
+                      ),
                       Text(
                         rideState.fare != null
                             ? '₹${rideState.fare!.toStringAsFixed(2)}'
-                            : (estimate != null ? '₹${estimate.grossAmount.toStringAsFixed(2)}' : '--'),
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: AppColors.primaryGreen),
+                            : (estimate != null
+                                  ? '₹${estimate.grossAmount.toStringAsFixed(2)}'
+                                  : '--'),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 20,
+                          color: brandGreen,
+                        ),
                       ),
                     ],
                   ),
@@ -385,26 +519,34 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: isSelected ? Colors.orange[50] : Colors.white,
+            color: isSelected ? const Color(0xFF3A290A) : cardBg,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: isSelected ? Colors.orange : Colors.grey[300]!,
+              color: isSelected ? logisticsOrange : borderCard,
               width: isSelected ? 2 : 1,
             ),
           ),
           child: Column(
             children: [
-              Icon(icon, size: 28, color: isSelected ? Colors.orange[800] : Colors.grey[700]),
+              Icon(
+                icon,
+                size: 28,
+                color: isSelected ? logisticsOrange : textGray,
+              ),
               const SizedBox(height: 6),
               Text(
                 title,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: textWhite,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 2),
               Text(
                 capacity,
-                style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                style: const TextStyle(fontSize: 10, color: textGray),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -418,8 +560,15 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: TextStyle(color: Colors.grey[700], fontSize: 13)),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+        Text(label, style: const TextStyle(color: textGray, fontSize: 13)),
+        Text(
+          value,
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+            color: textWhite,
+          ),
+        ),
       ],
     );
   }

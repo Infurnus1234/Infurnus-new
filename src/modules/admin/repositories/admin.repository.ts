@@ -5,7 +5,12 @@ import type {
   AdminPartner,
   AdminUser,
   AdminVehicle,
+  CityFleetAnalytics,
+  FleetAnalyticsSummary,
+  FleetFilters,
+  LiveFleetVehicle,
   Page,
+  StateFleetAnalytics,
 } from '../types/admin.js';
 
 export interface AdminRepository {
@@ -19,6 +24,13 @@ export interface AdminRepository {
   verifyDriver(driverId: string, status: string, rejectionReason?: string): Promise<boolean>;
   verifyVehicle(vehicleId: string, status: string, rejectionReason?: string): Promise<boolean>;
   verifyDocument(documentId: string, status: string, comments?: string): Promise<boolean>;
+
+  // Fleet Analytics
+  getFleetAnalyticsSummary(filters: FleetFilters): Promise<FleetAnalyticsSummary>;
+  getStateFleetAnalytics(filters: FleetFilters): Promise<StateFleetAnalytics[]>;
+  getCityFleetAnalytics(state: string, filters: FleetFilters): Promise<CityFleetAnalytics[]>;
+  getLiveFleetVehicles(filters: FleetFilters): Promise<Page<LiveFleetVehicle>>;
+  getLiveFleetVehicleDetails(id: string): Promise<LiveFleetVehicle | null>;
 }
 
 const userProjection = `
@@ -70,7 +82,8 @@ export class PostgresAdminRepository implements AdminRepository {
       `SELECT ${userProjection} FROM users${where} ORDER BY created_at DESC`,
       `SELECT COUNT(*)::int AS count FROM users${where}`,
       values,
-      filters,
+      filters.page,
+      filters.pageSize,
     );
   }
 
@@ -88,7 +101,8 @@ export class PostgresAdminRepository implements AdminRepository {
       `SELECT ${partnerProjection} FROM partners p${where} ORDER BY p.created_at DESC`,
       `SELECT COUNT(*)::int AS count FROM partners p${where}`,
       values,
-      filters,
+      filters.page,
+      filters.pageSize,
     );
   }
 
@@ -111,7 +125,8 @@ export class PostgresAdminRepository implements AdminRepository {
        LEFT JOIN driver_profiles d ON d.id = v.driver_profile_id
        LEFT JOIN partners p ON p.user_id = d.user_id${where}`,
       values,
-      filters,
+      filters.page,
+      filters.pageSize,
     );
   }
 
@@ -207,6 +222,273 @@ export class PostgresAdminRepository implements AdminRepository {
     return (res.rowCount ?? 0) > 0;
   }
 
+  // --- Fleet Analytics Implementation ---
+
+  async getFleetAnalyticsSummary(filters: FleetFilters): Promise<FleetAnalyticsSummary> {
+    const { where, values } = fleetWhere(filters);
+    const sql = `
+      SELECT
+        COUNT(*)::int AS "totalVehicles",
+        COUNT(*) FILTER (
+          WHERE active_ride.id IS NULL
+            AND v.is_active = TRUE
+            AND dp.availability_status = 'available'
+            AND dp.last_location_at >= (NOW() - INTERVAL '30 seconds')
+        )::int AS "activeVehicles",
+        COUNT(*) FILTER (
+          WHERE active_ride.id IS NOT NULL
+        )::int AS "onTripVehicles",
+        COUNT(*) FILTER (
+          WHERE active_ride.id IS NULL
+            AND NOT (
+              v.is_active = TRUE
+              AND dp.availability_status = 'available'
+              AND dp.last_location_at >= (NOW() - INTERVAL '30 seconds')
+            )
+        )::int AS "offlineVehicles"
+      FROM vehicles v
+      LEFT JOIN driver_profiles dp ON dp.id = v.driver_profile_id
+      LEFT JOIN users u ON u.id = dp.user_id
+      LEFT JOIN partners pt ON pt.user_id = v.owner_id OR pt.user_id = u.id
+      LEFT JOIN LATERAL (
+        SELECT r.id
+        FROM rides r
+        WHERE (r.assigned_vehicle_id = v.id OR r.assigned_driver_id = dp.id)
+          AND r.status IN ('driver_assigned', 'driver_arriving', 'driver_arrived', 'in_progress')
+        ORDER BY r.created_at DESC
+        LIMIT 1
+      ) active_ride ON TRUE
+      ${where}
+    `;
+
+    const res = await this.pool.query<{
+      totalVehicles: number;
+      activeVehicles: number;
+      onTripVehicles: number;
+      offlineVehicles: number;
+    }>(sql, values);
+
+    const row = res.rows[0] ?? {
+      totalVehicles: 0,
+      activeVehicles: 0,
+      onTripVehicles: 0,
+      offlineVehicles: 0,
+    };
+
+    const total = row.totalVehicles ?? 0;
+    const active = row.activeVehicles ?? 0;
+    const activePercentage = total > 0 ? Math.round((active / total) * 1000) / 10 : 0;
+
+    return {
+      totalVehicles: total,
+      activeVehicles: active,
+      onTripVehicles: row.onTripVehicles ?? 0,
+      offlineVehicles: row.offlineVehicles ?? 0,
+      activePercentage,
+    };
+  }
+
+  async getStateFleetAnalytics(filters: FleetFilters): Promise<StateFleetAnalytics[]> {
+    const { where, values } = fleetWhere(filters);
+    const sql = `
+      SELECT
+        COALESCE(dp.state, pt.state, 'Bihar') AS state,
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (
+          WHERE active_ride.id IS NULL
+            AND v.is_active = TRUE
+            AND dp.availability_status = 'available'
+            AND dp.last_location_at >= (NOW() - INTERVAL '30 seconds')
+        )::int AS active,
+        COUNT(*) FILTER (
+          WHERE active_ride.id IS NOT NULL
+        )::int AS "onTrip",
+        COUNT(*) FILTER (
+          WHERE active_ride.id IS NULL
+            AND NOT (
+              v.is_active = TRUE
+              AND dp.availability_status = 'available'
+              AND dp.last_location_at >= (NOW() - INTERVAL '30 seconds')
+            )
+        )::int AS offline
+      FROM vehicles v
+      LEFT JOIN driver_profiles dp ON dp.id = v.driver_profile_id
+      LEFT JOIN users u ON u.id = dp.user_id
+      LEFT JOIN partners pt ON pt.user_id = v.owner_id OR pt.user_id = u.id
+      LEFT JOIN LATERAL (
+        SELECT r.id
+        FROM rides r
+        WHERE (r.assigned_vehicle_id = v.id OR r.assigned_driver_id = dp.id)
+          AND r.status IN ('driver_assigned', 'driver_arriving', 'driver_arrived', 'in_progress')
+        ORDER BY r.created_at DESC
+        LIMIT 1
+      ) active_ride ON TRUE
+      ${where}
+      GROUP BY COALESCE(dp.state, pt.state, 'Bihar')
+      ORDER BY total DESC, state ASC
+    `;
+
+    const res = await this.pool.query<StateFleetAnalytics>(sql, values);
+    return res.rows;
+  }
+
+  async getCityFleetAnalytics(state: string, filters: FleetFilters): Promise<CityFleetAnalytics[]> {
+    const combinedFilters = { ...filters, state };
+    const { where, values } = fleetWhere(combinedFilters);
+    const sql = `
+      SELECT
+        COALESCE(dp.state, pt.state, $1) AS state,
+        COALESCE(dp.city, pt.city, 'Patna') AS city,
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (
+          WHERE active_ride.id IS NULL
+            AND v.is_active = TRUE
+            AND dp.availability_status = 'available'
+            AND dp.last_location_at >= (NOW() - INTERVAL '30 seconds')
+        )::int AS active,
+        COUNT(*) FILTER (
+          WHERE active_ride.id IS NOT NULL
+        )::int AS "onTrip",
+        COUNT(*) FILTER (
+          WHERE active_ride.id IS NULL
+            AND NOT (
+              v.is_active = TRUE
+              AND dp.availability_status = 'available'
+              AND dp.last_location_at >= (NOW() - INTERVAL '30 seconds')
+            )
+        )::int AS offline
+      FROM vehicles v
+      LEFT JOIN driver_profiles dp ON dp.id = v.driver_profile_id
+      LEFT JOIN users u ON u.id = dp.user_id
+      LEFT JOIN partners pt ON pt.user_id = v.owner_id OR pt.user_id = u.id
+      LEFT JOIN LATERAL (
+        SELECT r.id
+        FROM rides r
+        WHERE (r.assigned_vehicle_id = v.id OR r.assigned_driver_id = dp.id)
+          AND r.status IN ('driver_assigned', 'driver_arriving', 'driver_arrived', 'in_progress')
+        ORDER BY r.created_at DESC
+        LIMIT 1
+      ) active_ride ON TRUE
+      ${where}
+      GROUP BY COALESCE(dp.state, pt.state, $1), COALESCE(dp.city, pt.city, 'Patna')
+      ORDER BY total DESC, city ASC
+    `;
+
+    const res = await this.pool.query<CityFleetAnalytics>(sql, values);
+    return res.rows;
+  }
+
+  async getLiveFleetVehicles(filters: FleetFilters): Promise<Page<LiveFleetVehicle>> {
+    const { where, values } = fleetWhere(filters);
+    const dataSql = `
+      SELECT
+        v.id,
+        v.plate_number AS "plateNumber",
+        v.make,
+        v.model,
+        v.color,
+        COALESCE(v.sector, 'passenger') AS sector,
+        COALESCE(v.category, 'sedan') AS category,
+        CASE
+          WHEN active_ride.id IS NOT NULL THEN 'on_trip'
+          WHEN v.is_active = TRUE AND dp.availability_status = 'available' AND dp.last_location_at >= (NOW() - INTERVAL '30 seconds') THEN 'active'
+          ELSE 'offline'
+        END AS status,
+        dp.id AS "driverId",
+        CASE WHEN u.id IS NOT NULL THEN (u.first_name || ' ' || u.last_name) ELSE NULL END AS "driverName",
+        u.phone AS "driverPhone",
+        COALESCE(dp.state, pt.state, 'Bihar') AS state,
+        COALESCE(dp.city, pt.city, 'Patna') AS city,
+        ST_Y(dp.last_location::geometry) AS latitude,
+        ST_X(dp.last_location::geometry) AS longitude,
+        dp.last_location_at::text AS "lastLocationAt",
+        active_ride.id AS "currentRideId",
+        COALESCE(v.verification_status, 'approved') AS "verificationStatus",
+        v.created_at::text AS "createdAt"
+      FROM vehicles v
+      LEFT JOIN driver_profiles dp ON dp.id = v.driver_profile_id
+      LEFT JOIN users u ON u.id = dp.user_id
+      LEFT JOIN partners pt ON pt.user_id = v.owner_id OR pt.user_id = u.id
+      LEFT JOIN LATERAL (
+        SELECT r.id
+        FROM rides r
+        WHERE (r.assigned_vehicle_id = v.id OR r.assigned_driver_id = dp.id)
+          AND r.status IN ('driver_assigned', 'driver_arriving', 'driver_arrived', 'in_progress')
+        ORDER BY r.created_at DESC
+        LIMIT 1
+      ) active_ride ON TRUE
+      ${where}
+      ORDER BY v.created_at DESC
+    `;
+
+    const countSql = `
+      SELECT COUNT(*)::int AS count
+      FROM vehicles v
+      LEFT JOIN driver_profiles dp ON dp.id = v.driver_profile_id
+      LEFT JOIN users u ON u.id = dp.user_id
+      LEFT JOIN partners pt ON pt.user_id = v.owner_id OR pt.user_id = u.id
+      LEFT JOIN LATERAL (
+        SELECT r.id
+        FROM rides r
+        WHERE (r.assigned_vehicle_id = v.id OR r.assigned_driver_id = dp.id)
+          AND r.status IN ('driver_assigned', 'driver_arriving', 'driver_arrived', 'in_progress')
+        ORDER BY r.created_at DESC
+        LIMIT 1
+      ) active_ride ON TRUE
+      ${where}
+    `;
+
+    const page = filters.page ?? 1;
+    const pageSize = filters.pageSize ?? 25;
+
+    return this.paginate<LiveFleetVehicle>(dataSql, countSql, values, page, pageSize);
+  }
+
+  async getLiveFleetVehicleDetails(id: string): Promise<LiveFleetVehicle | null> {
+    const sql = `
+      SELECT
+        v.id,
+        v.plate_number AS "plateNumber",
+        v.make,
+        v.model,
+        v.color,
+        COALESCE(v.sector, 'passenger') AS sector,
+        COALESCE(v.category, 'sedan') AS category,
+        CASE
+          WHEN active_ride.id IS NOT NULL THEN 'on_trip'
+          WHEN v.is_active = TRUE AND dp.availability_status = 'available' AND dp.last_location_at >= (NOW() - INTERVAL '30 seconds') THEN 'active'
+          ELSE 'offline'
+        END AS status,
+        dp.id AS "driverId",
+        CASE WHEN u.id IS NOT NULL THEN (u.first_name || ' ' || u.last_name) ELSE NULL END AS "driverName",
+        u.phone AS "driverPhone",
+        COALESCE(dp.state, pt.state, 'Bihar') AS state,
+        COALESCE(dp.city, pt.city, 'Patna') AS city,
+        ST_Y(dp.last_location::geometry) AS latitude,
+        ST_X(dp.last_location::geometry) AS longitude,
+        dp.last_location_at::text AS "lastLocationAt",
+        active_ride.id AS "currentRideId",
+        COALESCE(v.verification_status, 'approved') AS "verificationStatus",
+        v.created_at::text AS "createdAt"
+      FROM vehicles v
+      LEFT JOIN driver_profiles dp ON dp.id = v.driver_profile_id
+      LEFT JOIN users u ON u.id = dp.user_id
+      LEFT JOIN partners pt ON pt.user_id = v.owner_id OR pt.user_id = u.id
+      LEFT JOIN LATERAL (
+        SELECT r.id
+        FROM rides r
+        WHERE (r.assigned_vehicle_id = v.id OR r.assigned_driver_id = dp.id)
+          AND r.status IN ('driver_assigned', 'driver_arriving', 'driver_arrived', 'in_progress')
+        ORDER BY r.created_at DESC
+        LIMIT 1
+      ) active_ride ON TRUE
+      WHERE v.id = $1
+    `;
+
+    const res = await this.pool.query<LiveFleetVehicle>(sql, [id]);
+    return res.rows[0] ?? null;
+  }
+
   private async complianceCount(type: string): Promise<number> {
     const result = await this.pool.query<{ count: number }>(
       `SELECT COUNT(*)::int AS count FROM partner_documents
@@ -221,21 +503,22 @@ export class PostgresAdminRepository implements AdminRepository {
     dataSql: string,
     countSql: string,
     values: unknown[],
-    filters: AdminFilters,
+    page: number,
+    pageSize: number,
   ): Promise<Page<T>> {
-    const offset = (filters.page - 1) * filters.pageSize;
+    const offset = (page - 1) * pageSize;
     const [data, count] = await Promise.all([
       this.pool.query<T>(`${dataSql} LIMIT $${values.length + 1} OFFSET $${values.length + 2}`, [
         ...values,
-        filters.pageSize,
+        pageSize,
         offset,
       ]),
       this.pool.query<{ count: number }>(countSql, values),
     ]);
     return {
       items: data.rows,
-      page: filters.page,
-      pageSize: filters.pageSize,
+      page,
+      pageSize,
       total: count.rows[0]?.count ?? 0,
     };
   }
@@ -328,6 +611,52 @@ function vehicleWhere(filters: AdminFilters) {
   }
   addDates(conditions, values, 'v.created_at', filters);
   return { where: conditions.length ? ` WHERE ${conditions.join(' AND ')}` : '', values };
+}
+
+function fleetWhere(filters: FleetFilters) {
+  const conditions: string[] = [];
+  const values: unknown[] = [];
+
+  if (filters.state) {
+    values.push(filters.state);
+    conditions.push(`COALESCE(dp.state, pt.state, 'Bihar') ILIKE $${values.length}`);
+  }
+  if (filters.city) {
+    values.push(filters.city);
+    conditions.push(`COALESCE(dp.city, pt.city, 'Patna') ILIKE $${values.length}`);
+  }
+  if (filters.sector) {
+    values.push(filters.sector);
+    conditions.push(`COALESCE(v.sector, 'passenger') = $${values.length}`);
+  }
+  if (filters.category) {
+    values.push(filters.category);
+    conditions.push(`COALESCE(v.category, 'sedan') ILIKE $${values.length}`);
+  }
+  if (filters.search) {
+    values.push(`%${filters.search}%`);
+    conditions.push(
+      `(v.plate_number ILIKE $${values.length} OR v.make ILIKE $${values.length} OR v.model ILIKE $${values.length} OR u.first_name ILIKE $${values.length} OR u.last_name ILIKE $${values.length} OR u.phone ILIKE $${values.length})`,
+    );
+  }
+  if (filters.status && filters.status !== 'all') {
+    if (filters.status === 'on_trip') {
+      conditions.push(`active_ride.id IS NOT NULL`);
+    } else if (filters.status === 'active') {
+      conditions.push(
+        `active_ride.id IS NULL AND v.is_active = TRUE AND dp.availability_status = 'available' AND dp.last_location_at >= (NOW() - INTERVAL '30 seconds')`,
+      );
+    } else if (filters.status === 'offline') {
+      conditions.push(
+        `active_ride.id IS NULL AND NOT (v.is_active = TRUE AND dp.availability_status = 'available' AND dp.last_location_at >= (NOW() - INTERVAL '30 seconds'))`,
+      );
+    }
+  }
+
+  return {
+    where: conditions.length ? ` WHERE ${conditions.join(' AND ')}` : '',
+    values,
+  };
 }
 
 function partnerDocumentStatusProjection(documentType: string, alias: string) {

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/theme/app_colors.dart';
+
 import '../../../../shared/widgets/infurnus_button.dart';
 import '../../../../shared/widgets/infurnus_empty_state.dart';
 import '../providers/ride_provider.dart';
@@ -13,6 +13,13 @@ class WalletScreen extends ConsumerStatefulWidget {
 }
 
 class _WalletScreenState extends ConsumerState<WalletScreen> {
+  static const Color mainBg = Color(0xFF000000);
+  static const Color cardBg = Color(0xFF111111);
+  static const Color borderCard = Color(0xFF262626);
+  static const Color textWhite = Color(0xFFFFFFFF);
+  static const Color textGray = Color(0xFFA1A1AA);
+  static const Color brandGreen = Color(0xFF22C55E);
+
   @override
   void initState() {
     super.initState();
@@ -27,12 +34,15 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
     final payments = rideState.recentPayments;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: mainBg,
       appBar: AppBar(
-        title: const Text('INFURNUS Wallet & Pay'),
+        title: const Text(
+          'INFURNUS Wallet & Pay',
+          style: TextStyle(color: textWhite, fontWeight: FontWeight.bold),
+        ),
         elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        backgroundColor: const Color(0xFF050505),
+        foregroundColor: textWhite,
       ),
       body: Padding(
         padding: const EdgeInsets.all(20.0),
@@ -44,10 +54,17 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Recent Transactions', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const Text(
+                  'Recent Transactions',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: textWhite,
+                  ),
+                ),
                 Text(
                   '${payments.length} items',
-                  style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                  style: const TextStyle(color: textGray, fontSize: 13),
                 ),
               ],
             ),
@@ -73,11 +90,12 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: AppColors.primaryDark,
+        color: cardBg,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: borderCard),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primaryDark.withValues(alpha: 0.3),
+            color: Colors.black.withValues(alpha: 0.5),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
@@ -85,14 +103,24 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
       ),
       child: Column(
         children: [
-          const Text('Wallet Balance', style: TextStyle(color: Colors.white70, fontSize: 15)),
+          const Text(
+            'Wallet Balance',
+            style: TextStyle(color: textGray, fontSize: 15),
+          ),
           const SizedBox(height: 8),
-          const Text('₹0.00', style: TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold)),
+          const Text(
+            '₹0.00',
+            style: TextStyle(
+              color: textWhite,
+              fontSize: 36,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
           if (totalSpent > 0) ...[
             const SizedBox(height: 4),
             Text(
               'Total Lifetime Settled: ₹${totalSpent.toStringAsFixed(2)}',
-              style: const TextStyle(color: Colors.white60, fontSize: 12),
+              style: const TextStyle(color: textGray, fontSize: 12),
             ),
           ],
           const SizedBox(height: 20),
@@ -103,19 +131,31 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                 text: '+ Add Money',
                 onPressed: () {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('UPI / Net Banking top-up gateway initiated')),
+                    const SnackBar(
+                      content: Text(
+                        'UPI / Net Banking top-up gateway initiated',
+                      ),
+                    ),
                   );
                 },
                 isFullWidth: false,
               ),
               const SizedBox(width: 12),
               OutlinedButton.icon(
-                icon: const Icon(Icons.qr_code, color: Colors.white, size: 18),
-                label: const Text('Scan & Pay', style: TextStyle(color: Colors.white)),
+                icon: const Icon(Icons.qr_code, color: textWhite, size: 18),
+                label: const Text(
+                  'Scan & Pay',
+                  style: TextStyle(color: textWhite),
+                ),
                 style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.white38),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  side: const BorderSide(color: borderCard),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                 ),
                 onPressed: () {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -141,34 +181,47 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
   Widget _buildTransactionList(List<Map<String, dynamic>> payments) {
     return ListView.separated(
       itemCount: payments.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
+      separatorBuilder: (_, __) => const Divider(height: 1, color: borderCard),
       itemBuilder: (context, index) {
         final tx = payments[index];
         final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
-        final method = tx['payment_method']?.toString().toUpperCase() ?? 'WALLET';
+        final method =
+            tx['payment_method']?.toString().toUpperCase() ?? 'WALLET';
         final status = tx['status']?.toString() ?? 'completed';
         final date = tx['created_at']?.toString().split('T').first ?? 'Recent';
 
         return ListTile(
           contentPadding: const EdgeInsets.symmetric(vertical: 6),
           leading: CircleAvatar(
-            backgroundColor: status == 'completed' ? Colors.green[50] : Colors.amber[50],
+            backgroundColor: status == 'completed'
+                ? brandGreen.withValues(alpha: 0.15)
+                : const Color(0xFF3A290A),
             child: Icon(
-              Icons.directions_car,
-              color: status == 'completed' ? AppColors.primaryGreen : Colors.amber[800],
+              Icons.directions_car_rounded,
+              color: status == 'completed'
+                  ? brandGreen
+                  : const Color(0xFFF59E0B),
             ),
           ),
           title: Text(
             'Mobility Fare ($method)',
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: textWhite,
+            ),
           ),
           subtitle: Text(
             '$date • ${status.toUpperCase()}',
-            style: TextStyle(color: Colors.grey[600], fontSize: 12),
+            style: const TextStyle(color: textGray, fontSize: 12),
           ),
           trailing: Text(
             '-₹${amount.toStringAsFixed(2)}',
-            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent, fontSize: 14),
+            style: const TextStyle(
+              fontWeight: FontWeight.w900,
+              color: Color(0xFFEF4444),
+              fontSize: 14,
+            ),
           ),
         );
       },

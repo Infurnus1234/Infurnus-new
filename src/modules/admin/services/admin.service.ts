@@ -1,6 +1,6 @@
 import { AppError } from '../../../common/errors/app-error.js';
 import type { AdminRepository } from '../repositories/admin.repository.js';
-import type { AdminFilters } from '../types/admin.js';
+import type { AdminFilters, FleetFilters } from '../types/admin.js';
 
 export class AdminService {
   constructor(private readonly repository: AdminRepository) {}
@@ -55,5 +55,29 @@ export class AdminService {
     const success = await this.repository.verifyDocument(documentId, status, comments);
     if (!success) throw new AppError('DOCUMENT_NOT_FOUND', 'Document not found', 404);
     return { success: true, documentId, status };
+  }
+
+  // --- Fleet Analytics Methods ---
+
+  getFleetAnalyticsSummary(filters: FleetFilters) {
+    return this.repository.getFleetAnalyticsSummary(filters);
+  }
+
+  getStateFleetAnalytics(filters: FleetFilters) {
+    return this.repository.getStateFleetAnalytics(filters);
+  }
+
+  getCityFleetAnalytics(state: string, filters: FleetFilters) {
+    return this.repository.getCityFleetAnalytics(state, filters);
+  }
+
+  getLiveFleetVehicles(filters: FleetFilters) {
+    return this.repository.getLiveFleetVehicles(filters);
+  }
+
+  async getLiveFleetVehicleDetails(id: string) {
+    const vehicle = await this.repository.getLiveFleetVehicleDetails(id);
+    if (!vehicle) throw new AppError('VEHICLE_NOT_FOUND', 'Vehicle not found', 404);
+    return vehicle;
   }
 }

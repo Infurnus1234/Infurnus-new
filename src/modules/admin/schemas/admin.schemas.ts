@@ -56,9 +56,21 @@ export const adminVehiclesQuerySchema = pagination
     message: 'from must be on or before to',
   });
 
+export const fleetQuerySchema = pagination
+  .extend({
+    state: z.string().trim().max(100).optional(),
+    city: z.string().trim().max(100).optional(),
+    sector: z.enum(['passenger', 'logistics', 'service', 'premium']).optional(),
+    category: z.string().trim().max(50).optional(),
+    status: z.enum(['all', 'active', 'on_trip', 'offline', 'registered']).optional(),
+    search: z.string().trim().max(100).optional(),
+  })
+  .strict();
+
 export type AdminUsersQuery = z.infer<typeof adminUsersQuerySchema>;
 export type AdminPartnersQuery = z.infer<typeof adminPartnersQuerySchema>;
 export type AdminVehiclesQuery = z.infer<typeof adminVehiclesQuerySchema>;
+export type FleetQuery = z.infer<typeof fleetQuerySchema>;
 
 export const verifyDriverSchema = z
   .object({

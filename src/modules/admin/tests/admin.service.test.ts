@@ -13,6 +13,17 @@ const repository = (overrides: Partial<AdminRepository> = {}): AdminRepository =
   verifyDriver: vi.fn().mockResolvedValue(true),
   verifyVehicle: vi.fn().mockResolvedValue(true),
   verifyDocument: vi.fn().mockResolvedValue(true),
+  getFleetAnalyticsSummary: vi.fn().mockResolvedValue({
+    totalVehicles: 0,
+    activeVehicles: 0,
+    onTripVehicles: 0,
+    offlineVehicles: 0,
+    activePercentage: 0,
+  }),
+  getStateFleetAnalytics: vi.fn().mockResolvedValue([]),
+  getCityFleetAnalytics: vi.fn().mockResolvedValue([]),
+  getLiveFleetVehicles: vi.fn().mockResolvedValue({ items: [], page: 1, pageSize: 25, total: 0 }),
+  getLiveFleetVehicleDetails: vi.fn().mockResolvedValue(null),
   ...overrides,
 });
 
@@ -41,6 +52,10 @@ describe('AdminService', () => {
       statusCode: 404,
     });
     await expect(service.getVehicle('750e8400-e29b-41d4-a716-446655440001')).rejects.toMatchObject({
+      code: 'VEHICLE_NOT_FOUND',
+      statusCode: 404,
+    });
+    await expect(service.getLiveFleetVehicleDetails('850e8400-e29b-41d4-a716-446655440001')).rejects.toMatchObject({
       code: 'VEHICLE_NOT_FOUND',
       statusCode: 404,
     });
