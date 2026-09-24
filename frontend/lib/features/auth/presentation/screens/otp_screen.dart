@@ -5,6 +5,7 @@ import 'dart:async';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_brand_mark.dart';
 import '../providers/auth_provider.dart';
+import '../providers/user_provider.dart';
 
 class OtpScreen extends ConsumerStatefulWidget {
   const OtpScreen({super.key});
@@ -64,9 +65,12 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
 
     ref.listen(authProvider, (previous, next) {
       if (next.status == AuthStatus.authenticated) {
-        // In a real flow, if it's a new user, we'd go to basic details.
-        // For now, matching the UI flow.
-        context.go('/signup'); // Assuming signup is the 'Basic Details' screen
+        final user = ref.read(userProvider);
+        if (user?.role == 'driver') {
+          context.go('/driver-dashboard');
+        } else {
+          context.go('/customer-home');
+        }
       }
     });
 
