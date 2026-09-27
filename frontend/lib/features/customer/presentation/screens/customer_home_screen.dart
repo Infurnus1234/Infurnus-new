@@ -1,12 +1,17 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../core/services/places_autocomplete_service.dart';
 import '../../../../shared/widgets/infurnus_empty_state.dart';
 import '../../../../shared/widgets/infurnus_skeleton.dart';
 import '../../data/models/ride_model.dart' as model;
 import '../providers/ride_provider.dart';
+import '../widgets/animated_vehicle_hero.dart';
+import '../widgets/vehicle_category_visual.dart';
 import '../../../auth/presentation/providers/user_provider.dart';
 
 class CustomerHomeScreen extends ConsumerStatefulWidget {
@@ -27,29 +32,38 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
   late Animation<double> _servicesFade;
   late Animation<Offset> _servicesSlide;
 
-  // Premium Dark Theme Palette
-  static const Color mainBg = Color(0xFF000000);
-  static const Color cardBg = Color(0xFF111111);
-  static const Color cardElevated = Color(0xFF151515);
-  static const Color borderCard = Color(0xFF262626);
-  static const Color borderSearch = Color(0xFF292929);
-  static const Color textWhite = Color(0xFFFFFFFF);
-  static const Color textGray = Color(0xFFA1A1AA);
-  static const Color textMuted = Color(0xFF737373);
+  // Search & Autocomplete state
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  Timer? _debounceTimer;
+  List<PlaceSuggestion> _suggestions = [];
+  bool _isSearching = false;
 
-  // Accent Colors
-  static const Color brandGreen = Color(0xFF22C55E);
-  static const Color logisticsOrange = Color(0xFFF59E0B);
-  static const Color serviceRed = Color(0xFFEF4444);
-  static const Color premiumBlue = Color(0xFF3B82F6);
-  static const Color goldAccent = Color(0xFFFACC15);
+  // Visual Rule: Light / White background palette
+  static const Color mainBg = Color(0xFFF9FAFB);
+  static const Color surfaceWhite = Color(0xFFFFFFFF);
+  static const Color cardBorder = Color(0xFFE5E7EB);
+  static const Color searchBg = Color(0xFFF3F4F6);
+  static const Color searchBorder = Color(0xFFE5E7EB);
+
+  // Normal UI: Text & buttons are BLACK / dark
+  static const Color textBlack = Color(0xFF111827);
+  static const Color textSecondary = Color(0xFF4B5563);
+  static const Color textMuted = Color(0xFF9CA3AF);
+  static const Color buttonBlack = Color(0xFF111827);
+
+  // Green is strictly reserved for success states, confirmations, and active indicators
+  static const Color successGreen = Color(0xFF16A34A);
+  static const Color serviceRed = Color(0xFFDC2626);
+  static const Color logisticsOrange = Color(0xFFD97706);
+  static const Color goldAccent = Color(0xFFCA8A04);
 
   @override
   void initState() {
     super.initState();
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration: const Duration(milliseconds: 700),
     );
 
     _headerFade = CurvedAnimation(
@@ -57,7 +71,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
       curve: const Interval(0.0, 0.4, curve: Curves.easeOut),
     );
     _headerSlide = Tween<Offset>(
-      begin: const Offset(0, -0.1),
+      begin: const Offset(0, -0.06),
       end: Offset.zero,
     ).animate(_headerFade);
 
@@ -66,7 +80,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
       curve: const Interval(0.2, 0.6, curve: Curves.easeOut),
     );
     _heroSlide = Tween<Offset>(
-      begin: const Offset(0, 0.1),
+      begin: const Offset(0, 0.06),
       end: Offset.zero,
     ).animate(_heroFade);
 
@@ -75,7 +89,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
       curve: const Interval(0.4, 0.8, curve: Curves.easeOut),
     );
     _servicesSlide = Tween<Offset>(
-      begin: const Offset(0, 0.1),
+      begin: const Offset(0, 0.06),
       end: Offset.zero,
     ).animate(_servicesFade);
 
@@ -91,8 +105,55 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
+    _searchController.dispose();
+    _searchFocusNode.dispose();
     _animController.dispose();
     super.dispose();
+  }
+
+  void _onSearchQueryChanged(String query) {
+    _debounceTimer?.cancel();
+    if (query.trim().length < 2) {
+      setState(() {
+        _suggestions = [];
+        _isSearching = false;
+      });
+      return;
+    }
+
+    setState(() => _isSearching = true);
+
+    // Debounce: 350ms to prevent duplicate and rapid API requests
+    _debounceTimer = Timer(const Duration(milliseconds: 350), () async {
+      final service = ref.read(placesAutocompleteServiceProvider);
+      final results = await service.getSuggestions(query);
+      if (mounted) {
+        setState(() {
+          _suggestions = results;
+          _isSearching = false;
+        });
+      }
+    });
+  }
+
+  void _selectSuggestion(PlaceSuggestion suggestion) {
+    _searchFocusNode.unfocus();
+    _searchController.clear();
+    setState(() => _suggestions = []);
+
+    ref
+        .read(rideProvider.notifier)
+        .setRoute('Current Location', suggestion.title);
+
+    if (suggestion.latitude != null && suggestion.longitude != null) {
+      ref.read(rideProvider.notifier).setDestinationCoords(
+            LatLng(suggestion.latitude!, suggestion.longitude!),
+            address: suggestion.title,
+          );
+    }
+
+    context.push('/ride-booking');
   }
 
   @override
@@ -107,211 +168,168 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
 
     return Scaffold(
       backgroundColor: mainBg,
-      body: Stack(
-        children: [
-          // Background ambient green glow top accent
-          Positioned(
-            top: -60,
-            right: -60,
-            child: Container(
-              width: 240,
-              height: 240,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: brandGreen.withValues(alpha: 0.12),
-                boxShadow: [
-                  BoxShadow(
-                    color: brandGreen.withValues(alpha: 0.12),
-                    blurRadius: 100,
-                    spreadRadius: 20,
+      body: SafeArea(
+        child: RefreshIndicator(
+          color: buttonBlack,
+          backgroundColor: surfaceWhite,
+          onRefresh: () async {
+            setState(() => _isLoadingHistory = true);
+            await ref.read(rideProvider.notifier).fetchRideHistory();
+            if (mounted) {
+              setState(() => _isLoadingHistory = false);
+            }
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 20.0,
+              vertical: 16.0,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Stagger 1: Header (Light Theme)
+                SlideTransition(
+                  position: _headerSlide,
+                  child: FadeTransition(
+                    opacity: _headerFade,
+                    child: _buildHeader(context, user),
                   ),
-                ],
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: 120,
-            left: -80,
-            child: Container(
-              width: 220,
-              height: 240,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: premiumBlue.withValues(alpha: 0.08),
-                boxShadow: [
-                  BoxShadow(
-                    color: premiumBlue.withValues(alpha: 0.08),
-                    blurRadius: 100,
-                    spreadRadius: 20,
+                ),
+                const SizedBox(height: 20),
+
+                // Stagger 2: Search Bar & Hero Feature Card
+                SlideTransition(
+                  position: _heroSlide,
+                  child: FadeTransition(
+                    opacity: _heroFade,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildDestinationSearchBar(context),
+                        if (_suggestions.isNotEmpty || _isSearching)
+                          _buildAutocompleteDropdown(context),
+                        const SizedBox(height: 20),
+                        _buildHeroFeatureCard(context),
+                      ],
+                    ),
                   ),
+                ),
+                const SizedBox(height: 24),
+
+                // Active Trip Banner (if any)
+                if (hasActiveTrip) ...[
+                  _buildActiveTripBanner(currentRide),
+                  const SizedBox(height: 24),
                 ],
-              ),
+
+                // Stagger 3: Services & Recent Activity
+                SlideTransition(
+                  position: _servicesSlide,
+                  child: FadeTransition(
+                    opacity: _servicesFade,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Quick Services Direct Grid
+                        _buildQuickServicesGrid(context),
+                        const SizedBox(height: 28),
+
+                        // Popular Rides / Passenger Fleet
+                        _buildPassengerSection(context),
+                        const SizedBox(height: 28),
+
+                        // Logistics Section
+                        _buildLogisticsSection(context),
+                        const SizedBox(height: 28),
+
+                        // Service Fleet Section
+                        _buildServiceFleetSection(context),
+                        const SizedBox(height: 28),
+
+                        // Luxury Concierge Fleet Section
+                        _buildConciergeFleetSection(context),
+                        const SizedBox(height: 32),
+
+                        // Recent Activity Timeline Section
+                        _buildRecentActivitySection(context, rideState),
+                        const SizedBox(height: 24),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-
-          SafeArea(
-            child: RefreshIndicator(
-              color: brandGreen,
-              backgroundColor: cardBg,
-              onRefresh: () async {
-                setState(() => _isLoadingHistory = true);
-                await ref.read(rideProvider.notifier).fetchRideHistory();
-                if (mounted) {
-                  setState(() => _isLoadingHistory = false);
-                }
-              },
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20.0,
-                  vertical: 16.0,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Stagger 1: Header
-                    SlideTransition(
-                      position: _headerSlide,
-                      child: FadeTransition(
-                        opacity: _headerFade,
-                        child: _buildHeader(context, user),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Stagger 2: Search Bar & Hero Feature Card
-                    SlideTransition(
-                      position: _heroSlide,
-                      child: FadeTransition(
-                        opacity: _heroFade,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildDestinationSearchBar(context),
-                            const SizedBox(height: 20),
-                            _buildHeroFeatureCard(context),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 28),
-
-                    // Active Trip Banner (if any)
-                    if (hasActiveTrip) ...[
-                      _buildActiveTripBanner(currentRide),
-                      const SizedBox(height: 28),
-                    ],
-
-                    // Stagger 3: Services Sections
-                    SlideTransition(
-                      position: _servicesSlide,
-                      child: FadeTransition(
-                        opacity: _servicesFade,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // 1. Passenger Section
-                            _buildPassengerSection(context),
-                            const SizedBox(height: 28),
-
-                            // 2. Logistics Section
-                            _buildLogisticsSection(context),
-                            const SizedBox(height: 28),
-
-                            // 3. Service Fleet Section
-                            _buildServiceFleetSection(context),
-                            const SizedBox(height: 28),
-
-                            // 4. Premium Concierge Fleet Section
-                            _buildConciergeFleetSection(context),
-                            const SizedBox(height: 32),
-
-                            // Recent Activity Timeline Section
-                            _buildRecentActivitySection(context, rideState),
-                            const SizedBox(height: 24),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
       bottomNavigationBar: _buildBottomNavigationBar(context),
     );
   }
 
   Widget _buildHeader(BuildContext context, dynamic user) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            const Text(
+              'NAMASTE',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 2.0,
+                color: textSecondary,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Row(
               children: [
                 const Text(
-                  'NAMASTE',
+                  'INFURNUS',
                   style: TextStyle(
-                    fontSize: 10,
+                    fontSize: 22,
                     fontWeight: FontWeight.w900,
-                    letterSpacing: 2.0,
-                    color: brandGreen,
+                    letterSpacing: 1.5,
+                    color: textBlack,
                   ),
                 ),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    const Text(
-                      'INFURNUS',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1.5,
-                        color: textWhite,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '👋 ${user?.firstName ?? "User"}',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: textGray,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                const Text(
-                  'Move. Haul. Rise.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: textGray,
-                    fontWeight: FontWeight.w500,
+                const SizedBox(width: 8),
+                Text(
+                  '👋 ${user?.firstName ?? "User"}',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: textSecondary,
                   ),
                 ),
               ],
             ),
-            Row(
-              children: [
-                _buildHeaderIcon(
-                  icon: Icons.chat_bubble_outline_rounded,
-                  tooltip: 'AI Assistant',
-                  showBadge: true,
-                  onTap: () => context.push('/ai-assistant/customer'),
-                ),
-                const SizedBox(width: 8),
-                _buildHeaderIcon(
-                  icon: Icons.person_outline_rounded,
-                  tooltip: 'Profile',
-                  onTap: () => context.push('/profile'),
-                ),
-              ],
+            const SizedBox(height: 2),
+            const Text(
+              'Move. Haul. Rise.',
+              style: TextStyle(
+                fontSize: 12,
+                color: textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+        Row(
+          children: [
+            _buildHeaderIcon(
+              icon: Icons.chat_bubble_outline_rounded,
+              tooltip: 'AI Assistant',
+              showBadge: true,
+              onTap: () => context.push('/ai-assistant/customer'),
+            ),
+            const SizedBox(width: 10),
+            _buildHeaderIcon(
+              icon: Icons.person_outline_rounded,
+              tooltip: 'Profile',
+              onTap: () => context.push('/profile'),
             ),
           ],
         ),
@@ -331,24 +349,31 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
       child: Stack(
         children: [
           Container(
-            width: 40,
-            height: 40,
+            width: 42,
+            height: 42,
             decoration: BoxDecoration(
-              color: const Color(0xFF1A1A1A),
+              color: surfaceWhite,
               shape: BoxShape.circle,
-              border: Border.all(color: borderCard),
+              border: Border.all(color: cardBorder),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
-            child: Icon(icon, size: 20, color: textWhite),
+            child: Icon(icon, size: 20, color: textBlack),
           ),
           if (showBadge)
             Positioned(
               right: 2,
               top: 2,
               child: Container(
-                width: 8,
-                height: 8,
+                width: 9,
+                height: 9,
                 decoration: const BoxDecoration(
-                  color: brandGreen,
+                  color: successGreen,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -359,65 +384,200 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
   }
 
   Widget _buildDestinationSearchBar(BuildContext context) {
-    return _PressableScaleCard(
-      onTap: () {
-        ref
-            .read(rideProvider.notifier)
-            .setRoute('Current Location', 'Airport Terminal 1');
-        context.push('/ride-booking');
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-        decoration: BoxDecoration(
-          color: cardBg,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: borderSearch),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.6),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            const Icon(
-              Icons.search_rounded,
-              color: Color(0xFFD4D4D4),
-              size: 20,
-            ),
-            const SizedBox(width: 12),
-            const Text(
-              'Where to today?',
-              style: TextStyle(
-                color: textMuted,
+    return Container(
+      decoration: BoxDecoration(
+        color: surfaceWhite,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: searchBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          const SizedBox(width: 16),
+          const Icon(
+            Icons.search_rounded,
+            color: textBlack,
+            size: 22,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: TextField(
+              controller: _searchController,
+              focusNode: _searchFocusNode,
+              onChanged: _onSearchQueryChanged,
+              style: const TextStyle(
+                color: textBlack,
                 fontSize: 15,
                 fontWeight: FontWeight.w500,
               ),
-            ),
-            const Spacer(),
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: const BoxDecoration(
-                color: premiumBlue,
-                shape: BoxShape.circle,
+              decoration: const InputDecoration(
+                hintText: 'Search',
+                hintStyle: TextStyle(
+                  color: textMuted,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w400,
+                ),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(vertical: 14),
               ),
-              child: const Icon(
-                Icons.mic_rounded,
-                color: Colors.white,
-                size: 16,
-              ),
+              onSubmitted: (val) {
+                if (val.trim().isNotEmpty) {
+                  ref
+                      .read(rideProvider.notifier)
+                      .setRoute('Current Location', val.trim());
+                  context.push('/ride-booking');
+                }
+              },
             ),
-          ],
-        ),
+          ),
+          if (_searchController.text.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.close_rounded, size: 18, color: textMuted),
+              onPressed: () {
+                _searchController.clear();
+                _onSearchQueryChanged('');
+              },
+            ),
+          Container(
+            margin: const EdgeInsets.only(right: 8),
+            padding: const EdgeInsets.all(8),
+            decoration: const BoxDecoration(
+              color: buttonBlack,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.arrow_forward_rounded,
+              color: Colors.white,
+              size: 16,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAutocompleteDropdown(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: surfaceWhite,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cardBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_isSearching)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: buttonBlack,
+                ),
+              ),
+            )
+          else if (_suggestions.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline_rounded, size: 16, color: textMuted),
+                  SizedBox(width: 8),
+                  Text(
+                    'No locations found. Press enter to search.',
+                    style: TextStyle(fontSize: 13, color: textMuted),
+                  ),
+                ],
+              ),
+            )
+          else
+            ...List.generate(_suggestions.length, (index) {
+              final suggestion = _suggestions[index];
+              return InkWell(
+                onTap: () => _selectSuggestion(suggestion),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: searchBg,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.location_on_outlined,
+                          size: 16,
+                          color: buttonBlack,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              suggestion.title,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                                color: textBlack,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              suggestion.subtitle,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: textSecondary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(
+                        Icons.north_west_rounded,
+                        size: 14,
+                        color: textMuted,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+        ],
       ),
     );
   }
 
   Widget _buildHeroFeatureCard(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(22),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
@@ -427,78 +587,199 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: premiumBlue.withValues(alpha: 0.3),
+            color: const Color(0xFF1E3A8A).withValues(alpha: 0.25),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'ONE APP • EVERY WHEEL',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.5,
+                          color: Color(0xFFBFDBFE),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'From auto to\nhelicopter',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () {
+                        ref
+                            .read(rideProvider.notifier)
+                            .selectSector('passenger');
+                        context.push('/ride-booking');
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: buttonBlack,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        elevation: 0,
+                      ),
+                      child: const Text(
+                        'Explore fleet →',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              // Dedicated Animated Vehicle Element Container
+              const AnimatedVehicleHero(
+                height: 100,
+                assetImagePath: 'assets/images/infurnus_3d_logo.png',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickServicesGrid(BuildContext context) {
+    final services = [
+      {
+        'title': 'Rides',
+        'subtitle': 'Bike, Auto, Cab',
+        'category': VehicleCategoryType.rides,
+        'action': () {
+          ref.read(rideProvider.notifier).selectSector('passenger');
+          context.push('/ride-booking');
+        },
+      },
+      {
+        'title': 'Logistics',
+        'subtitle': 'Parcels & Trucks',
+        'category': VehicleCategoryType.logistics,
+        'action': () => context.push('/logistics'),
+      },
+      {
+        'title': 'Emergency',
+        'subtitle': 'Ambulance & Tow',
+        'category': VehicleCategoryType.emergency,
+        'action': () {
+          ref.read(rideProvider.notifier).selectSector('service');
+          context.push('/ride-booking');
+        },
+      },
+      {
+        'title': 'Rentals',
+        'subtitle': 'Luxury & Chauffeur',
+        'category': VehicleCategoryType.rental,
+        'action': () => context.push('/rentals'),
+      },
+    ];
+
+    return GridView.builder(
+      physics: const NeverScrollableScrollPhysics(),
+      shrinkWrap: true,
+      itemCount: services.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        childAspectRatio: 2.2,
+      ),
+      itemBuilder: (context, index) {
+        final item = services[index];
+        final category = item['category'] as VehicleCategoryType;
+        return _PressableScaleCard(
+          onTap: item['action'] as VoidCallback,
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: surfaceWhite,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: cardBorder),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
               children: [
-                const Text(
-                  'ONE APP • EVERY WHEEL',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.5,
-                    color: Color(0xFF93C5FD),
-                  ),
+                VehicleCategoryVisual(
+                  category: category,
+                  size: 38,
+                  borderRadius: 10,
                 ),
-                const SizedBox(height: 6),
-                const Text(
-                  'From auto to\nhelicopter',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                    color: textWhite,
-                    height: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () {
-                    ref.read(rideProvider.notifier).selectSector('passenger');
-                    context.push('/ride-booking');
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10,
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    'Explore fleet →',
-                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        item['title'] as String,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: textBlack,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        item['subtitle'] as String,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: textSecondary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 12),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.stars_rounded,
-              size: 48,
-              color: Color(0xFFFDE047),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -510,6 +791,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         rate: 'Route Estimate',
         eta: 'Instant',
         icon: Icons.two_wheeler_rounded,
+        category: VehicleCategoryType.bike,
       ),
       _VehicleCategoryItem(
         title: 'Auto',
@@ -517,6 +799,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         rate: 'Route Estimate',
         eta: 'Instant',
         icon: Icons.electric_rickshaw_rounded,
+        category: VehicleCategoryType.auto,
       ),
       _VehicleCategoryItem(
         title: 'Mini / Compact',
@@ -524,6 +807,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         rate: 'Route Estimate',
         eta: 'Instant',
         icon: Icons.directions_car_rounded,
+        category: VehicleCategoryType.rides,
       ),
       _VehicleCategoryItem(
         title: 'Sedan',
@@ -531,6 +815,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         rate: 'Route Estimate',
         eta: 'Instant',
         icon: Icons.airport_shuttle_rounded,
+        category: VehicleCategoryType.rides,
       ),
       _VehicleCategoryItem(
         title: 'SUV',
@@ -538,6 +823,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         rate: 'Route Estimate',
         eta: 'Instant',
         icon: Icons.directions_car_filled_rounded,
+        category: VehicleCategoryType.premium,
       ),
     ];
 
@@ -545,7 +831,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionHeader(
-          title: 'Passenger',
+          title: 'Passenger Rides',
           subtitle: 'Everyday rides across the city',
           onSeeAll: () {
             ref.read(rideProvider.notifier).selectSector('passenger');
@@ -554,7 +840,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         ),
         const SizedBox(height: 12),
         SizedBox(
-          height: 150,
+          height: 145,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: items.length,
@@ -563,7 +849,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
               final item = items[index];
               return _buildHorizontalVehicleCard(
                 item: item,
-                accentColor: brandGreen,
                 onTap: () {
                   ref.read(rideProvider.notifier).selectSector('passenger');
                   context.push('/ride-booking');
@@ -584,6 +869,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         rate: 'Server Rate',
         eta: 'On-demand',
         icon: Icons.two_wheeler_rounded,
+        category: VehicleCategoryType.bike,
       ),
       _VehicleCategoryItem(
         title: '3-Wheeler',
@@ -591,6 +877,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         rate: 'Server Rate',
         eta: 'On-demand',
         icon: Icons.electric_rickshaw_rounded,
+        category: VehicleCategoryType.auto,
       ),
       _VehicleCategoryItem(
         title: 'Mini Truck 1T',
@@ -598,6 +885,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         rate: 'Server Rate',
         eta: 'On-demand',
         icon: Icons.local_shipping_rounded,
+        category: VehicleCategoryType.logistics,
       ),
       _VehicleCategoryItem(
         title: 'Tata 407',
@@ -605,6 +893,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         rate: 'Server Rate',
         eta: 'On-demand',
         icon: Icons.directions_bus_outlined,
+        category: VehicleCategoryType.logistics,
       ),
     ];
 
@@ -618,7 +907,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         ),
         const SizedBox(height: 12),
         SizedBox(
-          height: 150,
+          height: 145,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: items.length,
@@ -627,7 +916,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
               final item = items[index];
               return _buildHorizontalVehicleCard(
                 item: item,
-                accentColor: logisticsOrange,
                 onTap: () => context.push('/logistics'),
               );
             },
@@ -645,13 +933,15 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         rate: 'Trip-Based',
         eta: 'Priority',
         icon: Icons.medical_services_rounded,
+        category: VehicleCategoryType.emergency,
       ),
       _VehicleCategoryItem(
         title: 'Towing Van',
-        capacity: 'Vehicle Breakdown Assist',
+        capacity: 'Breakdown Assist',
         rate: 'Trip-Based',
         eta: 'Priority',
         icon: Icons.car_repair_rounded,
+        category: VehicleCategoryType.emergency,
       ),
       _VehicleCategoryItem(
         title: 'JCB / Excavator',
@@ -659,20 +949,15 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         rate: 'Trip-Based',
         eta: 'Scheduled',
         icon: Icons.agriculture_rounded,
+        category: VehicleCategoryType.logistics,
       ),
       _VehicleCategoryItem(
-        title: 'Recovery Vehicle',
-        capacity: 'Heavy Winch Assist',
-        rate: 'Trip-Based',
-        eta: 'Priority',
-        icon: Icons.rv_hookup_rounded,
-      ),
-      _VehicleCategoryItem(
-        title: 'Roadside Service',
-        capacity: 'Mechanic / Tire Repair',
+        title: 'Roadside Assist',
+        capacity: 'Tire / Battery Support',
         rate: 'Trip-Based',
         eta: 'Priority',
         icon: Icons.build_rounded,
+        category: VehicleCategoryType.emergency,
       ),
     ];
 
@@ -680,8 +965,8 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionHeader(
-          title: 'Service Fleet',
-          subtitle: 'Emergency & specialty support',
+          title: 'Specialty & Emergency',
+          subtitle: 'On-demand specialized fleet support',
           onSeeAll: () {
             ref.read(rideProvider.notifier).selectSector('service');
             context.push('/ride-booking');
@@ -689,7 +974,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         ),
         const SizedBox(height: 12),
         SizedBox(
-          height: 150,
+          height: 145,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: items.length,
@@ -698,7 +983,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
               final item = items[index];
               return _buildHorizontalVehicleCard(
                 item: item,
-                accentColor: serviceRed,
                 onTap: () {
                   ref.read(rideProvider.notifier).selectSector('service');
                   context.push('/ride-booking');
@@ -718,18 +1002,21 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         badge: 'Off-road',
         subtitle: 'Iconic 4x4 legend',
         price: 'Chauffeur + Fuel',
+        assetImagePath: 'assets/images/thar_visual.webp',
       ),
       _LuxuryVehicleItem(
         title: 'Toyota Fortuner',
         badge: 'Executive',
         subtitle: 'Commanding presence',
         price: 'Chauffeur + Fuel',
+        assetImagePath: 'assets/images/fortuner_visual.jpg',
       ),
       _LuxuryVehicleItem(
         title: 'BMW / Mercedes SUV',
         badge: 'VIP Luxury',
         subtitle: 'Flagship luxury suite',
         price: 'Chauffeur + Fuel',
+        assetImagePath: 'assets/images/bmw_visual.webp',
       ),
     ];
 
@@ -748,10 +1035,10 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                     vertical: 2,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1E1B00),
+                    color: const Color(0xFFFEF9C3),
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(
-                      color: goldAccent.withValues(alpha: 0.5),
+                      color: const Color(0xFFFDE047),
                     ),
                   ),
                   child: const Row(
@@ -775,12 +1062,12 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w900,
-                    color: textWhite,
+                    color: textBlack,
                   ),
                 ),
                 const Text(
                   'Luxury on-demand • Sky, road, off-road',
-                  style: TextStyle(fontSize: 12, color: textGray),
+                  style: TextStyle(fontSize: 12, color: textSecondary),
                 ),
               ],
             ),
@@ -789,7 +1076,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
               child: const Text(
                 'See all →',
                 style: TextStyle(
-                  color: goldAccent,
+                  color: textBlack,
                   fontWeight: FontWeight.bold,
                   fontSize: 13,
                 ),
@@ -798,8 +1085,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
           ],
         ),
         const SizedBox(height: 14),
-
-        // Full-Width Luxury Cards
         Column(
           children: luxuryVehicles
               .map(
@@ -821,14 +1106,42 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     return _PressableScaleCard(
       onTap: () => context.push('/rentals'),
       child: Container(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: cardBg,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: borderCard),
+          color: surfaceWhite,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: cardBorder),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Row(
           children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                width: 52,
+                height: 52,
+                color: searchBg,
+                child: item.assetImagePath != null
+                    ? Image.asset(
+                        item.assetImagePath!,
+                        width: 52,
+                        height: 52,
+                        fit: BoxFit.cover,
+                      )
+                    : const VehicleCategoryVisual(
+                        category: VehicleCategoryType.premium,
+                        size: 52,
+                        borderRadius: 12,
+                      ),
+              ),
+            ),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -836,45 +1149,42 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8,
-                      vertical: 3,
+                      vertical: 2,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1F1A00),
+                      color: searchBg,
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: goldAccent.withValues(alpha: 0.3),
-                      ),
                     ),
                     child: Text(
                       item.badge,
                       style: const TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
-                        color: goldAccent,
+                        color: textBlack,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   Text(
                     item.title,
                     style: const TextStyle(
-                      fontSize: 17,
+                      fontSize: 16,
                       fontWeight: FontWeight.w900,
-                      color: textWhite,
+                      color: textBlack,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     item.subtitle,
-                    style: const TextStyle(fontSize: 12, color: textGray),
+                    style: const TextStyle(fontSize: 12, color: textSecondary),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   Text(
                     item.price,
                     style: const TextStyle(
                       fontSize: 13,
-                      fontWeight: FontWeight.w900,
-                      color: goldAccent,
+                      fontWeight: FontWeight.w800,
+                      color: textBlack,
                     ),
                   ),
                 ],
@@ -883,8 +1193,8 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
             ElevatedButton(
               onPressed: () => context.push('/rentals'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: goldAccent,
-                foregroundColor: Colors.black,
+                backgroundColor: buttonBlack,
+                foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
@@ -896,7 +1206,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
               ),
               child: const Text(
                 'Book →',
-                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
               ),
             ),
           ],
@@ -921,13 +1231,13 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
               style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w900,
-                color: textWhite,
+                color: textBlack,
               ),
             ),
             const SizedBox(height: 2),
             Text(
               subtitle,
-              style: const TextStyle(fontSize: 12, color: textGray),
+              style: const TextStyle(fontSize: 12, color: textSecondary),
             ),
           ],
         ),
@@ -936,7 +1246,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
           child: const Text(
             'See all ↗',
             style: TextStyle(
-              color: textGray,
+              color: textBlack,
               fontWeight: FontWeight.bold,
               fontSize: 13,
             ),
@@ -948,30 +1258,33 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
 
   Widget _buildHorizontalVehicleCard({
     required _VehicleCategoryItem item,
-    required Color accentColor,
     required VoidCallback onTap,
   }) {
     return _PressableScaleCard(
       onTap: onTap,
       child: Container(
         width: 140,
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: cardBg,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: borderCard),
+          color: surfaceWhite,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: cardBorder),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: accentColor.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(item.icon, color: accentColor, size: 20),
+            VehicleCategoryVisual(
+              category: item.category,
+              size: 40,
+              borderRadius: 10,
             ),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -981,7 +1294,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
-                    color: textWhite,
+                    color: textBlack,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -989,23 +1302,23 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                 const SizedBox(height: 2),
                 Text(
                   item.capacity,
-                  style: const TextStyle(fontSize: 11, color: textGray),
+                  style: const TextStyle(fontSize: 11, color: textSecondary),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
                       item.rate,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 10,
-                        color: accentColor,
+                        color: textBlack,
                       ),
                     ),
                     Text(
                       item.eta,
-                      style: const TextStyle(fontSize: 10, color: textGray),
+                      style: const TextStyle(fontSize: 10, color: textSecondary),
                     ),
                   ],
                 ),
@@ -1023,13 +1336,13 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: cardElevated,
+          color: surfaceWhite,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: brandGreen.withValues(alpha: 0.5)),
+          border: Border.all(color: successGreen.withValues(alpha: 0.5)),
           boxShadow: [
             BoxShadow(
-              color: brandGreen.withValues(alpha: 0.2),
-              blurRadius: 16,
+              color: successGreen.withValues(alpha: 0.1),
+              blurRadius: 14,
               offset: const Offset(0, 4),
             ),
           ],
@@ -1039,12 +1352,12 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: brandGreen.withValues(alpha: 0.2),
+                color: successGreen.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
                 Icons.navigation_rounded,
-                color: brandGreen,
+                color: successGreen,
                 size: 24,
               ),
             ),
@@ -1061,13 +1374,13 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: brandGreen,
+                          color: successGreen,
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: const Text(
                           'ACTIVE TRIP',
                           style: TextStyle(
-                            color: Colors.black,
+                            color: Colors.white,
                             fontSize: 10,
                             fontWeight: FontWeight.w900,
                           ),
@@ -1076,7 +1389,10 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                       const SizedBox(width: 8),
                       Text(
                         _formatStatus(currentRide.status),
-                        style: const TextStyle(color: textGray, fontSize: 12),
+                        style: const TextStyle(
+                          color: textSecondary,
+                          fontSize: 12,
+                        ),
                       ),
                     ],
                   ),
@@ -1084,7 +1400,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                   Text(
                     currentRide.destinationAddress ?? 'Heading to Destination',
                     style: const TextStyle(
-                      color: textWhite,
+                      color: textBlack,
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
                     ),
@@ -1096,7 +1412,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
             ),
             const Icon(
               Icons.arrow_forward_ios_rounded,
-              color: brandGreen,
+              color: textBlack,
               size: 16,
             ),
           ],
@@ -1117,7 +1433,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
-                color: textWhite,
+                color: textBlack,
               ),
             ),
             if (rideState.history.isNotEmpty)
@@ -1126,7 +1442,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                 child: const Text(
                   'View All →',
                   style: TextStyle(
-                    color: brandGreen,
+                    color: textBlack,
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
                   ),
@@ -1135,7 +1451,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
           ],
         ),
         const SizedBox(height: 14),
-
         if (_isLoadingHistory && rideState.history.isEmpty) ...[
           const InfurnusSkeletonCard(),
           const InfurnusSkeletonCard(),
@@ -1164,9 +1479,16 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: cardBg,
+        color: surfaceWhite,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: borderCard),
+        border: Border.all(color: cardBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Material(
         color: Colors.transparent,
@@ -1185,19 +1507,19 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                     color: isCancelled
-                        ? serviceRed.withValues(alpha: 0.15)
-                        : brandGreen.withValues(alpha: 0.15),
+                        ? serviceRed.withValues(alpha: 0.12)
+                        : searchBg,
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
                     ride.sector == 'logistics'
                         ? Icons.local_shipping_rounded
                         : (ride.sector == 'service'
-                              ? Icons.emergency_rounded
-                              : (ride.sector == 'premium'
-                                    ? Icons.stars_rounded
-                                    : Icons.directions_car_rounded)),
-                    color: isCancelled ? serviceRed : brandGreen,
+                            ? Icons.emergency_rounded
+                            : (ride.sector == 'premium'
+                                ? Icons.stars_rounded
+                                : Icons.directions_car_rounded)),
+                    color: isCancelled ? serviceRed : buttonBlack,
                     size: 20,
                   ),
                 ),
@@ -1211,7 +1533,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
-                          color: textWhite,
+                          color: textBlack,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -1226,8 +1548,10 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                             ),
                             decoration: BoxDecoration(
                               color: isCancelled
-                                  ? serviceRed.withValues(alpha: 0.2)
-                                  : brandGreen.withValues(alpha: 0.2),
+                                  ? serviceRed.withValues(alpha: 0.1)
+                                  : (ride.status == model.RideStatus.completed
+                                      ? successGreen.withValues(alpha: 0.15)
+                                      : searchBg),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
@@ -1235,7 +1559,11 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                               style: TextStyle(
                                 fontSize: 9,
                                 fontWeight: FontWeight.bold,
-                                color: isCancelled ? serviceRed : brandGreen,
+                                color: isCancelled
+                                    ? serviceRed
+                                    : (ride.status == model.RideStatus.completed
+                                        ? successGreen
+                                        : textBlack),
                               ),
                             ),
                           ),
@@ -1243,7 +1571,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                           Text(
                             formattedDate,
                             style: const TextStyle(
-                              color: textGray,
+                              color: textSecondary,
                               fontSize: 11,
                             ),
                           ),
@@ -1259,7 +1587,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                     style: const TextStyle(
                       fontWeight: FontWeight.w900,
                       fontSize: 15,
-                      color: textWhite,
+                      color: textBlack,
                     ),
                   ),
                 ],
@@ -1274,15 +1602,15 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
   Widget _buildBottomNavigationBar(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        color: Color(0xFF050505),
-        border: Border(top: BorderSide(color: borderCard, width: 1.0)),
+        color: surfaceWhite,
+        border: Border(top: BorderSide(color: cardBorder, width: 1.0)),
       ),
       child: BottomNavigationBar(
-        selectedItemColor: brandGreen,
+        selectedItemColor: buttonBlack,
         unselectedItemColor: textMuted,
         currentIndex: 0,
         type: BottomNavigationBarType.fixed,
-        backgroundColor: const Color(0xFF050505),
+        backgroundColor: surfaceWhite,
         elevation: 0,
         showSelectedLabels: true,
         showUnselectedLabels: true,
@@ -1295,7 +1623,10 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
           if (index == 3) context.push('/profile');
         },
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: 'Home'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_filled),
+            label: 'Home',
+          ),
           BottomNavigationBarItem(
             icon: Icon(Icons.local_activity_outlined),
             activeIcon: Icon(Icons.local_activity_rounded),
@@ -1344,6 +1675,7 @@ class _VehicleCategoryItem {
   final String rate;
   final String eta;
   final IconData icon;
+  final VehicleCategoryType category;
 
   const _VehicleCategoryItem({
     required this.title,
@@ -1351,6 +1683,7 @@ class _VehicleCategoryItem {
     required this.rate,
     required this.eta,
     required this.icon,
+    required this.category,
   });
 }
 
@@ -1359,12 +1692,14 @@ class _LuxuryVehicleItem {
   final String badge;
   final String subtitle;
   final String price;
+  final String? assetImagePath;
 
   const _LuxuryVehicleItem({
     required this.title,
     required this.badge,
     required this.subtitle,
     required this.price,
+    this.assetImagePath,
   });
 }
 

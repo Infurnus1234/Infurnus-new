@@ -261,29 +261,39 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                _buildVehicleOption(
-                  id: 'bike',
-                  title: 'Bike Express',
-                  capacity: 'Up to 20 kg',
-                  icon: Icons.two_wheeler_rounded,
-                ),
-                const SizedBox(width: 10),
-                _buildVehicleOption(
-                  id: 'three_wheeler',
-                  title: '3-Wheeler',
-                  capacity: 'Up to 300 kg',
-                  icon: Icons.electric_rickshaw_rounded,
-                ),
-                const SizedBox(width: 10),
-                _buildVehicleOption(
-                  id: 'mini_truck',
-                  title: 'Mini Truck 1T',
-                  capacity: 'Up to 1000 kg',
-                  icon: Icons.local_shipping_rounded,
-                ),
-              ],
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _buildVehicleOption(
+                    id: 'bike',
+                    title: 'Bike Express',
+                    capacity: 'Up to 20 kg',
+                    icon: Icons.two_wheeler_rounded,
+                  ),
+                  const SizedBox(width: 10),
+                  _buildVehicleOption(
+                    id: 'three_wheeler',
+                    title: '3-Wheeler Auto',
+                    capacity: 'Up to 300 kg',
+                    icon: Icons.electric_rickshaw_rounded,
+                  ),
+                  const SizedBox(width: 10),
+                  _buildVehicleOption(
+                    id: 'mini_truck',
+                    title: 'Tata Pickup 207 / 407',
+                    capacity: 'Up to 1000 kg',
+                    assetImagePath: 'assets/images/tata_pickup_207_407.png',
+                  ),
+                  const SizedBox(width: 10),
+                  _buildVehicleOption(
+                    id: 'heavy_truck',
+                    title: 'Pickup (Heightened)',
+                    capacity: 'Up to 1500 kg',
+                    assetImagePath: 'assets/images/tata_pickup_207_heightened.png',
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 24),
 
@@ -506,51 +516,63 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
     required String id,
     required String title,
     required String capacity,
-    required IconData icon,
+    IconData? icon,
+    String? assetImagePath,
   }) {
     final isSelected = _selectedVehicle == id;
 
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          setState(() => _selectedVehicle = id);
-          _recalculateFare();
-        },
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF3A290A) : cardBg,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isSelected ? logisticsOrange : borderCard,
-              width: isSelected ? 2 : 1,
-            ),
+    return GestureDetector(
+      onTap: () {
+        setState(() => _selectedVehicle = id);
+        _recalculateFare();
+      },
+      child: Container(
+        width: 125,
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF3A290A) : cardBg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? logisticsOrange : borderCard,
+            width: isSelected ? 2 : 1,
           ),
-          child: Column(
-            children: [
+        ),
+        child: Column(
+          children: [
+            if (assetImagePath != null)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: Image.asset(
+                  assetImagePath,
+                  height: 38,
+                  fit: BoxFit.contain,
+                ),
+              )
+            else if (icon != null)
               Icon(
                 icon,
                 size: 28,
                 color: isSelected ? logisticsOrange : textGray,
               ),
-              const SizedBox(height: 6),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: textWhite,
-                ),
-                textAlign: TextAlign.center,
+            const SizedBox(height: 6),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: textWhite,
               ),
-              const SizedBox(height: 2),
-              Text(
-                capacity,
-                style: const TextStyle(fontSize: 10, color: textGray),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              capacity,
+              style: const TextStyle(fontSize: 10, color: textGray),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
       ),
     );

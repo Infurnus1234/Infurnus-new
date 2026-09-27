@@ -533,18 +533,39 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
         ),
         const SizedBox(height: 16),
 
-        // 4 Official Sectors
-        const Text(
-          'Choose Mobility Sector',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 14,
-            color: textWhite,
-          ),
+        // Established Sector Fleet Display
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              '${state.selectedSector[0].toUpperCase()}${state.selectedSector.substring(1)} Fleet',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: textWhite,
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: cardElevated,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: borderCard),
+              ),
+              child: Text(
+                state.selectedSector.toUpperCase(),
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.8,
+                  color: textGray,
+                ),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 8),
-        _buildSectorSelector(state),
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
+
 
         // Vehicle Category Cards
         _buildVehicleTierCards(state),
@@ -843,59 +864,6 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
     );
   }
 
-  Widget _buildSectorSelector(RideState state) {
-    final sectors = [
-      {
-        'id': 'passenger',
-        'label': 'Passenger',
-        'icon': Icons.directions_car_rounded,
-      },
-      {
-        'id': 'logistics',
-        'label': 'Logistics',
-        'icon': Icons.local_shipping_rounded,
-      },
-      {
-        'id': 'service',
-        'label': 'Service Vehicle',
-        'icon': Icons.emergency_rounded,
-      },
-      {'id': 'premium', 'label': 'Premium', 'icon': Icons.stars_rounded},
-    ];
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: sectors.map((sec) {
-          final isSelected = state.selectedSector == sec['id'];
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: ChoiceChip(
-              avatar: Icon(
-                sec['icon'] as IconData,
-                size: 16,
-                color: isSelected ? Colors.black : textGray,
-              ),
-              label: Text(sec['label'] as String),
-              selected: isSelected,
-              selectedColor: brandGreen,
-              backgroundColor: cardElevated,
-              labelStyle: TextStyle(
-                color: isSelected ? Colors.black : textWhite,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                fontSize: 12,
-              ),
-              onSelected: (_) {
-                ref
-                    .read(rideProvider.notifier)
-                    .selectSector(sec['id'] as String);
-              },
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
 
   Widget _buildVehicleTierCards(RideState state) {
     List<Map<String, dynamic>> tiers = [];
