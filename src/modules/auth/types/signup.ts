@@ -5,6 +5,15 @@
 export type SignupContactType = 'email' | 'phone';
 
 // ============================================================
+// Public signup roles
+//
+// Admin and Super Admin are intentionally excluded.
+// They are provisioned through the controlled admin flow.
+// ============================================================
+
+export type PublicSignupRole = 'customer' | 'driver' | 'fleet_owner' | 'driver_fleet_owner';
+
+// ============================================================
 // Pending signup
 // ============================================================
 
@@ -25,7 +34,7 @@ export interface PendingSignup {
    * Legacy contact fields retained for compatibility with
    * the existing pending_signups schema.
    *
-   * New signups always use:
+   * New signups use:
    *   contactType = 'phone'
    *   contactValue = normalized phone number
    */
@@ -33,7 +42,26 @@ export interface PendingSignup {
   contactValue: string;
 
   passwordHash: string;
-  role: string;
+  role: PublicSignupRole;
+
+  // ----------------------------------------------------------
+  // Provider registration fields
+  // ----------------------------------------------------------
+
+  /**
+   * Required for:
+   *   - driver
+   *   - driver_fleet_owner
+   */
+  licenseNumber: string | null;
+  licenseExpiry: Date | null;
+
+  /**
+   * Required for:
+   *   - fleet_owner
+   *   - driver_fleet_owner
+   */
+  businessName: string | null;
 
   // ----------------------------------------------------------
   // Legacy local-OTP fields
@@ -84,14 +112,33 @@ export interface CreatePendingSignupData {
   email: string | null;
 
   /**
-   * New signup flow always uses phone as the primary
+   * New signup flow uses phone as the primary
    * verification contact.
    */
   contactType: SignupContactType;
   contactValue: string;
 
   passwordHash: string;
-  role: string;
+  role: PublicSignupRole;
+
+  // ----------------------------------------------------------
+  // Provider registration fields
+  // ----------------------------------------------------------
+
+  /**
+   * Required for:
+   *   - driver
+   *   - driver_fleet_owner
+   */
+  licenseNumber: string | null;
+  licenseExpiry: Date | null;
+
+  /**
+   * Required for:
+   *   - fleet_owner
+   *   - driver_fleet_owner
+   */
+  businessName: string | null;
 
   // ----------------------------------------------------------
   // Provider-managed OTP state

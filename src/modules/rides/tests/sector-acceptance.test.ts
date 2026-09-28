@@ -88,8 +88,10 @@ describe('Phase 4 Step 3: Sector & Category Matching and Acceptance Isolation', 
       const sql = queryMock.mock.calls[0]![0] as string;
       const params = queryMock.mock.calls[0]![1] as unknown[];
 
-      expect(sql).toContain('($6::varchar IS NULL OR v.sector = $6)');
-      expect(sql).toContain('($7::varchar IS NULL OR v.category = $7)');
+      expect(sql).toContain('(v.sector = $6');
+      expect(sql).toContain('OR v.sector IS NULL)');
+      expect(sql).toContain('(v.category = $7');
+      expect(sql).toContain('OR v.category IS NULL)');
       expect(params[5]).toBe('service');
       expect(params[6]).toBe('jcb');
     });
@@ -106,9 +108,18 @@ describe('Phase 4 Step 3: Sector & Category Matching and Acceptance Isolation', 
       const result = await repo.accept('ride-123', 'driver-profile-1', clientMock as never);
 
       expect(result).toBeNull();
+
       const sql = queryMock.mock.calls[0]![0] as string;
-      expect(sql).toContain('v.sector = r.sector');
-      expect(sql).toContain('(r.vehicle_category IS NULL OR v.category = r.vehicle_category)');
+      const normalizedSql = sql
+        .replace(/\s+/g, ' ')
+        .replace(/\(\s+/g, '(')
+        .replace(/\s+\)/g, ')')
+        .trim();
+
+      expect(normalizedSql).toContain('v.sector = r.sector');
+      expect(normalizedSql).toContain(
+        '(r.vehicle_category IS NULL OR v.category = r.vehicle_category)',
+      );
     });
 
     it('returns mapped ride when matching vehicle sector and category accepts', async () => {
@@ -155,7 +166,7 @@ describe('Phase 4 Step 3: Sector & Category Matching and Acceptance Isolation', 
   describe('RideService Acceptance Conflict & Race Condition Protection', () => {
     it('throws RIDE_ACCEPTANCE_CONFLICT when driver vehicle sector/category does not match', async () => {
       const rideRepo = {
-        accept: vi.fn().mockResolvedValue(null), // DB update returns 0 rows due to sector/category mismatch
+        accept: vi.fn().mockResolvedValue(null),
       };
       const driverRepo = {
         setBusy: vi.fn().mockResolvedValue(true),
@@ -173,10 +184,13 @@ describe('Phase 4 Step 3: Sector & Category Matching and Acceptance Isolation', 
 
     it('throws DRIVER_CONTENTION_CONFLICT when driver is already busy with another ride', async () => {
       const rideRepo = {
-        accept: vi.fn().mockResolvedValue({ id: 'ride-1', status: 'driver_assigned' }),
+        accept: vi.fn().mockResolvedValue({
+          id: 'ride-1',
+          status: 'driver_assigned',
+        }),
       };
       const driverRepo = {
-        setBusy: vi.fn().mockResolvedValue(false), // driver contention!
+        setBusy: vi.fn().mockResolvedValue(false),
       };
 
       const service = new RideService(rideRepo as never, driverRepo as never);

@@ -14,39 +14,116 @@ export interface CustomerFleetVehicle {
 
 export interface VehicleRepository {
   driverProfileExists(id: string): Promise<boolean>;
+
   create(data: CreateVehicleData): Promise<Vehicle>;
+
   findById(id: string): Promise<Vehicle | null>;
+
   findByDriver(driverProfileId: string, activeOnly: boolean): Promise<Vehicle[]>;
+
   update(id: string, data: UpdateVehicleData): Promise<Vehicle | null>;
+
   deactivate(id: string, retiredAt: Date): Promise<Vehicle | null>;
+
   listFleet(sector?: string, category?: string): Promise<CustomerFleetVehicle[]>;
 }
 
 const vehicleProjection = `
-  id, driver_profile_id AS "driverProfileId", make, model, color,
+  id,
+  driver_profile_id AS "driverProfileId",
+  owner_id AS "ownerId",
+  make,
+  model,
+  color,
   plate_number AS "plateNumber",
   COALESCE(sector, 'passenger') AS "sector",
   COALESCE(category, 'sedan') AS "category",
   COALESCE(fuel_rate_per_km, 0)::numeric AS "fuelRatePerKm",
   COALESCE(load_capacity_kg, 0)::numeric AS "loadCapacityKg",
-  is_active AS "isActive", retired_at AS "retiredAt",
-  created_at AS "createdAt", updated_at AS "updatedAt"`;
+  manufacturing_year AS "manufacturingYear",
+  fuel_type AS "fuelType",
+  seating_capacity AS "seatingCapacity",
+  registration_date AS "registrationDate",
+  registration_expiry AS "registrationExpiry",
+  is_commercial AS "isCommercial",
+  permit_details AS "permitDetails",
+  verification_status AS "verificationStatus",
+  is_active AS "isActive",
+  retired_at AS "retiredAt",
+  created_at AS "createdAt",
+  updated_at AS "updatedAt"
+`;
+
+function mapVehicleRow(row: Vehicle): Vehicle {
+  return {
+    ...row,
+    fuelRatePerKm: Number(row.fuelRatePerKm ?? 0),
+    loadCapacityKg: Number(row.loadCapacityKg ?? 0),
+  };
+}
 
 export class PostgresVehicleRepository implements VehicleRepository {
   constructor(private readonly pool: Pool) {}
 
   async driverProfileExists(id: string): Promise<boolean> {
-    const result = await this.pool.query('SELECT 1 FROM driver_profiles WHERE id = $1', [id]);
+    const result = await this.pool.query(
+      `
+        SELECT 1
+        FROM driver_profiles
+        WHERE id = $1
+      `,
+      [id],
+    );
+
     return result.rowCount === 1;
   }
 
   async create(data: CreateVehicleData): Promise<Vehicle> {
     const result = await this.pool.query<Vehicle>(
-      `INSERT INTO vehicles (driver_profile_id, make, model, color, plate_number, sector, category, fuel_rate_per_km, load_capacity_kg)
-       VALUES ($1, $2, $3, $4, $5, COALESCE($6, 'passenger'), COALESCE($7, 'sedan'), COALESCE($8, 0), COALESCE($9, 0))
-       RETURNING ${vehicleProjection}`,
+      `
+        INSERT INTO vehicles (
+          driver_profile_id,
+          owner_id,
+          make,
+          model,
+          color,
+          plate_number,
+          sector,
+          category,
+          fuel_rate_per_km,
+          load_capacity_kg,
+          manufacturing_year,
+          fuel_type,
+          seating_capacity,
+          registration_date,
+          registration_expiry,
+          is_commercial,
+          permit_details
+        )
+        VALUES (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          $6,
+          COALESCE($7, 'passenger'),
+          COALESCE($8, 'sedan'),
+          COALESCE($9, 0),
+          COALESCE($10, 0),
+          $11,
+          $12,
+          $13,
+          $14,
+          $15,
+          COALESCE($16, TRUE),
+          $17
+        )
+        RETURNING ${vehicleProjection}
+      `,
       [
-        data.driverProfileId,
+        data.driverProfileId ?? null,
+        data.ownerId ?? null,
         data.make,
         data.model,
         data.color ?? null,
@@ -55,35 +132,57 @@ export class PostgresVehicleRepository implements VehicleRepository {
         data.category ?? 'sedan',
         data.fuelRatePerKm ?? 0,
         data.loadCapacityKg ?? 0,
+        data.manufacturingYear ?? null,
+        data.fuelType ?? null,
+        data.seatingCapacity ?? null,
+        data.registrationDate ?? null,
+        data.registrationExpiry ?? null,
+        data.isCommercial ?? true,
+        data.permitDetails ?? null,
       ],
     );
+
     const vehicle = result.rows.at(0);
-    if (!vehicle) throw new Error('Vehicle insert returned no row');
-    return vehicle;
+
+    if (!vehicle) {
+      throw new Error('Vehicle insert returned no row');
+    }
+
+    return mapVehicleRow(vehicle);
   }
 
   async findById(id: string): Promise<Vehicle | null> {
     const result = await this.pool.query<Vehicle>(
-      `SELECT ${vehicleProjection} FROM vehicles WHERE id = $1`,
+      `
+        SELECT ${vehicleProjection}
+        FROM vehicles
+        WHERE id = $1
+      `,
       [id],
     );
-    return result.rows[0] ?? null;
+
+    const vehicle = result.rows[0];
+
+    return vehicle ? mapVehicleRow(vehicle) : null;
   }
 
   async findByDriver(driverProfileId: string, activeOnly: boolean): Promise<Vehicle[]> {
     const result = await this.pool.query<Vehicle>(
-      `SELECT ${vehicleProjection}
-       FROM vehicles
-       WHERE driver_profile_id = $1
-         AND ($2 = FALSE OR is_active = TRUE)
-       ORDER BY created_at DESC`,
+      `
+        SELECT ${vehicleProjection}
+        FROM vehicles
+        WHERE driver_profile_id = $1
+          AND ($2 = FALSE OR is_active = TRUE)
+        ORDER BY created_at DESC
+      `,
       [driverProfileId, activeOnly],
     );
-    return result.rows;
+
+    return result.rows.map(mapVehicleRow);
   }
 
   async update(id: string, data: UpdateVehicleData): Promise<Vehicle | null> {
-    const columns: Record<string, string> = {
+    const columns: Record<keyof UpdateVehicleData, string> = {
       make: 'make',
       model: 'model',
       color: 'color',
@@ -92,31 +191,68 @@ export class PostgresVehicleRepository implements VehicleRepository {
       category: 'category',
       fuelRatePerKm: 'fuel_rate_per_km',
       loadCapacityKg: 'load_capacity_kg',
+      manufacturingYear: 'manufacturing_year',
+      fuelType: 'fuel_type',
+      seatingCapacity: 'seating_capacity',
+      registrationDate: 'registration_date',
+      registrationExpiry: 'registration_expiry',
+      isCommercial: 'is_commercial',
+      permitDetails: 'permit_details',
     };
-    const fields = Object.keys(data);
-    const values = Object.values(data).map((value) => (value === undefined ? null : value));
-    const assignments = fields.map((field, index) => `${columns[field]} = $${index + 1}`);
+
+    const entries = Object.entries(data).filter(([, value]) => value !== undefined) as Array<
+      [keyof UpdateVehicleData, Exclude<UpdateVehicleData[keyof UpdateVehicleData], undefined>]
+    >;
+
+    if (entries.length === 0) {
+      return this.findById(id);
+    }
+
+    const values = entries.map(([, value]) => value);
+
+    const assignments = entries.map(([field], index) => `${columns[field]} = $${index + 1}`);
+
     const result = await this.pool.query<Vehicle>(
-      `UPDATE vehicles SET ${assignments.join(', ')}, updated_at = NOW()
-       WHERE id = $${values.length + 1} AND is_active = TRUE
-       RETURNING ${vehicleProjection}`,
+      `
+        UPDATE vehicles
+        SET
+          ${assignments.join(', ')},
+          updated_at = NOW()
+        WHERE id = $${values.length + 1}
+          AND is_active = TRUE
+        RETURNING ${vehicleProjection}
+      `,
       [...values, id],
     );
-    return result.rows[0] ?? null;
+
+    const vehicle = result.rows[0];
+
+    return vehicle ? mapVehicleRow(vehicle) : null;
   }
 
   async deactivate(id: string, retiredAt: Date): Promise<Vehicle | null> {
     const result = await this.pool.query<Vehicle>(
-      `UPDATE vehicles SET is_active = FALSE, retired_at = $1, updated_at = NOW()
-       WHERE id = $2 AND is_active = TRUE
-       RETURNING ${vehicleProjection}`,
+      `
+        UPDATE vehicles
+        SET
+          is_active = FALSE,
+          retired_at = $1,
+          updated_at = NOW()
+        WHERE id = $2
+          AND is_active = TRUE
+        RETURNING ${vehicleProjection}
+      `,
       [retiredAt, id],
     );
-    return result.rows[0] ?? null;
+
+    const vehicle = result.rows[0];
+
+    return vehicle ? mapVehicleRow(vehicle) : null;
   }
 
   async listFleet(sector?: string, category?: string): Promise<CustomerFleetVehicle[]> {
-    const conditions: string[] = ['is_active = TRUE'];
+    const conditions: string[] = ['is_active = TRUE', `verification_status = 'approved'`];
+
     const params: unknown[] = [];
 
     if (sector) {
@@ -130,14 +266,20 @@ export class PostgresVehicleRepository implements VehicleRepository {
     }
 
     const result = await this.pool.query<CustomerFleetVehicle>(
-      `SELECT id, make, model, color,
-              COALESCE(sector, 'passenger') AS "sector",
-              COALESCE(category, 'sedan') AS "category",
-              COALESCE(fuel_rate_per_km, 0)::numeric AS "fuelRatePerKm",
-              COALESCE(load_capacity_kg, 0)::numeric AS "loadCapacityKg"
-       FROM vehicles
-       WHERE ${conditions.join(' AND ')}
-       ORDER BY make ASC, model ASC`,
+      `
+        SELECT
+          id,
+          make,
+          model,
+          color,
+          COALESCE(sector, 'passenger') AS "sector",
+          COALESCE(category, 'sedan') AS "category",
+          COALESCE(fuel_rate_per_km, 0)::numeric AS "fuelRatePerKm",
+          COALESCE(load_capacity_kg, 0)::numeric AS "loadCapacityKg"
+        FROM vehicles
+        WHERE ${conditions.join(' AND ')}
+        ORDER BY make ASC, model ASC
+      `,
       params,
     );
 

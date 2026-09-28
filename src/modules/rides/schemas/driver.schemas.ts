@@ -28,9 +28,6 @@ export const upsertDriverProfileSchema = z
       .string()
       .trim()
       .regex(/^\d{4}-\d{2}-\d{2}$/, 'License expiry must be in YYYY-MM-DD format'),
-    profilePhotoKey: z.string().trim().max(500).optional(),
-    licenseDocumentKey: z.string().trim().max(500).optional(),
-    vehicleRcDocumentKey: z.string().trim().max(500).optional(),
     dob: z
       .string()
       .trim()

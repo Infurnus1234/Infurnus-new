@@ -5,58 +5,64 @@ import helmet from 'helmet';
 
 import { errorMiddleware } from './common/middleware/error.middleware.js';
 import { env } from './config/env.js';
+import { pool } from './infrastructure/database/postgres.js';
 
 import { createAuthController } from './modules/auth/controllers/auth.controller.js';
 import type { OtpProvider } from './modules/auth/providers/otp.provider.js';
-import { createAuthRouter } from './modules/auth/routes/auth.routes.js';
 import { PostgresRefreshTokenRepository } from './modules/auth/repositories/refresh-token.repository.js';
+import { createAuthRouter } from './modules/auth/routes/auth.routes.js';
 import { LogoutService } from './modules/auth/services/logout.service.js';
-
-import { PartnerController } from './modules/partners/controllers/partner.controller.js';
-import type { PartnerRepository } from './modules/partners/repositories/partner.repository.js';
-import { createPartnerRouter } from './modules/partners/routes/partner.routes.js';
-import { PartnerService } from './modules/partners/services/partner.service.js';
-import { PartnerDocumentController } from './modules/partners/controllers/partner-document.controller.js';
-import type { PartnerDocumentRepository } from './modules/partners/repositories/partner-document.repository.js';
-import { createPartnerDocumentRouter } from './modules/partners/routes/partner-document.routes.js';
-import { PartnerDocumentService } from './modules/partners/services/partner-document.service.js';
-
-import { UserController } from './modules/users/controllers/user.controller.js';
-import type { UserRepository } from './modules/users/repositories/user.repository.js';
-import { createUserRouter } from './modules/users/routes/user.routes.js';
-import { UserService } from './modules/users/services/user.service.js';
-
-import { VehicleController } from './modules/vehicles/controllers/vehicle.controller.js';
-import type { VehicleRepository } from './modules/vehicles/repositories/vehicle.repository.js';
-import { createVehicleRouter } from './modules/vehicles/routes/vehicle.routes.js';
-import { VehicleService } from './modules/vehicles/services/vehicle.service.js';
 
 import { AdminController } from './modules/admin/controllers/admin.controller.js';
 import type { AdminRepository } from './modules/admin/repositories/admin.repository.js';
 import { createAdminRouter } from './modules/admin/routes/admin.routes.js';
 import { AdminService } from './modules/admin/services/admin.service.js';
 
-import { RideController } from './modules/rides/controllers/ride.controller.js';
-import type { RideRepository } from './modules/rides/repositories/ride.repository.js';
-import { createRideRouter } from './modules/rides/routes/ride.routes.js';
-import { RideService } from './modules/rides/services/ride.service.js';
+import { createDriverApplicationRouter } from './modules/driver-applications/driver-application.routes.js';
+import type { DriverApplicationService } from './modules/driver-applications/driver-application.service.js';
 
-import { DriverController } from './modules/rides/controllers/driver.controller.js';
-import type { DriverRepository } from './modules/rides/repositories/driver.repository.js';
-import { DriverService } from './modules/rides/services/driver.service.js';
+import { PartnerController } from './modules/partners/controllers/partner.controller.js';
+import { PartnerDocumentController } from './modules/partners/controllers/partner-document.controller.js';
+import { PartnerDocumentStorageController } from './modules/partners/controllers/partner-document-storage.controller.js';
+import { PartnerVehicleController } from './modules/partners/controllers/partner-vehicle.controller.js';
+import type { PartnerDocumentRepository } from './modules/partners/repositories/partner-document.repository.js';
+import type { PartnerRepository } from './modules/partners/repositories/partner.repository.js';
+import { createPartnerDocumentRouter } from './modules/partners/routes/partner-document.routes.js';
+import { createPartnerDocumentStorageRouter } from './modules/partners/routes/partner-document-storage.routes.js';
+import { createPartnerRouter } from './modules/partners/routes/partner.routes.js';
+import { createPartnerVehicleRouter } from './modules/partners/routes/partner-vehicle.routes.js';
+import { PartnerDocumentService } from './modules/partners/services/partner-document.service.js';
+import { PartnerDocumentStorageService } from './modules/partners/services/partner-document-storage.service.js';
+import { PartnerService } from './modules/partners/services/partner.service.js';
+import { PartnerVehicleService } from './modules/partners/services/partner-vehicle.service.js';
 
-import { RentalController } from './modules/rentals/controllers/rental.controller.js';
-import type { RentalRepository } from './modules/rentals/repositories/rental.repository.js';
-import { createRentalRouter } from './modules/rentals/routes/rental.routes.js';
-import { RentalService } from './modules/rentals/services/rental.service.js';
+import type { CouponRedemptionService } from './modules/coupons/services/coupon-redemption.service.js';
+import { CouponController } from './modules/coupons/controllers/coupon.controller.js';
+import { createCouponRouter } from './modules/coupons/routes/coupon.routes.js';
 
 import type { FareEstimateService } from './modules/fares/services/fare-estimate.service.js';
 import { FareController } from './modules/fares/controllers/fare.controller.js';
 import { createFareRouter } from './modules/fares/routes/fare.routes.js';
 
-import type { CouponRedemptionService } from './modules/coupons/services/coupon-redemption.service.js';
-import { CouponController } from './modules/coupons/controllers/coupon.controller.js';
-import { createCouponRouter } from './modules/coupons/routes/coupon.routes.js';
+import type { FleetRepository } from './modules/fleet/repositories/fleet.repository.js';
+import { FleetController } from './modules/fleet/controllers/fleet.controller.js';
+import { createFleetRouter } from './modules/fleet/routes/fleet.routes.js';
+import { FleetService } from './modules/fleet/services/fleet.service.js';
+
+import { DriverController } from './modules/rides/controllers/driver.controller.js';
+import { RideController } from './modules/rides/controllers/ride.controller.js';
+import type { DriverRepository } from './modules/rides/repositories/driver.repository.js';
+import { PostgresDriverDocumentRepository } from './modules/rides/repositories/driver-document.repository.js';
+import type { RideRepository } from './modules/rides/repositories/ride.repository.js';
+import { createRideRouter } from './modules/rides/routes/ride.routes.js';
+import { DriverDocumentStorageService } from './modules/rides/services/driver-document-storage.service.js';
+import { DriverService } from './modules/rides/services/driver.service.js';
+import { RideService } from './modules/rides/services/ride.service.js';
+
+import { RentalController } from './modules/rentals/controllers/rental.controller.js';
+import type { RentalRepository } from './modules/rentals/repositories/rental.repository.js';
+import { createRentalRouter } from './modules/rentals/routes/rental.routes.js';
+import { RentalService } from './modules/rentals/services/rental.service.js';
 
 import type { RatingRepository } from './modules/ratings/repositories/rating.repository.js';
 import { RatingController } from './modules/ratings/controllers/rating.controller.js';
@@ -67,24 +73,25 @@ import type { PaymentProvider } from './modules/payments/providers/payment.provi
 import { PaymentController } from './modules/payments/controllers/payment.controller.js';
 import { createPaymentRouter } from './modules/payments/routes/payment.routes.js';
 
-import type { FleetRepository } from './modules/fleet/repositories/fleet.repository.js';
-import { FleetService } from './modules/fleet/services/fleet.service.js';
-import { FleetController } from './modules/fleet/controllers/fleet.controller.js';
-import { createFleetRouter } from './modules/fleet/routes/fleet.routes.js';
-
 import type { ProviderBankRepository } from './modules/providers/repositories/provider-bank.repository.js';
-import { ProviderService } from './modules/providers/services/provider.service.js';
 import { ProviderController } from './modules/providers/controllers/provider.controller.js';
 import { createProviderRouter } from './modules/providers/routes/provider.routes.js';
+import { ProviderService } from './modules/providers/services/provider.service.js';
 
 import type { SupportRepository } from './modules/support/repositories/support.repository.js';
-import { SupportService } from './modules/support/services/support.service.js';
 import { SupportController } from './modules/support/controllers/support.controller.js';
 import { createSupportRouter } from './modules/support/routes/support.routes.js';
+import { SupportService } from './modules/support/services/support.service.js';
 
-// ============================================================
-// Notifications
-// ============================================================
+import { UserController } from './modules/users/controllers/user.controller.js';
+import type { UserRepository } from './modules/users/repositories/user.repository.js';
+import { createUserRouter } from './modules/users/routes/user.routes.js';
+import { UserService } from './modules/users/services/user.service.js';
+
+import { VehicleController } from './modules/vehicles/controllers/vehicle.controller.js';
+import type { VehicleRepository } from './modules/vehicles/repositories/vehicle.repository.js';
+import { createVehicleRouter } from './modules/vehicles/routes/vehicle.routes.js';
+import { VehicleService } from './modules/vehicles/services/vehicle.service.js';
 
 import { createDeviceTokenRouter } from './modules/notifications/device-tokens/routes/device-token.routes.js';
 
@@ -116,6 +123,7 @@ export function createApp(
   providerBankRepository?: ProviderBankRepository,
   supportRepository?: SupportRepository,
   paymentProvider?: PaymentProvider,
+  driverApplicationService?: DriverApplicationService,
 ): express.Express;
 
 // ============================================================
@@ -150,6 +158,7 @@ export function createApp(
   providerBankRepository?: ProviderBankRepository,
   supportRepository?: SupportRepository,
   paymentProvider?: PaymentProvider,
+  driverApplicationService?: DriverApplicationService,
 ) {
   const app = express();
 
@@ -197,7 +206,7 @@ export function createApp(
     });
   });
 
-  // Readiness health check (database connectivity verification)
+  // Readiness health check
   app.get(['/health/ready', '/ready'], async (_req, res) => {
     try {
       if (options.readinessCheck) {
@@ -211,6 +220,7 @@ export function createApp(
               message: 'Database check failed',
             },
           });
+
           return;
         }
       } else if (env.NODE_ENV !== 'test') {
@@ -244,6 +254,16 @@ export function createApp(
 
   let partnerRepository: PartnerRepository | undefined;
   let vehicleRepository: VehicleRepository | undefined;
+
+  // Reusable FleetService instance.
+  //
+  // This allows both:
+  //   /fleet
+  //   /partners/vehicles
+  //
+  // to use the same FleetService without creating duplicate
+  // service instances.
+  let fleetService: FleetService | undefined;
 
   // If the dedicated production auth provider is supplied,
   // it always takes precedence.
@@ -283,6 +303,7 @@ export function createApp(
 
   if (repository) {
     const logoutService = new LogoutService(new PostgresRefreshTokenRepository());
+
     const controller = new UserController(new UserService(repository, logoutService));
 
     app.use('/users', createUserRouter(controller));
@@ -293,7 +314,32 @@ export function createApp(
   // ==========================================================
 
   if (partnerRepository) {
-    const partnerController = new PartnerController(new PartnerService(partnerRepository));
+    const partnerService = new PartnerService(partnerRepository);
+
+    const partnerController = new PartnerController(partnerService);
+
+    // ========================================================
+    // Partner Vehicles
+    //
+    // IMPORTANT:
+    // Register this BEFORE /partners.
+    //
+    // Otherwise /partners/:id can capture:
+    // /partners/vehicles
+    //
+    // Partner -> PartnerVehicleService -> FleetService
+    // -> FleetRepository -> vehicles.owner_id
+    // ========================================================
+
+    if (fleetRepository) {
+      fleetService ??= new FleetService(fleetRepository);
+
+      const partnerVehicleService = new PartnerVehicleService(partnerRepository, fleetService);
+
+      const partnerVehicleController = new PartnerVehicleController(partnerVehicleService);
+
+      app.use('/partners/vehicles', createPartnerVehicleRouter(partnerVehicleController));
+    }
 
     app.use('/partners', createPartnerRouter(partnerController));
   }
@@ -303,11 +349,20 @@ export function createApp(
   // ==========================================================
 
   if (partnerDocumentRepository) {
-    const documentController = new PartnerDocumentController(
-      new PartnerDocumentService(partnerDocumentRepository),
-    );
+    const documentService = new PartnerDocumentService(partnerDocumentRepository);
+
+    const documentController = new PartnerDocumentController(documentService);
 
     app.use('/partners/:id/documents', createPartnerDocumentRouter(documentController));
+
+    const documentStorageService = new PartnerDocumentStorageService(documentService);
+
+    const documentStorageController = new PartnerDocumentStorageController(documentStorageService);
+
+    app.use(
+      '/partners/:id/documents',
+      createPartnerDocumentStorageRouter(documentStorageController),
+    );
   }
 
   // ==========================================================
@@ -325,20 +380,45 @@ export function createApp(
   // ==========================================================
 
   if (adminRepository) {
-    app.use('/admin', createAdminRouter(new AdminController(new AdminService(adminRepository))));
+    app.use(
+      '/admin',
+      createAdminRouter(
+        new AdminController(new AdminService(adminRepository), driverApplicationService),
+      ),
+    );
   }
+
+  // ==========================================================
+  // Driver Applications
+  // ==========================================================
+
+  app.use('/driver-applications', createDriverApplicationRouter(driverApplicationService));
 
   // ==========================================================
   // Rides
   // ==========================================================
 
   if (rideRepository) {
-    const rideService = new RideService(rideRepository, driverRepository);
+    // Driver document storage must be initialized before
+    // RideService because RideService now hydrates the driver's
+    // profile photo from driver_documents.
+    const driverDocumentRepository = new PostgresDriverDocumentRepository(pool);
+
+    const driverDocumentStorageService = new DriverDocumentStorageService({
+      repository: driverDocumentRepository,
+    });
+
+    const rideService = new RideService(
+      rideRepository,
+      driverRepository,
+      driverDocumentStorageService,
+    );
 
     const driverController = driverRepository
       ? new DriverController(
           new DriverService(driverRepository, undefined, rideRepository),
           rideService,
+          driverDocumentStorageService,
         )
       : undefined;
 
@@ -405,7 +485,9 @@ export function createApp(
   // ==========================================================
 
   if (fleetRepository) {
-    const fleetController = new FleetController(new FleetService(fleetRepository));
+    fleetService ??= new FleetService(fleetRepository);
+
+    const fleetController = new FleetController(fleetService);
 
     app.use('/fleet', createFleetRouter(fleetController));
   }

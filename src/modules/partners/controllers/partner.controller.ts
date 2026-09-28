@@ -3,6 +3,7 @@ import {
   createPartnerSchema,
   partnerIdSchema,
   partnerListQuerySchema,
+  reviewPartnerSchema,
   updateAvailabilitySchema,
   updatePartnerSchema,
 } from '../schemas/partner.schemas.js';
@@ -13,12 +14,20 @@ export class PartnerController {
 
   create = async (request: Request, response: Response, next: NextFunction) => {
     try {
-      if (!request.auth) throw new Error('Authentication middleware is required');
+      if (!request.auth) {
+        throw new Error('Authentication middleware is required');
+      }
+
       const partner = await this.service.createPartner(
         createPartnerSchema.parse(request.body),
         request.auth,
       );
-      response.status(201).json({ success: true, data: partner, message: 'Partner created' });
+
+      response.status(201).json({
+        success: true,
+        data: partner,
+        message: 'Partner created',
+      });
     } catch (error) {
       next(error);
     }
@@ -26,9 +35,17 @@ export class PartnerController {
 
   getMyPartner = async (request: Request, response: Response, next: NextFunction) => {
     try {
-      if (!request.auth) throw new Error('Authentication middleware is required');
+      if (!request.auth) {
+        throw new Error('Authentication middleware is required');
+      }
+
       const partner = await this.service.getMyPartner(request.auth);
-      response.json({ success: true, data: partner, message: 'Current partner retrieved' });
+
+      response.json({
+        success: true,
+        data: partner,
+        message: 'Current partner retrieved',
+      });
     } catch (error) {
       next(error);
     }
@@ -37,9 +54,18 @@ export class PartnerController {
   getById = async (request: Request, response: Response, next: NextFunction) => {
     try {
       const { id } = partnerIdSchema.parse(request.params);
-      if (!request.auth) throw new Error('Authentication middleware is required');
+
+      if (!request.auth) {
+        throw new Error('Authentication middleware is required');
+      }
+
       const partner = await this.service.getPartner(id, request.auth);
-      response.json({ success: true, data: partner, message: 'Partner retrieved' });
+
+      response.json({
+        success: true,
+        data: partner,
+        message: 'Partner retrieved',
+      });
     } catch (error) {
       next(error);
     }
@@ -47,12 +73,20 @@ export class PartnerController {
 
   list = async (request: Request, response: Response, next: NextFunction) => {
     try {
-      if (!request.auth) throw new Error('Authentication middleware is required');
+      if (!request.auth) {
+        throw new Error('Authentication middleware is required');
+      }
+
       const partners = await this.service.listPartners(
         partnerListQuerySchema.parse(request.query),
         request.auth,
       );
-      response.json({ success: true, data: partners, message: 'Partners retrieved' });
+
+      response.json({
+        success: true,
+        data: partners,
+        message: 'Partners retrieved',
+      });
     } catch (error) {
       next(error);
     }
@@ -61,13 +95,22 @@ export class PartnerController {
   update = async (request: Request, response: Response, next: NextFunction) => {
     try {
       const { id } = partnerIdSchema.parse(request.params);
-      if (!request.auth) throw new Error('Authentication middleware is required');
+
+      if (!request.auth) {
+        throw new Error('Authentication middleware is required');
+      }
+
       const partner = await this.service.updatePartner(
         id,
         updatePartnerSchema.parse(request.body),
         request.auth,
       );
-      response.json({ success: true, data: partner, message: 'Partner updated' });
+
+      response.json({
+        success: true,
+        data: partner,
+        message: 'Partner updated',
+      });
     } catch (error) {
       next(error);
     }
@@ -76,10 +119,44 @@ export class PartnerController {
   updateAvailability = async (request: Request, response: Response, next: NextFunction) => {
     try {
       const { id } = partnerIdSchema.parse(request.params);
+
       const { availabilityStatus } = updateAvailabilitySchema.parse(request.body);
-      if (!request.auth) throw new Error('Authentication middleware is required');
+
+      if (!request.auth) {
+        throw new Error('Authentication middleware is required');
+      }
+
       const partner = await this.service.updatePartner(id, { availabilityStatus }, request.auth);
-      response.json({ success: true, data: partner, message: 'Partner availability updated' });
+
+      response.json({
+        success: true,
+        data: partner,
+        message: 'Partner availability updated',
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  review = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      const { id } = partnerIdSchema.parse(request.params);
+
+      if (!request.auth) {
+        throw new Error('Authentication middleware is required');
+      }
+
+      const partner = await this.service.reviewPartner(
+        id,
+        reviewPartnerSchema.parse(request.body),
+        request.auth,
+      );
+
+      response.json({
+        success: true,
+        data: partner,
+        message: 'Partner review completed',
+      });
     } catch (error) {
       next(error);
     }

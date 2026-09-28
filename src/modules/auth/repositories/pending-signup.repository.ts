@@ -85,6 +85,9 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
             contact_value,
             password_hash,
             role,
+            license_number,
+            license_expiry,
+            business_name,
             otp_hash,
             otp_expires_at,
             otp_attempts,
@@ -103,15 +106,18 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
             $5,
             $6,
             $7,
+            $8,
+            $9,
+            $10,
             NULL,
             NULL,
             0,
             NULL,
             NOW(),
-            $8,
-            $9,
-            $10,
-            $11
+            $11,
+            $12,
+            $13,
+            $14
           )
           RETURNING
             id,
@@ -122,6 +128,9 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
             contact_value AS "contactValue",
             password_hash AS "passwordHash",
             role,
+            license_number AS "licenseNumber",
+            license_expiry AS "licenseExpiry",
+            business_name AS "businessName",
             otp_hash AS "otpHash",
             otp_expires_at AS "otpExpiresAt",
             otp_attempts AS "otpAttempts",
@@ -141,6 +150,9 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
           data.contactValue,
           data.passwordHash,
           data.role,
+          data.licenseNumber,
+          data.licenseExpiry,
+          data.businessName,
           data.otpProvider,
           data.otpProviderSessionId,
           data.otpProviderSessionToken,
@@ -196,6 +208,9 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
           contact_value AS "contactValue",
           password_hash AS "passwordHash",
           role,
+          license_number AS "licenseNumber",
+          license_expiry AS "licenseExpiry",
+          business_name AS "businessName",
           otp_hash AS "otpHash",
           otp_expires_at AS "otpExpiresAt",
           otp_attempts AS "otpAttempts",
@@ -213,7 +228,16 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
       [id],
     );
 
-    return result.rows[0] ?? null;
+    const row = result.rows[0];
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      ...row,
+      otpProviderSessionToken: null,
+    };
   }
 
   // ----------------------------------------------------------
@@ -232,6 +256,9 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
           contact_value AS "contactValue",
           password_hash AS "passwordHash",
           role,
+          license_number AS "licenseNumber",
+          license_expiry AS "licenseExpiry",
+          business_name AS "businessName",
           otp_hash AS "otpHash",
           otp_expires_at AS "otpExpiresAt",
           otp_attempts AS "otpAttempts",
@@ -250,7 +277,16 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
       [contactType, contactValue],
     );
 
-    return result.rows[0] ?? null;
+    const row = result.rows[0];
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      ...row,
+      otpProviderSessionToken: null,
+    };
   }
 
   // ----------------------------------------------------------

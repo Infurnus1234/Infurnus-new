@@ -28,9 +28,6 @@ export interface DriverProfile {
   userId: string;
   licenseNumber: string;
   licenseExpiry: string;
-  licenseDocumentKey?: string | null;
-  vehicleRcDocumentKey?: string | null;
-  profilePhotoKey?: string | null;
   verificationStatus: string;
   rejectionReason?: string | null;
   availabilityStatus?: DriverAvailabilityStatus | null;

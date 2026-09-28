@@ -232,6 +232,12 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
 
         password: input.password,
         role: input.role,
+
+        ...(input.licenseNumber !== undefined ? { licenseNumber: input.licenseNumber } : {}),
+
+        ...(input.licenseExpiry !== undefined ? { licenseExpiry: input.licenseExpiry } : {}),
+
+        ...(input.businessName !== undefined ? { businessName: input.businessName } : {}),
       });
 
       res.status(201).json({

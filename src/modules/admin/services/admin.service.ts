@@ -1,5 +1,7 @@
 import { AppError } from '../../../common/errors/app-error.js';
+
 import type { AdminRepository } from '../repositories/admin.repository.js';
+
 import type { AdminFilters, FleetFilters } from '../types/admin.js';
 
 export class AdminService {
@@ -9,9 +11,41 @@ export class AdminService {
     return this.repository.listUsers(filters);
   }
 
+  listDrivers(filters: AdminFilters) {
+    return this.repository.listDrivers(filters);
+  }
+
+  listDriverApplications(filters: AdminFilters) {
+    return this.repository.listDriverApplications(filters);
+  }
+
+  async getDriver(id: string) {
+    const driver = await this.repository.getDriver(id);
+
+    if (!driver) {
+      throw new AppError('DRIVER_NOT_FOUND', 'Driver not found', 404);
+    }
+
+    return driver;
+  }
+
   async getUser(id: string) {
     const user = await this.repository.getUser(id);
-    if (!user) throw new AppError('USER_NOT_FOUND', 'User not found', 404);
+
+    if (!user) {
+      throw new AppError('USER_NOT_FOUND', 'User not found', 404);
+    }
+
+    return user;
+  }
+
+  async updateUserStatus(id: string, status: string) {
+    const user = await this.repository.updateUserStatus(id, status);
+
+    if (!user) {
+      throw new AppError('USER_NOT_FOUND', 'User not found', 404);
+    }
+
     return user;
   }
 
@@ -21,7 +55,11 @@ export class AdminService {
 
   async getPartner(id: string) {
     const partner = await this.repository.getPartner(id);
-    if (!partner) throw new AppError('PARTNER_NOT_FOUND', 'Partner not found', 404);
+
+    if (!partner) {
+      throw new AppError('PARTNER_NOT_FOUND', 'Partner not found', 404);
+    }
+
     return partner;
   }
 
@@ -31,7 +69,11 @@ export class AdminService {
 
   async getVehicle(id: string) {
     const vehicle = await this.repository.getVehicle(id);
-    if (!vehicle) throw new AppError('VEHICLE_NOT_FOUND', 'Vehicle not found', 404);
+
+    if (!vehicle) {
+      throw new AppError('VEHICLE_NOT_FOUND', 'Vehicle not found', 404);
+    }
+
     return vehicle;
   }
 
@@ -41,19 +83,31 @@ export class AdminService {
 
   async verifyDriver(driverId: string, status: string, rejectionReason?: string) {
     const success = await this.repository.verifyDriver(driverId, status, rejectionReason);
-    if (!success) throw new AppError('DRIVER_NOT_FOUND', 'Driver profile not found', 404);
+
+    if (!success) {
+      throw new AppError('DRIVER_NOT_FOUND', 'Driver profile not found', 404);
+    }
+
     return { success: true, driverId, status };
   }
 
   async verifyVehicle(vehicleId: string, status: string, rejectionReason?: string) {
     const success = await this.repository.verifyVehicle(vehicleId, status, rejectionReason);
-    if (!success) throw new AppError('VEHICLE_NOT_FOUND', 'Vehicle not found', 404);
+
+    if (!success) {
+      throw new AppError('VEHICLE_NOT_FOUND', 'Vehicle not found', 404);
+    }
+
     return { success: true, vehicleId, status };
   }
 
   async verifyDocument(documentId: string, status: string, comments?: string) {
     const success = await this.repository.verifyDocument(documentId, status, comments);
-    if (!success) throw new AppError('DOCUMENT_NOT_FOUND', 'Document not found', 404);
+
+    if (!success) {
+      throw new AppError('DOCUMENT_NOT_FOUND', 'Document not found', 404);
+    }
+
     return { success: true, documentId, status };
   }
 
@@ -77,7 +131,11 @@ export class AdminService {
 
   async getLiveFleetVehicleDetails(id: string) {
     const vehicle = await this.repository.getLiveFleetVehicleDetails(id);
-    if (!vehicle) throw new AppError('VEHICLE_NOT_FOUND', 'Vehicle not found', 404);
+
+    if (!vehicle) {
+      throw new AppError('VEHICLE_NOT_FOUND', 'Vehicle not found', 404);
+    }
+
     return vehicle;
   }
 }
