@@ -31,11 +31,16 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://infurnus@localhost:5432/infurnus
+
       JWT_ACCESS_SECRET: ${{ secrets.CI_JWT_ACCESS_SECRET }}
       JWT_ACCESS_PREVIOUS_SECRET: ${{ secrets.CI_JWT_ACCESS_PREVIOUS_SECRET }}
       JWT_ACCESS_EXPIRES_IN: 15m
       JWT_REFRESH_EXPIRES_IN: 30d
       AUTH_OTP_ENCRYPTION_KEY: ${{ secrets.CI_AUTH_OTP_ENCRYPTION_KEY }}
+
+      CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+      CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
+      CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
 
     steps:
       - name: Checkout repository
