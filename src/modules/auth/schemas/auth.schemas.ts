@@ -24,7 +24,14 @@ const passwordSchema = z
 // Signup
 // ============================================================
 //
-// Supported:
+// Supported roles:
+//
+// 1. customer
+// 2. driver
+// 3. fleet_owner
+// 4. driver_fleet_owner
+//
+// Contact:
 //
 // 1. Email only
 // 2. Phone only
@@ -32,8 +39,19 @@ const passwordSchema = z
 //
 // At least one contact method is required.
 //
-// If both are supplied, the service decides which
-// contact receives the OTP.
+// Role-specific fields:
+//
+// driver:
+//   - licenseNumber
+//   - licenseExpiry
+//
+// fleet_owner:
+//   - businessName
+//
+// driver_fleet_owner:
+//   - licenseNumber
+//   - licenseExpiry
+//   - businessName
 // ============================================================
 
 export const signupSchema = z
@@ -58,10 +76,33 @@ export const signupSchema = z
 
     confirmPassword: z.string().min(1, 'Please confirm your password'),
 
-    role: z.enum(['customer', 'driver']).default('customer'),
+    role: z.enum(['customer', 'driver', 'fleet_owner', 'driver_fleet_owner']).default('customer'),
+
+    licenseNumber: z
+      .string()
+      .trim()
+      .min(1, 'License number is required')
+      .max(50, 'License number must not exceed 50 characters')
+      .optional(),
+
+    licenseExpiry: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'License expiry must be in YYYY-MM-DD format')
+      .optional(),
+
+    businessName: z
+      .string()
+      .trim()
+      .min(1, 'Business name is required')
+      .max(150, 'Business name must not exceed 150 characters')
+      .optional(),
   })
   .strict()
   .superRefine((data, ctx) => {
+    // --------------------------------------------------------
+    // Contact validation
+    // --------------------------------------------------------
+
     if (!data.email && !data.phone) {
       ctx.addIssue({
         code: 'custom',
@@ -76,11 +117,92 @@ export const signupSchema = z
       });
     }
 
+    // --------------------------------------------------------
+    // Password confirmation
+    // --------------------------------------------------------
+
     if (data.password !== data.confirmPassword) {
       ctx.addIssue({
         code: 'custom',
         path: ['confirmPassword'],
         message: 'Passwords do not match',
+      });
+    }
+
+    // --------------------------------------------------------
+    // Role-specific validation
+    // --------------------------------------------------------
+
+    const isDriver = data.role === 'driver' || data.role === 'driver_fleet_owner';
+
+    const isFleetOwner = data.role === 'fleet_owner' || data.role === 'driver_fleet_owner';
+
+    // --------------------------------------------------------
+    // Driver fields
+    // --------------------------------------------------------
+
+    if (isDriver) {
+      if (!data.licenseNumber) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['licenseNumber'],
+          message: 'License number is required for driver signup',
+        });
+      }
+
+      if (!data.licenseExpiry) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['licenseExpiry'],
+          message: 'License expiry is required for driver signup',
+        });
+      } else {
+        const parts = data.licenseExpiry.split('-');
+
+        if (parts.length !== 3) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['licenseExpiry'],
+            message: 'License expiry must be in YYYY-MM-DD format',
+          });
+        } else {
+          const year = Number(parts[0]);
+          const month = Number(parts[1]);
+          const day = Number(parts[2]);
+
+          const date = new Date(Date.UTC(year, month - 1, day));
+
+          const isValidCalendarDate =
+            Number.isInteger(year) &&
+            Number.isInteger(month) &&
+            Number.isInteger(day) &&
+            month >= 1 &&
+            month <= 12 &&
+            day >= 1 &&
+            date.getUTCFullYear() === year &&
+            date.getUTCMonth() === month - 1 &&
+            date.getUTCDate() === day;
+
+          if (!isValidCalendarDate) {
+            ctx.addIssue({
+              code: 'custom',
+              path: ['licenseExpiry'],
+              message: 'License expiry must be a valid calendar date',
+            });
+          }
+        }
+      }
+    }
+
+    // --------------------------------------------------------
+    // Fleet owner fields
+    // --------------------------------------------------------
+
+    if (isFleetOwner && !data.businessName) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['businessName'],
+        message: 'Business name is required for fleet owner signup',
       });
     }
   });

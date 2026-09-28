@@ -42,6 +42,8 @@ export interface SignupCompletionRepository {
    * - prevent duplicate completion
    * - mark provider verification locally
    * - create users row
+   * - create driver profile when required
+   * - create partner profile when required
    * - create password credentials
    * - delete pending signup
    */
@@ -71,6 +73,9 @@ export class PostgresSignupCompletionRepository implements SignupCompletionRepos
         contactValue: string;
         passwordHash: string;
         role: string;
+        licenseNumber: string | null;
+        licenseExpiry: Date | null;
+        businessName: string | null;
         otpVerifiedAt: Date | null;
       }>(
         `
@@ -83,6 +88,9 @@ export class PostgresSignupCompletionRepository implements SignupCompletionRepos
             contact_value AS "contactValue",
             password_hash AS "passwordHash",
             role,
+            license_number AS "licenseNumber",
+            license_expiry AS "licenseExpiry",
+            business_name AS "businessName",
             otp_verified_at AS "otpVerifiedAt"
           FROM pending_signups
           WHERE id = $1
@@ -136,23 +144,13 @@ export class PostgresSignupCompletionRepository implements SignupCompletionRepos
       // ======================================================
       // Determine verified contact.
       //
-      // Rules:
+      // Phone signup:
+      // - phone is verified
+      // - email remains unverified
       //
-      // 1. Phone signup:
-      //    - contactValue = phone
-      //    - phone is verified
-      //    - email remains unverified
-      //
-      // 2. Email signup:
-      //    - contactValue = email
-      //    - email is verified
-      //    - phone remains NULL/unverified
-      //
-      // 3. Both email + phone supplied:
-      //    - contactType is phone because phone is the
-      //      selected OTP channel
-      //    - phone is verified
-      //    - email remains unverified
+      // Email signup:
+      // - email is verified
+      // - phone remains NULL/unverified
       // ======================================================
 
       const isPhoneSignup = pendingSignup.contactType === 'phone';
@@ -163,6 +161,16 @@ export class PostgresSignupCompletionRepository implements SignupCompletionRepos
 
       const emailVerified = !isPhoneSignup;
       const phoneVerified = isPhoneSignup;
+
+      // ======================================================
+      // Role-specific signup data
+      // ======================================================
+
+      const isDriver =
+        pendingSignup.role === 'driver' || pendingSignup.role === 'driver_fleet_owner';
+
+      const isFleetOwner =
+        pendingSignup.role === 'fleet_owner' || pendingSignup.role === 'driver_fleet_owner';
 
       // ======================================================
       // Create actual user.
@@ -213,6 +221,67 @@ export class PostgresSignupCompletionRepository implements SignupCompletionRepos
       }
 
       // ======================================================
+      // Create driver profile
+      //
+      // Required for:
+      // - driver
+      // - driver_fleet_owner
+      //
+      // Verification remains PENDING.
+      // Admin/Super Admin approval happens later.
+      // ======================================================
+
+      if (isDriver) {
+        if (!pendingSignup.licenseNumber || !pendingSignup.licenseExpiry) {
+          throw new Error('Driver signup is missing required license information');
+        }
+
+        await client.query(
+          `
+            INSERT INTO driver_profiles (
+              user_id,
+              license_number,
+              license_expiry
+            )
+            VALUES ($1, $2, $3)
+          `,
+          [user.id, pendingSignup.licenseNumber, pendingSignup.licenseExpiry],
+        );
+      }
+
+      // ======================================================
+      // Create partner profile
+      //
+      // Required for:
+      // - fleet_owner
+      // - driver_fleet_owner
+      //
+      // Partner approval remains PENDING.
+      // Admin/Super Admin approval happens later.
+      //
+      // Do NOT create partner_drivers here.
+      // That relationship is created after a Driver Application
+      // is approved.
+      // ======================================================
+
+      if (isFleetOwner) {
+        if (!pendingSignup.businessName) {
+          throw new Error('Fleet owner signup is missing required business name');
+        }
+
+        await client.query(
+          `
+            INSERT INTO partners (
+              user_id,
+              business_name
+            )
+            VALUES ($1, $2)
+          `,
+          [user.id, pendingSignup.businessName],
+        );
+      }
+
+      // ======================================================
       // Create password credentials.
       //
       // passwordHash is already an Argon2 hash.
@@ -233,7 +302,7 @@ export class PostgresSignupCompletionRepository implements SignupCompletionRepos
       // Delete pending signup.
       //
       // The temporary signup state is no longer needed after
-      // the user and credentials have been created.
+      // the user and required domain profiles have been created.
       // ======================================================
 
       await client.query(

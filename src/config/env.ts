@@ -10,6 +10,7 @@ const envSchema = z
     DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
 
     CORS_ORIGIN: z.string().min(1).default('http://localhost:5173'),
+
     CORS_CREDENTIALS: z.coerce.boolean().default(true),
 
     // ============================================================
@@ -193,6 +194,16 @@ const envSchema = z
     FIREBASE_PRIVATE_KEY: z.string().min(1).optional(),
 
     // ============================================================
+    // Cloudinary Storage
+    // ============================================================
+
+    CLOUDINARY_CLOUD_NAME: z.string().min(1).optional(),
+
+    CLOUDINARY_API_KEY: z.string().min(1).optional(),
+
+    CLOUDINARY_API_SECRET: z.string().min(1).optional(),
+
+    // ============================================================
     // Sendmator
     // ============================================================
 
@@ -223,7 +234,9 @@ const envSchema = z
 
     CASHFREE_BASE_URL: z.string().url().default('https://sandbox.cashfree.com/pg'),
 
+    // ============================================================
     // Cashfree Payouts
+    // ============================================================
 
     CASHFREE_PAYOUT_CLIENT_ID: z.string().min(1).optional(),
 
@@ -336,6 +349,25 @@ const envSchema = z
         path: ['FIREBASE_PROJECT_ID'],
         message:
           'FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY must all be provided together',
+      });
+    }
+
+    // ============================================================
+    // Cloudinary Configuration Validation
+    // ============================================================
+
+    const cloudinaryValuesProvided =
+      config.CLOUDINARY_CLOUD_NAME || config.CLOUDINARY_API_KEY || config.CLOUDINARY_API_SECRET;
+
+    const cloudinaryConfigurationComplete =
+      config.CLOUDINARY_CLOUD_NAME && config.CLOUDINARY_API_KEY && config.CLOUDINARY_API_SECRET;
+
+    if (cloudinaryValuesProvided && !cloudinaryConfigurationComplete) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['CLOUDINARY_CLOUD_NAME'],
+        message:
+          'CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET must all be provided together',
       });
     }
   });

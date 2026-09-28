@@ -1,3 +1,8 @@
+import type {
+  StorageAccessMode,
+  StorageResourceType,
+} from '../../../infrastructure/storage/types.js';
+
 export const partnerDocumentTypes = [
   'AADHAAR',
   'PAN',
@@ -12,7 +17,33 @@ export const partnerDocumentTypes = [
 ] as const;
 
 export type PartnerDocumentType = (typeof partnerDocumentTypes)[number];
-export type PartnerDocumentStatus = 'PENDING' | 'SUBMITTED' | 'VERIFIED' | 'REJECTED' | 'EXPIRED';
+
+export const partnerDocumentStatuses = [
+  'PENDING',
+  'SUBMITTED',
+  'VERIFIED',
+  'REJECTED',
+  'EXPIRED',
+] as const;
+
+export type PartnerDocumentStatus = (typeof partnerDocumentStatuses)[number];
+
+export interface PartnerDocumentStorageMetadata {
+  storageProvider: 'cloudinary';
+  storageKey: string;
+  resourceType: StorageResourceType;
+  accessMode: StorageAccessMode;
+  mimeType: string;
+  fileSize: number;
+  originalFileName: string;
+}
+
+export interface PartnerDocumentMetadata {
+  storage?: PartnerDocumentStorageMetadata | undefined;
+  uploadedBy?: string | undefined;
+  rejectionReason?: string | undefined;
+  [key: string]: unknown;
+}
 
 export interface PartnerDocument {
   id: string;
@@ -20,6 +51,7 @@ export interface PartnerDocument {
   vehicleId: string | null;
   documentType: PartnerDocumentType;
   status: PartnerDocumentStatus;
+  metadata: PartnerDocumentMetadata | null;
   issuedAt: string | null;
   expiresAt: string | null;
   uploadedAt: Date;
@@ -33,14 +65,14 @@ export interface CreatePartnerDocumentData {
   vehicleId?: string | null | undefined;
   documentType: PartnerDocumentType;
   status?: PartnerDocumentStatus | undefined;
-  metadata?: Record<string, unknown> | null | undefined;
+  metadata?: PartnerDocumentMetadata | null | undefined;
   issuedAt?: string | null | undefined;
   expiresAt?: string | null | undefined;
 }
 
 export interface UpdatePartnerDocumentData {
   status?: PartnerDocumentStatus | undefined;
-  metadata?: Record<string, unknown> | null | undefined;
+  metadata?: PartnerDocumentMetadata | null | undefined;
   issuedAt?: string | null | undefined;
   expiresAt?: string | null | undefined;
   verifiedAt?: Date | null | undefined;

@@ -10,21 +10,30 @@ import type {
 
 export interface FleetRepository {
   getDashboard(ownerId: string): Promise<FleetDashboardMetrics>;
+
   listVehicles(ownerId: string): Promise<FleetVehicle[]>;
+
   createVehicle(ownerId: string, input: CreateFleetVehicleInput): Promise<FleetVehicle>;
+
   updateVehicle(
     ownerId: string,
     vehicleId: string,
     input: UpdateFleetVehicleInput,
   ): Promise<FleetVehicle | null>;
+
   deactivateVehicle(ownerId: string, vehicleId: string): Promise<boolean>;
+
   generateAssignmentCode(
     ownerId: string,
     vehicleId: string,
   ): Promise<{ code: string; expiresAt: Date }>;
+
   unassignDriver(ownerId: string, vehicleId: string): Promise<boolean>;
+
   listDrivers(ownerId: string): Promise<FleetDriver[]>;
+
   listTrips(ownerId: string, limit?: number): Promise<FleetTrip[]>;
+
   getEarnings(ownerId: string): Promise<FleetEarningsSummary>;
 }
 
@@ -40,11 +49,19 @@ export class PostgresFleetRepository implements FleetRepository {
     }>(
       `SELECT
          COUNT(*)::text AS "totalVehicles",
-         COUNT(*) FILTER (WHERE v.is_active = TRUE)::text AS "activeVehicles",
-         COUNT(*) FILTER (WHERE v.is_active = FALSE)::text AS "maintenanceVehicles",
-         COUNT(*) FILTER (WHERE v.is_active = TRUE AND dp.availability_status = 'available')::text AS "availableVehicles"
+         COUNT(*) FILTER (
+           WHERE v.is_active = TRUE
+         )::text AS "activeVehicles",
+         COUNT(*) FILTER (
+           WHERE v.is_active = FALSE
+         )::text AS "maintenanceVehicles",
+         COUNT(*) FILTER (
+           WHERE v.is_active = TRUE
+             AND dp.availability_status = 'available'
+         )::text AS "availableVehicles"
        FROM vehicles v
-       LEFT JOIN driver_profiles dp ON dp.id = v.driver_profile_id
+       LEFT JOIN driver_profiles dp
+         ON dp.id = v.driver_profile_id
        WHERE v.owner_id = $1`,
       [ownerId],
     );
@@ -54,11 +71,18 @@ export class PostgresFleetRepository implements FleetRepository {
       availableDrivers: string;
     }>(
       `SELECT
-         COUNT(DISTINCT v.driver_profile_id)::text AS "totalDrivers",
-         COUNT(DISTINCT v.driver_profile_id) FILTER (WHERE dp.availability_status = 'available')::text AS "availableDrivers"
-       FROM vehicles v
-       JOIN driver_profiles dp ON dp.id = v.driver_profile_id
-       WHERE v.owner_id = $1 AND v.driver_profile_id IS NOT NULL`,
+         COUNT(DISTINCT pd.driver_profile_id)::text AS "totalDrivers",
+         COUNT(DISTINCT pd.driver_profile_id) FILTER (
+           WHERE dp.availability_status = 'available'
+         )::text AS "availableDrivers"
+       FROM partners p
+       JOIN partner_drivers pd
+         ON pd.partner_id = p.id
+        AND pd.status = 'ACTIVE'
+       JOIN driver_profiles dp
+         ON dp.id = pd.driver_profile_id
+       WHERE p.user_id = $1
+         AND dp.verification_status = 'approved'`,
       [ownerId],
     );
 
@@ -67,21 +91,43 @@ export class PostgresFleetRepository implements FleetRepository {
       todayRevenue: string;
     }>(
       `SELECT
-         COUNT(*) FILTER (WHERE r.status IN ('driver_assigned', 'driver_arriving', 'driver_arrived', 'in_progress'))::text AS "activeTrips",
-         COALESCE(SUM(COALESCE(r.final_fare, r.fare_estimate, 0)) FILTER (
-           WHERE r.status = 'completed' AND r.completed_at >= CURRENT_DATE
-         ), 0)::text AS "todayRevenue"
+         COUNT(*) FILTER (
+           WHERE r.status IN (
+             'driver_assigned',
+             'driver_arriving',
+             'driver_arrived',
+             'in_progress'
+           )
+         )::text AS "activeTrips",
+         COALESCE(
+           SUM(
+             COALESCE(
+               r.final_fare,
+               r.fare_estimate,
+               0
+             )
+           ) FILTER (
+             WHERE r.status = 'completed'
+               AND r.completed_at >= CURRENT_DATE
+           ),
+           0
+         )::text AS "todayRevenue"
        FROM rides r
-       JOIN vehicles v ON v.id = r.assigned_vehicle_id
+       JOIN vehicles v
+         ON v.id = r.assigned_vehicle_id
        WHERE v.owner_id = $1`,
       [ownerId],
     );
 
-    const docsRes = await this.pool.query<{ pendingDocs: string }>(
+    const docsRes = await this.pool.query<{
+      pendingDocs: string;
+    }>(
       `SELECT COUNT(*)::text AS "pendingDocs"
        FROM partner_documents pd
-       JOIN partners p ON p.id = pd.partner_id
-       WHERE p.user_id = $1 AND pd.status IN ('PENDING', 'SUBMITTED')`,
+       JOIN partners p
+         ON p.id = pd.partner_id
+       WHERE p.user_id = $1
+         AND pd.status IN ('PENDING', 'SUBMITTED')`,
       [ownerId],
     );
 
@@ -134,34 +180,64 @@ export class PostgresFleetRepository implements FleetRepository {
       updatedAt: Date;
     }>(
       `SELECT
-         v.id, v.owner_id AS "ownerId", v.driver_profile_id AS "driverProfileId",
-         v.make, v.model, v.color, v.plate_number AS "plateNumber",
+         v.id,
+         v.owner_id AS "ownerId",
+         v.driver_profile_id AS "driverProfileId",
+         v.make,
+         v.model,
+         v.color,
+         v.plate_number AS "plateNumber",
          COALESCE(v.sector, 'passenger') AS "sector",
          COALESCE(v.category, 'sedan') AS "category",
-         COALESCE(v.fuel_rate_per_km, 0)::text AS "fuelRatePerKm",
-         COALESCE(v.load_capacity_kg, 0)::text AS "loadCapacityKg",
-         v.manufacturing_year AS "year", v.fuel_type AS "fuelType",
+         COALESCE(
+           v.fuel_rate_per_km,
+           0
+         )::text AS "fuelRatePerKm",
+         COALESCE(
+           v.load_capacity_kg,
+           0
+         )::text AS "loadCapacityKg",
+         v.manufacturing_year AS "year",
+         v.fuel_type AS "fuelType",
          v.seating_capacity AS "seatingCapacity",
          v.registration_date::text AS "registrationDate",
          v.registration_expiry::text AS "registrationExpiry",
-         COALESCE(v.is_commercial, TRUE) AS "isCommercial",
+         COALESCE(
+           v.is_commercial,
+           TRUE
+         ) AS "isCommercial",
          v.permit_details AS "permitDetails",
-         COALESCE(v.verification_status, 'approved') AS "verificationStatus",
+         COALESCE(
+           v.verification_status,
+           'pending'
+         ) AS "verificationStatus",
          v.is_active AS "isActive",
          u.id AS "driverUserId",
-         CASE WHEN u.id IS NOT NULL THEN (u.first_name || ' ' || u.last_name) ELSE NULL END AS "driverName",
+         CASE
+           WHEN u.id IS NOT NULL
+           THEN (
+             u.first_name || ' ' || u.last_name
+           )
+           ELSE NULL
+         END AS "driverName",
          u.phone AS "driverPhone",
          dp.availability_status AS "driverAvailability",
          ac.code AS "activeCode",
          v.created_at AS "createdAt",
          v.updated_at AS "updatedAt"
        FROM vehicles v
-       LEFT JOIN driver_profiles dp ON dp.id = v.driver_profile_id
-       LEFT JOIN users u ON u.id = dp.user_id
+       LEFT JOIN driver_profiles dp
+         ON dp.id = v.driver_profile_id
+       LEFT JOIN users u
+         ON u.id = dp.user_id
        LEFT JOIN LATERAL (
-         SELECT code FROM driver_assignment_codes
-         WHERE vehicle_id = v.id AND status = 'ACTIVE' AND expires_at > NOW()
-         ORDER BY created_at DESC LIMIT 1
+         SELECT code
+         FROM driver_assignment_codes
+         WHERE vehicle_id = v.id
+           AND status = 'ACTIVE'
+           AND expires_at > NOW()
+         ORDER BY created_at DESC
+         LIMIT 1
        ) ac ON TRUE
        WHERE v.owner_id = $1
        ORDER BY v.created_at DESC`,
@@ -208,19 +284,65 @@ export class PostgresFleetRepository implements FleetRepository {
   async createVehicle(ownerId: string, input: CreateFleetVehicleInput): Promise<FleetVehicle> {
     const result = await this.pool.query<FleetVehicle>(
       `INSERT INTO vehicles (
-         owner_id, make, model, color, plate_number, sector, category,
-         fuel_rate_per_km, load_capacity_kg, manufacturing_year, fuel_type,
-         seating_capacity, registration_date, registration_expiry, is_commercial,
-         permit_details, verification_status, is_active
+         owner_id,
+         make,
+         model,
+         color,
+         plate_number,
+         sector,
+         category,
+         fuel_rate_per_km,
+         load_capacity_kg,
+         manufacturing_year,
+         fuel_type,
+         seating_capacity,
+         registration_date,
+         registration_expiry,
+         is_commercial,
+         permit_details,
+         verification_status,
+         is_active
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'approved', TRUE)
+       VALUES (
+         $1,
+         $2,
+         $3,
+         $4,
+         $5,
+         $6,
+         $7,
+         $8,
+         $9,
+         $10,
+         $11,
+         $12,
+         $13,
+         $14,
+         $15,
+         $16,
+         'pending',
+         TRUE
+       )
        RETURNING
-         id, owner_id AS "ownerId", driver_profile_id AS "driverProfileId",
-         make, model, color, plate_number AS "plateNumber",
-         sector, category,
-         COALESCE(fuel_rate_per_km, 0)::numeric AS "fuelRatePerKm",
-         COALESCE(load_capacity_kg, 0)::numeric AS "loadCapacityKg",
-         manufacturing_year AS "year", fuel_type AS "fuelType",
+         id,
+         owner_id AS "ownerId",
+         driver_profile_id AS "driverProfileId",
+         make,
+         model,
+         color,
+         plate_number AS "plateNumber",
+         sector,
+         category,
+         COALESCE(
+           fuel_rate_per_km,
+           0
+         )::numeric AS "fuelRatePerKm",
+         COALESCE(
+           load_capacity_kg,
+           0
+         )::numeric AS "loadCapacityKg",
+         manufacturing_year AS "year",
+         fuel_type AS "fuelType",
          seating_capacity AS "seatingCapacity",
          registration_date::text AS "registrationDate",
          registration_expiry::text AS "registrationExpiry",
@@ -228,7 +350,8 @@ export class PostgresFleetRepository implements FleetRepository {
          permit_details AS "permitDetails",
          verification_status AS "verificationStatus",
          is_active AS "isActive",
-         created_at AS "createdAt", updated_at AS "updatedAt"`,
+         created_at AS "createdAt",
+         updated_at AS "updatedAt"`,
       [
         ownerId,
         input.make,
@@ -250,7 +373,11 @@ export class PostgresFleetRepository implements FleetRepository {
     );
 
     const vehicle = result.rows[0];
-    if (!vehicle) throw new Error('Failed to create fleet vehicle');
+
+    if (!vehicle) {
+      throw new Error('Failed to create fleet vehicle');
+    }
+
     return vehicle;
   }
 
@@ -278,18 +405,34 @@ export class PostgresFleetRepository implements FleetRepository {
     };
 
     const fields = Object.keys(input) as (keyof UpdateFleetVehicleInput)[];
-    if (fields.length === 0) return null;
 
-    const values = fields.map((f) => (input[f] === undefined ? null : input[f]));
-    const assignments = fields.map((f, i) => `${columns[f]} = $${i + 1}`);
+    if (fields.length === 0) {
+      return null;
+    }
+
+    const values = fields.map((field) => (input[field] === undefined ? null : input[field]));
+
+    const assignments = fields.map((field, index) => `${columns[field]} = $${index + 1}`);
 
     const result = await this.pool.query<FleetVehicle>(
-      `UPDATE vehicles SET ${assignments.join(', ')}, updated_at = NOW()
-       WHERE id = $${values.length + 1} AND owner_id = $${values.length + 2}
-       RETURNING id, owner_id AS "ownerId", driver_profile_id AS "driverProfileId",
-                 make, model, color, plate_number AS "plateNumber",
-                 sector, category, is_active AS "isActive",
-                 created_at AS "createdAt", updated_at AS "updatedAt"`,
+      `UPDATE vehicles
+       SET ${assignments.join(', ')},
+           updated_at = NOW()
+       WHERE id = $${values.length + 1}
+         AND owner_id = $${values.length + 2}
+       RETURNING
+         id,
+         owner_id AS "ownerId",
+         driver_profile_id AS "driverProfileId",
+         make,
+         model,
+         color,
+         plate_number AS "plateNumber",
+         sector,
+         category,
+         is_active AS "isActive",
+         created_at AS "createdAt",
+         updated_at AS "updatedAt"`,
       [...values, vehicleId, ownerId],
     );
 
@@ -297,89 +440,235 @@ export class PostgresFleetRepository implements FleetRepository {
   }
 
   async deactivateVehicle(ownerId: string, vehicleId: string): Promise<boolean> {
-    const result = await this.pool.query(
-      `UPDATE vehicles SET is_active = FALSE, retired_at = NOW(), updated_at = NOW()
-       WHERE id = $1 AND owner_id = $2 AND is_active = TRUE
-       RETURNING id`,
-      [vehicleId, ownerId],
-    );
-    return result.rowCount === 1;
+    const client = await this.pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      const vehicleResult = await client.query<{
+        driverProfileId: string | null;
+      }>(
+        `SELECT
+           driver_profile_id AS "driverProfileId"
+         FROM vehicles
+         WHERE id = $1
+           AND owner_id = $2
+         FOR UPDATE`,
+        [vehicleId, ownerId],
+      );
+
+      const vehicle = vehicleResult.rows[0];
+
+      if (!vehicle) {
+        await client.query('ROLLBACK');
+        return false;
+      }
+
+      /*
+       * Remove the driver's active vehicle pointer if this vehicle
+       * was currently selected by the assigned driver.
+       */
+      if (vehicle.driverProfileId) {
+        await client.query(
+          `UPDATE driver_profiles
+           SET active_vehicle_id = NULL,
+               updated_at = NOW()
+           WHERE id = $1
+             AND active_vehicle_id = $2`,
+          [vehicle.driverProfileId, vehicleId],
+        );
+      }
+
+      /*
+       * The vehicle must not remain assigned after deactivation.
+       */
+      await client.query(
+        `UPDATE vehicles
+         SET is_active = FALSE,
+             driver_profile_id = NULL,
+             retired_at = NOW(),
+             updated_at = NOW()
+         WHERE id = $1
+           AND owner_id = $2`,
+        [vehicleId, ownerId],
+      );
+
+      /*
+       * Any active assignment code becomes invalid immediately.
+       */
+      await client.query(
+        `UPDATE driver_assignment_codes
+         SET status = 'REVOKED',
+             updated_at = NOW()
+         WHERE vehicle_id = $1
+           AND status = 'ACTIVE'`,
+        [vehicleId],
+      );
+
+      await client.query('COMMIT');
+
+      return true;
+    } catch (error) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // Preserve original error.
+      }
+
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async generateAssignmentCode(
     ownerId: string,
     vehicleId: string,
-  ): Promise<{ code: string; expiresAt: Date }> {
-    // Check vehicle belongs to owner
-    const check = await this.pool.query(`SELECT id FROM vehicles WHERE id = $1 AND owner_id = $2`, [
-      vehicleId,
-      ownerId,
-    ]);
-    if (check.rowCount !== 1) {
-      throw new Error('VEHICLE_NOT_FOUND');
-    }
-
-    // Revoke any previous active code
-    await this.pool.query(
-      `UPDATE driver_assignment_codes SET status = 'REVOKED', updated_at = NOW()
-       WHERE vehicle_id = $1 AND status = 'ACTIVE'`,
-      [vehicleId],
-    );
-
-    const randomSuffix = Math.floor(10000 + Math.random() * 90000);
-    const code = `FLEET-${randomSuffix}`;
-    const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
-
-    await this.pool.query(
-      `INSERT INTO driver_assignment_codes (code, vehicle_id, fleet_owner_id, expires_at)
-       VALUES ($1, $2, $3, $4)`,
-      [code, vehicleId, ownerId, expiresAt],
-    );
-
-    return { code, expiresAt };
-  }
-
-  async unassignDriver(ownerId: string, vehicleId: string): Promise<boolean> {
+  ): Promise<{
+    code: string;
+    expiresAt: Date;
+  }> {
     const client = await this.pool.connect();
+
     try {
       await client.query('BEGIN');
 
-      const vRes = await client.query<{ driver_profile_id: string | null }>(
-        `SELECT driver_profile_id FROM vehicles
-         WHERE id = $1 AND owner_id = $2
+      /*
+       * Lock the vehicle so its assignment/deactivation state
+       * cannot change while the code is being generated.
+       */
+      const vehicleResult = await client.query<{
+        id: string;
+      }>(
+        `SELECT v.id
+         FROM vehicles v
+         JOIN partners p
+           ON p.user_id = v.owner_id
+         WHERE v.id = $1
+           AND v.owner_id = $2
+           AND v.is_active = TRUE
+           AND v.verification_status = 'approved'
+           AND v.driver_profile_id IS NULL
+           AND p.approval_status = 'approved'
          FOR UPDATE`,
         [vehicleId, ownerId],
       );
 
-      const v = vRes.rows[0];
-      if (!v) {
+      if (!vehicleResult.rows[0]) {
+        throw new Error('VEHICLE_NOT_AVAILABLE_FOR_ASSIGNMENT');
+      }
+
+      /*
+       * Only one active assignment code should exist for a vehicle.
+       */
+      await client.query(
+        `UPDATE driver_assignment_codes
+         SET status = 'REVOKED',
+             updated_at = NOW()
+         WHERE vehicle_id = $1
+           AND status = 'ACTIVE'`,
+        [vehicleId],
+      );
+
+      const randomSuffix = Math.floor(10000 + Math.random() * 90000);
+
+      const code = `FLEET-${randomSuffix}`;
+
+      const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+
+      await client.query(
+        `INSERT INTO driver_assignment_codes (
+           code,
+           vehicle_id,
+           fleet_owner_id,
+           expires_at
+         )
+         VALUES ($1, $2, $3, $4)`,
+        [code, vehicleId, ownerId, expiresAt],
+      );
+
+      await client.query('COMMIT');
+
+      return {
+        code,
+        expiresAt,
+      };
+    } catch (error) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // Preserve original error.
+      }
+
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async unassignDriver(ownerId: string, vehicleId: string): Promise<boolean> {
+    const client = await this.pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      const vRes = await client.query<{
+        driver_profile_id: string | null;
+      }>(
+        `SELECT
+             driver_profile_id
+           FROM vehicles
+           WHERE id = $1
+             AND owner_id = $2
+           FOR UPDATE`,
+        [vehicleId, ownerId],
+      );
+
+      const vehicle = vRes.rows[0];
+
+      if (!vehicle) {
         throw new Error('VEHICLE_NOT_FOUND');
       }
 
-      if (v.driver_profile_id) {
+      if (vehicle.driver_profile_id) {
         await client.query(
-          `UPDATE driver_profiles SET active_vehicle_id = NULL, updated_at = NOW()
-           WHERE id = $1 AND active_vehicle_id = $2`,
-          [v.driver_profile_id, vehicleId],
+          `UPDATE driver_profiles
+           SET active_vehicle_id = NULL,
+               updated_at = NOW()
+           WHERE id = $1
+             AND active_vehicle_id = $2`,
+          [vehicle.driver_profile_id, vehicleId],
         );
       }
 
       await client.query(
-        `UPDATE vehicles SET driver_profile_id = NULL, updated_at = NOW()
-         WHERE id = $1`,
-        [vehicleId],
+        `UPDATE vehicles
+         SET driver_profile_id = NULL,
+             updated_at = NOW()
+         WHERE id = $1
+           AND owner_id = $2`,
+        [vehicleId, ownerId],
       );
 
       await client.query(
-        `UPDATE driver_assignment_codes SET status = 'REVOKED', updated_at = NOW()
-         WHERE vehicle_id = $1 AND status = 'ACTIVE'`,
+        `UPDATE driver_assignment_codes
+         SET status = 'REVOKED',
+             updated_at = NOW()
+         WHERE vehicle_id = $1
+           AND status = 'ACTIVE'`,
         [vehicleId],
       );
 
       await client.query('COMMIT');
+
       return true;
     } catch (error) {
-      await client.query('ROLLBACK');
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // Preserve original error.
+      }
+
       throw error;
     } finally {
       client.release();
@@ -405,24 +694,77 @@ export class PostgresFleetRepository implements FleetRepository {
       totalEarnings: string;
     }>(
       `SELECT
-         dp.id, dp.user_id AS "userId",
-         (u.first_name || ' ' || u.last_name) AS "name",
-         u.phone, u.email,
+         dp.id,
+         dp.user_id AS "userId",
+         (
+           u.first_name || ' ' || u.last_name
+         ) AS "name",
+         u.phone,
+         u.email,
          dp.license_number AS "licenseNumber",
          dp.license_expiry::text AS "licenseExpiry",
          dp.verification_status AS "verificationStatus",
          dp.availability_status AS "availabilityStatus",
-         v.id AS "vehicleId", v.make AS "vehicleMake", v.model AS "vehicleModel", v.plate_number AS "vehiclePlate",
+
+         v.id AS "vehicleId",
+         v.make AS "vehicleMake",
+         v.model AS "vehicleModel",
+         v.plate_number AS "vehiclePlate",
+
          COUNT(r.id)::text AS "completedTrips",
-         COALESCE(SUM(COALESCE(r.final_fare, r.fare_estimate, 0)), 0)::text AS "totalEarnings"
-       FROM vehicles v
-       JOIN driver_profiles dp ON dp.id = v.driver_profile_id
-       JOIN users u ON u.id = dp.user_id
-       LEFT JOIN rides r ON r.assigned_vehicle_id = v.id AND r.status = 'completed'
-       WHERE v.owner_id = $1
-       GROUP BY dp.id, u.id, dp.user_id, u.first_name, u.last_name, u.phone, u.email,
-                dp.license_number, dp.license_expiry, dp.verification_status, dp.availability_status,
-                v.id, v.make, v.model, v.plate_number
+
+         COALESCE(
+           SUM(
+             COALESCE(
+               r.final_fare,
+               r.fare_estimate,
+               0
+             )
+           ),
+           0
+         )::text AS "totalEarnings"
+
+       FROM partners p
+
+       JOIN partner_drivers pd
+         ON pd.partner_id = p.id
+        AND pd.status = 'ACTIVE'
+
+       JOIN driver_profiles dp
+         ON dp.id = pd.driver_profile_id
+
+       JOIN users u
+         ON u.id = dp.user_id
+
+       LEFT JOIN vehicles v
+         ON v.driver_profile_id = dp.id
+        AND v.owner_id = p.user_id
+        AND v.is_active = TRUE
+        AND v.verification_status = 'approved'
+
+       LEFT JOIN rides r
+         ON r.assigned_vehicle_id = v.id
+        AND r.status = 'completed'
+
+       WHERE p.user_id = $1
+
+       GROUP BY
+         dp.id,
+         u.id,
+         dp.user_id,
+         u.first_name,
+         u.last_name,
+         u.phone,
+         u.email,
+         dp.license_number,
+         dp.license_expiry,
+         dp.verification_status,
+         dp.availability_status,
+         v.id,
+         v.make,
+         v.model,
+         v.plate_number
+
        ORDER BY u.first_name ASC`,
       [ownerId],
     );
@@ -437,6 +779,7 @@ export class PostgresFleetRepository implements FleetRepository {
       licenseExpiry: row.licenseExpiry,
       verificationStatus: row.verificationStatus,
       availabilityStatus: row.availabilityStatus,
+
       assignedVehicle: row.vehicleId
         ? {
             id: row.vehicleId,
@@ -445,7 +788,9 @@ export class PostgresFleetRepository implements FleetRepository {
             plateNumber: row.vehiclePlate ?? '',
           }
         : null,
+
       completedTrips: parseInt(row.completedTrips, 10),
+
       totalEarnings: parseFloat(row.totalEarnings),
     }));
   }
@@ -466,8 +811,12 @@ export class PostgresFleetRepository implements FleetRepository {
       completedAt: Date | null;
     }>(
       `SELECT
-         r.id, v.id AS "vehicleId", v.plate_number AS "vehiclePlate",
-         (u.first_name || ' ' || u.last_name) AS "driverName",
+         r.id,
+         v.id AS "vehicleId",
+         v.plate_number AS "vehiclePlate",
+         (
+           u.first_name || ' ' || u.last_name
+         ) AS "driverName",
          r.pickup_address AS "pickupAddress",
          r.destination_address AS "destinationAddress",
          r.status,
@@ -477,9 +826,12 @@ export class PostgresFleetRepository implements FleetRepository {
          r.created_at AS "createdAt",
          r.completed_at AS "completedAt"
        FROM rides r
-       JOIN vehicles v ON v.id = r.assigned_vehicle_id
-       LEFT JOIN driver_profiles dp ON dp.id = r.assigned_driver_id
-       LEFT JOIN users u ON u.id = dp.user_id
+       JOIN vehicles v
+         ON v.id = r.assigned_vehicle_id
+       LEFT JOIN driver_profiles dp
+         ON dp.id = r.assigned_driver_id
+       LEFT JOIN users u
+         ON u.id = dp.user_id
        WHERE v.owner_id = $1
        ORDER BY r.created_at DESC
        LIMIT $2`,
@@ -510,25 +862,72 @@ export class PostgresFleetRepository implements FleetRepository {
       totalTrips: string;
     }>(
       `SELECT
-         COALESCE(SUM(COALESCE(r.final_fare, r.fare_estimate, 0)) FILTER (
-           WHERE r.status = 'completed' AND r.completed_at >= CURRENT_DATE
-         ), 0)::text AS "todayRevenue",
-         COALESCE(SUM(COALESCE(r.final_fare, r.fare_estimate, 0)) FILTER (
-           WHERE r.status = 'completed' AND r.completed_at >= date_trunc('week', CURRENT_DATE)
-         ), 0)::text AS "thisWeekRevenue",
-         COALESCE(SUM(COALESCE(r.final_fare, r.fare_estimate, 0)) FILTER (
-           WHERE r.status = 'completed' AND r.completed_at >= date_trunc('month', CURRENT_DATE)
-         ), 0)::text AS "thisMonthRevenue",
-         COUNT(r.id) FILTER (WHERE r.status = 'completed')::text AS "totalTrips"
+         COALESCE(
+           SUM(
+             COALESCE(
+               r.final_fare,
+               r.fare_estimate,
+               0
+             )
+           ) FILTER (
+             WHERE r.status = 'completed'
+               AND r.completed_at >= CURRENT_DATE
+           ),
+           0
+         )::text AS "todayRevenue",
+
+         COALESCE(
+           SUM(
+             COALESCE(
+               r.final_fare,
+               r.fare_estimate,
+               0
+             )
+           ) FILTER (
+             WHERE r.status = 'completed'
+               AND r.completed_at >= date_trunc(
+                 'week',
+                 CURRENT_DATE
+               )
+           ),
+           0
+         )::text AS "thisWeekRevenue",
+
+         COALESCE(
+           SUM(
+             COALESCE(
+               r.final_fare,
+               r.fare_estimate,
+               0
+             )
+           ) FILTER (
+             WHERE r.status = 'completed'
+               AND r.completed_at >= date_trunc(
+                 'month',
+                 CURRENT_DATE
+               )
+           ),
+           0
+         )::text AS "thisMonthRevenue",
+
+         COUNT(r.id) FILTER (
+           WHERE r.status = 'completed'
+         )::text AS "totalTrips"
+
        FROM rides r
-       JOIN vehicles v ON v.id = r.assigned_vehicle_id
+
+       JOIN vehicles v
+         ON v.id = r.assigned_vehicle_id
+
        WHERE v.owner_id = $1`,
       [ownerId],
     );
 
     const row = result.rows[0];
+
     const thisMonthRevenue = parseFloat(row?.thisMonthRevenue ?? '0');
-    const commission = thisMonthRevenue * 0.1; // 10% platform commission standard
+
+    const commission = thisMonthRevenue * 0.1;
 
     return {
       todayRevenue: parseFloat(row?.todayRevenue ?? '0'),

@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
+
 import {
   createVehicleSchema,
   deactivateVehicleSchema,
@@ -7,6 +8,7 @@ import {
   vehicleFleetQuerySchema,
   vehicleIdSchema,
 } from '../schemas/vehicle.schemas.js';
+
 import type { VehicleService } from '../services/vehicle.service.js';
 
 export class VehicleController {
@@ -14,8 +16,15 @@ export class VehicleController {
 
   create = async (request: Request, response: Response, next: NextFunction) => {
     try {
-      const vehicle = await this.service.createVehicle(createVehicleSchema.parse(request.body));
-      response.status(201).json({ success: true, data: vehicle, message: 'Vehicle created' });
+      const input = createVehicleSchema.parse(request.body);
+
+      const vehicle = await this.service.createVehicle(input);
+
+      response.status(201).json({
+        success: true,
+        data: vehicle,
+        message: 'Vehicle created',
+      });
     } catch (error) {
       next(error);
     }
@@ -24,8 +33,14 @@ export class VehicleController {
   getById = async (request: Request, response: Response, next: NextFunction) => {
     try {
       const { id } = vehicleIdSchema.parse(request.params);
+
       const vehicle = await this.service.getVehicle(id);
-      response.json({ success: true, data: vehicle, message: 'Vehicle retrieved' });
+
+      response.json({
+        success: true,
+        data: vehicle,
+        message: 'Vehicle retrieved',
+      });
     } catch (error) {
       next(error);
     }
@@ -33,10 +48,15 @@ export class VehicleController {
 
   list = async (request: Request, response: Response, next: NextFunction) => {
     try {
-      const vehicles = await this.service.listVehicles(
-        vehicleDriverQuerySchema.parse(request.query),
-      );
-      response.json({ success: true, data: vehicles, message: 'Vehicles retrieved' });
+      const query = vehicleDriverQuerySchema.parse(request.query);
+
+      const vehicles = await this.service.listVehicles(query);
+
+      response.json({
+        success: true,
+        data: vehicles,
+        message: 'Vehicles retrieved',
+      });
     } catch (error) {
       next(error);
     }
@@ -44,8 +64,15 @@ export class VehicleController {
 
   getFleet = async (request: Request, response: Response, next: NextFunction) => {
     try {
-      const fleet = await this.service.listFleet(vehicleFleetQuerySchema.parse(request.query));
-      response.json({ success: true, data: fleet, message: 'Fleet retrieved' });
+      const query = vehicleFleetQuerySchema.parse(request.query);
+
+      const fleet = await this.service.listFleet(query);
+
+      response.json({
+        success: true,
+        data: fleet,
+        message: 'Fleet retrieved',
+      });
     } catch (error) {
       next(error);
     }
@@ -54,8 +81,15 @@ export class VehicleController {
   update = async (request: Request, response: Response, next: NextFunction) => {
     try {
       const { id } = vehicleIdSchema.parse(request.params);
-      const vehicle = await this.service.updateVehicle(id, updateVehicleSchema.parse(request.body));
-      response.json({ success: true, data: vehicle, message: 'Vehicle updated' });
+      const input = updateVehicleSchema.parse(request.body);
+
+      const vehicle = await this.service.updateVehicle(id, input);
+
+      response.json({
+        success: true,
+        data: vehicle,
+        message: 'Vehicle updated',
+      });
     } catch (error) {
       next(error);
     }
@@ -64,11 +98,15 @@ export class VehicleController {
   deactivate = async (request: Request, response: Response, next: NextFunction) => {
     try {
       const { id } = vehicleIdSchema.parse(request.params);
-      const vehicle = await this.service.deactivateVehicle(
-        id,
-        deactivateVehicleSchema.parse(request.body),
-      );
-      response.json({ success: true, data: vehicle, message: 'Vehicle deactivated' });
+      const input = deactivateVehicleSchema.parse(request.body);
+
+      const vehicle = await this.service.deactivateVehicle(id, input);
+
+      response.json({
+        success: true,
+        data: vehicle,
+        message: 'Vehicle deactivated',
+      });
     } catch (error) {
       next(error);
     }

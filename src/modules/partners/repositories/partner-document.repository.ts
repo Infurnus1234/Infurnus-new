@@ -17,19 +17,30 @@ export interface PartnerDocumentRepository {
     partnerId: string,
     data: UpdatePartnerDocumentData,
   ): Promise<PartnerDocument | null>;
+  delete(id: string, partnerId: string): Promise<PartnerDocument | null>;
 }
 
 const projection = `
-  id, partner_id AS "partnerId", vehicle_id AS "vehicleId", document_type AS "documentType",
-  status, issued_at AS "issuedAt", expires_at AS "expiresAt",
-  uploaded_at AS "uploadedAt", verified_at AS "verifiedAt", created_at AS "createdAt",
-  updated_at AS "updatedAt"`;
+  id,
+  partner_id AS "partnerId",
+  vehicle_id AS "vehicleId",
+  document_type AS "documentType",
+  status,
+  metadata,
+  issued_at AS "issuedAt",
+  expires_at AS "expiresAt",
+  uploaded_at AS "uploadedAt",
+  verified_at AS "verifiedAt",
+  created_at AS "createdAt",
+  updated_at AS "updatedAt"
+`;
 
 export class PostgresPartnerDocumentRepository implements PartnerDocumentRepository {
   constructor(private readonly pool: Pool) {}
 
   async partnerExists(id: string): Promise<boolean> {
     const result = await this.pool.query('SELECT id FROM partners WHERE id = $1', [id]);
+
     return result.rowCount === 1;
   }
 
@@ -38,6 +49,7 @@ export class PostgresPartnerDocumentRepository implements PartnerDocumentReposit
       'SELECT user_id AS "userId" FROM partners WHERE id = $1',
       [id],
     );
+
     return result.rows[0]?.userId ?? null;
   }
 
@@ -45,19 +57,28 @@ export class PostgresPartnerDocumentRepository implements PartnerDocumentReposit
     const result = await this.pool.query(
       `SELECT v.id
        FROM vehicles v
-       JOIN driver_profiles d ON d.id = v.driver_profile_id
-       JOIN partners p ON p.user_id = d.user_id
-       WHERE v.id = $1 AND p.id = $2`,
+       JOIN partners p
+         ON p.user_id = v.owner_id
+       WHERE v.id = $1
+         AND p.id = $2`,
       [vehicleId, partnerId],
     );
+
     return result.rowCount === 1;
   }
 
   async create(data: CreatePartnerDocumentData): Promise<PartnerDocument> {
     const result = await this.pool.query<PartnerDocument>(
       `INSERT INTO partner_documents
-        (partner_id, vehicle_id, document_type, status, metadata,
-          issued_at, expires_at)
+        (
+          partner_id,
+          vehicle_id,
+          document_type,
+          status,
+          metadata,
+          issued_at,
+          expires_at
+        )
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING ${projection}`,
       [
@@ -70,26 +91,37 @@ export class PostgresPartnerDocumentRepository implements PartnerDocumentReposit
         data.expiresAt ?? null,
       ],
     );
+
     const document = result.rows.at(0);
-    if (!document) throw new Error('Document insert returned no row');
+
+    if (!document) {
+      throw new Error('Document insert returned no row');
+    }
+
     return document;
   }
 
   async findByPartner(partnerId: string): Promise<PartnerDocument[]> {
     const result = await this.pool.query<PartnerDocument>(
-      `SELECT ${projection} FROM partner_documents
-       WHERE partner_id = $1 ORDER BY created_at DESC`,
+      `SELECT ${projection}
+       FROM partner_documents
+       WHERE partner_id = $1
+       ORDER BY created_at DESC`,
       [partnerId],
     );
+
     return result.rows;
   }
 
   async findById(id: string, partnerId: string): Promise<PartnerDocument | null> {
     const result = await this.pool.query<PartnerDocument>(
-      `SELECT ${projection} FROM partner_documents
-       WHERE id = $1 AND partner_id = $2`,
+      `SELECT ${projection}
+       FROM partner_documents
+       WHERE id = $1
+         AND partner_id = $2`,
       [id, partnerId],
     );
+
     return result.rows[0] ?? null;
   }
 
@@ -98,22 +130,50 @@ export class PostgresPartnerDocumentRepository implements PartnerDocumentReposit
     partnerId: string,
     data: UpdatePartnerDocumentData,
   ): Promise<PartnerDocument | null> {
-    const columns: Record<string, string> = {
+    const columns: Record<keyof UpdatePartnerDocumentData, string> = {
       status: 'status',
       metadata: 'metadata',
       issuedAt: 'issued_at',
       expiresAt: 'expires_at',
       verifiedAt: 'verified_at',
     };
-    const fields = Object.keys(data);
-    const values = Object.values(data);
+
+    const fields = Object.keys(data) as Array<keyof UpdatePartnerDocumentData>;
+
+    if (fields.length === 0) {
+      return this.findById(id, partnerId);
+    }
+
+    const values = fields.map((field) => data[field]);
+
     const assignments = fields.map((field, index) => `${columns[field]} = $${index + 1}`);
+
+    const idParameter = values.length + 1;
+    const partnerParameter = values.length + 2;
+
     const result = await this.pool.query<PartnerDocument>(
-      `UPDATE partner_documents SET ${assignments.join(', ')}, updated_at = NOW()
-       WHERE id = $${values.length + 1} AND partner_id = $${values.length + 2}
+      `UPDATE partner_documents
+       SET
+         ${assignments.join(', ')},
+         updated_at = NOW()
+       WHERE id = $${idParameter}
+         AND partner_id = $${partnerParameter}
        RETURNING ${projection}`,
       [...values, id, partnerId],
     );
+
+    return result.rows[0] ?? null;
+  }
+
+  async delete(id: string, partnerId: string): Promise<PartnerDocument | null> {
+    const result = await this.pool.query<PartnerDocument>(
+      `DELETE FROM partner_documents
+       WHERE id = $1
+         AND partner_id = $2
+       RETURNING ${projection}`,
+      [id, partnerId],
+    );
+
     return result.rows[0] ?? null;
   }
 }

@@ -62,15 +62,15 @@ class EnvConfig {
 
   // Local development for physical Android device via USB adb reverse or LAN
   static const EnvConfig dev = EnvConfig(
-    baseUrl: 'http://127.0.0.1:3001',
-    socketUrl: 'http://127.0.0.1:3001',
+    baseUrl: 'http://10.86.91.230:3000',
+    socketUrl: 'http://10.86.91.230:3000',
     environment: Environment.dev,
   );
 
   // Android Emulator (10.0.2.2 points to host)
   static const EnvConfig emulator = EnvConfig(
-    baseUrl: 'http://10.0.2.2:3001',
-    socketUrl: 'http://10.0.2.2:3001',
+    baseUrl: 'http://10.86.91.230:3000',
+    socketUrl: 'http://10.86.91.230:3000', 
     environment: Environment.emulator,
   );
 

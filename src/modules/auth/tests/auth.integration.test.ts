@@ -461,33 +461,51 @@ describe.sequential('Auth integration', () => {
   async function cleanupUser(userId: string): Promise<void> {
     await pool.query(
       `
-          DELETE FROM login_challenges
-          WHERE user_id = $1
-        `,
+        DELETE FROM login_challenges
+        WHERE user_id = $1
+      `,
       [userId],
     );
 
     await pool.query(
       `
-          DELETE FROM refresh_tokens
-          WHERE user_id = $1
-        `,
+        DELETE FROM refresh_tokens
+        WHERE user_id = $1
+      `,
       [userId],
     );
 
     await pool.query(
       `
-          DELETE FROM user_credentials
-          WHERE user_id = $1
-        `,
+        DELETE FROM user_credentials
+        WHERE user_id = $1
+      `,
+      [userId],
+    );
+
+    // Driver profile belongs to the user.
+    await pool.query(
+      `
+        DELETE FROM driver_profiles
+        WHERE user_id = $1
+      `,
+      [userId],
+    );
+
+    // Partner belongs to the user.
+    await pool.query(
+      `
+        DELETE FROM partners
+        WHERE user_id = $1
+      `,
       [userId],
     );
 
     await pool.query(
       `
-          DELETE FROM users
-          WHERE id = $1
-        `,
+        DELETE FROM users
+        WHERE id = $1
+      `,
       [userId],
     );
   }
@@ -495,9 +513,9 @@ describe.sequential('Auth integration', () => {
   async function cleanupSignup(signupId: string): Promise<void> {
     await pool.query(
       `
-          DELETE FROM pending_signups
-          WHERE id = $1
-        `,
+        DELETE FROM pending_signups
+        WHERE id = $1
+      `,
       [signupId],
     );
   }
@@ -549,14 +567,14 @@ describe.sequential('Auth integration', () => {
       phoneVerified: boolean;
     }>(
       `
-              SELECT
-                email,
-                phone,
-                email_verified AS "emailVerified",
-                phone_verified AS "phoneVerified"
-              FROM users
-              WHERE id = $1
-            `,
+        SELECT
+          email,
+          phone,
+          email_verified AS "emailVerified",
+          phone_verified AS "phoneVerified"
+        FROM users
+        WHERE id = $1
+      `,
       [userId],
     );
 
@@ -623,14 +641,14 @@ describe.sequential('Auth integration', () => {
       phoneVerified: boolean;
     }>(
       `
-              SELECT
-                email,
-                phone,
-                email_verified AS "emailVerified",
-                phone_verified AS "phoneVerified"
-              FROM users
-              WHERE id = $1
-            `,
+        SELECT
+          email,
+          phone,
+          email_verified AS "emailVerified",
+          phone_verified AS "phoneVerified"
+        FROM users
+        WHERE id = $1
+      `,
       [userId],
     );
 
@@ -694,13 +712,13 @@ describe.sequential('Auth integration', () => {
       phoneVerified: boolean;
     }>(
       `
-              SELECT
-                email,
-                phone,
-                phone_verified AS "phoneVerified"
-              FROM users
-              WHERE id = $1
-            `,
+        SELECT
+          email,
+          phone,
+          phone_verified AS "phoneVerified"
+        FROM users
+        WHERE id = $1
+      `,
       [userId],
     );
 
@@ -722,7 +740,362 @@ describe.sequential('Auth integration', () => {
   });
 
   // ========================================================
-  // 4. SIGNUP WITHOUT CONTACT
+  // 4. DRIVER SIGNUP
+  // ========================================================
+
+  it('signup: creates driver profile for driver role', async () => {
+    const email = uniqueEmail('driver-signup');
+
+    const phone = uniquePhone();
+
+    const signupResponse = await request(app).post('/auth/signup').send({
+      firstName: 'Driver',
+      lastName: 'Test',
+      email,
+      phone,
+      password: 'StrongPassword123!',
+      confirmPassword: 'StrongPassword123!',
+      role: 'driver',
+      licenseNumber: 'DL-TEST-12345',
+      licenseExpiry: '2030-12-31',
+    });
+
+    expect(signupResponse.status).toBe(201);
+
+    expect(signupResponse.body.success).toBe(true);
+
+    const signupId = signupResponse.body.data.signupId;
+
+    expect(signupId).toEqual(expect.any(String));
+
+    const otp = otpProvider.getSmsOtp(phone);
+
+    const verifyResponse = await request(app).post('/auth/signup/verify').send({
+      signupId,
+      otp,
+    });
+
+    expect(verifyResponse.status).toBe(200);
+
+    expect(verifyResponse.body.success).toBe(true);
+
+    const userId = verifyResponse.body.data.userId;
+
+    const userResult = await pool.query<{
+      role: string;
+      status: string;
+    }>(
+      `
+        SELECT
+          role,
+          status
+        FROM users
+        WHERE id = $1
+      `,
+      [userId],
+    );
+
+    expect(userResult.rows).toHaveLength(1);
+
+    const user = userResult.rows[0];
+
+    expect(user).toBeDefined();
+
+    if (!user) {
+      throw new Error('Expected driver user');
+    }
+
+    expect(user.role).toBe('driver');
+
+    expect(user.status).toBe('active');
+
+    const driverResult = await pool.query<{
+      userId: string;
+      licenseNumber: string;
+      licenseExpiry: string;
+      verificationStatus: string;
+    }>(
+      `
+        SELECT
+          user_id AS "userId",
+          license_number AS "licenseNumber",
+          license_expiry::text AS "licenseExpiry",
+          verification_status AS "verificationStatus"
+        FROM driver_profiles
+        WHERE user_id = $1
+      `,
+      [userId],
+    );
+
+    expect(driverResult.rows).toHaveLength(1);
+
+    const driver = driverResult.rows[0];
+
+    expect(driver).toBeDefined();
+
+    if (!driver) {
+      throw new Error('Expected driver profile');
+    }
+
+    expect(driver.userId).toBe(userId);
+
+    expect(driver.licenseNumber).toBe('DL-TEST-12345');
+
+    expect(driver.licenseExpiry).toBe('2030-12-31');
+
+    expect(driver.verificationStatus).toBe('pending');
+
+    await cleanupUser(userId);
+  });
+
+  // ========================================================
+  // 5. FLEET OWNER SIGNUP
+  // ========================================================
+
+  it('signup: creates partner profile for fleet owner role', async () => {
+    const email = uniqueEmail('fleet-owner-signup');
+
+    const phone = uniquePhone();
+
+    const signupResponse = await request(app).post('/auth/signup').send({
+      firstName: 'Fleet',
+      lastName: 'Owner',
+      email,
+      phone,
+      password: 'StrongPassword123!',
+      confirmPassword: 'StrongPassword123!',
+      role: 'fleet_owner',
+      businessName: 'Test Fleet Pvt Ltd',
+    });
+
+    expect(signupResponse.status).toBe(201);
+
+    expect(signupResponse.body.success).toBe(true);
+
+    const signupId = signupResponse.body.data.signupId;
+
+    expect(signupId).toEqual(expect.any(String));
+
+    const otp = otpProvider.getSmsOtp(phone);
+
+    const verifyResponse = await request(app).post('/auth/signup/verify').send({
+      signupId,
+      otp,
+    });
+
+    expect(verifyResponse.status).toBe(200);
+
+    expect(verifyResponse.body.success).toBe(true);
+
+    const userId = verifyResponse.body.data.userId;
+
+    const userResult = await pool.query<{
+      role: string;
+      status: string;
+    }>(
+      `
+        SELECT
+          role,
+          status
+        FROM users
+        WHERE id = $1
+      `,
+      [userId],
+    );
+
+    expect(userResult.rows).toHaveLength(1);
+
+    const user = userResult.rows[0];
+
+    expect(user).toBeDefined();
+
+    if (!user) {
+      throw new Error('Expected fleet owner user');
+    }
+
+    expect(user.role).toBe('fleet_owner');
+
+    expect(user.status).toBe('active');
+
+    const partnerResult = await pool.query<{
+      userId: string;
+      businessName: string;
+      approvalStatus: string;
+    }>(
+      `
+        SELECT
+          user_id AS "userId",
+          business_name AS "businessName",
+          approval_status AS "approvalStatus"
+        FROM partners
+        WHERE user_id = $1
+      `,
+      [userId],
+    );
+
+    expect(partnerResult.rows).toHaveLength(1);
+
+    const partner = partnerResult.rows[0];
+
+    expect(partner).toBeDefined();
+
+    if (!partner) {
+      throw new Error('Expected partner profile');
+    }
+
+    expect(partner.userId).toBe(userId);
+
+    expect(partner.businessName).toBe('Test Fleet Pvt Ltd');
+
+    expect(partner.approvalStatus).toBe('pending');
+
+    await cleanupUser(userId);
+  });
+
+  // ========================================================
+  // 6. DRIVER + FLEET OWNER SIGNUP
+  // ========================================================
+
+  it('signup: creates driver profile and partner profile for driver_fleet_owner role', async () => {
+    const email = uniqueEmail('driver-fleet-signup');
+
+    const phone = uniquePhone();
+
+    const signupResponse = await request(app).post('/auth/signup').send({
+      firstName: 'Driver',
+      lastName: 'FleetOwner',
+      email,
+      phone,
+      password: 'StrongPassword123!',
+      confirmPassword: 'StrongPassword123!',
+      role: 'driver_fleet_owner',
+      licenseNumber: 'DL-FLEET-12345',
+      licenseExpiry: '2031-06-30',
+      businessName: 'Driver Fleet Test Pvt Ltd',
+    });
+
+    expect(signupResponse.status).toBe(201);
+
+    expect(signupResponse.body.success).toBe(true);
+
+    const signupId = signupResponse.body.data.signupId;
+
+    expect(signupId).toEqual(expect.any(String));
+
+    const otp = otpProvider.getSmsOtp(phone);
+
+    const verifyResponse = await request(app).post('/auth/signup/verify').send({
+      signupId,
+      otp,
+    });
+
+    expect(verifyResponse.status).toBe(200);
+
+    expect(verifyResponse.body.success).toBe(true);
+
+    const userId = verifyResponse.body.data.userId;
+
+    const userResult = await pool.query<{
+      role: string;
+      status: string;
+    }>(
+      `
+        SELECT
+          role,
+          status
+        FROM users
+        WHERE id = $1
+      `,
+      [userId],
+    );
+
+    expect(userResult.rows).toHaveLength(1);
+
+    const user = userResult.rows[0];
+
+    expect(user).toBeDefined();
+
+    if (!user) {
+      throw new Error('Expected driver fleet owner user');
+    }
+
+    expect(user.role).toBe('driver_fleet_owner');
+
+    expect(user.status).toBe('active');
+
+    const driverResult = await pool.query<{
+      userId: string;
+      licenseNumber: string;
+      licenseExpiry: string;
+      verificationStatus: string;
+    }>(
+      `
+        SELECT
+          user_id AS "userId",
+          license_number AS "licenseNumber",
+          license_expiry::text AS "licenseExpiry",
+          verification_status AS "verificationStatus"
+        FROM driver_profiles
+        WHERE user_id = $1
+      `,
+      [userId],
+    );
+
+    expect(driverResult.rows).toHaveLength(1);
+
+    const driver = driverResult.rows[0];
+
+    expect(driver).toBeDefined();
+
+    if (!driver) {
+      throw new Error('Expected driver profile');
+    }
+
+    expect(driver.userId).toBe(userId);
+
+    expect(driver.licenseNumber).toBe('DL-FLEET-12345');
+
+    expect(driver.licenseExpiry).toBe('2031-06-30');
+
+    expect(driver.verificationStatus).toBe('pending');
+
+    const partnerResult = await pool.query<{
+      userId: string;
+      businessName: string;
+      approvalStatus: string;
+    }>(
+      `
+        SELECT
+          user_id AS "userId",
+          business_name AS "businessName",
+          approval_status AS "approvalStatus"
+        FROM partners
+        WHERE user_id = $1
+      `,
+      [userId],
+    );
+
+    expect(partnerResult.rows).toHaveLength(1);
+
+    const partner = partnerResult.rows[0];
+
+    expect(partner).toBeDefined();
+
+    if (!partner) {
+      throw new Error('Expected partner profile');
+    }
+
+    expect(partner.userId).toBe(userId);
+
+    expect(partner.businessName).toBe('Driver Fleet Test Pvt Ltd');
+
+    expect(partner.approvalStatus).toBe('pending');
+
+    await cleanupUser(userId);
+  });
+
+  // ========================================================
+  // 7. SIGNUP WITHOUT CONTACT
   // ========================================================
 
   it('signup: rejects missing email and phone', async () => {
@@ -740,7 +1113,160 @@ describe.sequential('Auth integration', () => {
   });
 
   // ========================================================
-  // 5. INVALID SIGNUP OTP
+  // 8A. SIGNUP VALIDATION - INVALID PHONE
+  // ========================================================
+
+  it('signup: rejects invalid phone number', async () => {
+    const response = await request(app).post('/auth/signup').send({
+      firstName: 'Invalid',
+      lastName: 'Phone',
+      phone: '123',
+      password: 'StrongPassword123!',
+      confirmPassword: 'StrongPassword123!',
+      role: 'customer',
+    });
+
+    expect(response.status).toBe(400);
+
+    expect(response.body.success).toBe(false);
+  });
+
+  // ========================================================
+  // 8B. SIGNUP VALIDATION - INVALID LICENSE DATE
+  // ========================================================
+
+  it('signup: rejects invalid license calendar date', async () => {
+    const response = await request(app).post('/auth/signup').send({
+      firstName: 'Invalid',
+      lastName: 'Date',
+      phone: uniquePhone(),
+      password: 'StrongPassword123!',
+      confirmPassword: 'StrongPassword123!',
+      role: 'driver',
+      licenseNumber: 'DL-INVALID-DATE',
+      licenseExpiry: '2030-02-30',
+    });
+
+    expect(response.status).toBe(400);
+
+    expect(response.body.success).toBe(false);
+  });
+
+  // ========================================================
+  // 8C. SIGNUP VALIDATION - DRIVER WITHOUT LICENSE
+  // ========================================================
+
+  it('signup: rejects driver without license number', async () => {
+    const response = await request(app).post('/auth/signup').send({
+      firstName: 'Driver',
+      lastName: 'NoLicense',
+      phone: uniquePhone(),
+      password: 'StrongPassword123!',
+      confirmPassword: 'StrongPassword123!',
+      role: 'driver',
+      licenseExpiry: '2030-12-31',
+    });
+
+    expect(response.status).toBe(400);
+
+    expect(response.body.success).toBe(false);
+  });
+
+  it('signup: rejects driver without license expiry', async () => {
+    const response = await request(app).post('/auth/signup').send({
+      firstName: 'Driver',
+      lastName: 'NoExpiry',
+      phone: uniquePhone(),
+      password: 'StrongPassword123!',
+      confirmPassword: 'StrongPassword123!',
+      role: 'driver',
+      licenseNumber: 'DL-NO-EXPIRY',
+    });
+
+    expect(response.status).toBe(400);
+
+    expect(response.body.success).toBe(false);
+  });
+
+  // ========================================================
+  // 8D. SIGNUP VALIDATION - FLEET OWNER WITHOUT BUSINESS
+  // ========================================================
+
+  it('signup: rejects fleet owner without business name', async () => {
+    const response = await request(app).post('/auth/signup').send({
+      firstName: 'Fleet',
+      lastName: 'NoBusiness',
+      phone: uniquePhone(),
+      password: 'StrongPassword123!',
+      confirmPassword: 'StrongPassword123!',
+      role: 'fleet_owner',
+    });
+
+    expect(response.status).toBe(400);
+
+    expect(response.body.success).toBe(false);
+  });
+
+  // ========================================================
+  // 8E. SIGNUP VALIDATION - PASSWORD MISMATCH
+  // ========================================================
+
+  it('signup: rejects password mismatch', async () => {
+    const response = await request(app).post('/auth/signup').send({
+      firstName: 'Password',
+      lastName: 'Mismatch',
+      phone: uniquePhone(),
+      password: 'StrongPassword123!',
+      confirmPassword: 'DifferentPassword123!',
+      role: 'customer',
+    });
+
+    expect(response.status).toBe(400);
+
+    expect(response.body.success).toBe(false);
+  });
+
+  // ========================================================
+  // 8F. SIGNUP VALIDATION - UNKNOWN FIELD
+  // ========================================================
+
+  it('signup: rejects unknown fields', async () => {
+    const response = await request(app).post('/auth/signup').send({
+      firstName: 'Unknown',
+      lastName: 'Field',
+      phone: uniquePhone(),
+      password: 'StrongPassword123!',
+      confirmPassword: 'StrongPassword123!',
+      role: 'customer',
+      unexpectedField: 'should-not-be-accepted',
+    });
+
+    expect(response.status).toBe(400);
+
+    expect(response.body.success).toBe(false);
+  });
+
+  // ========================================================
+  // 8G. SIGNUP VALIDATION - INVALID ROLE
+  // ========================================================
+
+  it('signup: rejects invalid role', async () => {
+    const response = await request(app).post('/auth/signup').send({
+      firstName: 'Invalid',
+      lastName: 'Role',
+      phone: uniquePhone(),
+      password: 'StrongPassword123!',
+      confirmPassword: 'StrongPassword123!',
+      role: 'admin',
+    });
+
+    expect(response.status).toBe(400);
+
+    expect(response.body.success).toBe(false);
+  });
+
+  // ========================================================
+  // 9. INVALID SIGNUP OTP
   // ========================================================
 
   it('signup: rejects incorrect OTP', async () => {
@@ -775,7 +1301,7 @@ describe.sequential('Auth integration', () => {
   });
 
   // ========================================================
-  // 6. EMAIL LOGIN
+  // 10. EMAIL LOGIN
   // ========================================================
 
   it('login: email uses email OTP', async () => {
@@ -811,7 +1337,7 @@ describe.sequential('Auth integration', () => {
   });
 
   // ========================================================
-  // 7. PHONE LOGIN
+  // 11. PHONE LOGIN
   // ========================================================
 
   it('login: phone uses SMS OTP', async () => {
@@ -843,7 +1369,7 @@ describe.sequential('Auth integration', () => {
   });
 
   // ========================================================
-  // 8. INVALID LOGIN OTP
+  // 12. INVALID LOGIN OTP
   // ========================================================
 
   it('login: rejects incorrect OTP', async () => {
@@ -871,7 +1397,7 @@ describe.sequential('Auth integration', () => {
   });
 
   // ========================================================
-  // 9. INVALID LOGIN CREDENTIALS
+  // 13. INVALID LOGIN CREDENTIALS
   // ========================================================
 
   it('login: rejects invalid credentials', async () => {
@@ -888,7 +1414,7 @@ describe.sequential('Auth integration', () => {
   });
 
   // ========================================================
-  // 10. REFRESH TOKEN ROTATION
+  // 14. REFRESH TOKEN ROTATION
   // ========================================================
 
   it('refresh: rotates refresh token', async () => {
@@ -920,13 +1446,13 @@ describe.sequential('Auth integration', () => {
       replacedBy: string | null;
     }>(
       `
-              SELECT
-                token_hash AS "tokenHash",
-                revoked_at AS "revokedAt",
-                replaced_by AS "replacedBy"
-              FROM refresh_tokens
-              WHERE token_hash = $1
-            `,
+        SELECT
+          token_hash AS "tokenHash",
+          revoked_at AS "revokedAt",
+          replaced_by AS "replacedBy"
+        FROM refresh_tokens
+        WHERE token_hash = $1
+      `,
       [hashRefreshToken(oldToken)],
     );
 
@@ -948,7 +1474,7 @@ describe.sequential('Auth integration', () => {
   });
 
   // ========================================================
-  // 11. REFRESH WITHOUT COOKIE
+  // 15. REFRESH WITHOUT COOKIE
   // ========================================================
 
   it('refresh: rejects missing cookie', async () => {
@@ -960,7 +1486,7 @@ describe.sequential('Auth integration', () => {
   });
 
   // ========================================================
-  // 12. REFRESH TOKEN REUSE
+  // 16. REFRESH TOKEN REUSE
   // ========================================================
 
   it('refresh: detects rotated token reuse', async () => {
@@ -984,7 +1510,7 @@ describe.sequential('Auth integration', () => {
   });
 
   // ========================================================
-  // 13. SESSION LIST
+  // 17. SESSION LIST
   // ========================================================
 
   it('sessions: lists authenticated sessions', async () => {
@@ -1026,7 +1552,7 @@ describe.sequential('Auth integration', () => {
   });
 
   // ========================================================
-  // 14. LOGOUT
+  // 18. LOGOUT
   // ========================================================
 
   it('logout: revokes refresh token', async () => {
@@ -1048,7 +1574,7 @@ describe.sequential('Auth integration', () => {
   });
 
   // ========================================================
-  // 15. LOGOUT WITHOUT COOKIE
+  // 19. LOGOUT WITHOUT COOKIE
   // ========================================================
 
   it('logout: rejects missing refresh cookie', async () => {

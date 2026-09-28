@@ -1,15 +1,22 @@
 import { AppError } from '../../../common/errors/app-error.js';
+
 import { encryptSecret } from '../../../common/crypto/encryption.js';
 
 import { hashPassword } from '../utils/password.js';
+
 import { normalizeEmail, normalizePhone } from '../utils/contact.js';
 
 import type { OtpProvider } from '../providers/otp.provider.js';
 
 import type { PendingSignupRepository } from '../repositories/pending-signup.repository.js';
+
 import type { SignupUserRepository } from '../repositories/signup-user.repository.js';
 
-import type { CreatePendingSignupData, SignupContactType } from '../types/signup.js';
+import type {
+  CreatePendingSignupData,
+  PublicSignupRole,
+  SignupContactType,
+} from '../types/signup.js';
 
 // ============================================================
 // Input / Result Types
@@ -18,10 +25,37 @@ import type { CreatePendingSignupData, SignupContactType } from '../types/signup
 export interface SignupInput {
   firstName: string;
   lastName: string;
+
   email?: string;
   phone?: string;
+
   password: string;
-  role: 'customer' | 'driver';
+
+  role: PublicSignupRole;
+
+  /**
+   * Required for:
+   *   - driver
+   *   - driver_fleet_owner
+   */
+  licenseNumber?: string;
+
+  /**
+   * Required for:
+   *   - driver
+   *   - driver_fleet_owner
+   *
+   * Format:
+   *   YYYY-MM-DD
+   */
+  licenseExpiry?: string;
+
+  /**
+   * Required for:
+   *   - fleet_owner
+   *   - driver_fleet_owner
+   */
+  businessName?: string;
 }
 
 export interface SignupResult {
@@ -37,6 +71,8 @@ export interface SignupResult {
 const PHONE_PATTERN = /^\+?[1-9]\d{7,14}$/;
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 // ============================================================
 // Signup Service
@@ -54,6 +90,89 @@ export class SignupService {
   // ==========================================================
 
   async signup(input: SignupInput): Promise<SignupResult> {
+    // ========================================================
+    // Validate provider-specific registration fields
+    // ========================================================
+
+    const isDriver = input.role === 'driver' || input.role === 'driver_fleet_owner';
+
+    const isFleetOwner = input.role === 'fleet_owner' || input.role === 'driver_fleet_owner';
+
+    // --------------------------------------------------------
+    // Driver fields
+    // --------------------------------------------------------
+
+    let licenseNumber: string | null = null;
+    let licenseExpiry: Date | null = null;
+
+    if (isDriver) {
+      if (typeof input.licenseNumber !== 'string' || input.licenseNumber.trim().length === 0) {
+        throw new AppError(
+          'INVALID_SIGNUP_DATA',
+          'License number is required for driver registration',
+          400,
+        );
+      }
+
+      const normalizedLicenseNumber = input.licenseNumber.trim();
+
+      if (normalizedLicenseNumber.length > 50) {
+        throw new AppError(
+          'INVALID_SIGNUP_DATA',
+          'License number must not exceed 50 characters',
+          400,
+        );
+      }
+
+      if (
+        typeof input.licenseExpiry !== 'string' ||
+        !DATE_PATTERN.test(input.licenseExpiry.trim())
+      ) {
+        throw new AppError(
+          'INVALID_SIGNUP_DATA',
+          'License expiry must be in YYYY-MM-DD format',
+          400,
+        );
+      }
+
+      const parsedLicenseExpiry = new Date(`${input.licenseExpiry.trim()}T00:00:00.000Z`);
+
+      if (Number.isNaN(parsedLicenseExpiry.getTime())) {
+        throw new AppError('INVALID_SIGNUP_DATA', 'Invalid license expiry date', 400);
+      }
+
+      licenseNumber = normalizedLicenseNumber;
+      licenseExpiry = parsedLicenseExpiry;
+    }
+
+    // --------------------------------------------------------
+    // Fleet owner fields
+    // --------------------------------------------------------
+
+    let businessName: string | null = null;
+
+    if (isFleetOwner) {
+      if (typeof input.businessName !== 'string' || input.businessName.trim().length === 0) {
+        throw new AppError(
+          'INVALID_SIGNUP_DATA',
+          'Business name is required for fleet owner registration',
+          400,
+        );
+      }
+
+      const normalizedBusinessName = input.businessName.trim();
+
+      if (normalizedBusinessName.length > 150) {
+        throw new AppError(
+          'INVALID_SIGNUP_DATA',
+          'Business name must not exceed 150 characters',
+          400,
+        );
+      }
+
+      businessName = normalizedBusinessName;
+    }
+
     // ========================================================
     // Determine supplied contacts
     //
@@ -259,25 +378,25 @@ export class SignupService {
 
     const data: CreatePendingSignupData = {
       firstName: input.firstName.trim(),
-
       lastName: input.lastName.trim(),
 
       email,
 
       contactType,
-
       contactValue,
 
       passwordHash,
 
       role: input.role,
 
+      licenseNumber,
+      licenseExpiry,
+
+      businessName,
+
       otpProvider: 'sendmator',
-
       otpProviderSessionId: providerSession.sessionId,
-
       otpProviderSessionToken: encryptedProviderSessionToken,
-
       otpProviderExpiresAt,
     };
 
@@ -291,9 +410,7 @@ export class SignupService {
 
     return {
       signupId: pendingSignup.id,
-
       contactType,
-
       expiresAt: otpProviderExpiresAt,
     };
   }

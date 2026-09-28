@@ -4,55 +4,74 @@ import type { CancelRideInput, CreateRideInput, ListRidesInput } from '../schema
 import type { RideRepository } from '../repositories/ride.repository.js';
 import type { RideStatus } from '../types/ride.js';
 import type { DriverRepository } from '../repositories/driver.repository.js';
+import type { DriverDocumentStorageService } from '../services/driver-document-storage.service.js';
 import { rideEvents } from '../events/ride.events.js';
 
 export class RideService {
   constructor(
     private readonly repository: RideRepository,
     private readonly driverRepository?: DriverRepository,
+    private readonly driverDocumentStorageService?: DriverDocumentStorageService,
   ) {}
 
   async createRide(customerId: string, input: CreateRideInput) {
     const ride = await this.repository.create(customerId, input);
-    rideEvents.emit('ride:created', ride);
-    return ride;
+    const hydratedRide = await this.hydrateDriverPhoto(ride);
+    rideEvents.emit('ride:created', hydratedRide);
+    return hydratedRide;
   }
 
-  listRides(customerId: string, query: ListRidesInput) {
-    return this.repository.listForCustomer(customerId, query);
+  async listRides(customerId: string, query: ListRidesInput) {
+    const rides = await this.repository.listForCustomer(customerId, query);
+    return this.hydrateDriverPhotos(rides);
   }
 
-  listAvailableRides(limit?: number) {
-    return this.repository.listAvailable(limit);
+  async listAvailableRides(limit?: number) {
+    const rides = await this.repository.listAvailable(limit);
+    return this.hydrateDriverPhotos(rides);
   }
 
   async getRide(customerId: string, id: string) {
     const ride = await this.repository.findByIdForCustomer(id, customerId);
-    if (!ride) throw new AppError('RIDE_NOT_FOUND', 'Ride not found', 404);
-    return ride;
+
+    if (!ride) {
+      throw new AppError('RIDE_NOT_FOUND', 'Ride not found', 404);
+    }
+
+    return this.hydrateDriverPhoto(ride);
   }
 
   async cancelRide(customerId: string, id: string, input: CancelRideInput) {
     const ride = await withTransaction((client) =>
       this.repository.cancel(id, customerId, input.reason, client),
     );
+
     if (!ride) {
       const existing = await this.repository.findByIdForCustomer(id, customerId);
-      if (!existing) throw new AppError('RIDE_NOT_FOUND', 'Ride not found', 404);
+
+      if (!existing) {
+        throw new AppError('RIDE_NOT_FOUND', 'Ride not found', 404);
+      }
+
       throw new AppError(
         'RIDE_CANCELLATION_CONFLICT',
         'Ride cannot be cancelled in its current state',
         409,
       );
     }
+
+    const hydratedRide = await this.hydrateDriverPhoto(ride);
+
     rideEvents.emit('ride:cancelled', id);
-    return ride;
+
+    return hydratedRide;
   }
 
   async acceptRide(driverProfileId: string, id: string) {
     try {
       const ride = await withTransaction(async (client) => {
         const accepted = await this.repository.accept(id, driverProfileId, client);
+
         if (
           accepted &&
           this.driverRepository &&
@@ -60,11 +79,19 @@ export class RideService {
         ) {
           throw new AppError('DRIVER_CONTENTION_CONFLICT', 'Driver is no longer available', 409);
         }
+
         return accepted;
       });
-      if (!ride) throw new AppError('RIDE_ACCEPTANCE_CONFLICT', 'Ride is no longer available', 409);
-      rideEvents.emit('ride:accepted', ride);
-      return ride;
+
+      if (!ride) {
+        throw new AppError('RIDE_ACCEPTANCE_CONFLICT', 'Ride is no longer available', 409);
+      }
+
+      const hydratedRide = await this.hydrateDriverPhoto(ride);
+
+      rideEvents.emit('ride:accepted', hydratedRide);
+
+      return hydratedRide;
     } catch (error) {
       if (isPostgresCode(error, '23505')) {
         throw new AppError(
@@ -73,6 +100,7 @@ export class RideService {
           409,
         );
       }
+
       throw error;
     }
   }
@@ -108,13 +136,19 @@ export class RideService {
           1,
           Number(ride.rentalDetails?.rentalHours ?? ride.rentalDetails?.hours ?? 1),
         );
+
         const hourlyRate = 1000;
         const hourlyBase = bookedHours * hourlyRate;
         const actualDistanceMeters = ride.actualDistanceMeters ?? 0;
+
         const actualDistanceKm = Math.round((actualDistanceMeters / 1000) * 100) / 100;
+
         const actualFuelCost = Number(ride.actualFuelCost ?? 0);
+
         const subtotal = hourlyBase + actualFuelCost;
+
         const taxAmount = Math.round(subtotal * 0.05 * 100) / 100;
+
         const finalFare = Number(ride.finalFare ?? Math.round((subtotal + taxAmount) * 100) / 100);
 
         ride.billing = {
@@ -138,7 +172,7 @@ export class RideService {
         };
       }
 
-      return ride;
+      return this.hydrateDriverPhoto(ride);
     });
   }
 
@@ -150,15 +184,18 @@ export class RideService {
     if (typeof inputPin !== 'string' || !/^\d{4}$/.test(inputPin.trim())) {
       throw new AppError('INVALID_PIN', 'PIN must be exactly 4 digits', 400);
     }
+
     const normalizedPin = inputPin.trim();
 
     const isAssigned = await this.repository.isAssignedDriverProfile(rideId, driverProfileId);
+
     if (!isAssigned) {
       throw new AppError('FORBIDDEN', 'Not assigned to this ride', 403);
     }
 
     if (typeof this.repository.findById === 'function') {
       const ride = await this.repository.findById(rideId);
+
       if (!ride) {
         throw new AppError('RIDE_NOT_FOUND', 'Ride not found', 404);
       }
@@ -178,6 +215,7 @@ export class RideService {
     }
 
     const storedPin = await this.repository.getRidePin(rideId);
+
     if (!storedPin) {
       throw new AppError('RIDE_NOT_FOUND', 'Ride not found or PIN not generated', 404);
     }
@@ -187,6 +225,7 @@ export class RideService {
     }
 
     await this.repository.markPinVerified(rideId);
+
     return { verified: true };
   }
 
@@ -207,6 +246,7 @@ export class RideService {
       if (!assignedDriverId) {
         throw new AppError('FORBIDDEN', 'Assigned driver is required to verify PIN', 403);
       }
+
       await this.verifyRidePin(id, assignedDriverId, pin);
     }
 
@@ -216,12 +256,14 @@ export class RideService {
       }
 
       const isAssigned = await this.repository.isAssignedDriverProfile(id, assignedDriverId);
+
       if (!isAssigned) {
         throw new AppError('FORBIDDEN', 'Not assigned to this ride', 403);
       }
 
       if (typeof this.repository.findById === 'function') {
         const currentRide = await this.repository.findById(id);
+
         if (!currentRide) {
           throw new AppError('RIDE_NOT_FOUND', 'Ride not found', 404);
         }
@@ -240,6 +282,7 @@ export class RideService {
       }
 
       const isVerified = await this.repository.isPinVerified(id);
+
       if (!isVerified) {
         throw new AppError(
           'PIN_VERIFICATION_REQUIRED',
@@ -251,14 +294,52 @@ export class RideService {
 
     try {
       const ride = await this.repository.transition(id, status, assignedDriverId);
-      if (!ride) throw new AppError('RIDE_NOT_FOUND', 'Ride not found', 404);
-      return ride;
+
+      if (!ride) {
+        throw new AppError('RIDE_NOT_FOUND', 'Ride not found', 404);
+      }
+
+      return this.hydrateDriverPhoto(ride);
     } catch (error) {
       if (isPostgresCode(error, 'P0001')) {
         throw new AppError('RIDE_TRANSITION_CONFLICT', 'Invalid ride lifecycle transition', 409);
       }
+
       throw error;
     }
+  }
+
+  private async hydrateDriverPhoto(
+    ride: Awaited<ReturnType<RideRepository['findById']>>,
+  ): Promise<NonNullable<typeof ride>> {
+    if (
+      !ride ||
+      !ride.driverDetails ||
+      !ride.assignedDriverId ||
+      !this.driverDocumentStorageService
+    ) {
+      return ride as NonNullable<typeof ride>;
+    }
+
+    const photoUrl = await this.driverDocumentStorageService.getProfilePhotoAccessUrl(
+      ride.assignedDriverId,
+    );
+
+    ride.driverDetails.photoUrl = photoUrl;
+
+    return ride as NonNullable<typeof ride>;
+  }
+
+  private async hydrateDriverPhotos(
+    rides: Awaited<ReturnType<RideRepository['listForCustomer']>>,
+  ): Promise<typeof rides> {
+    if (!this.driverDocumentStorageService || rides.length === 0) {
+      return rides;
+    }
+
+    await Promise.all(rides.map((ride) => this.hydrateDriverPhoto(ride)));
+
+    return rides;
   }
 }
 
