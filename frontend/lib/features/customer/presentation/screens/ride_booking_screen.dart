@@ -39,6 +39,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
   int _selectedRating = 5;
   String _selectedPaymentMethod = 'wallet';
   bool _isProcessingPayment = false;
+  bool _isChangingVehicle = false;
   List<FleetVehicleModel> _premiumFleet = [];
 
   final List<Map<String, dynamic>> _quickDestinations = [
@@ -978,85 +979,181 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
       ];
     }
 
-    return SizedBox(
-      height: 95,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: tiers.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
-        itemBuilder: (context, index) {
-          final tier = tiers[index];
-          final isSelected = state.selectedTier == tier['id'];
-          final String displayPriceText;
-          if (isSelected) {
-            if (state.isEstimatingFare) {
-              displayPriceText = '...';
-            } else if (state.fare != null) {
-              displayPriceText = '₹${state.fare!.toStringAsFixed(0)}';
-            } else {
-              displayPriceText = 'View Est.';
-            }
-          } else {
-            displayPriceText = 'Select';
-          }
+    final selectedTierItem = tiers.where((t) => t['id'] == state.selectedTier).firstOrNull;
 
-          return GestureDetector(
-            onTap: () {
-              ref.read(rideProvider.notifier).selectTier(tier['id'] as String);
-            },
-            child: Container(
-              width: 120,
+    // Show ONLY selected vehicle card if user has selected a vehicle and is not currently choosing another
+    if (selectedTierItem != null && !_isChangingVehicle) {
+      final String displayPriceText = state.isEstimatingFare
+          ? 'Calculating fare...'
+          : (state.fare != null ? 'Estimated Fare: ₹${state.fare!.toStringAsFixed(0)}' : 'Route Estimate Ready');
+
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF12351F),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: brandGreen, width: 2),
+        ),
+        child: Row(
+          children: [
+            Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: isSelected ? const Color(0xFF12351F) : cardElevated,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: isSelected ? brandGreen : borderCard,
-                  width: isSelected ? 2 : 1,
-                ),
+                color: brandGreen.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(12),
               ),
+              child: Icon(
+                selectedTierItem['icon'] as IconData,
+                color: brandGreen,
+                size: 28,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Icon(
-                        tier['icon'] as IconData,
-                        size: 22,
-                        color: isSelected ? brandGreen : textGray,
+                      Text(
+                        selectedTierItem['name'] as String,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                          color: textWhite,
+                        ),
                       ),
                       Text(
-                        tier['eta'] as String,
-                        style: const TextStyle(fontSize: 10, color: textGray),
+                        selectedTierItem['eta'] as String,
+                        style: const TextStyle(fontSize: 11, color: textGray),
                       ),
                     ],
                   ),
-                  Text(
-                    tier['name'] as String,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                      color: textWhite,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  const SizedBox(height: 4),
                   Text(
                     displayPriceText,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 13,
-                      color: isSelected ? brandGreen : textWhite,
+                      color: brandGreen,
                     ),
                   ),
                 ],
               ),
             ),
-          );
-        },
-      ),
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: () => setState(() => _isChangingVehicle = true),
+              child: const Text(
+                'Change',
+                style: TextStyle(color: textGray, fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (state.selectedTier != null)
+          Align(
+            alignment: Alignment.centerRight,
+            child: GestureDetector(
+              onTap: () => setState(() => _isChangingVehicle = false),
+              child: const Padding(
+                padding: EdgeInsets.only(bottom: 6),
+                child: Text(
+                  'Done',
+                  style: TextStyle(color: brandGreen, fontWeight: FontWeight.bold, fontSize: 12),
+                ),
+              ),
+            ),
+          ),
+        SizedBox(
+          height: 95,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: tiers.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            itemBuilder: (context, index) {
+              final tier = tiers[index];
+              final isSelected = state.selectedTier == tier['id'];
+              final String displayPriceText;
+              if (isSelected) {
+                if (state.isEstimatingFare) {
+                  displayPriceText = '...';
+                } else if (state.fare != null) {
+                  displayPriceText = '₹${state.fare!.toStringAsFixed(0)}';
+                } else {
+                  displayPriceText = 'View Est.';
+                }
+              } else {
+                displayPriceText = 'Select';
+              }
+
+              return GestureDetector(
+                onTap: () {
+                  ref.read(rideProvider.notifier).selectTier(tier['id'] as String);
+                  setState(() => _isChangingVehicle = false);
+                },
+                child: Container(
+                  width: 120,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: isSelected ? const Color(0xFF12351F) : cardElevated,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: isSelected ? brandGreen : borderCard,
+                      width: isSelected ? 2 : 1,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Icon(
+                            tier['icon'] as IconData,
+                            size: 22,
+                            color: isSelected ? brandGreen : textGray,
+                          ),
+                          Text(
+                            tier['eta'] as String,
+                            style: const TextStyle(fontSize: 10, color: textGray),
+                          ),
+                        ],
+                      ),
+                      Text(
+                        tier['name'] as String,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          color: textWhite,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        displayPriceText,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          color: isSelected ? brandGreen : textWhite,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
