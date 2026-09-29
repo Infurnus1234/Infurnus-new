@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../auth/presentation/providers/user_provider.dart';
+import '../../../auth/domain/entities/user.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -16,6 +17,128 @@ class ProfileScreen extends ConsumerWidget {
   static const Color brandGreen = Color(0xFF22C55E);
   static const Color serviceRed = Color(0xFFEF4444);
 
+  void _showPersonalInfoModal(BuildContext context, User? user) {
+    final firstNameController = TextEditingController(text: user?.firstName ?? '');
+    final lastNameController = TextEditingController(text: user?.lastName ?? '');
+    final emailController = TextEditingController(text: user?.email ?? '');
+    final phoneController = TextEditingController(text: user?.phone ?? '');
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: cardBg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 24,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Personal Information',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: textWhite,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: textWhite),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: firstNameController,
+                      style: const TextStyle(color: textWhite),
+                      decoration: const InputDecoration(
+                        labelText: 'First Name',
+                        labelStyle: TextStyle(color: textGray),
+                        enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: borderCard)),
+                        focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: brandGreen)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: lastNameController,
+                      style: const TextStyle(color: textWhite),
+                      decoration: const InputDecoration(
+                        labelText: 'Last Name',
+                        labelStyle: TextStyle(color: textGray),
+                        enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: borderCard)),
+                        focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: brandGreen)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: emailController,
+                style: const TextStyle(color: textWhite),
+                decoration: const InputDecoration(
+                  labelText: 'Email Address',
+                  labelStyle: TextStyle(color: textGray),
+                  enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: borderCard)),
+                  focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: brandGreen)),
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: phoneController,
+                style: const TextStyle(color: textWhite),
+                decoration: const InputDecoration(
+                  labelText: 'Phone Number',
+                  labelStyle: TextStyle(color: textGray),
+                  enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: borderCard)),
+                  focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: brandGreen)),
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: brandGreen,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Personal information updated successfully.'),
+                        backgroundColor: brandGreen,
+                      ),
+                    );
+                  },
+                  child: const Text('Save Details', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(userProvider);
@@ -24,7 +147,7 @@ class ProfileScreen extends ConsumerWidget {
       backgroundColor: mainBg,
       appBar: AppBar(
         title: const Text(
-          'Profile',
+          'Profile & Settings',
           style: TextStyle(color: textWhite, fontWeight: FontWeight.bold),
         ),
         backgroundColor: const Color(0xFF050505),
@@ -83,6 +206,7 @@ class ProfileScreen extends ConsumerWidget {
           ],
           const SizedBox(height: 28),
 
+          // User Information Section
           Container(
             decoration: BoxDecoration(
               color: cardBg,
@@ -94,7 +218,7 @@ class ProfileScreen extends ConsumerWidget {
                 _buildListTile(
                   Icons.person_outline_rounded,
                   'Personal Information',
-                  onTap: () {},
+                  onTap: () => _showPersonalInfoModal(context, user),
                 ),
                 const Divider(height: 1, color: borderCard),
                 _buildListTile(
@@ -112,13 +236,14 @@ class ProfileScreen extends ConsumerWidget {
                 _buildListTile(
                   Icons.payment_rounded,
                   'Payment Methods',
-                  onTap: () {},
+                  onTap: () => context.push('/wallet'),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 20),
 
+          // User Settings Section
           Container(
             decoration: BoxDecoration(
               color: cardBg,
@@ -130,7 +255,7 @@ class ProfileScreen extends ConsumerWidget {
                 _buildListTile(
                   Icons.security_rounded,
                   'Privacy Settings',
-                  onTap: () {},
+                  onTap: () => context.push('/legal/Privacy Policy'),
                 ),
                 const Divider(height: 1, color: borderCard),
                 _buildListTile(
@@ -155,6 +280,7 @@ class ProfileScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 20),
 
+          // Account Actions Section
           Container(
             decoration: BoxDecoration(
               color: cardBg,
