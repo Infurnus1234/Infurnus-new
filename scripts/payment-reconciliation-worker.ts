@@ -20,7 +20,9 @@ async function runWorker() {
 
   try {
     const stats = await service.reconcileStuckPayments(10);
-    console.log(`[WORKER] Reconciliation complete. Reconciled: ${stats.reconciled}, Failed: ${stats.failed}`);
+    console.log(
+      `[WORKER] Reconciliation complete. Reconciled: ${stats.reconciled}, Failed: ${stats.failed}`,
+    );
   } catch (err) {
     console.error('[WORKER] Error in reconciliation worker:', err);
   } finally {

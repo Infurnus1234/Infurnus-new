@@ -9,7 +9,9 @@ export class PaymentReconciliationService {
     private readonly paymentProvider?: PaymentProvider,
   ) {}
 
-  async reconcileStuckPayments(staleMinutes: number = 10): Promise<{ reconciled: number; failed: number }> {
+  async reconcileStuckPayments(
+    staleMinutes: number = 10,
+  ): Promise<{ reconciled: number; failed: number }> {
     const result = await this.pool.query<{ id: string; providerOrderId: string; provider: string }>(
       `SELECT id, provider_order_id AS "providerOrderId", provider
        FROM payments
@@ -33,9 +35,15 @@ export class PaymentReconciliationService {
             providerPaymentId: providerStatus.providerPaymentId ?? undefined,
           });
           reconciled++;
-        } else if (providerStatus.orderStatus === 'FAILED' || providerStatus.orderStatus === 'EXPIRED') {
+        } else if (
+          providerStatus.orderStatus === 'FAILED' ||
+          providerStatus.orderStatus === 'EXPIRED'
+        ) {
           if (this.paymentRepository.markFailed) {
-            await this.paymentRepository.markFailed(payment.id, providerStatus.rawStatus ?? 'Payment expired or failed at gateway');
+            await this.paymentRepository.markFailed(
+              payment.id,
+              providerStatus.rawStatus ?? 'Payment expired or failed at gateway',
+            );
           }
           failed++;
         }
