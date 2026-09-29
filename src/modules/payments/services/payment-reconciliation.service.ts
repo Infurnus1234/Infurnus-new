@@ -27,15 +27,15 @@ export class PaymentReconciliationService {
       try {
         const providerStatus = await this.paymentProvider.getPaymentStatus(payment.providerOrderId);
 
-        if (providerStatus.status === 'PAID') {
+        if (providerStatus.orderStatus === 'PAID') {
           await this.paymentRepository.capture({
             paymentId: payment.id,
-            providerPaymentId: providerStatus.providerPaymentId,
+            providerPaymentId: providerStatus.providerPaymentId ?? undefined,
           });
           reconciled++;
-        } else if (providerStatus.status === 'FAILED' || providerStatus.status === 'EXPIRED') {
+        } else if (providerStatus.orderStatus === 'FAILED' || providerStatus.orderStatus === 'EXPIRED') {
           if (this.paymentRepository.markFailed) {
-            await this.paymentRepository.markFailed(payment.id, providerStatus.failureReason ?? 'Payment expired or failed at gateway');
+            await this.paymentRepository.markFailed(payment.id, providerStatus.rawStatus ?? 'Payment expired or failed at gateway');
           }
           failed++;
         }
