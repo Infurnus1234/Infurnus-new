@@ -18,7 +18,7 @@ function createCoupon(overrides: Partial<Coupon> = {}): Coupon {
     usageLimit: null,
     perUserLimit: null,
     startsAt: new Date('2026-09-01T00:00:00.000Z'),
-    expiresAt: new Date('2026-10-01T00:00:00.000Z'),
+    expiresAt: new Date('2030-10-01T00:00:00.000Z'),
     isActive: true,
     usageCount: 0,
     createdAt: new Date('2026-08-01T00:00:00.000Z'),
