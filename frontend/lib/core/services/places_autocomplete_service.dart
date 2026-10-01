@@ -30,16 +30,82 @@ class OpenStreetMapAutocompleteService implements PlacesAutocompleteService {
   final Dio _dio;
   final Map<String, List<PlaceSuggestion>> _cache = {};
   static const int _maxCacheEntries = 100;
-  static const int _minQueryLength = 3;
+  static const int _minQueryLength = 1;
+
+  static const List<PlaceSuggestion> _popularLocations = [
+    PlaceSuggestion(
+      id: 'patna_jn',
+      title: 'Patna Junction Railway Station',
+      subtitle: 'Station Road, Fraser Road Area, Patna, Bihar',
+      latitude: 25.6022,
+      longitude: 85.1376,
+    ),
+    PlaceSuggestion(
+      id: 'patna_airport',
+      title: 'Jay Prakash Narayan Airport (Patna Airport)',
+      subtitle: 'Shaheed Pir Ali Khan Marg, Patna, Bihar',
+      latitude: 25.5913,
+      longitude: 85.0880,
+    ),
+    PlaceSuggestion(
+      id: 'gandhi_maidan',
+      title: 'Gandhi Maidan',
+      subtitle: 'Near Exhibition Road, Patna, Bihar',
+      latitude: 25.6154,
+      longitude: 85.1437,
+    ),
+    PlaceSuggestion(
+      id: 'boring_road',
+      title: 'Boring Road Chauraha',
+      subtitle: 'Sri Krishnapuri, Patna, Bihar',
+      latitude: 25.6127,
+      longitude: 85.1189,
+    ),
+    PlaceSuggestion(
+      id: 'kankarbagh',
+      title: 'Kankarbagh Tempo Stand',
+      subtitle: 'Kankarbagh Main Road, Patna, Bihar',
+      latitude: 25.5960,
+      longitude: 85.1550,
+    ),
+    PlaceSuggestion(
+      id: 'danapur_stn',
+      title: 'Danapur Railway Station',
+      subtitle: 'Khagaul, Patna, Bihar',
+      latitude: 25.5786,
+      longitude: 85.0441,
+    ),
+    PlaceSuggestion(
+      id: 'aiims_patna',
+      title: 'AIIMS Patna',
+      subtitle: 'Phulwari Sharif, Patna, Bihar',
+      latitude: 25.5606,
+      longitude: 85.0436,
+    ),
+    PlaceSuggestion(
+      id: 'ecoworld_blr',
+      title: 'RMZ Ecoworld Tech Park',
+      subtitle: 'Outer Ring Road, Bellandur, Bengaluru',
+      latitude: 12.9279,
+      longitude: 77.6841,
+    ),
+    PlaceSuggestion(
+      id: 'blr_airport',
+      title: 'Kempegowda International Airport',
+      subtitle: 'Devanahalli, Bengaluru, Karnataka',
+      latitude: 13.1986,
+      longitude: 77.7066,
+    ),
+  ];
 
   OpenStreetMapAutocompleteService({Dio? dio})
       : _dio = dio ??
             Dio(
               BaseOptions(
-                connectTimeout: const Duration(seconds: 5),
-                receiveTimeout: const Duration(seconds: 5),
+                connectTimeout: const Duration(seconds: 4),
+                receiveTimeout: const Duration(seconds: 4),
                 headers: {
-                  'User-Agent': 'Infurnus-RideBooking/1.0',
+                  'User-Agent': 'InfurnusApp/1.0 (contact@infurnus.com)',
                   'Accept': 'application/json',
                 },
               ),
@@ -57,22 +123,33 @@ class OpenStreetMapAutocompleteService implements PlacesAutocompleteService {
       return _cache[normalizedKey]!;
     }
 
+    final localMatches = _popularLocations.where((place) {
+      final t = place.title.toLowerCase();
+      final s = place.subtitle.toLowerCase();
+      return t.contains(normalizedKey) || s.contains(normalizedKey);
+    }).toList();
+
     try {
       final response = await _dio.get<List<dynamic>>(
         'https://nominatim.openstreetmap.org/search',
         queryParameters: {
-          'q': trimmed,
+          'q': '$trimmed, India',
           'format': 'json',
           'addressdetails': 1,
-          'limit': 5,
+          'countrycodes': 'in',
+          'limit': 6,
         },
       );
 
       if (response.statusCode == 200 && response.data != null) {
-        final suggestions = <PlaceSuggestion>[];
+        final suggestions = <PlaceSuggestion>[...localMatches];
+        final seenIds = suggestions.map((s) => s.id).toSet();
+
         for (final item in response.data!) {
           if (item is! Map<String, dynamic>) continue;
           final placeId = (item['place_id'] ?? '').toString();
+          if (seenIds.contains(placeId)) continue;
+
           final displayName = (item['display_name'] ?? '') as String;
           final latStr = item['lat'] as String?;
           final lonStr = item['lon'] as String?;
@@ -92,6 +169,7 @@ class OpenStreetMapAutocompleteService implements PlacesAutocompleteService {
               longitude: lonStr != null ? double.tryParse(lonStr) : null,
             ),
           );
+          seenIds.add(placeId);
         }
 
         if (_cache.length >= _maxCacheEntries) {
@@ -101,11 +179,11 @@ class OpenStreetMapAutocompleteService implements PlacesAutocompleteService {
         return suggestions;
       }
     } catch (_) {
-      // In case of network errors or rate limit, fail gracefully
-      return [];
+      // Return local matching locations on network timeout
+      return localMatches;
     }
 
-    return [];
+    return localMatches;
   }
 
   @override

@@ -10,14 +10,12 @@ void main() {
       service = OpenStreetMapAutocompleteService();
     });
 
-    test('returns empty suggestions for queries shorter than 3 characters without API call', () async {
+    test('returns empty suggestions for empty or whitespace queries without API call', () async {
       final results1 = await service.getSuggestions('');
-      final results2 = await service.getSuggestions('a');
-      final results3 = await service.getSuggestions('ab ');
+      final results2 = await service.getSuggestions('   ');
 
       expect(results1, isEmpty);
       expect(results2, isEmpty);
-      expect(results3, isEmpty);
     });
 
     test('caches suggestions and respects clearCache', () async {

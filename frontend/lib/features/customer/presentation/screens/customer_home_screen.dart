@@ -114,7 +114,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
 
   void _onSearchQueryChanged(String query) {
     _debounceTimer?.cancel();
-    if (query.trim().length < 2) {
+    if (query.trim().isEmpty) {
       setState(() {
         _suggestions = [];
         _isSearching = false;
@@ -124,8 +124,8 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
 
     setState(() => _isSearching = true);
 
-    // Debounce: 350ms to prevent duplicate and rapid API requests
-    _debounceTimer = Timer(const Duration(milliseconds: 350), () async {
+    // Debounce: 200ms for instant autocomplete response
+    _debounceTimer = Timer(const Duration(milliseconds: 200), () async {
       final service = ref.read(placesAutocompleteServiceProvider);
       final results = await service.getSuggestions(query);
       if (mounted) {
