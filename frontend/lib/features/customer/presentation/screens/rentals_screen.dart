@@ -33,6 +33,7 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
 
   List<FleetVehicleModel> _fleetVehicles = [];
   bool _isLoadingFleet = true;
+  bool _isContinuingToBooking = false;
   String? _fleetError;
 
   @override
@@ -86,7 +87,16 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
         _pickupController.text = 'Current Location';
         _syncToRideProvider();
       }
-    } catch (_) {}
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error.toString()),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -126,7 +136,8 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
     }
   }
 
-  void _handleBooking() {
+  Future<void> _handleBooking() async {
+    if (_isContinuingToBooking) return;
     if (_pickupController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter pickup location')),
@@ -141,9 +152,13 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
       return;
     }
 
-    _syncToRideProvider();
-    ref.read(rideProvider.notifier).requestRide();
-    context.push('/ride-booking');
+    setState(() => _isContinuingToBooking = true);
+    try {
+      _syncToRideProvider();
+      await context.push('/ride-booking');
+    } finally {
+      if (mounted) setState(() => _isContinuingToBooking = false);
+    }
   }
 
   IconData _getVehicleIcon(String category) {
@@ -447,7 +462,12 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                             border: InputBorder.none,
                             isDense: true,
                           ),
-                          onChanged: (_) => _syncToRideProvider(),
+                          onChanged: (value) {
+                            ref
+                                .read(rideProvider.notifier)
+                                .updatePickupAddress(value);
+                            _syncToRideProvider();
+                          },
                         ),
                       ),
                       IconButton(
@@ -691,9 +711,9 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
             // Book Button
             InfurnusButton(
               text: estimatedAdvance != null
-                  ? 'Book Premium Vehicle • ₹${estimatedAdvance.toStringAsFixed(0)}'
-                  : 'Book Premium Vehicle',
-              isLoading: rideState.isEstimatingFare,
+                  ? 'Continue to Booking • ₹${estimatedAdvance.toStringAsFixed(0)}'
+                  : 'Choose Destination & Continue',
+              isLoading: rideState.isEstimatingFare || _isContinuingToBooking,
               onPressed: _fleetVehicles.isEmpty ? null : _handleBooking,
             ),
             const SizedBox(height: 20),

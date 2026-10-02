@@ -3,6 +3,9 @@ import { FareCalculatorService } from '../../fares/services/fare-calculator.serv
 import { PostgresDriverRepository } from '../repositories/driver.repository.js';
 import { PostgresRideRepository } from '../repositories/ride.repository.js';
 import { RideService } from '../services/ride.service.js';
+
+const inMemoryTransaction = async <T>(callback: (client: never) => Promise<T>) =>
+  callback({} as never);
 import { MatchingService } from '../services/matching.service.js';
 import { createRideSchema, fareEstimateSchema } from '../schemas/ride.schemas.js';
 import type { FarePricingConfig } from '../../fares/types/fare.js';
@@ -297,7 +300,13 @@ describe('Phase 4 Step 6: Logistics Cargo Delivery Enhancements', () => {
         accept: vi.fn().mockResolvedValue(null),
       };
 
-      const rideService = new RideService(mockRepo as never);
+      const rideService = new RideService(
+        mockRepo as never,
+        undefined,
+        undefined,
+        undefined,
+        inMemoryTransaction as never,
+      );
 
       await expect(
         rideService.acceptRide('dp-passenger-sedan', 'ride-logistics-1'),

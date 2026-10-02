@@ -55,6 +55,22 @@ describe('INFURNUS 4-Sector Fare Calculations', () => {
       expect(autoFare.baseAmount).toBe(3500); // 5000 * 0.7
       expect(suvFare.baseAmount).toBe(8000); // 5000 * 1.6
     });
+
+    it.each(['bike', 'mini'])('rejects %s while no category fare is configured', (category) => {
+      expect(() =>
+        calculator.calculate({
+          distanceMeters: 5000,
+          durationSeconds: 600,
+          sector: 'passenger',
+          vehicleCategory: category,
+        }),
+      ).toThrow(
+        expect.objectContaining({
+          code: 'FARE_CONFIGURATION_MISSING',
+          statusCode: 422,
+        }),
+      );
+    });
   });
 
   describe('Sector 2: Logistics', () => {

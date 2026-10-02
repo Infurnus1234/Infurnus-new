@@ -20,6 +20,7 @@ import { PostgresRideRepository } from './modules/rides/repositories/ride.reposi
 import { PostgresDriverRepository } from './modules/rides/repositories/driver.repository.js';
 import { DriverService } from './modules/rides/services/driver.service.js';
 import { RideService } from './modules/rides/services/ride.service.js';
+import { MatchingService } from './modules/rides/services/matching.service.js';
 
 import { PostgresRentalRepository } from './modules/rentals/repositories/rental.repository.js';
 
@@ -182,6 +183,7 @@ async function startServer() {
   const driverService = new DriverService(driverRepository, undefined, rideRepository);
 
   const routeRecalculationService = new RouteRecalculationService(googleMapsProvider);
+  const matchingService = new MatchingService(driverRepository, googleMapsProvider);
 
   // ==========================================================
   // Socket.IO
@@ -192,6 +194,7 @@ async function startServer() {
     rideRepository,
     rideService,
     routeRecalculationService,
+    matchingService,
   });
 
   io.on('connection', (socket) => {

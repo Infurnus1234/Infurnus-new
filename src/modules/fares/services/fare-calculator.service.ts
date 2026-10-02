@@ -1,4 +1,5 @@
 import { DEFAULT_FARE_PRICING } from '../config/fare.config.js';
+import { AppError } from '../../../common/errors/app-error.js';
 import type {
   FareCalculationInput,
   FareCalculationResult,
@@ -23,6 +24,7 @@ export class FareCalculatorService {
   calculate(input: FareCalculationInput): FareCalculationResult {
     this.validateInput(input);
     this.validatePricing();
+    this.validateVehicleFareConfiguration(input);
 
     let baseAmount = this.pricing.baseFare;
     let distanceAmount = this.calculateDistanceAmount(input.distanceMeters);
@@ -139,6 +141,38 @@ export class FareCalculatorService {
     if (taxAmount !== undefined) result.taxAmount = taxAmount;
 
     return result;
+  }
+
+  private validateVehicleFareConfiguration(input: FareCalculationInput): void {
+    const category = input.vehicleCategory;
+    if (!input.sector || !category) return;
+
+    const configuredCategories: Record<string, readonly string[]> = {
+      passenger: ['auto', 'sedan', 'suv'],
+      logistics: ['bike', 'mini_truck'],
+      service: [
+        'ambulance',
+        'towing',
+        'towing_van',
+        'jcb',
+        'recovery',
+        'recovery_vehicle',
+        'roadside_service',
+        'roadside_service_vehicle',
+        'roadside_recovery',
+        'roadside',
+      ],
+      premium: [category],
+    };
+
+    const categories = configuredCategories[input.sector];
+    if (!categories || !categories.includes(category)) {
+      throw new AppError(
+        'FARE_CONFIGURATION_MISSING',
+        `Fare is not configured for ${input.sector} vehicle category '${category}'. Configure this category's base and distance rates before enabling bookings.`,
+        422,
+      );
+    }
   }
 
   private calculateDistanceAmount(distanceMeters: number): number {

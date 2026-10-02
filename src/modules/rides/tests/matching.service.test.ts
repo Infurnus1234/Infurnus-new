@@ -37,7 +37,7 @@ function driverRepository() {
 }
 
 describe('MatchingService', () => {
-  it('uses the first bounded PostGIS candidate without a map provider', async () => {
+  it('uses deterministic distance/profile ordering without a map provider', async () => {
     const repo = driverRepository();
 
     await expect(
@@ -45,7 +45,7 @@ describe('MatchingService', () => {
         latitude: 12,
         longitude: 77,
       }),
-    ).resolves.toEqual(candidates[0]);
+    ).resolves.toEqual(candidates[1]);
 
     expect(repo.findNearbyEligible).toHaveBeenCalledTimes(1);
   });

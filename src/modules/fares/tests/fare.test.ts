@@ -379,6 +379,8 @@ describe('INFURNUS Fare Module', () => {
         latitude: 26.8467,
         longitude: 75.802,
       },
+      sector: 'passenger',
+      vehicleCategory: 'mini',
     };
 
     function createController() {
@@ -410,7 +412,14 @@ describe('INFURNUS Fare Module', () => {
       await controller.estimate(req, res, next);
 
       expect(estimate).toHaveBeenCalledOnce();
-      expect(estimate).toHaveBeenCalledWith(validBody.pickup, validBody.destination);
+      expect(estimate).toHaveBeenCalledWith(
+        validBody.pickup,
+        validBody.destination,
+        expect.objectContaining({
+          sector: 'passenger',
+          vehicleCategory: 'mini',
+        }),
+      );
 
       expect(res.json).toHaveBeenCalledWith({
         success: true,

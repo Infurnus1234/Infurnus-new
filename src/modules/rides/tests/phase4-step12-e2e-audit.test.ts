@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { FareCalculatorService } from '../../fares/services/fare-calculator.service.js';
 import { MatchingService } from '../services/matching.service.js';
+
+const inMemoryTransaction = async <T>(callback: (client: never) => Promise<T>) =>
+  callback({} as never);
 import { RideService } from '../services/ride.service.js';
 import { sanitizeRideForDriver } from '../utils/ride-sanitizer.js';
 import { CashfreePaymentProvider } from '../../payments/providers/cashfree.provider.js';
@@ -200,7 +203,13 @@ describe('Phase 4 Step 12: End-to-End Validation & Final Audit Suite', () => {
       accept: vi.fn().mockResolvedValue(null), // DB query enforces matching sector/category; returns null on mismatch
     };
 
-    const service = new RideService(mockRideRepo as RideRepository);
+    const service = new RideService(
+      mockRideRepo as RideRepository,
+      undefined,
+      undefined,
+      undefined,
+      inMemoryTransaction as never,
+    );
     await expect(service.acceptRide('driver-profile-hatchback', 'ride-sedan')).rejects.toThrow(
       expect.objectContaining({
         code: 'RIDE_ACCEPTANCE_CONFLICT',

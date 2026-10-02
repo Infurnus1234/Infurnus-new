@@ -75,9 +75,43 @@ describe('Socket.IO Sector-Constrained Driver Dispatch', () => {
 
     const dependencies = {
       driverService: driverService as never,
-      rideRepository: {} as never,
+      rideRepository: {
+        offerDispatch: vi.fn().mockResolvedValue(true),
+        finishDispatchAttempt: vi.fn().mockResolvedValue(true),
+        failDispatch: vi.fn().mockResolvedValue(null),
+      } as never,
       rideService: {} as never,
       routeRecalculationService: {} as never,
+      matchingService: {
+        findRankedDrivers: vi.fn(async (_pickup, sector, category) => {
+          const userId =
+            sector === 'logistics'
+              ? 'driver-logistics'
+              : sector === 'service'
+                ? 'driver-service'
+                : sector === 'premium'
+                  ? 'driver-premium'
+                  : category === 'sedan'
+                    ? 'driver-passenger'
+                    : '';
+          if (!userId) return [];
+          return [{
+            driverProfileId: userId,
+            userId,
+            vehicleId: `${userId}-vehicle`,
+            distanceMeters: 100,
+            latitude: 12.97,
+            longitude: 77.59,
+            availabilityStatus: 'available',
+            verificationStatus: 'approved',
+            activeRideCount: 0,
+            locationRecordedAt: new Date(),
+            sector,
+            vehicleCategory: category,
+          }];
+        }),
+      } as never,
+      dispatchResponseTimeoutMs: 25,
     };
 
     httpServer = createServer();
@@ -198,9 +232,32 @@ describe('Socket.IO Sector-Constrained Driver Dispatch', () => {
 
     const dependencies = {
       driverService: driverService as never,
-      rideRepository: {} as never,
+      rideRepository: {
+        offerDispatch: vi.fn().mockResolvedValue(true),
+        finishDispatchAttempt: vi.fn().mockResolvedValue(true),
+        failDispatch: vi.fn().mockResolvedValue(null),
+      } as never,
       rideService: {} as never,
       routeRecalculationService: {} as never,
+      matchingService: {
+        findRankedDrivers: vi.fn().mockResolvedValue([
+          {
+            driverProfileId: 'driver-suv',
+            userId: 'driver-suv',
+            vehicleId: 'driver-suv-vehicle',
+            distanceMeters: 100,
+            latitude: 12.97,
+            longitude: 77.59,
+            availabilityStatus: 'available',
+            verificationStatus: 'approved',
+            activeRideCount: 0,
+            locationRecordedAt: new Date(),
+            sector: 'passenger',
+            vehicleCategory: 'suv',
+          },
+        ]),
+      } as never,
+      dispatchResponseTimeoutMs: 25,
     };
 
     httpServer = createServer();

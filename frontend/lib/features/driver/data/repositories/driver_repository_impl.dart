@@ -1,5 +1,7 @@
 import 'dart:io';
+
 import 'package:dio/dio.dart';
+
 import '../../../../core/errors/failures.dart';
 import '../../domain/repositories/driver_repository.dart';
 import '../datasources/driver_remote_data_source.dart';
@@ -61,7 +63,9 @@ class DriverRepositoryImpl implements DriverRepository {
   }
 
   @override
-  Future<DriverProfileModel> upsertDriverProfile(Map<String, dynamic> data) async {
+  Future<DriverProfileModel> upsertDriverProfile(
+    Map<String, dynamic> data,
+  ) async {
     try {
       return await remoteDataSource.upsertDriverProfile(data);
     } on DioException catch (e) {
@@ -83,7 +87,10 @@ class DriverRepositoryImpl implements DriverRepository {
   }
 
   @override
-  Future<PartnerModel> updatePartner(String id, Map<String, dynamic> data) async {
+  Future<PartnerModel> updatePartner(
+    String id,
+    Map<String, dynamic> data,
+  ) async {
     try {
       return await remoteDataSource.updatePartner(id, data);
     } on DioException catch (e) {
@@ -105,7 +112,10 @@ class DriverRepositoryImpl implements DriverRepository {
   }
 
   @override
-  Future<PartnerDocumentModel> addDocument(String partnerId, Map<String, dynamic> data) async {
+  Future<PartnerDocumentModel> addDocument(
+    String partnerId,
+    Map<String, dynamic> data,
+  ) async {
     try {
       return await remoteDataSource.addDocument(partnerId, data);
     } on DioException catch (e) {
@@ -116,7 +126,11 @@ class DriverRepositoryImpl implements DriverRepository {
   }
 
   @override
-  Future<PartnerDocumentModel> updateDocument(String partnerId, String documentId, Map<String, dynamic> data) async {
+  Future<PartnerDocumentModel> updateDocument(
+    String partnerId,
+    String documentId,
+    Map<String, dynamic> data,
+  ) async {
     try {
       return await remoteDataSource.updateDocument(partnerId, documentId, data);
     } on DioException catch (e) {
@@ -171,6 +185,17 @@ class DriverRepositoryImpl implements DriverRepository {
   }
 
   @override
+  Future<void> declineRide(String rideId) async {
+    try {
+      await remoteDataSource.declineRide(rideId);
+    } on DioException catch (e) {
+      throw _handleDioException(e);
+    } catch (e) {
+      throw ServerFailure(e.toString());
+    }
+  }
+
+  @override
   Future<RideModel> completeRide(String rideId) async {
     try {
       return await remoteDataSource.completeRide(rideId);
@@ -182,7 +207,11 @@ class DriverRepositoryImpl implements DriverRepository {
   }
 
   @override
-  Future<RideModel> transitionRide(String rideId, String status, {String? pin}) async {
+  Future<RideModel> transitionRide(
+    String rideId,
+    String status, {
+    String? pin,
+  }) async {
     try {
       return await remoteDataSource.transitionRide(rideId, status, pin: pin);
     } on DioException catch (e) {
@@ -217,7 +246,9 @@ class DriverRepositoryImpl implements DriverRepository {
   @override
   Future<List<VehicleModel>> listVehicles({String? driverProfileId}) async {
     try {
-      return await remoteDataSource.listVehicles(driverProfileId: driverProfileId);
+      return await remoteDataSource.listVehicles(
+        driverProfileId: driverProfileId,
+      );
     } on DioException catch (e) {
       throw _handleDioException(e);
     } catch (e) {
@@ -237,7 +268,10 @@ class DriverRepositoryImpl implements DriverRepository {
   }
 
   @override
-  Future<VehicleModel> updateVehicle(String id, Map<String, dynamic> data) async {
+  Future<VehicleModel> updateVehicle(
+    String id,
+    Map<String, dynamic> data,
+  ) async {
     try {
       return await remoteDataSource.updateVehicle(id, data);
     } on DioException catch (e) {
@@ -270,7 +304,10 @@ class DriverRepositoryImpl implements DriverRepository {
   }
 
   @override
-  Future<UserPreferencesModel> updateUserPreferences(String userId, Map<String, dynamic> data) async {
+  Future<UserPreferencesModel> updateUserPreferences(
+    String userId,
+    Map<String, dynamic> data,
+  ) async {
     try {
       return await remoteDataSource.updateUserPreferences(userId, data);
     } on DioException catch (e) {
@@ -281,7 +318,10 @@ class DriverRepositoryImpl implements DriverRepository {
   }
 
   @override
-  Future<List<UserHistoryModel>> getUserHistory(String userId, {int limit = 20}) async {
+  Future<List<UserHistoryModel>> getUserHistory(
+    String userId, {
+    int limit = 20,
+  }) async {
     try {
       return await remoteDataSource.getUserHistory(userId, limit: limit);
     } on DioException catch (e) {
@@ -297,7 +337,7 @@ class DriverRepositoryImpl implements DriverRepository {
         e.error is SocketException) {
       return NetworkFailure();
     }
-    
+
     final message = e.response?.data?['message'] ?? e.message;
     return ServerFailure(message.toString());
   }

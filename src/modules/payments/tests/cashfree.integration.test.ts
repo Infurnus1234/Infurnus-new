@@ -153,6 +153,10 @@ describe('INFURNUS Payments - Cashfree Provider Integration', () => {
       markPinVerified: vi.fn(),
       isPinVerified: vi.fn(),
       listAvailable: vi.fn(),
+      offerDispatch: vi.fn().mockResolvedValue(false),
+      finishDispatchAttempt: vi.fn().mockResolvedValue(false),
+      listAvailableForDriver: vi.fn().mockResolvedValue([]),
+      failDispatch: vi.fn().mockResolvedValue(null),
       listForDriver: vi.fn(),
       recordBreadcrumbAndAccumulateDistance: vi.fn(),
     };

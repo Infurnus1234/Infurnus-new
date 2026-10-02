@@ -1,5 +1,7 @@
 import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../../core/services/location_service.dart';
 import '../../../../core/services/socket_service.dart';
 import '../../../customer/data/models/ride_model.dart';
@@ -62,7 +64,9 @@ class DriverRideNotifier extends StateNotifier<DriverRideState> {
 
   void _subscribeToSocketEvents() {
     _eventSubscription?.cancel();
-    _eventSubscription = ref.read(socketServiceProvider).eventStream.listen((event) {
+    _eventSubscription = ref.read(socketServiceProvider).eventStream.listen((
+      event,
+    ) {
       _handleSocketEvent(event);
     });
   }
@@ -70,7 +74,9 @@ class DriverRideNotifier extends StateNotifier<DriverRideState> {
   void _handleSocketEvent(SocketServerEvent event) {
     switch (event.name) {
       case 'ride:incoming':
-        final rideData = event.data is Map ? event.data['ride'] ?? event.data : null;
+        final rideData = event.data is Map
+            ? event.data['ride'] ?? event.data
+            : null;
         if (rideData != null && rideData is Map<String, dynamic>) {
           try {
             final newRide = RideModel.fromJson(rideData);
@@ -84,7 +90,9 @@ class DriverRideNotifier extends StateNotifier<DriverRideState> {
 
       case 'ride:taken':
       case 'ride:cancelled':
-        final rideId = event.data is Map ? (event.data['rideId'] ?? event.data['id']) : null;
+        final rideId = event.data is Map
+            ? (event.data['rideId'] ?? event.data['id'])
+            : null;
         if (rideId != null) {
           final currentList = List<RideModel>.from(state.availableRides);
           currentList.removeWhere((r) => r.id == rideId.toString());
@@ -125,7 +133,10 @@ class DriverRideNotifier extends StateNotifier<DriverRideState> {
       final rides = await ref.read(getAvailableRidesUseCaseProvider).execute();
       state = state.copyWith(availableRides: rides, isLoadingAvailable: false);
     } catch (e) {
-      state = state.copyWith(isLoadingAvailable: false, errorMessage: e.toString());
+      state = state.copyWith(
+        isLoadingAvailable: false,
+        errorMessage: e.toString(),
+      );
     }
   }
 
@@ -135,12 +146,22 @@ class DriverRideNotifier extends StateNotifier<DriverRideState> {
     state = state.copyWith(availableRides: currentList);
   }
 
+  Future<void> declineRide(String rideId) async {
+    try {
+      await ref.read(declineRideUseCaseProvider).execute(rideId);
+      dismissRide(rideId);
+      await fetchAvailableRides();
+    } catch (error) {
+      state = state.copyWith(errorMessage: error.toString());
+    }
+  }
+
   Future<void> acceptRide(String rideId) async {
     state = state.copyWith(isAccepting: true, errorMessage: null);
 
     try {
       final ride = await ref.read(acceptRideUseCaseProvider).execute(rideId);
-      
+
       final currentList = List<RideModel>.from(state.availableRides);
       currentList.removeWhere((r) => r.id == rideId);
 
@@ -154,23 +175,23 @@ class DriverRideNotifier extends StateNotifier<DriverRideState> {
       ref.read(socketServiceProvider).joinRide(rideId);
       _startLocationBroadcasting(rideId);
     } catch (e) {
-      state = state.copyWith(
-        isAccepting: false,
-        errorMessage: e.toString(),
-      );
+      state = state.copyWith(isAccepting: false, errorMessage: e.toString());
     }
   }
 
-  Future<void> transitionStatus(String rideId, String newStatus, {String? pin}) async {
+  Future<void> transitionStatus(
+    String rideId,
+    String newStatus, {
+    String? pin,
+  }) async {
     state = state.copyWith(isUpdatingStatus: true, errorMessage: null);
 
     try {
-      final ride = await ref.read(updateRideStatusUseCaseProvider).execute(rideId, newStatus, pin: pin);
+      final ride = await ref
+          .read(updateRideStatusUseCaseProvider)
+          .execute(rideId, newStatus, pin: pin);
 
-      state = state.copyWith(
-        isUpdatingStatus: false,
-        currentRide: ride,
-      );
+      state = state.copyWith(isUpdatingStatus: false, currentRide: ride);
 
       _handleRideStateChange(ride.status);
     } catch (e) {
@@ -184,21 +205,18 @@ class DriverRideNotifier extends StateNotifier<DriverRideState> {
   Future<bool> verifyPinAndStartRide(String rideId, String pin) async {
     final trimmed = pin.trim();
     if (trimmed.length != 4 || !RegExp(r'^\d{4}$').hasMatch(trimmed)) {
-      state = state.copyWith(errorMessage: 'Please enter a valid 4-digit pickup PIN');
+      state = state.copyWith(
+        errorMessage: 'Please enter a valid 4-digit pickup PIN',
+      );
       return false;
     }
 
     state = state.copyWith(isUpdatingStatus: true, errorMessage: null);
     try {
-      final ride = await ref.read(updateRideStatusUseCaseProvider).execute(
-        rideId,
-        'in_progress',
-        pin: trimmed,
-      );
-      state = state.copyWith(
-        isUpdatingStatus: false,
-        currentRide: ride,
-      );
+      final ride = await ref
+          .read(updateRideStatusUseCaseProvider)
+          .execute(rideId, 'in_progress', pin: trimmed);
+      state = state.copyWith(isUpdatingStatus: false, currentRide: ride);
       _handleRideStateChange(ride.status);
       return true;
     } catch (e) {
@@ -216,10 +234,7 @@ class DriverRideNotifier extends StateNotifier<DriverRideState> {
     try {
       final ride = await ref.read(completeRideUseCaseProvider).execute(rideId);
 
-      state = state.copyWith(
-        isUpdatingStatus: false,
-        currentRide: ride,
-      );
+      state = state.copyWith(isUpdatingStatus: false, currentRide: ride);
 
       _handleRideStateChange(RideStatus.completed);
     } catch (e) {
@@ -241,10 +256,14 @@ class DriverRideNotifier extends StateNotifier<DriverRideState> {
         return;
       }
 
-      final position = await ref.read(locationServiceProvider).getCurrentPosition();
+      final position = await ref
+          .read(locationServiceProvider)
+          .getCurrentPosition();
       if (position != null) {
         final now = DateTime.now();
-        ref.read(socketServiceProvider).updateDriverLocation(
+        ref
+            .read(socketServiceProvider)
+            .updateDriverLocation(
               rideId: rideId,
               latitude: position.latitude,
               longitude: position.longitude,
@@ -278,5 +297,5 @@ class DriverRideNotifier extends StateNotifier<DriverRideState> {
 
 final driverRideProvider =
     StateNotifierProvider<DriverRideNotifier, DriverRideState>((ref) {
-  return DriverRideNotifier(ref);
-});
+      return DriverRideNotifier(ref);
+    });

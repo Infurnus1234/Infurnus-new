@@ -1,12 +1,17 @@
+import 'dart:async';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../../core/services/location_service.dart';
+import '../../../../core/services/places_autocomplete_service.dart';
 import '../../../../shared/widgets/infurnus_button.dart';
-import '../../../../shared/widgets/infurnus_card.dart';
 import '../../../../shared/widgets/infurnus_text_field.dart';
+import '../../data/models/fleet_vehicle_model.dart';
+import '../providers/ride_use_case_providers.dart';
 import '../providers/ride_provider.dart';
 
 class LogisticsScreen extends ConsumerStatefulWidget {
@@ -31,9 +36,21 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
   final _weightController = TextEditingController(text: '15');
   final _quantityController = TextEditingController(text: '1');
 
-  String _selectedVehicle = 'mini_truck';
+  String _selectedVehicle = '';
   String _selectedCategory = 'General Goods';
   bool _needLoadingHelper = false;
+  bool _isLoadingVehicles = true;
+  bool _isSubmittingBooking = false;
+  List<FleetVehicleModel> _fleetVehicles = [];
+  Timer? _pickupAutocompleteTimer;
+  Timer? _destinationAutocompleteTimer;
+  CancelToken? _pickupAutocompleteToken;
+  CancelToken? _destinationAutocompleteToken;
+  List<PlaceSuggestion> _pickupSuggestions = [];
+  List<PlaceSuggestion> _destinationSuggestions = [];
+  bool _isLoadingPickupSuggestions = false;
+  bool _isLoadingDestinationSuggestions = false;
+  bool? _activeAutocompleteIsPickup;
 
   final List<String> _categories = [
     'General Goods',
@@ -53,8 +70,35 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _detectCurrentLocation();
-      _recalculateFare();
+      _fetchFleet();
     });
+  }
+
+  Future<void> _fetchFleet() async {
+    try {
+      final fleet = await ref.read(getFleetUseCaseProvider)(
+        sector: 'logistics',
+      );
+      if (!mounted) return;
+      setState(() {
+        _fleetVehicles = fleet;
+        _isLoadingVehicles = false;
+        if (fleet.isNotEmpty &&
+            !fleet.any((vehicle) => vehicle.category == _selectedVehicle)) {
+          _selectedVehicle = fleet.first.category;
+        }
+      });
+      _recalculateFare();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _isLoadingVehicles = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString()),
+          backgroundColor: logisticsOrange,
+        ),
+      );
+    }
   }
 
   Future<void> _detectCurrentLocation() async {
@@ -70,7 +114,198 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
         _pickupController.text = 'Current Location';
         _recalculateFare();
       }
-    } catch (_) {}
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error.toString()),
+            backgroundColor: logisticsOrange,
+          ),
+        );
+      }
+    }
+  }
+
+  void _onLocationQueryChanged(String query, {required bool isPickup}) {
+    final controller = isPickup ? _pickupController : _dropController;
+    final timer = isPickup
+        ? _pickupAutocompleteTimer
+        : _destinationAutocompleteTimer;
+    final token = isPickup
+        ? _pickupAutocompleteToken
+        : _destinationAutocompleteToken;
+    timer?.cancel();
+    token?.cancel();
+    _recalculateFare();
+
+    if (query.trim().length < 2) {
+      setState(() {
+        _activeAutocompleteIsPickup = null;
+        _pickupSuggestions = [];
+        _destinationSuggestions = [];
+        _isLoadingPickupSuggestions = false;
+        _isLoadingDestinationSuggestions = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _activeAutocompleteIsPickup = isPickup;
+      if (isPickup) {
+        _pickupSuggestions = [];
+        _isLoadingPickupSuggestions = true;
+      } else {
+        _destinationSuggestions = [];
+        _isLoadingDestinationSuggestions = true;
+      }
+    });
+
+    final cancelToken = CancelToken();
+    if (isPickup) {
+      _pickupAutocompleteToken = cancelToken;
+    } else {
+      _destinationAutocompleteToken = cancelToken;
+    }
+
+    final debounceTimer = Timer(const Duration(milliseconds: 250), () async {
+      try {
+        final suggestions = await ref
+            .read(placesAutocompleteServiceProvider)
+            .getSuggestions(query, cancelToken: cancelToken);
+        if (!mounted ||
+            cancelToken.isCancelled ||
+            controller.text.trim() != query.trim()) {
+          return;
+        }
+        setState(() {
+          if (isPickup) {
+            _pickupSuggestions = suggestions;
+            _isLoadingPickupSuggestions = false;
+          } else {
+            _destinationSuggestions = suggestions;
+            _isLoadingDestinationSuggestions = false;
+          }
+        });
+      } catch (_) {
+        if (mounted && !cancelToken.isCancelled) {
+          setState(() {
+            if (isPickup) {
+              _pickupSuggestions = [];
+              _isLoadingPickupSuggestions = false;
+            } else {
+              _destinationSuggestions = [];
+              _isLoadingDestinationSuggestions = false;
+            }
+          });
+        }
+      }
+    });
+    if (isPickup) {
+      _pickupAutocompleteTimer = debounceTimer;
+    } else {
+      _destinationAutocompleteTimer = debounceTimer;
+    }
+  }
+
+  void _selectLocationSuggestion(
+    PlaceSuggestion suggestion, {
+    required bool isPickup,
+  }) {
+    final latitude = suggestion.latitude;
+    final longitude = suggestion.longitude;
+    if (latitude == null || longitude == null) return;
+
+    (isPickup ? _pickupAutocompleteTimer : _destinationAutocompleteTimer)
+        ?.cancel();
+    (isPickup ? _pickupAutocompleteToken : _destinationAutocompleteToken)
+        ?.cancel();
+
+    final address = suggestion.toString();
+    final coordinates = LatLng(latitude, longitude);
+    setState(() {
+      _activeAutocompleteIsPickup = null;
+      if (isPickup) {
+        _pickupController.text = address;
+        _pickupSuggestions = [];
+        _isLoadingPickupSuggestions = false;
+      } else {
+        _dropController.text = address;
+        _destinationSuggestions = [];
+        _isLoadingDestinationSuggestions = false;
+      }
+    });
+
+    final notifier = ref.read(rideProvider.notifier);
+    if (isPickup) {
+      notifier.setPickupCoords(coordinates, address: address);
+    } else {
+      notifier.setDestinationCoords(coordinates, address: address);
+    }
+  }
+
+  Widget _buildLocationSuggestions({required bool isPickup}) {
+    if (_activeAutocompleteIsPickup != isPickup) return const SizedBox.shrink();
+    final suggestions = isPickup ? _pickupSuggestions : _destinationSuggestions;
+    final isLoading = isPickup
+        ? _isLoadingPickupSuggestions
+        : _isLoadingDestinationSuggestions;
+
+    return Container(
+      margin: const EdgeInsets.only(top: 6, bottom: 8),
+      decoration: BoxDecoration(
+        color: cardBg,
+        border: Border.all(color: borderCard),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: isLoading
+          ? const Padding(
+              padding: EdgeInsets.all(14),
+              child: Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          : suggestions.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.all(14),
+              child: Text(
+                'No locations found',
+                style: TextStyle(color: textGray, fontSize: 13),
+              ),
+            )
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final suggestion in suggestions)
+                  ListTile(
+                    dense: true,
+                    leading: const Icon(
+                      Icons.location_on_outlined,
+                      color: logisticsOrange,
+                    ),
+                    title: Text(
+                      suggestion.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: textWhite),
+                    ),
+                    subtitle: Text(
+                      suggestion.subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: textGray),
+                    ),
+                    onTap: () => _selectLocationSuggestion(
+                      suggestion,
+                      isPickup: isPickup,
+                    ),
+                  ),
+              ],
+            ),
+    );
   }
 
   @override
@@ -80,6 +315,10 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
     _itemDescController.dispose();
     _weightController.dispose();
     _quantityController.dispose();
+    _pickupAutocompleteTimer?.cancel();
+    _destinationAutocompleteTimer?.cancel();
+    _pickupAutocompleteToken?.cancel();
+    _destinationAutocompleteToken?.cancel();
     super.dispose();
   }
 
@@ -101,7 +340,8 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
     });
   }
 
-  void _handleBooking() {
+  Future<void> _handleBooking() async {
+    if (_isSubmittingBooking) return;
     if (_pickupController.text.trim().isEmpty ||
         _dropController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -112,9 +352,56 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
       return;
     }
 
-    _recalculateFare();
-    ref.read(rideProvider.notifier).requestRide();
-    context.push('/ride-booking');
+    if (_selectedVehicle.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No freight vehicle is available.')),
+      );
+      return;
+    }
+
+    setState(() => _isSubmittingBooking = true);
+    final notifier = ref.read(rideProvider.notifier);
+    final previousRideId = ref.read(rideProvider).currentRide?.id;
+    try {
+      _recalculateFare();
+      if (ref.read(rideProvider).pickupCoords == null &&
+          !await notifier.geocodeAndSetPickup(_pickupController.text.trim())) {
+        throw Exception(
+          ref.read(rideProvider).errorMessage ??
+              'Pickup location is unavailable.',
+        );
+      }
+      if (ref.read(rideProvider).destinationCoords == null &&
+          !await notifier.geocodeAndSetDestination(
+            _dropController.text.trim(),
+          )) {
+        throw Exception(
+          ref.read(rideProvider).errorMessage ?? 'Destination is unavailable.',
+        );
+      }
+
+      await notifier.requestRide();
+      final ride = ref.read(rideProvider).currentRide;
+      if (!mounted) return;
+      if (ride == null || ride.id == previousRideId) {
+        throw Exception(
+          ref.read(rideProvider).errorMessage ??
+              'Ride booking was not created.',
+        );
+      }
+      context.push('/ride-booking');
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error.toString()),
+            backgroundColor: logisticsOrange,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmittingBooking = false);
+    }
   }
 
   @override
@@ -149,7 +436,7 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
                 ),
               ),
               child: Row(
-                children: [
+                children: const [
                   const Icon(
                     Icons.local_shipping_rounded,
                     color: logisticsOrange,
@@ -190,60 +477,76 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
               ),
               child: Column(
                 children: [
-                  Row(
+                  Column(
                     children: [
-                      const Icon(
-                        Icons.upload_rounded,
-                        color: brandGreen,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextField(
-                          controller: _pickupController,
-                          style: const TextStyle(color: textWhite),
-                          decoration: const InputDecoration(
-                            hintText:
-                                'Pickup Address (Warehouse / Shop / Home)',
-                            hintStyle: TextStyle(color: textGray),
-                            border: InputBorder.none,
-                            isDense: true,
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.upload_rounded,
+                            color: brandGreen,
+                            size: 20,
                           ),
-                          onChanged: (_) => _recalculateFare(),
-                        ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextField(
+                              controller: _pickupController,
+                              style: const TextStyle(color: textWhite),
+                              decoration: const InputDecoration(
+                                hintText:
+                                    'Pickup Address (Warehouse / Shop / Home)',
+                                hintStyle: TextStyle(color: textGray),
+                                border: InputBorder.none,
+                                isDense: true,
+                              ),
+                              onChanged: (query) => _onLocationQueryChanged(
+                                query,
+                                isPickup: true,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.gps_fixed_rounded,
+                              size: 18,
+                              color: brandGreen,
+                            ),
+                            onPressed: _detectCurrentLocation,
+                          ),
+                        ],
                       ),
-                      IconButton(
-                        icon: const Icon(
-                          Icons.gps_fixed_rounded,
-                          size: 18,
-                          color: brandGreen,
-                        ),
-                        onPressed: _detectCurrentLocation,
-                      ),
+                      _buildLocationSuggestions(isPickup: true),
                     ],
                   ),
                   const Divider(height: 16, color: borderCard),
-                  Row(
+                  Column(
                     children: [
-                      const Icon(
-                        Icons.download_rounded,
-                        color: logisticsOrange,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextField(
-                          controller: _dropController,
-                          style: const TextStyle(color: textWhite),
-                          decoration: const InputDecoration(
-                            hintText: 'Delivery Destination Address',
-                            hintStyle: TextStyle(color: textGray),
-                            border: InputBorder.none,
-                            isDense: true,
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.download_rounded,
+                            color: logisticsOrange,
+                            size: 20,
                           ),
-                          onChanged: (_) => _recalculateFare(),
-                        ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextField(
+                              controller: _dropController,
+                              style: const TextStyle(color: textWhite),
+                              decoration: const InputDecoration(
+                                hintText: 'Delivery Destination Address',
+                                hintStyle: TextStyle(color: textGray),
+                                border: InputBorder.none,
+                                isDense: true,
+                              ),
+                              onChanged: (query) => _onLocationQueryChanged(
+                                query,
+                                isPickup: false,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
+                      _buildLocationSuggestions(isPickup: false),
                     ],
                   ),
                 ],
@@ -261,40 +564,34 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
+            if (_isLoadingVehicles)
+              const Center(child: CircularProgressIndicator())
+            else if (_fleetVehicles.isEmpty)
+              Column(
                 children: [
-                  _buildVehicleOption(
-                    id: 'bike',
-                    title: 'Bike Express',
-                    capacity: 'Up to 20 kg',
-                    icon: Icons.two_wheeler_rounded,
+                  const Text(
+                    'No active, approved freight vehicles are available.',
+                    style: TextStyle(color: textGray),
                   ),
-                  const SizedBox(width: 10),
-                  _buildVehicleOption(
-                    id: 'three_wheeler',
-                    title: '3-Wheeler Auto',
-                    capacity: 'Up to 300 kg',
-                    icon: Icons.electric_rickshaw_rounded,
-                  ),
-                  const SizedBox(width: 10),
-                  _buildVehicleOption(
-                    id: 'mini_truck',
-                    title: 'Tata Pickup 207 / 407',
-                    capacity: 'Up to 1000 kg',
-                    assetImagePath: 'assets/images/tata_pickup_207_407.png',
-                  ),
-                  const SizedBox(width: 10),
-                  _buildVehicleOption(
-                    id: 'heavy_truck',
-                    title: 'Pickup (Heightened)',
-                    capacity: 'Up to 1500 kg',
-                    assetImagePath: 'assets/images/tata_pickup_207_heightened.png',
+                  TextButton(
+                    onPressed: _fetchFleet,
+                    child: const Text('Retry'),
                   ),
                 ],
+              )
+            else
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (final vehicle in _fleetVehicles) ...[
+                      _buildVehicleOption(vehicle),
+                      if (vehicle != _fleetVehicles.last)
+                        const SizedBox(width: 10),
+                    ],
+                  ],
+                ),
               ),
-            ),
             const SizedBox(height: 24),
 
             // Item Details
@@ -502,7 +799,7 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
               text: rideState.fare != null
                   ? 'Book Logistics Delivery • ₹${rideState.fare!.toStringAsFixed(0)}'
                   : 'Book Logistics Delivery',
-              isLoading: rideState.isEstimatingFare,
+              isLoading: rideState.isEstimatingFare || _isSubmittingBooking,
               onPressed: _handleBooking,
             ),
             const SizedBox(height: 20),
@@ -512,18 +809,12 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
     );
   }
 
-  Widget _buildVehicleOption({
-    required String id,
-    required String title,
-    required String capacity,
-    IconData? icon,
-    String? assetImagePath,
-  }) {
-    final isSelected = _selectedVehicle == id;
+  Widget _buildVehicleOption(FleetVehicleModel vehicle) {
+    final isSelected = _selectedVehicle == vehicle.category;
 
     return GestureDetector(
       onTap: () {
-        setState(() => _selectedVehicle = id);
+        setState(() => _selectedVehicle = vehicle.category);
         _recalculateFare();
       },
       child: Container(
@@ -539,24 +830,14 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
         ),
         child: Column(
           children: [
-            if (assetImagePath != null)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: Image.asset(
-                  assetImagePath,
-                  height: 38,
-                  fit: BoxFit.contain,
-                ),
-              )
-            else if (icon != null)
-              Icon(
-                icon,
-                size: 28,
-                color: isSelected ? logisticsOrange : textGray,
-              ),
+            Icon(
+              Icons.local_shipping_rounded,
+              size: 28,
+              color: isSelected ? logisticsOrange : textGray,
+            ),
             const SizedBox(height: 6),
             Text(
-              title,
+              vehicle.displayName,
               style: const TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
@@ -568,7 +849,9 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
             ),
             const SizedBox(height: 2),
             Text(
-              capacity,
+              vehicle.loadCapacityKg > 0
+                  ? '${vehicle.loadCapacityKg} kg capacity'
+                  : vehicle.category,
               style: const TextStyle(fontSize: 10, color: textGray),
               textAlign: TextAlign.center,
             ),

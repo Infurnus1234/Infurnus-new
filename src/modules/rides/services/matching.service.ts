@@ -14,6 +14,14 @@ export class MatchingService {
     sector?: string,
     vehicleCategory?: string,
   ): Promise<DriverCandidate | null> {
+    return (await this.findRankedDrivers(pickup, sector, vehicleCategory))[0] ?? null;
+  }
+
+  async findRankedDrivers(
+    pickup: Coordinates,
+    sector?: string,
+    vehicleCategory?: string,
+  ): Promise<DriverCandidate[]> {
     const staleBefore = new Date(Date.now() - env.DRIVER_LOCATION_STALE_SECONDS * 1000);
     const candidates =
       sector !== undefined || vehicleCategory !== undefined
@@ -34,8 +42,13 @@ export class MatchingService {
             staleBefore,
           );
 
-    if (candidates.length === 0) return null;
-    if (!this.maps) return candidates[0] ?? null;
+    if (candidates.length === 0 || !this.maps) {
+      return [...candidates].sort(
+        (left, right) =>
+          left.distanceMeters - right.distanceMeters ||
+          left.driverProfileId.localeCompare(right.driverProfileId),
+      );
+    }
 
     const routes = await this.maps.calculateMatrix(
       candidates.map((candidate) => ({
@@ -45,25 +58,22 @@ export class MatchingService {
       pickup,
     );
 
-    return (
-      candidates
-        .map((candidate) => ({
-          candidate,
-          route: routes.find(
-            (result) =>
-              result.origin.latitude === candidate.latitude &&
-              result.origin.longitude === candidate.longitude,
-          )?.route,
-        }))
-        .sort(
-          (left, right) =>
-            (left.route?.durationSeconds ?? Number.MAX_SAFE_INTEGER) -
-              (right.route?.durationSeconds ?? Number.MAX_SAFE_INTEGER) ||
-            left.candidate.distanceMeters - right.candidate.distanceMeters ||
-            left.candidate.driverProfileId.localeCompare(right.candidate.driverProfileId),
-        )[0]?.candidate ??
-      candidates[0] ??
-      null
-    );
+    return candidates
+      .map((candidate) => ({
+        candidate,
+        route: routes.find(
+          (result) =>
+            result.origin.latitude === candidate.latitude &&
+            result.origin.longitude === candidate.longitude,
+        )?.route,
+      }))
+      .sort(
+        (left, right) =>
+          (left.route?.durationSeconds ?? Number.MAX_SAFE_INTEGER) -
+            (right.route?.durationSeconds ?? Number.MAX_SAFE_INTEGER) ||
+          left.candidate.distanceMeters - right.candidate.distanceMeters ||
+          left.candidate.driverProfileId.localeCompare(right.candidate.driverProfileId),
+          )
+          .map(({ candidate }) => candidate);
   }
 }

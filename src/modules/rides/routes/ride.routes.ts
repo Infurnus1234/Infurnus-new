@@ -67,6 +67,8 @@ export function createRideRouter(controller: RideController, driverController?: 
 
     router.get('/driver/available', requireRoles('driver'), driverController.listAvailableRides);
 
+    router.post('/driver/available/:id/decline', requireRoles('driver'), driverController.decline);
+
     router.get('/driver/current-trip', requireRoles('driver'), driverController.getCurrentTrip);
 
     // ==========================================================

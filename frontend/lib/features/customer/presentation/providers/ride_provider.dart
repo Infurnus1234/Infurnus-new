@@ -75,7 +75,7 @@ class RideState {
     this.pickupCoords,
     this.destinationCoords,
     this.selectedSector = 'passenger',
-    this.selectedTier = 'mini',
+    this.selectedTier = '',
     this.fare,
     this.fareEstimate,
     this.distanceKm,
@@ -107,10 +107,13 @@ class RideState {
     String? destination,
     LatLng? pickupCoords,
     LatLng? destinationCoords,
+    bool clearPickupCoords = false,
+    bool clearDestinationCoords = false,
     String? selectedSector,
     String? selectedTier,
     double? fare,
     FareEstimateModel? fareEstimate,
+    bool clearFareData = false,
     double? distanceKm,
     int? durationMinutes,
     int? waitingMinutes,
@@ -137,14 +140,20 @@ class RideState {
       status: status ?? this.status,
       pickup: pickup ?? this.pickup,
       destination: destination ?? this.destination,
-      pickupCoords: pickupCoords ?? this.pickupCoords,
-      destinationCoords: destinationCoords ?? this.destinationCoords,
+      pickupCoords: clearPickupCoords
+          ? null
+          : pickupCoords ?? this.pickupCoords,
+      destinationCoords: clearDestinationCoords
+          ? null
+          : destinationCoords ?? this.destinationCoords,
       selectedSector: selectedSector ?? this.selectedSector,
       selectedTier: selectedTier ?? this.selectedTier,
-      fare: fare ?? this.fare,
-      fareEstimate: fareEstimate ?? this.fareEstimate,
-      distanceKm: distanceKm ?? this.distanceKm,
-      durationMinutes: durationMinutes ?? this.durationMinutes,
+      fare: clearFareData ? null : fare ?? this.fare,
+      fareEstimate: clearFareData ? null : fareEstimate ?? this.fareEstimate,
+      distanceKm: clearFareData ? null : distanceKm ?? this.distanceKm,
+      durationMinutes: clearFareData
+          ? null
+          : durationMinutes ?? this.durationMinutes,
       waitingMinutes: waitingMinutes ?? this.waitingMinutes,
       isEstimatingFare: isEstimatingFare ?? this.isEstimatingFare,
       driverName: driverName ?? this.driverName,
@@ -171,6 +180,7 @@ class RideState {
 class RideNotifier extends StateNotifier<RideState> {
   final Ref ref;
   StreamSubscription<SocketServerEvent>? _eventSubscription;
+  int _fareEstimateGeneration = 0;
 
   RideNotifier(this.ref) : super(RideState()) {
     _subscribeToSocketEvents();
@@ -270,11 +280,19 @@ class RideNotifier extends StateNotifier<RideState> {
     LatLng? pickupCoords,
     LatLng? destCoords,
   }) {
+    _fareEstimateGeneration++;
+    final preservePickupCoords = state.pickup == pickup;
+    final preserveDestinationCoords = state.destination == dest;
     state = state.copyWith(
       pickup: pickup,
       destination: dest,
-      pickupCoords: pickupCoords ?? state.pickupCoords,
-      destinationCoords: destCoords ?? state.destinationCoords,
+      pickupCoords:
+          pickupCoords ?? (preservePickupCoords ? state.pickupCoords : null),
+      destinationCoords:
+          destCoords ??
+          (preserveDestinationCoords ? state.destinationCoords : null),
+      clearFareData: true,
+      isEstimatingFare: false,
       status: RideStatus.initial,
       errorMessage: null,
       lastDriverLocation: null,
@@ -289,15 +307,34 @@ class RideNotifier extends StateNotifier<RideState> {
     final trimmed = address.trim();
     if (trimmed.isEmpty) return false;
 
-    if (trimmed.toLowerCase().contains('current location')) {
+    if (trimmed.toLowerCase() == 'current location') {
       if (state.pickupCoords != null) {
         setPickupCoords(state.pickupCoords!, address: 'Current Location');
         return true;
       }
-      final pos = await ref.read(locationServiceProvider).getCurrentPosition();
-      if (pos != null) {
-        setPickupCoords(LatLng(pos.latitude, pos.longitude), address: 'Current Location');
+      try {
+        final pos = await ref
+            .read(locationServiceProvider)
+            .getCurrentPosition();
+        if (pos == null) {
+          throw const LocationUnavailableException(
+            'Your current location is unavailable. Check GPS and try again.',
+          );
+        }
+        setPickupCoords(
+          LatLng(pos.latitude, pos.longitude),
+          address: 'Current Location',
+        );
         return true;
+      } on LocationUnavailableException catch (error) {
+        state = state.copyWith(errorMessage: error.message);
+        return false;
+      } catch (_) {
+        state = state.copyWith(
+          errorMessage:
+              'Your current location is unavailable. Check GPS and try again.',
+        );
+        return false;
       }
     }
 
@@ -319,15 +356,37 @@ class RideNotifier extends StateNotifier<RideState> {
     final trimmed = address.trim();
     if (trimmed.isEmpty) return false;
 
-    if (trimmed.toLowerCase().contains('current location')) {
+    if (trimmed.toLowerCase() == 'current location') {
       if (state.destinationCoords != null) {
-        setDestinationCoords(state.destinationCoords!, address: 'Current Location');
+        setDestinationCoords(
+          state.destinationCoords!,
+          address: 'Current Location',
+        );
         return true;
       }
-      final pos = await ref.read(locationServiceProvider).getCurrentPosition();
-      if (pos != null) {
-        setDestinationCoords(LatLng(pos.latitude, pos.longitude), address: 'Current Location');
+      try {
+        final pos = await ref
+            .read(locationServiceProvider)
+            .getCurrentPosition();
+        if (pos == null) {
+          throw const LocationUnavailableException(
+            'Your current location is unavailable. Check GPS and try again.',
+          );
+        }
+        setDestinationCoords(
+          LatLng(pos.latitude, pos.longitude),
+          address: 'Current Location',
+        );
         return true;
+      } on LocationUnavailableException catch (error) {
+        state = state.copyWith(errorMessage: error.message);
+        return false;
+      } catch (_) {
+        state = state.copyWith(
+          errorMessage:
+              'Your current location is unavailable. Check GPS and try again.',
+        );
+        return false;
       }
     }
 
@@ -355,6 +414,20 @@ class RideNotifier extends StateNotifier<RideState> {
     }
   }
 
+  void updatePickupAddress(String address) {
+    _fareEstimateGeneration++;
+    state = state.copyWith(
+      pickup: address,
+      clearPickupCoords: true,
+      clearFareData: true,
+      isEstimatingFare: false,
+    );
+  }
+
+  void setPickupAddress(String address) {
+    state = state.copyWith(pickup: address);
+  }
+
   void setDestinationCoords(LatLng coords, {String? address}) {
     state = state.copyWith(
       destinationCoords: coords,
@@ -365,17 +438,18 @@ class RideNotifier extends StateNotifier<RideState> {
     }
   }
 
-  void selectSector(String sector) {
-    String defaultTier = 'mini';
-    if (sector == 'logistics') {
-      defaultTier = 'mini_truck';
-    } else if (sector == 'service') {
-      defaultTier = 'ambulance';
-    } else if (sector == 'premium') {
-      defaultTier = 'fortuner';
-    }
+  void updateDestinationAddress(String address) {
+    _fareEstimateGeneration++;
+    state = state.copyWith(
+      destination: address,
+      clearDestinationCoords: true,
+      clearFareData: true,
+      isEstimatingFare: false,
+    );
+  }
 
-    state = state.copyWith(selectedSector: sector, selectedTier: defaultTier);
+  void selectSector(String sector) {
+    state = state.copyWith(selectedSector: sector, selectedTier: '');
     estimateRouteFare();
   }
 
@@ -404,15 +478,29 @@ class RideNotifier extends StateNotifier<RideState> {
     estimateRouteFare();
   }
 
-  Future<void> estimateRouteFare() async {
-    if (state.pickupCoords == null || state.destinationCoords == null) {
-      return;
+  Future<bool> estimateRouteFare() async {
+    final generation = ++_fareEstimateGeneration;
+    if (state.pickupCoords == null ||
+        state.destinationCoords == null ||
+        state.selectedTier.trim().isEmpty) {
+      state = state.copyWith(clearFareData: true, isEstimatingFare: false);
+      return false;
     }
 
     final pickup = state.pickupCoords!;
     final destination = state.destinationCoords!;
+    final sector = state.selectedSector;
+    final vehicleCategory = state.selectedTier;
+    final goods = state.goods;
+    final serviceDetails = state.serviceDetails;
+    final rentalDetails = state.rentalDetails;
+    final waitingMinutes = state.waitingMinutes;
 
-    state = state.copyWith(isEstimatingFare: true);
+    state = state.copyWith(
+      isEstimatingFare: true,
+      clearFareData: true,
+      errorMessage: null,
+    );
 
     try {
       final payload = <String, dynamic>{
@@ -421,42 +509,42 @@ class RideNotifier extends StateNotifier<RideState> {
           'latitude': destination.latitude,
           'longitude': destination.longitude,
         },
-        'sector': state.selectedSector,
-        'vehicleCategory': state.selectedTier,
+        'sector': sector,
+        'vehicleCategory': vehicleCategory,
       };
 
-      if (state.goods != null) {
-        payload['goods'] = state.goods;
-        if (state.goods!['weightKg'] != null) {
-          payload['weightKg'] = state.goods!['weightKg'];
+      if (goods != null) {
+        payload['goods'] = goods;
+        if (goods['weightKg'] != null) {
+          payload['weightKg'] = goods['weightKg'];
         }
-        if (state.goods!['hasLoadingAssistance'] != null ||
-            state.goods!['loadingAssistance'] != null) {
+        if (goods['hasLoadingAssistance'] != null ||
+            goods['loadingAssistance'] != null) {
           payload['hasLoadingAssistance'] =
-              state.goods!['hasLoadingAssistance'] ??
-              state.goods!['loadingAssistance'];
+              goods['hasLoadingAssistance'] ?? goods['loadingAssistance'];
         }
       }
-      if (state.serviceDetails != null) {
-        payload['serviceDetails'] = state.serviceDetails;
+      if (serviceDetails != null) {
+        payload['serviceDetails'] = serviceDetails;
       }
-      if (state.rentalDetails != null) {
-        payload['rentalDetails'] = state.rentalDetails;
-        if (state.rentalDetails!['hours'] != null) {
-          payload['rentalHours'] = state.rentalDetails!['hours'];
+      if (rentalDetails != null) {
+        payload['rentalDetails'] = rentalDetails;
+        if (rentalDetails['hours'] != null) {
+          payload['rentalHours'] = rentalDetails['hours'];
         }
-        if (state.rentalDetails!['fuelRatePerKm'] != null) {
-          payload['fuelRatePerKm'] = state.rentalDetails!['fuelRatePerKm'];
+        if (rentalDetails['fuelRatePerKm'] != null) {
+          payload['fuelRatePerKm'] = rentalDetails['fuelRatePerKm'];
         }
       }
-      if (state.waitingMinutes != null && state.waitingMinutes! > 0) {
-        payload['waitingMinutes'] = state.waitingMinutes;
+      if (waitingMinutes != null && waitingMinutes > 0) {
+        payload['waitingMinutes'] = waitingMinutes;
       }
 
       final estimate = await ref
           .read(estimateFareUseCaseProvider)
           .execute(payload);
 
+      if (generation != _fareEstimateGeneration) return false;
       state = state.copyWith(
         fareEstimate: estimate,
         fare: estimate.grossAmount,
@@ -465,11 +553,14 @@ class RideNotifier extends StateNotifier<RideState> {
         isEstimatingFare: false,
         errorMessage: null,
       );
+      return true;
     } catch (e) {
+      if (generation != _fareEstimateGeneration) return false;
       state = state.copyWith(
         isEstimatingFare: false,
         errorMessage: 'Fare calculation unavailable: ${e.toString()}',
       );
+      return false;
     }
   }
 
@@ -486,6 +577,17 @@ class RideNotifier extends StateNotifier<RideState> {
     state = state.copyWith(status: RideStatus.searching, errorMessage: null);
 
     try {
+      final quoteReady = await estimateRouteFare();
+      if (!quoteReady || state.fareEstimate == null) {
+        state = state.copyWith(
+          status: RideStatus.error,
+          errorMessage:
+              state.errorMessage ??
+              'A current fare estimate is required to book.',
+        );
+        return;
+      }
+
       final pickup = state.pickupCoords!;
       final destination = state.destinationCoords!;
 
@@ -497,7 +599,6 @@ class RideNotifier extends StateNotifier<RideState> {
         },
         'pickupAddress': state.pickup ?? 'Current Location',
         'destinationAddress': state.destination ?? 'Destination',
-        if (state.fare != null) 'fareEstimate': state.fare!,
         'sector': state.selectedSector,
         'vehicleCategory': state.selectedTier,
       };

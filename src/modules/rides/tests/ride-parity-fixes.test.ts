@@ -98,13 +98,33 @@ describe('BUG-P3-02 & BUG-P3-04: Parity Fixes — Real Details & Secure PIN', ()
           return createMockRide({ id, pin: '7391' });
         }),
       };
+      const fareEstimator = {
+        estimate: vi.fn().mockResolvedValue({ grossAmount: 25000 }),
+      };
 
-      const service = new RideService(mockRepo as RideRepository);
+      const service = new RideService(
+        mockRepo as RideRepository,
+        undefined,
+        undefined,
+        fareEstimator as never,
+      );
       const created = await service.createRide('cust-uuid-1', {
         pickup: { latitude: 12.9716, longitude: 77.5946 },
         destination: { latitude: 12.9352, longitude: 77.6245 },
+        sector: 'passenger',
+        vehicleCategory: 'sedan',
+        fareEstimate: 1,
       });
 
+      expect(fareEstimator.estimate).toHaveBeenCalledWith(
+        { latitude: 12.9716, longitude: 77.5946 },
+        { latitude: 12.9352, longitude: 77.6245 },
+        { sector: 'passenger', vehicleCategory: 'sedan' },
+      );
+      expect(mockRepo.create).toHaveBeenCalledWith(
+        'cust-uuid-1',
+        expect.objectContaining({ fareEstimate: 250 }),
+      );
       expect(created.pin).toBe('7391');
       expect(created.pin).not.toBe('5924'); // Confirms removal of hardcoded 5924
 
@@ -114,11 +134,11 @@ describe('BUG-P3-02 & BUG-P3-04: Parity Fixes — Real Details & Secure PIN', ()
 
     it('driver listing masks the PIN (pin is null)', async () => {
       const mockRepo: Partial<RideRepository> = {
-        listAvailable: vi.fn().mockResolvedValue([createMockRide({ pin: null })]),
+        listAvailableForDriver: vi.fn().mockResolvedValue([createMockRide({ pin: null })]),
       };
 
       const service = new RideService(mockRepo as RideRepository);
-      const available = await service.listAvailableRides();
+      const available = await service.listAvailableRides('driver-profile-uuid');
 
       expect(available[0]?.pin).toBeNull();
     });

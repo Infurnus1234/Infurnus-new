@@ -4,6 +4,8 @@ import { createRideSchema, fareEstimateSchema, listRidesSchema } from '../schema
 const validRide = {
   pickup: { latitude: 12.9716, longitude: 77.5946 },
   destination: { latitude: 12.9352, longitude: 77.6245 },
+  sector: 'passenger',
+  vehicleCategory: 'mini',
 };
 
 describe('ride schemas', () => {
@@ -46,6 +48,13 @@ describe('ride schemas', () => {
         },
       }),
     ).toThrow();
+  });
+
+  it('requires a selected sector and vehicle category for estimates and bookings', () => {
+    const { sector: _sector, vehicleCategory: _vehicleCategory, ...routeOnly } = validRide;
+
+    expect(() => createRideSchema.parse(routeOnly)).toThrow();
+    expect(() => fareEstimateSchema.parse(routeOnly)).toThrow();
   });
 
   it('rejects unexpected fields from fare estimate requests', () => {

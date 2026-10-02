@@ -4,6 +4,9 @@ import { PostgresRideRepository } from '../repositories/ride.repository.js';
 import { RideService } from '../services/ride.service.js';
 import { MatchingService } from '../services/matching.service.js';
 
+const inMemoryTransaction = async <T>(callback: (client: never) => Promise<T>) =>
+  callback({} as never);
+
 describe('Phase 4 Step 3: Sector & Category Matching and Acceptance Isolation', () => {
   describe('MatchingService & PostgresDriverRepository Sector Filtering', () => {
     it('passes sector and vehicleCategory to driver repository findNearbyEligible', async () => {
@@ -88,10 +91,12 @@ describe('Phase 4 Step 3: Sector & Category Matching and Acceptance Isolation', 
       const sql = queryMock.mock.calls[0]![0] as string;
       const params = queryMock.mock.calls[0]![1] as unknown[];
 
-      expect(sql).toContain('(v.sector = $6');
-      expect(sql).toContain('OR v.sector IS NULL)');
-      expect(sql).toContain('(v.category = $7');
-      expect(sql).toContain('OR v.category IS NULL)');
+      expect(sql).toContain('v.sector = $6');
+      expect(sql).not.toContain('v.sector IS NULL');
+      expect(sql).toContain('v.category = $7');
+      expect(sql).not.toContain('v.category IS NULL');
+      expect(sql).toContain("u.status = 'active'");
+      expect(sql).toContain('COALESCE(active_rides.count, 0) = 0');
       expect(params[5]).toBe('service');
       expect(params[6]).toBe('jcb');
     });
@@ -117,9 +122,13 @@ describe('Phase 4 Step 3: Sector & Category Matching and Acceptance Isolation', 
         .trim();
 
       expect(normalizedSql).toContain('v.sector = r.sector');
-      expect(normalizedSql).toContain(
-        '(r.vehicle_category IS NULL OR v.category = r.vehicle_category)',
-      );
+      expect(normalizedSql).toContain('v.category = r.vehicle_category');
+      expect(normalizedSql).not.toContain('r.vehicle_category IS NULL');
+      expect(normalizedSql).toContain('v.verification_status =');
+      expect(normalizedSql).toContain('dp.active_vehicle_id');
+      expect(normalizedSql).toContain('ST_DWithin');
+      expect(normalizedSql).toContain('r.pickup_location');
+      expect(normalizedSql).toContain('active_ride.status NOT IN');
     });
 
     it('returns mapped ride when matching vehicle sector and category accepts', async () => {
@@ -172,7 +181,13 @@ describe('Phase 4 Step 3: Sector & Category Matching and Acceptance Isolation', 
         setBusy: vi.fn().mockResolvedValue(true),
       };
 
-      const service = new RideService(rideRepo as never, driverRepo as never);
+      const service = new RideService(
+        rideRepo as never,
+        driverRepo as never,
+        undefined,
+        undefined,
+        inMemoryTransaction as never,
+      );
 
       await expect(service.acceptRide('driver-wrong-sector', 'ride-logistics')).rejects.toThrow(
         expect.objectContaining({
@@ -193,7 +208,13 @@ describe('Phase 4 Step 3: Sector & Category Matching and Acceptance Isolation', 
         setBusy: vi.fn().mockResolvedValue(false),
       };
 
-      const service = new RideService(rideRepo as never, driverRepo as never);
+      const service = new RideService(
+        rideRepo as never,
+        driverRepo as never,
+        undefined,
+        undefined,
+        inMemoryTransaction as never,
+      );
 
       await expect(service.acceptRide('driver-busy', 'ride-1')).rejects.toThrow(
         expect.objectContaining({
@@ -211,7 +232,13 @@ describe('Phase 4 Step 3: Sector & Category Matching and Acceptance Isolation', 
         accept: vi.fn().mockRejectedValue(pgError),
       };
 
-      const service = new RideService(rideRepo as never);
+      const service = new RideService(
+        rideRepo as never,
+        undefined,
+        undefined,
+        undefined,
+        inMemoryTransaction as never,
+      );
 
       await expect(service.acceptRide('driver-busy', 'ride-1')).rejects.toThrow(
         expect.objectContaining({

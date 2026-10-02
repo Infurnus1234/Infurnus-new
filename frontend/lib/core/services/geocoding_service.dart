@@ -6,17 +6,18 @@ class GeocodingService {
   final Dio _dio;
 
   GeocodingService({Dio? dio})
-      : _dio = dio ??
-            Dio(
-              BaseOptions(
-                connectTimeout: const Duration(seconds: 6),
-                receiveTimeout: const Duration(seconds: 6),
-                headers: {
-                  'User-Agent': 'Infurnus-RideBooking/1.0',
-                  'Accept': 'application/json',
-                },
-              ),
-            );
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
+              connectTimeout: const Duration(seconds: 6),
+              receiveTimeout: const Duration(seconds: 6),
+              headers: {
+                'User-Agent': 'Infurnus-RideBooking/1.0',
+                'Accept': 'application/json',
+              },
+            ),
+          );
 
   /// Geocodes an address string to LatLng coordinates.
   /// First checks if input is already formatted as "lat, lng" coordinates.
@@ -47,11 +48,7 @@ class GeocodingService {
     try {
       final response = await _dio.get<List<dynamic>>(
         'https://nominatim.openstreetmap.org/search',
-        queryParameters: {
-          'q': trimmed,
-          'format': 'json',
-          'limit': 1,
-        },
+        queryParameters: {'q': trimmed, 'format': 'json', 'limit': 1},
       );
 
       if (response.statusCode == 200 &&
@@ -73,6 +70,23 @@ class GeocodingService {
     }
 
     return null;
+  }
+
+  Future<String?> reverseGeocode(LatLng coordinates) async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        'https://nominatim.openstreetmap.org/reverse',
+        queryParameters: {
+          'lat': coordinates.latitude,
+          'lon': coordinates.longitude,
+          'format': 'jsonv2',
+        },
+      );
+      final address = response.data?['display_name']?.toString().trim();
+      return address == null || address.isEmpty ? null : address;
+    } catch (_) {
+      return null;
+    }
   }
 }
 

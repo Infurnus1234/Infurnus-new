@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+
 import '../models/partner_model.dart';
 import '../models/partner_document_model.dart';
 import '../models/vehicle_model.dart';
@@ -18,9 +19,16 @@ abstract class DriverRemoteDataSource {
   Future<PartnerModel?> getMyPartner();
   Future<PartnerModel> updatePartner(String id, Map<String, dynamic> data);
   Future<List<PartnerDocumentModel>> listDocuments(String partnerId);
-  Future<PartnerDocumentModel> addDocument(String partnerId, Map<String, dynamic> data);
-  Future<PartnerDocumentModel> updateDocument(String partnerId, String documentId, Map<String, dynamic> data);
-  
+  Future<PartnerDocumentModel> addDocument(
+    String partnerId,
+    Map<String, dynamic> data,
+  );
+  Future<PartnerDocumentModel> updateDocument(
+    String partnerId,
+    String documentId,
+    Map<String, dynamic> data,
+  );
+
   Future<DriverProfileModel?> getDriverProfile();
   Future<DriverProfileModel> upsertDriverProfile(Map<String, dynamic> data);
   Future<DriverHistoryModel> getDriverHistory({int limit = 20});
@@ -29,6 +37,7 @@ abstract class DriverRemoteDataSource {
   Future<void> updateLocation(Map<String, dynamic> data);
   Future<List<RideModel>> getAvailableRides();
   Future<RideModel> acceptRide(String rideId);
+  Future<void> declineRide(String rideId);
   Future<RideModel> completeRide(String rideId);
   Future<RideModel> transitionRide(String rideId, String status, {String? pin});
   Future<bool> verifyPin(String rideId, String pin);
@@ -40,8 +49,14 @@ abstract class DriverRemoteDataSource {
   Future<VehicleModel> deactivateVehicle(String id);
 
   Future<UserPreferencesModel> getUserPreferences(String userId);
-  Future<UserPreferencesModel> updateUserPreferences(String userId, Map<String, dynamic> data);
-  Future<List<UserHistoryModel>> getUserHistory(String userId, {int limit = 20});
+  Future<UserPreferencesModel> updateUserPreferences(
+    String userId,
+    Map<String, dynamic> data,
+  );
+  Future<List<UserHistoryModel>> getUserHistory(
+    String userId, {
+    int limit = 20,
+  });
 
   // Assignment & Active Vehicle
   Future<Map<String, dynamic>> verifyAssignmentCode(String code);
@@ -61,7 +76,9 @@ abstract class DriverRemoteDataSource {
 
   // Provider Bank Details
   Future<ProviderBankAccountModel?> getProviderBankAccount();
-  Future<ProviderBankAccountModel> upsertProviderBankAccount(Map<String, dynamic> data);
+  Future<ProviderBankAccountModel> upsertProviderBankAccount(
+    Map<String, dynamic> data,
+  );
 
   // Support Tickets
   Future<SupportTicketModel> createSupportTicket(Map<String, dynamic> data);
@@ -115,19 +132,27 @@ class DriverRemoteDataSourceImpl implements DriverRemoteDataSource {
   }
 
   @override
-  Future<DriverProfileModel> upsertDriverProfile(Map<String, dynamic> data) async {
+  Future<DriverProfileModel> upsertDriverProfile(
+    Map<String, dynamic> data,
+  ) async {
     final response = await _dio.post('/rides/driver/profile', data: data);
     return DriverProfileModel.fromJson(response.data['data']);
   }
 
   @override
   Future<DriverHistoryModel> getDriverHistory({int limit = 20}) async {
-    final response = await _dio.get('/rides/driver/history', queryParameters: {'limit': limit});
+    final response = await _dio.get(
+      '/rides/driver/history',
+      queryParameters: {'limit': limit},
+    );
     return DriverHistoryModel.fromJson(response.data['data']);
   }
 
   @override
-  Future<PartnerModel> updatePartner(String id, Map<String, dynamic> data) async {
+  Future<PartnerModel> updatePartner(
+    String id,
+    Map<String, dynamic> data,
+  ) async {
     final response = await _dio.patch('/partners/$id', data: data);
     return PartnerModel.fromJson(response.data['data']);
   }
@@ -140,14 +165,27 @@ class DriverRemoteDataSourceImpl implements DriverRemoteDataSource {
   }
 
   @override
-  Future<PartnerDocumentModel> addDocument(String partnerId, Map<String, dynamic> data) async {
-    final response = await _dio.post('/partners/$partnerId/documents', data: data);
+  Future<PartnerDocumentModel> addDocument(
+    String partnerId,
+    Map<String, dynamic> data,
+  ) async {
+    final response = await _dio.post(
+      '/partners/$partnerId/documents',
+      data: data,
+    );
     return PartnerDocumentModel.fromJson(response.data['data']);
   }
 
   @override
-  Future<PartnerDocumentModel> updateDocument(String partnerId, String documentId, Map<String, dynamic> data) async {
-    final response = await _dio.patch('/partners/$partnerId/documents/$documentId', data: data);
+  Future<PartnerDocumentModel> updateDocument(
+    String partnerId,
+    String documentId,
+    Map<String, dynamic> data,
+  ) async {
+    final response = await _dio.patch(
+      '/partners/$partnerId/documents/$documentId',
+      data: data,
+    );
     return PartnerDocumentModel.fromJson(response.data['data']);
   }
 
@@ -165,7 +203,9 @@ class DriverRemoteDataSourceImpl implements DriverRemoteDataSource {
   Future<List<RideModel>> getAvailableRides() async {
     final response = await _dio.get('/rides/driver/available');
     final List list = response.data['data'] ?? [];
-    return list.map((e) => RideModel.fromJson(e as Map<String, dynamic>)).toList();
+    return list
+        .map((e) => RideModel.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   @override
@@ -175,19 +215,25 @@ class DriverRemoteDataSourceImpl implements DriverRemoteDataSource {
   }
 
   @override
+  Future<void> declineRide(String rideId) async {
+    await _dio.post('/rides/driver/available/$rideId/decline');
+  }
+
+  @override
   Future<RideModel> completeRide(String rideId) async {
     final response = await _dio.post('/rides/$rideId/complete');
     return RideModel.fromJson(response.data['data']);
   }
 
   @override
-  Future<RideModel> transitionRide(String rideId, String status, {String? pin}) async {
+  Future<RideModel> transitionRide(
+    String rideId,
+    String status, {
+    String? pin,
+  }) async {
     final response = await _dio.post(
       '/rides/$rideId/status',
-      data: {
-        'status': status,
-        if (pin != null) 'pin': pin,
-      },
+      data: {'status': status, if (pin != null) 'pin': pin},
     );
     return RideModel.fromJson(response.data['data']);
   }
@@ -209,9 +255,12 @@ class DriverRemoteDataSourceImpl implements DriverRemoteDataSource {
 
   @override
   Future<List<VehicleModel>> listVehicles({String? driverProfileId}) async {
-    final response = await _dio.get('/vehicles', queryParameters: {
-      if (driverProfileId != null) 'driverProfileId': driverProfileId,
-    });
+    final response = await _dio.get(
+      '/vehicles',
+      queryParameters: {
+        if (driverProfileId != null) 'driverProfileId': driverProfileId,
+      },
+    );
     final List list = response.data['data'];
     return list.map((e) => VehicleModel.fromJson(e)).toList();
   }
@@ -223,7 +272,10 @@ class DriverRemoteDataSourceImpl implements DriverRemoteDataSource {
   }
 
   @override
-  Future<VehicleModel> updateVehicle(String id, Map<String, dynamic> data) async {
+  Future<VehicleModel> updateVehicle(
+    String id,
+    Map<String, dynamic> data,
+  ) async {
     final response = await _dio.patch('/vehicles/$id', data: data);
     return VehicleModel.fromJson(response.data['data']);
   }
@@ -241,14 +293,23 @@ class DriverRemoteDataSourceImpl implements DriverRemoteDataSource {
   }
 
   @override
-  Future<UserPreferencesModel> updateUserPreferences(String userId, Map<String, dynamic> data) async {
+  Future<UserPreferencesModel> updateUserPreferences(
+    String userId,
+    Map<String, dynamic> data,
+  ) async {
     final response = await _dio.patch('/users/$userId/preferences', data: data);
     return UserPreferencesModel.fromJson(response.data['data']);
   }
 
   @override
-  Future<List<UserHistoryModel>> getUserHistory(String userId, {int limit = 20}) async {
-    final response = await _dio.get('/users/$userId/history', queryParameters: {'limit': limit});
+  Future<List<UserHistoryModel>> getUserHistory(
+    String userId, {
+    int limit = 20,
+  }) async {
+    final response = await _dio.get(
+      '/users/$userId/history',
+      queryParameters: {'limit': limit},
+    );
     final List list = response.data['data'];
     return list.map((e) => UserHistoryModel.fromJson(e)).toList();
   }
@@ -259,19 +320,28 @@ class DriverRemoteDataSourceImpl implements DriverRemoteDataSource {
 
   @override
   Future<Map<String, dynamic>> verifyAssignmentCode(String code) async {
-    final response = await _dio.post('/rides/driver/assignment/verify-code', data: {'code': code});
+    final response = await _dio.post(
+      '/rides/driver/assignment/verify-code',
+      data: {'code': code},
+    );
     return Map<String, dynamic>.from(response.data['data']);
   }
 
   @override
   Future<Map<String, dynamic>> claimAssignmentCode(String code) async {
-    final response = await _dio.post('/rides/driver/assignment/claim-code', data: {'code': code});
+    final response = await _dio.post(
+      '/rides/driver/assignment/claim-code',
+      data: {'code': code},
+    );
     return Map<String, dynamic>.from(response.data['data']);
   }
 
   @override
   Future<void> setActiveVehicle(String vehicleId) async {
-    await _dio.post('/rides/driver/active-vehicle', data: {'vehicleId': vehicleId});
+    await _dio.post(
+      '/rides/driver/active-vehicle',
+      data: {'vehicleId': vehicleId},
+    );
   }
 
   @override
@@ -301,7 +371,9 @@ class DriverRemoteDataSourceImpl implements DriverRemoteDataSource {
   Future<List<VehicleModel>> listFleetVehicles() async {
     final response = await _dio.get('/fleet/vehicles');
     final List list = response.data['data'] ?? [];
-    return list.map((e) => VehicleModel.fromJson(e as Map<String, dynamic>)).toList();
+    return list
+        .map((e) => VehicleModel.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   @override
@@ -311,8 +383,12 @@ class DriverRemoteDataSourceImpl implements DriverRemoteDataSource {
   }
 
   @override
-  Future<Map<String, dynamic>> generateFleetAssignmentCode(String vehicleId) async {
-    final response = await _dio.post('/fleet/vehicles/$vehicleId/assignment-code');
+  Future<Map<String, dynamic>> generateFleetAssignmentCode(
+    String vehicleId,
+  ) async {
+    final response = await _dio.post(
+      '/fleet/vehicles/$vehicleId/assignment-code',
+    );
     return Map<String, dynamic>.from(response.data['data']);
   }
 
@@ -325,7 +401,9 @@ class DriverRemoteDataSourceImpl implements DriverRemoteDataSource {
   Future<List<FleetDriverModel>> listFleetDrivers() async {
     final response = await _dio.get('/fleet/drivers');
     final List list = response.data['data'] ?? [];
-    return list.map((e) => FleetDriverModel.fromJson(e as Map<String, dynamic>)).toList();
+    return list
+        .map((e) => FleetDriverModel.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   @override
@@ -359,7 +437,9 @@ class DriverRemoteDataSourceImpl implements DriverRemoteDataSource {
   }
 
   @override
-  Future<ProviderBankAccountModel> upsertProviderBankAccount(Map<String, dynamic> data) async {
+  Future<ProviderBankAccountModel> upsertProviderBankAccount(
+    Map<String, dynamic> data,
+  ) async {
     final response = await _dio.post('/provider/bank-account', data: data);
     return ProviderBankAccountModel.fromJson(response.data['data']);
   }
@@ -369,7 +449,9 @@ class DriverRemoteDataSourceImpl implements DriverRemoteDataSource {
   // ==========================================
 
   @override
-  Future<SupportTicketModel> createSupportTicket(Map<String, dynamic> data) async {
+  Future<SupportTicketModel> createSupportTicket(
+    Map<String, dynamic> data,
+  ) async {
     final response = await _dio.post('/support/tickets', data: data);
     return SupportTicketModel.fromJson(response.data['data']);
   }
@@ -378,7 +460,9 @@ class DriverRemoteDataSourceImpl implements DriverRemoteDataSource {
   Future<List<SupportTicketModel>> listSupportTickets() async {
     final response = await _dio.get('/support/tickets');
     final List list = response.data['data'] ?? [];
-    return list.map((e) => SupportTicketModel.fromJson(e as Map<String, dynamic>)).toList();
+    return list
+        .map((e) => SupportTicketModel.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   @override

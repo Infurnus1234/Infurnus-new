@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_button.dart';
 import '../../../../shared/widgets/infurnus_card.dart';
@@ -18,10 +19,12 @@ class DriverRideRequestScreen extends ConsumerStatefulWidget {
   const DriverRideRequestScreen({super.key, this.initialRideId});
 
   @override
-  ConsumerState<DriverRideRequestScreen> createState() => _DriverRideRequestScreenState();
+  ConsumerState<DriverRideRequestScreen> createState() =>
+      _DriverRideRequestScreenState();
 }
 
-class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScreen> {
+class _DriverRideRequestScreenState
+    extends ConsumerState<DriverRideRequestScreen> {
   final _rideIdController = TextEditingController();
   final _pinController = TextEditingController();
   bool _showManualEntry = false;
@@ -58,7 +61,10 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
         ? LatLng(currentRide.pickup.latitude, currentRide.pickup.longitude)
         : null;
     final destinationLatLng = currentRide != null
-        ? LatLng(currentRide.destination.latitude, currentRide.destination.longitude)
+        ? LatLng(
+            currentRide.destination.latitude,
+            currentRide.destination.longitude,
+          )
         : null;
 
     return Scaffold(
@@ -72,7 +78,8 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh available rides',
-            onPressed: () => ref.read(driverRideProvider.notifier).fetchAvailableRides(),
+            onPressed: () =>
+                ref.read(driverRideProvider.notifier).fetchAvailableRides(),
           ),
         ],
       ),
@@ -145,7 +152,10 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.amber[300]!),
       ),
-      child: Text(message, style: const TextStyle(color: Colors.black87, fontSize: 13)),
+      child: Text(
+        message,
+        style: const TextStyle(color: Colors.black87, fontSize: 13),
+      ),
     );
   }
 
@@ -159,7 +169,10 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.red[200]!),
       ),
-      child: Text(message, style: const TextStyle(color: Colors.red, fontSize: 13)),
+      child: Text(
+        message,
+        style: const TextStyle(color: Colors.red, fontSize: 13),
+      ),
     );
   }
 
@@ -176,7 +189,10 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
             children: [
               CircularProgressIndicator(color: AppColors.primaryGreen),
               SizedBox(height: 12),
-              Text('Checking for ride requests...', style: TextStyle(color: Colors.grey, fontSize: 13)),
+              Text(
+                'Checking for ride requests...',
+                style: TextStyle(color: Colors.grey, fontSize: 13),
+              ),
             ],
           ),
         ),
@@ -202,7 +218,8 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
           const SizedBox(height: 16),
           InfurnusOutlinedButton(
             text: 'Refresh Feed',
-            onPressed: () => ref.read(driverRideProvider.notifier).fetchAvailableRides(),
+            onPressed: () =>
+                ref.read(driverRideProvider.notifier).fetchAvailableRides(),
           ),
           const SizedBox(height: 8),
           _buildManualEntryToggle(isApproved, isOnline, state),
@@ -231,14 +248,23 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
                 children: [
                   Icon(Icons.flash_on, size: 14, color: AppColors.primaryGreen),
                   SizedBox(width: 4),
-                  Text('LIVE', style: TextStyle(color: AppColors.primaryGreen, fontSize: 11, fontWeight: FontWeight.bold)),
+                  Text(
+                    'LIVE',
+                    style: TextStyle(
+                      color: AppColors.primaryGreen,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ],
               ),
             ),
           ],
         ),
         const SizedBox(height: 12),
-        ...state.availableRides.map((ride) => _buildRideCard(ride, isApproved, isOnline, state)),
+        ...state.availableRides.map(
+          (ride) => _buildRideCard(ride, isApproved, isOnline, state),
+        ),
         _buildManualEntryToggle(isApproved, isOnline, state),
       ],
     );
@@ -273,7 +299,10 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
             children: [
               Text(
                 'Ride #${ride.id.substring(0, 8)}',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
               ),
               if (ride.fareEstimate != null)
                 Text(
@@ -290,14 +319,16 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
           _locationRow(
             Icons.my_location,
             'Pickup',
-            ride.pickupAddress ?? '${ride.pickup.latitude.toStringAsFixed(4)}, ${ride.pickup.longitude.toStringAsFixed(4)}',
+            ride.pickupAddress ??
+                '${ride.pickup.latitude.toStringAsFixed(4)}, ${ride.pickup.longitude.toStringAsFixed(4)}',
             AppColors.primaryGreen,
           ),
           const SizedBox(height: 6),
           _locationRow(
             Icons.location_on,
             'Destination',
-            ride.destinationAddress ?? '${ride.destination.latitude.toStringAsFixed(4)}, ${ride.destination.longitude.toStringAsFixed(4)}',
+            ride.destinationAddress ??
+                '${ride.destination.latitude.toStringAsFixed(4)}, ${ride.destination.longitude.toStringAsFixed(4)}',
             Colors.red,
           ),
           if (ride.sector == 'logistics' || ride.goods != null) ...[
@@ -310,7 +341,11 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
               Expanded(
                 child: InfurnusOutlinedButton(
                   text: 'Decline',
-                  onPressed: () => ref.read(driverRideProvider.notifier).dismissRide(ride.id),
+                  onPressed: state.isAccepting
+                      ? null
+                      : () => ref
+                            .read(driverRideProvider.notifier)
+                            .declineRide(ride.id),
                 ),
               ),
               const SizedBox(width: 8),
@@ -320,7 +355,9 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
                   isLoading: state.isAccepting,
                   onPressed: (!isApproved || !isOnline)
                       ? null
-                      : () => ref.read(driverRideProvider.notifier).acceptRide(ride.id),
+                      : () => ref
+                            .read(driverRideProvider.notifier)
+                            .acceptRide(ride.id),
                 ),
               ),
             ],
@@ -330,7 +367,11 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
     );
   }
 
-  Widget _buildManualEntryToggle(bool isApproved, bool isOnline, DriverRideState state) {
+  Widget _buildManualEntryToggle(
+    bool isApproved,
+    bool isOnline,
+    DriverRideState state,
+  ) {
     return Column(
       children: [
         Center(
@@ -363,7 +404,9 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
                     final rideId = _rideIdController.text.trim();
                     if (rideId.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Please enter a valid Ride ID')),
+                        const SnackBar(
+                          content: Text('Please enter a valid Ride ID'),
+                        ),
                       );
                       return;
                     }
@@ -382,7 +425,10 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Ride #${ride.id.substring(0, 8)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            Text(
+              'Ride #${ride.id.substring(0, 8)}',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
@@ -391,15 +437,31 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
               ),
               child: Text(
                 ride.status.name.toUpperCase(),
-                style: const TextStyle(color: AppColors.primaryGreen, fontWeight: FontWeight.bold, fontSize: 11),
+                style: const TextStyle(
+                  color: AppColors.primaryGreen,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 11,
+                ),
               ),
             ),
           ],
         ),
         const SizedBox(height: 12),
-        _locationRow(Icons.my_location, 'Pickup', ride.pickupAddress ?? '${ride.pickup.latitude}, ${ride.pickup.longitude}', AppColors.primaryGreen),
+        _locationRow(
+          Icons.my_location,
+          'Pickup',
+          ride.pickupAddress ??
+              '${ride.pickup.latitude}, ${ride.pickup.longitude}',
+          AppColors.primaryGreen,
+        ),
         const SizedBox(height: 8),
-        _locationRow(Icons.location_on, 'Destination', ride.destinationAddress ?? '${ride.destination.latitude}, ${ride.destination.longitude}', Colors.red),
+        _locationRow(
+          Icons.location_on,
+          'Destination',
+          ride.destinationAddress ??
+              '${ride.destination.latitude}, ${ride.destination.longitude}',
+          Colors.red,
+        ),
         if (ride.sector == 'logistics' || ride.goods != null) ...[
           const SizedBox(height: 8),
           _buildLogisticsCargoDetails(ride),
@@ -411,10 +473,13 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
   Widget _buildLogisticsCargoDetails(RideModel ride) {
     final goods = ride.goods ?? {};
     final category = goods['category'] ?? goods['itemType'] ?? 'General Cargo';
-    final description = goods['description'] ?? goods['notes'] ?? 'Standard freight';
+    final description =
+        goods['description'] ?? goods['notes'] ?? 'Standard freight';
     final weight = goods['weightKg'] ?? goods['weight'] ?? 0;
     final quantity = goods['quantity'] ?? goods['qty'] ?? 1;
-    final bool hasHelper = goods['hasLoadingAssistance'] == true || goods['loadingAssistance'] == true;
+    final bool hasHelper =
+        goods['hasLoadingAssistance'] == true ||
+        goods['loadingAssistance'] == true;
 
     return Container(
       width: double.infinity,
@@ -429,7 +494,11 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
         children: [
           Row(
             children: [
-              const Icon(Icons.local_shipping, size: 16, color: Color(0xFFE65100)),
+              const Icon(
+                Icons.local_shipping,
+                size: 16,
+                color: Color(0xFFE65100),
+              ),
               const SizedBox(width: 6),
               const Text(
                 'LOGISTICS CARGO DETAILS',
@@ -464,7 +533,11 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
             children: [
               const Text(
                 'Item: ',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Colors.black87),
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                  color: Colors.black87,
+                ),
               ),
               Expanded(
                 child: Text(
@@ -484,7 +557,11 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
                     const SizedBox(width: 4),
                     Text(
                       'Weight: $weight kg',
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.black87),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
                     ),
                   ],
                 ),
@@ -492,11 +569,19 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
               Expanded(
                 child: Row(
                   children: [
-                    const Icon(Icons.inventory_2, size: 14, color: Colors.black54),
+                    const Icon(
+                      Icons.inventory_2,
+                      size: 14,
+                      color: Colors.black54,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       'Quantity: $quantity',
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.black87),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
                     ),
                   ],
                 ),
@@ -509,7 +594,9 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
             decoration: BoxDecoration(
               color: hasHelper ? Colors.green[50] : Colors.grey[100],
               borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: hasHelper ? Colors.green[300]! : Colors.grey[300]!),
+              border: Border.all(
+                color: hasHelper ? Colors.green[300]! : Colors.grey[300]!,
+              ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -538,7 +625,12 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
     );
   }
 
-  Widget _locationRow(IconData icon, String label, String address, Color color) {
+  Widget _locationRow(
+    IconData icon,
+    String label,
+    String address,
+    Color color,
+  ) {
     return Row(
       children: [
         Icon(icon, color: color, size: 20),
@@ -547,8 +639,18 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: const TextStyle(color: Colors.grey, fontSize: 11)),
-              Text(address, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13), overflow: TextOverflow.ellipsis),
+              Text(
+                label,
+                style: const TextStyle(color: Colors.grey, fontSize: 11),
+              ),
+              Text(
+                address,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
             ],
           ),
         ),
@@ -564,7 +666,9 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
     bool isOnline,
   ) {
     if (state.isUpdatingStatus) {
-      return const Center(child: CircularProgressIndicator(color: AppColors.primaryGreen));
+      return const Center(
+        child: CircularProgressIndicator(color: AppColors.primaryGreen),
+      );
     }
 
     final notifier = ref.read(driverRideProvider.notifier);
@@ -657,7 +761,9 @@ class _DriverRideRequestScreenState extends ConsumerState<DriverRideRequestScree
         return Column(
           children: [
             Text(
-              ride.status == RideStatus.completed ? 'Ride Completed 🎉' : 'Ride Cancelled',
+              ride.status == RideStatus.completed
+                  ? 'Ride Completed 🎉'
+                  : 'Ride Cancelled',
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             const SizedBox(height: 12),

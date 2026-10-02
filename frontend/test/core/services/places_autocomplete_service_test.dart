@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:infurnus/core/services/places_autocomplete_service.dart';
 import 'package:infurnus/features/customer/data/models/fleet_vehicle_model.dart';
@@ -22,6 +23,45 @@ void main() {
       service.clearCache();
       expect(await service.getSuggestions('  '), isEmpty);
     });
+
+    test(
+      'returns live suggestions with both coordinates from the provider',
+      () async {
+        final dio = Dio();
+        dio.interceptors.add(
+          InterceptorsWrapper(
+            onRequest: (options, handler) {
+              handler.resolve(
+                Response(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: [
+                    {
+                      'place_id': 42,
+                      'display_name': 'Central Station, City, State',
+                      'lat': '12.34',
+                      'lon': '56.78',
+                    },
+                    {
+                      'place_id': 43,
+                      'display_name': 'Missing Coordinates, City',
+                    },
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+        final liveService = OpenStreetMapAutocompleteService(dio: dio);
+
+        final results = await liveService.getSuggestions('Central Station');
+
+        expect(results, hasLength(1));
+        expect(results.single.title, 'Central Station');
+        expect(results.single.latitude, 12.34);
+        expect(results.single.longitude, 56.78);
+      },
+    );
   });
 
   group('FleetVehicleModel Dynamic Fields Tests', () {

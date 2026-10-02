@@ -1,5 +1,6 @@
 import { randomInt } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
+import { withTransaction } from '../../../infrastructure/database/postgres.js';
 
 import { env } from '../../../config/env.js';
 import type { CreateRideInput, ListRidesInput } from '../schemas/ride.schemas.js';
@@ -33,6 +34,18 @@ export interface RideRepository {
   cancel(id: string, customerId: string, reason: string, client?: PoolClient): Promise<Ride | null>;
 
   accept(id: string, driverProfileId: string, client?: PoolClient): Promise<Ride | null>;
+
+  offerDispatch(rideId: string, driverProfileId: string, responseTimeoutMs: number): Promise<boolean>;
+
+  finishDispatchAttempt(
+    rideId: string,
+    driverProfileId: string,
+    status: 'rejected' | 'timed_out',
+  ): Promise<boolean>;
+
+  listAvailableForDriver(driverProfileId: string, limit?: number): Promise<Ride[]>;
+
+  failDispatch(rideId: string, reason: string): Promise<Ride | null>;
 
   transition(
     id: string,
@@ -434,9 +447,21 @@ export class PostgresRideRepository implements RideRepository {
              'driver_arrived'
            )
          RETURNING *
+       ), accepted_attempt AS (
+         UPDATE ride_dispatch_attempts attempt
+         SET status = 'accepted', responded_at = NOW()
+         FROM updated
+         WHERE attempt.ride_id = updated.id
+           AND attempt.driver_profile_id = $2
+           AND attempt.status = 'offered'
+         RETURNING attempt.ride_id AS id
+       ), accepted AS (
+         SELECT updated.*
+         FROM updated
+         JOIN accepted_attempt USING (id)
        )
        SELECT ${detailedRideColumns('u_r')}
-       FROM updated u_r
+       FROM accepted u_r
        ${detailedRideJoins('u_r')}`,
       [id, customerId, reason],
     );
@@ -458,18 +483,38 @@ export class PostgresRideRepository implements RideRepository {
              SELECT v.id
              FROM vehicles v
              WHERE v.driver_profile_id = $2
-               AND v.is_active = TRUE
-               AND v.sector = r.sector
                AND (
-                 r.vehicle_category IS NULL
-                 OR v.category = r.vehicle_category
+                 (
+                   SELECT dp.active_vehicle_id
+                   FROM driver_profiles dp
+                   WHERE dp.id = $2
+                 ) IS NULL
+                 OR v.id = (
+                   SELECT dp.active_vehicle_id
+                   FROM driver_profiles dp
+                   WHERE dp.id = $2
+                 )
                )
-             ORDER BY v.id
+               AND v.is_active = TRUE
+               AND v.verification_status = 'approved'
+               AND v.sector = r.sector
+               AND v.category = r.vehicle_category
+             ORDER BY v.created_at DESC
              LIMIT 1
            ),
-           status = 'driver_assigned'
+           status = 'driver_assigned',
+           dispatch_driver_id = NULL,
+           dispatch_expires_at = NULL
          WHERE r.id = $1
            AND r.status = 'searching'
+              AND EXISTS (
+                SELECT 1
+                FROM ride_dispatch_attempts offered
+                WHERE offered.ride_id = r.id
+                  AND offered.driver_profile_id = $2
+                  AND offered.status = 'offered'
+                  AND offered.expires_at > NOW()
+              )
            AND EXISTS (
              SELECT 1
              FROM driver_profiles dp
@@ -479,31 +524,248 @@ export class PostgresRideRepository implements RideRepository {
                AND u.status = 'active'
                AND dp.verification_status = 'approved'
                AND dp.availability_status = 'available'
+               AND dp.last_location IS NOT NULL
                AND dp.last_location_at >= NOW() -
                  (
                    $3::int *
                    INTERVAL '1 second'
                  )
+               AND ST_DWithin(
+                 dp.last_location,
+                 r.pickup_location,
+                 $4
+               )
+               AND NOT EXISTS (
+                 SELECT 1
+                 FROM rides active_ride
+                 WHERE active_ride.assigned_driver_id = dp.id
+                   AND active_ride.status NOT IN ('completed', 'cancelled')
+               )
            )
            AND EXISTS (
              SELECT 1
              FROM vehicles v
              WHERE v.driver_profile_id = $2
-               AND v.is_active = TRUE
-               AND v.sector = r.sector
                AND (
-                 r.vehicle_category IS NULL
-                 OR v.category = r.vehicle_category
+                 (
+                   SELECT dp.active_vehicle_id
+                   FROM driver_profiles dp
+                   WHERE dp.id = $2
+                 ) IS NULL
+                 OR v.id = (
+                   SELECT dp.active_vehicle_id
+                   FROM driver_profiles dp
+                   WHERE dp.id = $2
+                 )
                )
+               AND v.is_active = TRUE
+               AND v.verification_status = 'approved'
+               AND v.sector = r.sector
+               AND v.category = r.vehicle_category
            )
          RETURNING *
+       ), accepted_attempt AS (
+         UPDATE ride_dispatch_attempts attempt
+         SET status = 'accepted', responded_at = NOW()
+         FROM updated
+         WHERE attempt.ride_id = updated.id
+           AND attempt.driver_profile_id = $2
+           AND attempt.status = 'offered'
+         RETURNING attempt.ride_id AS id
+       ), accepted AS (
+         SELECT updated.*
+         FROM updated
+         JOIN accepted_attempt USING (id)
        )
        SELECT ${detailedRideColumns('u_r')}
-       FROM updated u_r
+       FROM accepted u_r
        ${detailedRideJoins('u_r')}`,
-      [id, driverProfileId, env.DRIVER_LOCATION_STALE_SECONDS],
+      [
+        id,
+        driverProfileId,
+        env.DRIVER_LOCATION_STALE_SECONDS,
+        env.DRIVER_SEARCH_RADIUS_METERS,
+      ],
     );
 
+    return result.rows[0] ? mapRide(result.rows[0], false) : null;
+  }
+
+  async offerDispatch(
+    rideId: string,
+    driverProfileId: string,
+    responseTimeoutMs: number,
+  ): Promise<boolean> {
+    return withTransaction(async (client) => {
+      const lockedDriver = await client.query(
+        `SELECT id FROM driver_profiles WHERE id = $1 FOR UPDATE`,
+        [driverProfileId],
+      );
+      if (lockedDriver.rowCount !== 1) return false;
+
+      await client.query(
+        `UPDATE ride_dispatch_attempts attempt
+         SET status = 'timed_out', responded_at = NOW()
+         FROM rides r
+         WHERE r.id = $1
+           AND r.dispatch_expires_at <= NOW()
+           AND attempt.ride_id = r.id
+           AND attempt.driver_profile_id = r.dispatch_driver_id
+           AND attempt.status = 'offered'`,
+        [rideId],
+      );
+      await client.query(
+        `UPDATE rides
+         SET dispatch_driver_id = NULL, dispatch_expires_at = NULL
+         WHERE id = $1 AND dispatch_expires_at <= NOW()`,
+        [rideId],
+      );
+
+      const leased = await client.query<{ attempt: number }>(
+        `UPDATE rides r
+         SET dispatch_driver_id = $2,
+             dispatch_expires_at = NOW() + ($3::int * INTERVAL '1 millisecond'),
+             dispatch_attempt = dispatch_attempt + 1
+         WHERE r.id = $1
+           AND r.status = 'searching'
+           AND r.assigned_driver_id IS NULL
+           AND r.dispatch_driver_id IS NULL
+           AND NOT EXISTS (
+             SELECT 1 FROM ride_dispatch_attempts previous
+             WHERE previous.ride_id = r.id
+               AND previous.driver_profile_id = $2
+           )
+           AND EXISTS (
+             SELECT 1
+             FROM driver_profiles dp
+             JOIN users u ON u.id = dp.user_id
+             JOIN vehicles v ON v.driver_profile_id = dp.id
+             WHERE dp.id = $2
+               AND u.status = 'active'
+               AND dp.verification_status = 'approved'
+               AND dp.availability_status = 'available'
+               AND dp.last_location IS NOT NULL
+               AND dp.last_location_at >= NOW() - ($4::int * INTERVAL '1 second')
+               AND v.is_active = TRUE
+               AND v.verification_status = 'approved'
+               AND v.sector = r.sector
+               AND v.category = r.vehicle_category
+               AND (
+                 dp.active_vehicle_id IS NULL
+                 OR dp.active_vehicle_id = v.id
+               )
+               AND ST_DWithin(dp.last_location, r.pickup_location, $5)
+               AND NOT EXISTS (
+                 SELECT 1 FROM rides active_ride
+                 WHERE active_ride.assigned_driver_id = dp.id
+                   AND active_ride.status NOT IN ('completed', 'cancelled')
+               )
+               AND NOT EXISTS (
+                 SELECT 1 FROM rides pending_offer
+                 WHERE pending_offer.dispatch_driver_id = dp.id
+                   AND pending_offer.dispatch_expires_at > NOW()
+                   AND pending_offer.status = 'searching'
+               )
+           )
+         RETURNING dispatch_attempt AS attempt`,
+        [
+          rideId,
+          driverProfileId,
+          responseTimeoutMs,
+          env.DRIVER_LOCATION_STALE_SECONDS,
+          env.DRIVER_SEARCH_RADIUS_METERS,
+        ],
+      );
+      const attempt = leased.rows[0]?.attempt;
+      if (attempt === undefined) return false;
+
+      await client.query(
+        `INSERT INTO ride_dispatch_attempts (
+           ride_id, attempt, driver_profile_id, status, expires_at
+         )
+         SELECT id, dispatch_attempt, dispatch_driver_id, 'offered', dispatch_expires_at
+         FROM rides
+         WHERE id = $1 AND dispatch_attempt = $2`,
+        [rideId, attempt],
+      );
+      return true;
+    });
+  }
+
+  async finishDispatchAttempt(
+    rideId: string,
+    driverProfileId: string,
+    status: 'rejected' | 'timed_out',
+  ): Promise<boolean> {
+    return withTransaction(async (client) => {
+      const lease = await client.query<{ id: string }>(
+        `SELECT id
+         FROM rides
+         WHERE id = $1
+           AND status = 'searching'
+           AND dispatch_driver_id = $2
+         FOR UPDATE`,
+        [rideId, driverProfileId],
+      );
+      if (!lease.rows[0]) return false;
+
+      const attempt = await client.query(
+        `UPDATE ride_dispatch_attempts
+         SET status = $3, responded_at = NOW()
+         WHERE ride_id = $1
+           AND driver_profile_id = $2
+           AND status = 'offered'
+         RETURNING ride_id`,
+        [rideId, driverProfileId, status],
+      );
+      if (attempt.rowCount !== 1) return false;
+
+      await client.query(
+        `UPDATE rides
+         SET dispatch_driver_id = NULL, dispatch_expires_at = NULL
+         WHERE id = $1 AND dispatch_driver_id = $2 AND status = 'searching'`,
+        [rideId, driverProfileId],
+      );
+      return true;
+    });
+  }
+
+  async listAvailableForDriver(driverProfileId: string, limit = 20): Promise<Ride[]> {
+    const result = await this.pool.query(
+      `SELECT ${detailedRideColumns('r')}
+       FROM rides r
+       ${detailedRideJoins('r')}
+       WHERE r.status = 'searching'
+         AND r.assigned_driver_id IS NULL
+         AND r.dispatch_driver_id = $1
+         AND r.dispatch_expires_at > NOW()
+       ORDER BY r.created_at DESC, r.id DESC
+       LIMIT $2`,
+      [driverProfileId, limit],
+    );
+    return result.rows.map((row) => mapRide(row, false));
+  }
+
+  async failDispatch(rideId: string, reason: string): Promise<Ride | null> {
+    const result = await this.pool.query(
+      `WITH failed AS (
+         UPDATE rides r
+         SET status = 'cancelled',
+             cancellation_reason = $2,
+             cancelled_at = NOW(),
+             dispatch_driver_id = NULL,
+             dispatch_expires_at = NULL
+         WHERE r.id = $1
+           AND r.status = 'searching'
+           AND r.assigned_driver_id IS NULL
+           AND r.dispatch_driver_id IS NULL
+         RETURNING r.*
+       )
+       SELECT ${detailedRideColumns('failed')}
+       FROM failed
+       ${detailedRideJoins('failed')}`,
+      [rideId, reason],
+    );
     return result.rows[0] ? mapRide(result.rows[0], false) : null;
   }
 

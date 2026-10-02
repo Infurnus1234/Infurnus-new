@@ -145,6 +145,12 @@ const envSchema = z
 
     MAX_DRIVER_MATCH_CANDIDATES: z.coerce.number().int().positive().default(20),
 
+    DRIVER_DISPATCH_RESPONSE_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(15000),
+
     // ============================================================
     // Google Maps
     // ============================================================
@@ -368,6 +374,15 @@ const envSchema = z
         path: ['CLOUDINARY_CLOUD_NAME'],
         message:
           'CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET must all be provided together',
+      });
+    }
+
+    if (config.NODE_ENV === 'production' && !cloudinaryConfigurationComplete) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['CLOUDINARY_CLOUD_NAME'],
+        message:
+          'CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET are required in production',
       });
     }
   });

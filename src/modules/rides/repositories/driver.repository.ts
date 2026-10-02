@@ -430,23 +430,32 @@ export class PostgresDriverRepository implements DriverRepository {
       `v.is_active = TRUE`,
       `v.verification_status = 'approved'`,
       `v.driver_profile_id = dp.id`,
+      `NOT EXISTS (
+         SELECT 1
+         FROM rides pending_offer
+         WHERE pending_offer.dispatch_driver_id = dp.id
+           AND pending_offer.dispatch_expires_at > NOW()
+           AND pending_offer.status = 'searching'
+       )`,
     ];
 
     if (sector) {
       values.push(sector);
-      conditions.push(
-        `(v.sector = $${values.length}
-          OR v.sector IS NULL)`,
-      );
+      conditions.push(`v.sector = $${values.length}`);
     }
 
     if (vehicleCategory) {
       values.push(vehicleCategory);
-      conditions.push(
-        `(v.category = $${values.length}
-          OR v.category IS NULL)`,
-      );
+      conditions.push(`v.category = $${values.length}`);
     }
+
+    const fallbackVehicleConditions = [
+      'v2.driver_profile_id = dp.id',
+      'v2.is_active = TRUE',
+      "v2.verification_status = 'approved'",
+      ...(sector ? [`v2.sector = $${values.indexOf(sector) + 1}`] : []),
+      ...(vehicleCategory ? [`v2.category = $${values.indexOf(vehicleCategory) + 1}`] : []),
+    ];
 
     const result = await this.pool.query<DriverCandidate>(
       `SELECT
@@ -469,15 +478,16 @@ export class PostgresDriverRepository implements DriverRepository {
            v.sector AS sector,
            v.category AS "vehicleCategory"
          FROM driver_profiles dp
+         JOIN users u
+           ON u.id = dp.user_id
+          AND u.status = 'active'
          JOIN vehicles v
            ON v.id = COALESCE(
              dp.active_vehicle_id,
              (
                SELECT id
                FROM vehicles v2
-               WHERE v2.driver_profile_id = dp.id
-                 AND v2.is_active = TRUE
-                 AND v2.verification_status = 'approved'
+               WHERE ${fallbackVehicleConditions.join('\n                 AND ')}
                ORDER BY v2.created_at DESC
                LIMIT 1
              )
@@ -492,6 +502,7 @@ export class PostgresDriverRepository implements DriverRepository {
              )
          ) active_rides ON TRUE
          WHERE ${conditions.join('\nAND ')}
+           AND COALESCE(active_rides.count, 0) = 0
            AND ST_DWithin(
              dp.last_location,
              ST_SetSRID(

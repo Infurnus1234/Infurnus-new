@@ -535,6 +535,7 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
       await pool.query(
         `UPDATE driver_profiles
            SET availability_status = 'available',
+
                last_location =
                  ST_SetSRID(
                    ST_MakePoint(77.5946, 12.9716),
@@ -544,6 +545,83 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
            WHERE id = $1`,
         [driverProfileId],
       );
+    });
+
+    it('releases rejected and timed-out leases for the next ranked driver', async () => {
+      const secondSuffix = randomUUID();
+      const secondUserResult = await pool.query<{ id: string }>(
+        `INSERT INTO users (first_name, last_name, phone, role)
+         VALUES ('Next', 'Driver', $1, 'driver') RETURNING id`,
+        [`+93${secondSuffix.replaceAll('-', '').slice(0, 10)}`],
+      );
+      const secondUserId = secondUserResult.rows[0]!.id;
+      const secondProfileResult = await pool.query<{ id: string }>(
+        `INSERT INTO driver_profiles
+           (user_id, license_number, license_expiry, verification_status, availability_status)
+         VALUES ($1, $2, CURRENT_DATE + 365, 'approved', 'available') RETURNING id`,
+        [secondUserId, `LIC-${secondSuffix}`],
+      );
+      const secondProfileId = secondProfileResult.rows[0]!.id;
+      const secondVehicleResult = await pool.query<{ id: string }>(
+        `INSERT INTO vehicles
+           (driver_profile_id, make, model, plate_number, sector, category, verification_status, is_active)
+         VALUES ($1, 'Toyota', 'Fortuner', $2, 'premium', 'fortuner', 'approved', TRUE)
+         RETURNING id`,
+        [secondProfileId, `NEXT-${secondSuffix.replaceAll('-', '').slice(0, 10)}`],
+      );
+      const secondVehicleId = secondVehicleResult.rows[0]!.id;
+      await pool.query(
+        `UPDATE driver_profiles
+         SET active_vehicle_id = $2,
+             last_location = ST_SetSRID(ST_MakePoint(77.5946, 12.9716), 4326)::geography,
+             last_location_at = NOW()
+         WHERE id = $1`,
+        [secondProfileId, secondVehicleId],
+      );
+
+      try {
+        const rejectedRide = await repo.create(customerId, {
+          pickup: { latitude: 12.9716, longitude: 77.5946 },
+          destination: { latitude: 13.0, longitude: 77.65 },
+          sector: 'premium',
+          vehicleCategory: 'fortuner',
+          fareEstimate: 4000,
+        });
+        expect(await repo.offerDispatch(rejectedRide.id, driverProfileId, 1000)).toBe(true);
+        expect(await repo.finishDispatchAttempt(rejectedRide.id, driverProfileId, 'rejected')).toBe(true);
+        expect(await repo.listAvailableForDriver(driverProfileId)).toHaveLength(0);
+        expect(await repo.offerDispatch(rejectedRide.id, secondProfileId, 1000)).toBe(true);
+        expect(await repo.listAvailableForDriver(secondProfileId)).toHaveLength(1);
+        expect(
+          await repo.finishDispatchAttempt(rejectedRide.id, secondProfileId, 'rejected'),
+        ).toBe(true);
+
+        const timeoutRide = await repo.create(customerId, {
+          pickup: { latitude: 12.9716, longitude: 77.5946 },
+          destination: { latitude: 13.0, longitude: 77.65 },
+          sector: 'premium',
+          vehicleCategory: 'fortuner',
+          fareEstimate: 4000,
+        });
+        expect(await repo.offerDispatch(timeoutRide.id, driverProfileId, 1)).toBe(true);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        expect(await repo.finishDispatchAttempt(timeoutRide.id, driverProfileId, 'timed_out')).toBe(true);
+        expect(await repo.listAvailableForDriver(driverProfileId)).toHaveLength(0);
+        expect(await repo.offerDispatch(timeoutRide.id, secondProfileId, 1000)).toBe(true);
+      } finally {
+        await pool.query(
+          `UPDATE rides
+           SET dispatch_driver_id = NULL, dispatch_expires_at = NULL
+           WHERE dispatch_driver_id = $1`,
+          [secondProfileId],
+        );
+        await pool.query('DELETE FROM ride_dispatch_attempts WHERE driver_profile_id = $1', [
+          secondProfileId,
+        ]);
+        await pool.query('DELETE FROM vehicles WHERE driver_profile_id = $1', [secondProfileId]);
+        await pool.query('DELETE FROM driver_profiles WHERE id = $1', [secondProfileId]);
+        await pool.query('DELETE FROM users WHERE id = $1', [secondUserId]);
+      }
     });
 
     afterAll(async () => {
@@ -607,7 +685,16 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
       expect(check1?.actualDistanceMeters).toBe(0);
 
       // 3. Driver accepts ride
-      await rideService.acceptRide(driverProfileId, ride.id);
+      expect(await repo.offerDispatch(ride.id, driverProfileId, 15000)).toBe(true);
+      expect(await repo.offerDispatch(ride.id, driverProfileId, 15000)).toBe(false);
+      expect(await repo.listAvailableForDriver(driverProfileId)).toHaveLength(1);
+      expect(await repo.listAvailableForDriver('00000000-0000-0000-0000-000000000001')).toHaveLength(0);
+      const simultaneousAccepts = await Promise.allSettled([
+        rideService.acceptRide(driverProfileId, ride.id),
+        rideService.acceptRide(driverProfileId, ride.id),
+      ]);
+      expect(simultaneousAccepts.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+      expect(simultaneousAccepts.filter((result) => result.status === 'rejected')).toHaveLength(1);
 
       const acceptedRide = await repo.findById(ride.id);
 
@@ -874,6 +961,7 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
         fareEstimate: 2000,
       });
 
+      expect(await repo.offerDispatch(ride.id, driverProfileId2, 15000)).toBe(true);
       await rideService.acceptRide(driverProfileId2, ride.id);
 
       await repo.transition(ride.id, 'driver_arriving', driverProfileId2);

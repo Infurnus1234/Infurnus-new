@@ -5,6 +5,7 @@ export interface RideEventPayloads {
   'ride:created': Ride;
   'ride:accepted': Ride;
   'ride:cancelled': string;
+  'ride:dispatch_rejected': { rideId: string; driverProfileId: string };
 }
 
 export const rideEvents = new EventEmitter();

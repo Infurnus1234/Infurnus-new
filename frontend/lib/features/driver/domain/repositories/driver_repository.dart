@@ -12,17 +12,25 @@ abstract class DriverRepository {
   Future<PartnerModel?> getMyPartner();
   Future<PartnerModel> updatePartner(String id, Map<String, dynamic> data);
   Future<List<PartnerDocumentModel>> listDocuments(String partnerId);
-  Future<PartnerDocumentModel> addDocument(String partnerId, Map<String, dynamic> data);
-  Future<PartnerDocumentModel> updateDocument(String partnerId, String documentId, Map<String, dynamic> data);
-  
+  Future<PartnerDocumentModel> addDocument(
+    String partnerId,
+    Map<String, dynamic> data,
+  );
+  Future<PartnerDocumentModel> updateDocument(
+    String partnerId,
+    String documentId,
+    Map<String, dynamic> data,
+  );
+
   Future<DriverProfileModel?> getDriverProfile();
   Future<DriverProfileModel> upsertDriverProfile(Map<String, dynamic> data);
   Future<DriverHistoryModel> getDriverHistory({int limit = 20});
-  
+
   Future<void> updateAvailability(String status);
   Future<void> updateLocation(Map<String, dynamic> data);
   Future<List<RideModel>> getAvailableRides();
   Future<RideModel> acceptRide(String rideId);
+  Future<void> declineRide(String rideId);
   Future<RideModel> completeRide(String rideId);
   Future<RideModel> transitionRide(String rideId, String status, {String? pin});
   Future<bool> verifyPin(String rideId, String pin);
@@ -34,6 +42,12 @@ abstract class DriverRepository {
   Future<VehicleModel> deactivateVehicle(String id);
 
   Future<UserPreferencesModel> getUserPreferences(String userId);
-  Future<UserPreferencesModel> updateUserPreferences(String userId, Map<String, dynamic> data);
-  Future<List<UserHistoryModel>> getUserHistory(String userId, {int limit = 20});
+  Future<UserPreferencesModel> updateUserPreferences(
+    String userId,
+    Map<String, dynamic> data,
+  );
+  Future<List<UserHistoryModel>> getUserHistory(
+    String userId, {
+    int limit = 20,
+  });
 }

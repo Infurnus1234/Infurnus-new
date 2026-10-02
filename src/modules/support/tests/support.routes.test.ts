@@ -1,8 +1,11 @@
+import express from 'express';
 import request from 'supertest';
 import { describe, expect, it, vi } from 'vitest';
-import { createApp } from '../../../app.js';
 import { signAccessToken } from '../../auth/utils/jwt.js';
+import { createSupportRouter } from '../routes/support.routes.js';
+import { SupportController } from '../controllers/support.controller.js';
 import type { SupportRepository } from '../repositories/support.repository.js';
+import { SupportService } from '../services/support.service.js';
 import type { SupportTicket } from '../types/support.js';
 
 class MockSupportRepository implements SupportRepository {
@@ -52,23 +55,11 @@ class MockSupportRepository implements SupportRepository {
 
 describe('Support Ticket API', () => {
   const supportRepo = new MockSupportRepository();
-  const app = createApp(
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    supportRepo,
+  const app = express();
+  app.use(express.json());
+  app.use(
+    '/support',
+    createSupportRouter(new SupportController(new SupportService(supportRepo))),
   );
 
   const userId = '770e8400-e29b-41d4-a716-446655440000';
@@ -87,6 +78,26 @@ describe('Support Ticket API', () => {
     expect(res.status).toBe(201);
     expect(res.body.success).toBe(true);
     expect(res.body.data.ticketNumber).toBe('TCK-8921');
+  });
+
+  it('allows an authenticated customer to open support', async () => {
+    const token = await signAccessToken({ sub: userId, role: 'customer', type: 'access' });
+    const res = await request(app)
+      .post('/support/tickets')
+      .set('authorization', `Bearer ${token}`)
+      .send({
+        category: 'account',
+        subject: 'Ride booking help',
+        message: 'I need help with a recent booking.',
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.success).toBe(true);
+    expect(supportRepo.createTicket).toHaveBeenLastCalledWith(
+      userId,
+      'customer',
+      expect.objectContaining({ subject: 'Ride booking help' }),
+    );
   });
 
   it('lists user support tickets', async () => {

@@ -1,4 +1,6 @@
 import 'dart:async';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -36,6 +38,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   Timer? _debounceTimer;
+  CancelToken? _searchCancelToken;
   List<PlaceSuggestion> _suggestions = [];
   bool _isSearching = false;
 
@@ -106,6 +109,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
   @override
   void dispose() {
     _debounceTimer?.cancel();
+    _searchCancelToken?.cancel();
     _searchController.dispose();
     _searchFocusNode.dispose();
     _animController.dispose();
@@ -114,7 +118,8 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
 
   void _onSearchQueryChanged(String query) {
     _debounceTimer?.cancel();
-    if (query.trim().isEmpty) {
+    _searchCancelToken?.cancel();
+    if (query.trim().length < 2) {
       setState(() {
         _suggestions = [];
         _isSearching = false;
@@ -127,17 +132,36 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     // Debounce: 200ms for instant autocomplete response
     _debounceTimer = Timer(const Duration(milliseconds: 200), () async {
       final service = ref.read(placesAutocompleteServiceProvider);
-      final results = await service.getSuggestions(query);
-      if (mounted) {
-        setState(() {
-          _suggestions = results;
-          _isSearching = false;
-        });
+      final cancelToken = CancelToken();
+      _searchCancelToken = cancelToken;
+      try {
+        final results = await service.getSuggestions(
+          query,
+          cancelToken: cancelToken,
+        );
+        if (mounted &&
+            !cancelToken.isCancelled &&
+            _searchController.text.trim() == query.trim()) {
+          setState(() {
+            _suggestions = results;
+            _isSearching = false;
+          });
+        }
+      } catch (_) {
+        if (mounted && !cancelToken.isCancelled) {
+          setState(() {
+            _suggestions = [];
+            _isSearching = false;
+          });
+        }
       }
     });
   }
 
   void _selectSuggestion(PlaceSuggestion suggestion) {
+    if (suggestion.latitude == null || suggestion.longitude == null) return;
+    _debounceTimer?.cancel();
+    _searchCancelToken?.cancel();
     _searchFocusNode.unfocus();
     _searchController.clear();
     setState(() => _suggestions = []);
@@ -146,12 +170,12 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         .read(rideProvider.notifier)
         .setRoute('Current Location', suggestion.title);
 
-    if (suggestion.latitude != null && suggestion.longitude != null) {
-      ref.read(rideProvider.notifier).setDestinationCoords(
-            LatLng(suggestion.latitude!, suggestion.longitude!),
-            address: suggestion.title,
-          );
-    }
+    ref
+        .read(rideProvider.notifier)
+        .setDestinationCoords(
+          LatLng(suggestion.latitude!, suggestion.longitude!),
+          address: suggestion.toString(),
+        );
 
     context.push('/ride-booking');
   }
@@ -207,7 +231,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _buildDestinationSearchBar(context),
-                        if (_suggestions.isNotEmpty || _isSearching)
+                        if (_searchController.text.trim().length >= 2)
                           _buildAutocompleteDropdown(context),
                         const SizedBox(height: 20),
                         _buildHeroFeatureCard(context),
@@ -400,11 +424,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
       child: Row(
         children: [
           const SizedBox(width: 16),
-          const Icon(
-            Icons.search_rounded,
-            color: textBlack,
-            size: 22,
-          ),
+          const Icon(Icons.search_rounded, color: textBlack, size: 22),
           const SizedBox(width: 12),
           Expanded(
             child: TextField(
@@ -502,7 +522,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                   Icon(Icons.info_outline_rounded, size: 16, color: textMuted),
                   SizedBox(width: 8),
                   Text(
-                    'No locations found. Press enter to search.',
+                    'No locations found.',
                     style: TextStyle(fontSize: 13, color: textMuted),
                   ),
                 ],
@@ -1037,9 +1057,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                   decoration: BoxDecoration(
                     color: const Color(0xFFFEF9C3),
                     borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                      color: const Color(0xFFFDE047),
-                    ),
+                    border: Border.all(color: const Color(0xFFFDE047)),
                   ),
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
@@ -1318,7 +1336,10 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                     ),
                     Text(
                       item.eta,
-                      style: const TextStyle(fontSize: 10, color: textSecondary),
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: textSecondary,
+                      ),
                     ),
                   ],
                 ),
@@ -1515,10 +1536,10 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                     ride.sector == 'logistics'
                         ? Icons.local_shipping_rounded
                         : (ride.sector == 'service'
-                            ? Icons.emergency_rounded
-                            : (ride.sector == 'premium'
-                                ? Icons.stars_rounded
-                                : Icons.directions_car_rounded)),
+                              ? Icons.emergency_rounded
+                              : (ride.sector == 'premium'
+                                    ? Icons.stars_rounded
+                                    : Icons.directions_car_rounded)),
                     color: isCancelled ? serviceRed : buttonBlack,
                     size: 20,
                   ),
@@ -1550,8 +1571,8 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                               color: isCancelled
                                   ? serviceRed.withValues(alpha: 0.1)
                                   : (ride.status == model.RideStatus.completed
-                                      ? successGreen.withValues(alpha: 0.15)
-                                      : searchBg),
+                                        ? successGreen.withValues(alpha: 0.15)
+                                        : searchBg),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
@@ -1562,8 +1583,8 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                                 color: isCancelled
                                     ? serviceRed
                                     : (ride.status == model.RideStatus.completed
-                                        ? successGreen
-                                        : textBlack),
+                                          ? successGreen
+                                          : textBlack),
                               ),
                             ),
                           ),
@@ -1623,10 +1644,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
           if (index == 3) context.push('/profile');
         },
         items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home_filled),
-            label: 'Home',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: 'Home'),
           BottomNavigationBarItem(
             icon: Icon(Icons.local_activity_outlined),
             activeIcon: Icon(Icons.local_activity_rounded),

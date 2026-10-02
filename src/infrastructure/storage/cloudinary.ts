@@ -150,7 +150,9 @@ function uploadBuffer(
 export class CloudinaryStorageProvider implements StorageProviderAdapter {
   constructor() {
     if (!env.CLOUDINARY_CLOUD_NAME || !env.CLOUDINARY_API_KEY || !env.CLOUDINARY_API_SECRET) {
-      throw new Error('Cloudinary configuration is incomplete');
+      throw new Error(
+        'Cloudinary storage is not configured. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET.',
+      );
     }
 
     cloudinary.config({

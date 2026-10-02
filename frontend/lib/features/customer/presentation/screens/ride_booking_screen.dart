@@ -1,11 +1,15 @@
+import 'dart:async';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../../core/services/location_service.dart';
+import '../../../../core/services/geocoding_service.dart';
+import '../../../../core/services/places_autocomplete_service.dart';
 import '../../../../shared/widgets/infurnus_button.dart';
-import '../../../../shared/widgets/infurnus_card.dart';
 import '../../../../shared/widgets/infurnus_map.dart';
 import '../../../../shared/widgets/infurnus_outlined_button.dart';
 import '../../data/models/fleet_vehicle_model.dart';
@@ -24,7 +28,6 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
   static const Color cardBg = Color(0xFF111111);
   static const Color cardElevated = Color(0xFF151515);
   static const Color borderCard = Color(0xFF262626);
-  static const Color borderSearch = Color(0xFF292929);
   static const Color textWhite = Color(0xFFFFFFFF);
   static const Color textGray = Color(0xFFA1A1AA);
   static const Color brandGreen = Color(0xFF22C55E);
@@ -36,38 +39,21 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
   final _destinationController = TextEditingController();
   final _reviewController = TextEditingController();
   final _serviceNotesController = TextEditingController();
+  Timer? _pickupAutocompleteTimer;
+  Timer? _destinationAutocompleteTimer;
+  CancelToken? _pickupAutocompleteToken;
+  CancelToken? _destinationAutocompleteToken;
+  List<PlaceSuggestion> _pickupSuggestions = [];
+  List<PlaceSuggestion> _destinationSuggestions = [];
+  bool _isLoadingPickupSuggestions = false;
+  bool _isLoadingDestinationSuggestions = false;
+  bool? _activeAutocompleteIsPickup;
   int _selectedRating = 5;
   String _selectedPaymentMethod = 'wallet';
   bool _isProcessingPayment = false;
   bool _isChangingVehicle = false;
-  List<FleetVehicleModel> _premiumFleet = [];
-
-  final List<Map<String, dynamic>> _quickDestinations = [
-    {
-      'label': 'Airport T1',
-      'icon': Icons.flight_rounded,
-      'address': 'Airport Terminal 1, International Hub',
-      'coords': const LatLng(12.9716, 77.6946),
-    },
-    {
-      'label': 'Tech Park',
-      'icon': Icons.business_rounded,
-      'address': 'EcoWorld Tech Park, Block 4',
-      'coords': const LatLng(12.9352, 77.6944),
-    },
-    {
-      'label': 'Central Railway',
-      'icon': Icons.train_rounded,
-      'address': 'Central Railway Station Platform 1',
-      'coords': const LatLng(12.9781, 77.5696),
-    },
-    {
-      'label': 'City Hospital',
-      'icon': Icons.local_hospital_rounded,
-      'address': 'Manipal Hospital, HAL Airport Rd',
-      'coords': const LatLng(12.9582, 77.6534),
-    },
-  ];
+  bool _isLoadingFleet = true;
+  List<FleetVehicleModel> _fleetVehicles = [];
 
   @override
   void initState() {
@@ -77,41 +63,285 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
     _destinationController.text = rideState.destination ?? '';
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _detectCurrentLocation();
-      _fetchPremiumFleet();
+      _detectCurrentLocation(preserveSelection: true);
+      _fetchFleet(rideState.selectedSector);
     });
   }
 
-  Future<void> _fetchPremiumFleet() async {
+  Future<void> _fetchFleet(String sector) async {
+    if (mounted) setState(() => _isLoadingFleet = true);
     try {
-      final fleet = await ref.read(getFleetUseCaseProvider)(sector: 'premium');
+      final fleet = await ref.read(getFleetUseCaseProvider)(sector: sector);
       if (mounted) {
-        setState(() => _premiumFleet = fleet);
+        setState(() {
+          _fleetVehicles = fleet;
+          _isLoadingFleet = false;
+        });
+        final rideState = ref.read(rideProvider);
+        if (fleet.isNotEmpty &&
+            !fleet.any(
+              (vehicle) => vehicle.category == rideState.selectedTier,
+            )) {
+          ref.read(rideProvider.notifier).selectTier(fleet.first.category);
+        }
       }
-    } catch (_) {}
+    } catch (error) {
+      if (mounted) {
+        setState(() => _isLoadingFleet = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error.toString()),
+            backgroundColor: serviceRed,
+          ),
+        );
+      }
+    }
   }
 
-  Future<void> _detectCurrentLocation() async {
+  void _onLocationQueryChanged(String query, {required bool isPickup}) {
+    final controller = isPickup ? _pickupController : _destinationController;
+    final previousTimer = isPickup
+        ? _pickupAutocompleteTimer
+        : _destinationAutocompleteTimer;
+    final previousToken = isPickup
+        ? _pickupAutocompleteToken
+        : _destinationAutocompleteToken;
+    previousTimer?.cancel();
+    previousToken?.cancel();
+
+    if (isPickup) {
+      ref.read(rideProvider.notifier).updatePickupAddress(query);
+    } else {
+      ref.read(rideProvider.notifier).updateDestinationAddress(query);
+    }
+
+    if (query.trim().length < 2) {
+      setState(() {
+        _activeAutocompleteIsPickup = null;
+        _pickupSuggestions = [];
+        _destinationSuggestions = [];
+        _isLoadingPickupSuggestions = false;
+        _isLoadingDestinationSuggestions = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _activeAutocompleteIsPickup = isPickup;
+      if (isPickup) {
+        _pickupSuggestions = [];
+        _isLoadingPickupSuggestions = true;
+      } else {
+        _destinationSuggestions = [];
+        _isLoadingDestinationSuggestions = true;
+      }
+    });
+
+    final cancelToken = CancelToken();
+    if (isPickup) {
+      _pickupAutocompleteToken = cancelToken;
+    } else {
+      _destinationAutocompleteToken = cancelToken;
+    }
+
+    final timer = Timer(const Duration(milliseconds: 250), () async {
+      try {
+        final suggestions = await ref
+            .read(placesAutocompleteServiceProvider)
+            .getSuggestions(query, cancelToken: cancelToken);
+        if (!mounted ||
+            cancelToken.isCancelled ||
+            controller.text.trim() != query.trim()) {
+          return;
+        }
+        setState(() {
+          if (isPickup) {
+            _pickupSuggestions = suggestions;
+            _isLoadingPickupSuggestions = false;
+          } else {
+            _destinationSuggestions = suggestions;
+            _isLoadingDestinationSuggestions = false;
+          }
+        });
+      } catch (_) {
+        if (mounted && !cancelToken.isCancelled) {
+          setState(() {
+            if (isPickup) {
+              _pickupSuggestions = [];
+              _isLoadingPickupSuggestions = false;
+            } else {
+              _destinationSuggestions = [];
+              _isLoadingDestinationSuggestions = false;
+            }
+          });
+        }
+      }
+    });
+    if (isPickup) {
+      _pickupAutocompleteTimer = timer;
+    } else {
+      _destinationAutocompleteTimer = timer;
+    }
+  }
+
+  void _selectLocationSuggestion(
+    PlaceSuggestion suggestion, {
+    required bool isPickup,
+  }) {
+    final latitude = suggestion.latitude;
+    final longitude = suggestion.longitude;
+    if (latitude == null || longitude == null) return;
+
+    final timer = isPickup
+        ? _pickupAutocompleteTimer
+        : _destinationAutocompleteTimer;
+    final token = isPickup
+        ? _pickupAutocompleteToken
+        : _destinationAutocompleteToken;
+    timer?.cancel();
+    token?.cancel();
+
+    final address = suggestion.toString();
+    setState(() {
+      _activeAutocompleteIsPickup = null;
+      if (isPickup) {
+        _pickupController.text = address;
+        _pickupSuggestions = [];
+        _isLoadingPickupSuggestions = false;
+      } else {
+        _destinationController.text = address;
+        _destinationSuggestions = [];
+        _isLoadingDestinationSuggestions = false;
+      }
+    });
+
+    final coordinates = LatLng(latitude, longitude);
+    if (isPickup) {
+      ref
+          .read(rideProvider.notifier)
+          .setPickupCoords(coordinates, address: address);
+    } else {
+      ref
+          .read(rideProvider.notifier)
+          .setDestinationCoords(coordinates, address: address);
+    }
+  }
+
+  Widget _buildLocationSuggestions({required bool isPickup}) {
+    if (_activeAutocompleteIsPickup != isPickup) return const SizedBox.shrink();
+
+    final suggestions = isPickup ? _pickupSuggestions : _destinationSuggestions;
+    final isLoading = isPickup
+        ? _isLoadingPickupSuggestions
+        : _isLoadingDestinationSuggestions;
+
+    return Container(
+      margin: const EdgeInsets.only(top: 6, bottom: 8),
+      decoration: BoxDecoration(
+        color: cardBg,
+        border: Border.all(color: borderCard),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: isLoading
+          ? const Padding(
+              padding: EdgeInsets.all(14),
+              child: Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          : suggestions.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.all(14),
+              child: Text(
+                'No locations found',
+                style: TextStyle(color: textGray, fontSize: 13),
+              ),
+            )
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final suggestion in suggestions)
+                  ListTile(
+                    dense: true,
+                    leading: const Icon(
+                      Icons.location_on_outlined,
+                      color: brandGreen,
+                    ),
+                    title: Text(
+                      suggestion.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: textWhite),
+                    ),
+                    subtitle: Text(
+                      suggestion.subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: textGray),
+                    ),
+                    onTap: () => _selectLocationSuggestion(
+                      suggestion,
+                      isPickup: isPickup,
+                    ),
+                  ),
+              ],
+            ),
+    );
+  }
+
+  Future<void> _detectCurrentLocation({bool preserveSelection = false}) async {
     try {
+      final currentPickup = _pickupController.text.trim();
+      if (preserveSelection &&
+          currentPickup.isNotEmpty &&
+          currentPickup.toLowerCase() != 'current location') {
+        return;
+      }
       final pos = await ref.read(locationServiceProvider).getCurrentPosition();
       if (pos != null && mounted) {
-        if (_pickupController.text.isEmpty) {
-          _pickupController.text = 'Current Location';
-        }
+        _pickupController.text = 'Current Location';
         ref
             .read(rideProvider.notifier)
             .setPickupCoords(
               LatLng(pos.latitude, pos.longitude),
               address: 'Current Location',
             );
+        unawaited(_reverseGeocodePickup(LatLng(pos.latitude, pos.longitude)));
       }
     } catch (_) {}
+  }
+
+  Future<void> _reverseGeocodePickup(LatLng coordinates) async {
+    final address = await ref
+        .read(geocodingServiceProvider)
+        .reverseGeocode(coordinates);
+    if (!mounted || address == null) return;
+
+    final pickupCoords = ref.read(rideProvider).pickupCoords;
+    if (pickupCoords == null ||
+        pickupCoords.latitude != coordinates.latitude ||
+        pickupCoords.longitude != coordinates.longitude) {
+      return;
+    }
+
+    if (_pickupController.text.trim().toLowerCase() == 'current location') {
+      _pickupController.text = address;
+    }
+    ref.read(rideProvider.notifier).setPickupAddress(address);
   }
 
   @override
   void dispose() {
     _pickupController.dispose();
     _destinationController.dispose();
+    _pickupAutocompleteTimer?.cancel();
+    _destinationAutocompleteTimer?.cancel();
+    _pickupAutocompleteToken?.cancel();
+    _destinationAutocompleteToken?.cancel();
     _reviewController.dispose();
     _serviceNotesController.dispose();
     super.dispose();
@@ -171,7 +401,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
     if (rentalFuelRate != null && rentalFuelRate > 0) {
       return 'Actual distance fuel billed separately @ ₹${rentalFuelRate.toStringAsFixed(0)}/km';
     }
-    final vehicle = _premiumFleet
+    final vehicle = _fleetVehicles
         .where((v) => v.category == state.selectedTier)
         .firstOrNull;
     if (vehicle != null && vehicle.fuelRatePerKm > 0) {
@@ -495,45 +725,6 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
         _buildRouteInputs(),
         const SizedBox(height: 12),
 
-        // Quick Destination Chips
-        SizedBox(
-          height: 36,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: _quickDestinations.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 8),
-            itemBuilder: (context, index) {
-              final item = _quickDestinations[index];
-              return ActionChip(
-                avatar: Icon(
-                  item['icon'] as IconData,
-                  size: 16,
-                  color: brandGreen,
-                ),
-                label: Text(
-                  item['label'] as String,
-                  style: const TextStyle(fontSize: 12, color: textWhite),
-                ),
-                backgroundColor: cardElevated,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  side: const BorderSide(color: borderCard),
-                ),
-                onPressed: () {
-                  _destinationController.text = item['address'] as String;
-                  ref
-                      .read(rideProvider.notifier)
-                      .setDestinationCoords(
-                        item['coords'] as LatLng,
-                        address: item['address'] as String,
-                      );
-                },
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: 16),
-
         // Established Sector Fleet Display
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -566,7 +757,6 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
           ],
         ),
         const SizedBox(height: 12),
-
 
         // Vehicle Category Cards
         _buildVehicleTierCards(state),
@@ -770,94 +960,108 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
       ),
       child: Column(
         children: [
-          Row(
+          Column(
             children: [
-              const Icon(
-                Icons.my_location_rounded,
-                color: brandGreen,
-                size: 20,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextField(
-                  controller: _pickupController,
-                  style: const TextStyle(color: textWhite),
-                  decoration: const InputDecoration(
-                    hintText: 'Pickup Location',
-                    hintStyle: TextStyle(color: textGray),
-                    border: InputBorder.none,
-                    isDense: true,
-                    contentPadding: EdgeInsets.symmetric(vertical: 8),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.my_location_rounded,
+                    color: brandGreen,
+                    size: 20,
                   ),
-                  onSubmitted: (val) async {
-                    final query = val.trim();
-                    if (query.isEmpty) return;
-                    final success = await ref
-                        .read(rideProvider.notifier)
-                        .geocodeAndSetPickup(query);
-                    if (!success && mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Could not locate "$query". Please check the address.',
-                          ),
-                          backgroundColor: serviceRed,
-                        ),
-                      );
-                    }
-                  },
-                ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: _pickupController,
+                      onChanged: (query) =>
+                          _onLocationQueryChanged(query, isPickup: true),
+                      style: const TextStyle(color: textWhite),
+                      decoration: const InputDecoration(
+                        hintText: 'Pickup Location',
+                        hintStyle: TextStyle(color: textGray),
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(vertical: 8),
+                      ),
+                      onSubmitted: (val) async {
+                        final query = val.trim();
+                        if (query.isEmpty) return;
+                        final success = await ref
+                            .read(rideProvider.notifier)
+                            .geocodeAndSetPickup(query);
+                        if (!success && mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Could not locate "$query". Please check the address.',
+                              ),
+                              backgroundColor: serviceRed,
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.gps_fixed_rounded,
+                      size: 18,
+                      color: brandGreen,
+                    ),
+                    tooltip: 'Current GPS',
+                    onPressed: _detectCurrentLocation,
+                  ),
+                ],
               ),
-              IconButton(
-                icon: const Icon(
-                  Icons.gps_fixed_rounded,
-                  size: 18,
-                  color: brandGreen,
-                ),
-                tooltip: 'Current GPS',
-                onPressed: _detectCurrentLocation,
-              ),
+              _buildLocationSuggestions(isPickup: true),
             ],
           ),
           const Divider(height: 1, color: borderCard),
-          Row(
+          Column(
             children: [
-              const Icon(
-                Icons.location_on_rounded,
-                color: serviceRed,
-                size: 20,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextField(
-                  controller: _destinationController,
-                  style: const TextStyle(color: textWhite),
-                  decoration: const InputDecoration(
-                    hintText: 'Destination',
-                    hintStyle: TextStyle(color: textGray),
-                    border: InputBorder.none,
-                    isDense: true,
-                    contentPadding: EdgeInsets.symmetric(vertical: 8),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.location_on_rounded,
+                    color: serviceRed,
+                    size: 20,
                   ),
-                  onSubmitted: (val) async {
-                    final query = val.trim();
-                    if (query.isEmpty) return;
-                    final success = await ref
-                        .read(rideProvider.notifier)
-                        .geocodeAndSetDestination(query);
-                    if (!success && mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Could not locate "$query". Please check the address.',
-                          ),
-                          backgroundColor: serviceRed,
-                        ),
-                      );
-                    }
-                  },
-                ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: _destinationController,
+                      onChanged: (query) =>
+                          _onLocationQueryChanged(query, isPickup: false),
+                      style: const TextStyle(color: textWhite),
+                      decoration: const InputDecoration(
+                        hintText: 'Destination',
+                        hintStyle: TextStyle(color: textGray),
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(vertical: 8),
+                      ),
+                      onSubmitted: (val) async {
+                        final query = val.trim();
+                        if (query.isEmpty) return;
+                        final success = await ref
+                            .read(rideProvider.notifier)
+                            .geocodeAndSetDestination(query);
+                        if (!success && mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Could not locate "$query". Please check the address.',
+                              ),
+                              backgroundColor: serviceRed,
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                ],
               ),
+              _buildLocationSuggestions(isPickup: false),
             ],
           ),
         ],
@@ -865,127 +1069,39 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
     );
   }
 
-
   Widget _buildVehicleTierCards(RideState state) {
-    List<Map<String, dynamic>> tiers = [];
+    final vehiclesByCategory = <String, FleetVehicleModel>{};
+    for (final vehicle in _fleetVehicles) {
+      vehiclesByCategory.putIfAbsent(vehicle.category, () => vehicle);
+    }
+    final vehicles = vehiclesByCategory.values.toList();
+    final selectedVehicle = vehiclesByCategory[state.selectedTier];
 
-    if (state.selectedSector == 'passenger') {
-      tiers = [
-        {
-          'id': 'bike',
-          'name': 'Bike Taxi',
-          'icon': Icons.two_wheeler_rounded,
-          'eta': '3m',
-        },
-        {
-          'id': 'auto',
-          'name': 'Auto',
-          'icon': Icons.electric_rickshaw_rounded,
-          'eta': '3m',
-        },
-        {
-          'id': 'mini',
-          'name': 'Mini/Compact',
-          'icon': Icons.directions_car_rounded,
-          'eta': '4m',
-        },
-        {
-          'id': 'sedan',
-          'name': 'Prime Sedan',
-          'icon': Icons.airport_shuttle_rounded,
-          'eta': '2m',
-        },
-        {
-          'id': 'suv',
-          'name': 'SUV 6-Seater',
-          'icon': Icons.directions_bus_rounded,
-          'eta': '6m',
-        },
-      ];
-    } else if (state.selectedSector == 'logistics') {
-      tiers = [
-        {
-          'id': 'bike',
-          'name': 'Bike Express',
-          'icon': Icons.two_wheeler_rounded,
-          'eta': '5m',
-        },
-        {
-          'id': 'three_wheeler',
-          'name': '3-Wheeler',
-          'icon': Icons.electric_rickshaw_rounded,
-          'eta': '8m',
-        },
-        {
-          'id': 'mini_truck',
-          'name': 'Mini Truck 1T',
-          'icon': Icons.local_shipping_rounded,
-          'eta': '10m',
-        },
-      ];
-    } else if (state.selectedSector == 'service') {
-      tiers = [
-        {
-          'id': 'ambulance',
-          'name': 'Ambulance',
-          'icon': Icons.medical_services_rounded,
-          'eta': 'Priority',
-        },
-        {
-          'id': 'towing',
-          'name': 'Towing Van',
-          'icon': Icons.car_repair_rounded,
-          'eta': '12m',
-        },
-        {
-          'id': 'jcb',
-          'name': 'JCB Excavator',
-          'icon': Icons.agriculture_rounded,
-          'eta': 'Scheduled',
-        },
-        {
-          'id': 'recovery',
-          'name': 'Recovery Vehicle',
-          'icon': Icons.rv_hookup_rounded,
-          'eta': '15m',
-        },
-        {
-          'id': 'roadside_service',
-          'name': 'Roadside Service',
-          'icon': Icons.build_rounded,
-          'eta': '15m',
-        },
-      ];
-    } else if (state.selectedSector == 'premium') {
-      tiers = [
-        {
-          'id': 'fortuner',
-          'name': 'Toyota Fortuner',
-          'icon': Icons.directions_car_filled_rounded,
-          'eta': 'Chauffeur',
-        },
-        {
-          'id': 'thar',
-          'name': 'Mahindra Thar',
-          'icon': Icons.terrain_rounded,
-          'eta': 'Standby',
-        },
-        {
-          'id': 'luxury_suv',
-          'name': 'BMW/Mercedes SUV',
-          'icon': Icons.stars_rounded,
-          'eta': 'VIP',
-        },
-      ];
+    if (_isLoadingFleet) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (vehicles.isEmpty) {
+      return Column(
+        children: [
+          const Text(
+            'No active, approved vehicles are available for this sector.',
+            style: TextStyle(color: textGray),
+            textAlign: TextAlign.center,
+          ),
+          TextButton(
+            onPressed: () => _fetchFleet(state.selectedSector),
+            child: const Text('Retry'),
+          ),
+        ],
+      );
     }
 
-    final selectedTierItem = tiers.where((t) => t['id'] == state.selectedTier).firstOrNull;
-
-    // Show ONLY selected vehicle card if user has selected a vehicle and is not currently choosing another
-    if (selectedTierItem != null && !_isChangingVehicle) {
+    if (selectedVehicle != null && !_isChangingVehicle) {
       final String displayPriceText = state.isEstimatingFare
           ? 'Calculating fare...'
-          : (state.fare != null ? 'Estimated Fare: ₹${state.fare!.toStringAsFixed(0)}' : 'Route Estimate Ready');
+          : (state.fare != null
+                ? 'Estimated Fare: ₹${state.fare!.toStringAsFixed(0)}'
+                : 'Fare estimate unavailable');
 
       return Container(
         padding: const EdgeInsets.all(14),
@@ -1003,7 +1119,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
-                selectedTierItem['icon'] as IconData,
+                _vehicleIcon(selectedVehicle),
                 color: brandGreen,
                 size: 28,
               ),
@@ -1017,7 +1133,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        selectedTierItem['name'] as String,
+                        selectedVehicle.displayName,
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 15,
@@ -1025,7 +1141,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                         ),
                       ),
                       Text(
-                        selectedTierItem['eta'] as String,
+                        selectedVehicle.category,
                         style: const TextStyle(fontSize: 11, color: textGray),
                       ),
                     ],
@@ -1058,7 +1174,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (state.selectedTier != null)
+        if (_isChangingVehicle)
           Align(
             alignment: Alignment.centerRight,
             child: GestureDetector(
@@ -1067,7 +1183,11 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                 padding: EdgeInsets.only(bottom: 6),
                 child: Text(
                   'Done',
-                  style: TextStyle(color: brandGreen, fontWeight: FontWeight.bold, fontSize: 12),
+                  style: TextStyle(
+                    color: brandGreen,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
                 ),
               ),
             ),
@@ -1076,11 +1196,11 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
           height: 95,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            itemCount: tiers.length,
+            itemCount: vehicles.length,
             separatorBuilder: (_, __) => const SizedBox(width: 10),
             itemBuilder: (context, index) {
-              final tier = tiers[index];
-              final isSelected = state.selectedTier == tier['id'];
+              final vehicle = vehicles[index];
+              final isSelected = state.selectedTier == vehicle.category;
               final String displayPriceText;
               if (isSelected) {
                 if (state.isEstimatingFare) {
@@ -1096,7 +1216,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
 
               return GestureDetector(
                 onTap: () {
-                  ref.read(rideProvider.notifier).selectTier(tier['id'] as String);
+                  ref.read(rideProvider.notifier).selectTier(vehicle.category);
                   setState(() => _isChangingVehicle = false);
                 },
                 child: Container(
@@ -1118,23 +1238,25 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Icon(
-                            tier['icon'] as IconData,
+                            _vehicleIcon(vehicle),
                             size: 22,
                             color: isSelected ? brandGreen : textGray,
-                          ),
-                          Text(
-                            tier['eta'] as String,
-                            style: const TextStyle(fontSize: 10, color: textGray),
                           ),
                         ],
                       ),
                       Text(
-                        tier['name'] as String,
+                        vehicle.displayName,
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
                           color: textWhite,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        vehicle.category,
+                        style: const TextStyle(fontSize: 10, color: textGray),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1155,6 +1277,19 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
         ),
       ],
     );
+  }
+
+  IconData _vehicleIcon(FleetVehicleModel vehicle) {
+    if (vehicle.sector == 'logistics') return Icons.local_shipping_rounded;
+    if (vehicle.sector == 'service') return Icons.build_rounded;
+    if (vehicle.category.toLowerCase().contains('bike')) {
+      return Icons.two_wheeler_rounded;
+    }
+    if (vehicle.category.toLowerCase().contains('auto') ||
+        vehicle.category.toLowerCase().contains('three_wheeler')) {
+      return Icons.electric_rickshaw_rounded;
+    }
+    return Icons.directions_car_rounded;
   }
 
   // --- Step 2: Searching Radar Sheet ---

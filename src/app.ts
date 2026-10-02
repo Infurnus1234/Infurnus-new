@@ -412,6 +412,7 @@ export function createApp(
       rideRepository,
       driverRepository,
       driverDocumentStorageService,
+      fareEstimateService,
     );
 
     const driverController = driverRepository

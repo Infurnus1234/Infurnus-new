@@ -151,13 +151,25 @@ export class DriverController {
 
   listAvailableRides = async (_req: Request, res: Response, next: NextFunction) => {
     try {
-      const rides = await this.rideService.listAvailableRides();
+      const profileId = await this.driverService.profileForUser(_req.auth!.userId);
+      const rides = await this.rideService.listAvailableRides(profileId);
 
       res.json({
         success: true,
         data: rides.map(sanitizeRideForDriver),
         message: 'Available rides retrieved',
       });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  decline = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = rideIdSchema.parse(req.params);
+      const profileId = await this.driverService.profileForUser(req.auth!.userId);
+      await this.rideService.rejectRide(profileId, id);
+      res.json({ success: true, message: 'Ride declined' });
     } catch (error) {
       next(error);
     }

@@ -6,16 +6,47 @@ import type { RideStatus } from '../types/ride.js';
 import type { DriverRepository } from '../repositories/driver.repository.js';
 import type { DriverDocumentStorageService } from '../services/driver-document-storage.service.js';
 import { rideEvents } from '../events/ride.events.js';
+import type { FareEstimateService } from '../../fares/services/fare-estimate.service.js';
+
+export type RideTransactionRunner = typeof withTransaction;
 
 export class RideService {
   constructor(
     private readonly repository: RideRepository,
     private readonly driverRepository?: DriverRepository,
     private readonly driverDocumentStorageService?: DriverDocumentStorageService,
+    private readonly fareEstimateService?: FareEstimateService,
+    private readonly transactionRunner: RideTransactionRunner = withTransaction,
   ) {}
 
   async createRide(customerId: string, input: CreateRideInput) {
-    const ride = await this.repository.create(customerId, input);
+    if (!this.fareEstimateService) {
+      throw new AppError(
+        'FARE_ESTIMATOR_UNAVAILABLE',
+        'Ride booking is unavailable because fare estimation is not configured',
+        503,
+      );
+    }
+
+    const fare = await this.fareEstimateService.estimate(input.pickup, input.destination, {
+      sector: input.sector,
+      vehicleCategory: input.vehicleCategory,
+      weightKg: input.sector === 'logistics' ? input.goods?.weightKg : undefined,
+      hasLoadingAssistance:
+        input.sector === 'logistics'
+          ? (input.goods?.hasLoadingAssistance ?? input.goods?.loadingAssistance)
+          : undefined,
+      rentalHours:
+        input.sector === 'premium'
+          ? (input.rentalDetails?.hours ?? input.rentalDetails?.rentalHours)
+          : undefined,
+      fuelRatePerKm:
+        input.sector === 'premium' ? input.rentalDetails?.fuelRatePerKm : undefined,
+    });
+    const ride = await this.repository.create(customerId, {
+      ...input,
+      fareEstimate: fare.grossAmount / 100,
+    });
     const hydratedRide = await this.hydrateDriverPhoto(ride);
     rideEvents.emit('ride:created', hydratedRide);
     return hydratedRide;
@@ -26,9 +57,25 @@ export class RideService {
     return this.hydrateDriverPhotos(rides);
   }
 
-  async listAvailableRides(limit?: number) {
-    const rides = await this.repository.listAvailable(limit);
+  async listAvailableRides(driverProfileId: string, limit?: number) {
+    const rides = await this.repository.listAvailableForDriver(driverProfileId, limit);
     return this.hydrateDriverPhotos(rides);
+  }
+
+  async rejectRide(driverProfileId: string, id: string): Promise<void> {
+    const released = await this.repository.finishDispatchAttempt(
+      id,
+      driverProfileId,
+      'rejected',
+    );
+    if (!released) {
+      throw new AppError(
+        'RIDE_DISPATCH_OFFER_EXPIRED',
+        'This ride request is no longer assigned to you',
+        409,
+      );
+    }
+    rideEvents.emit('ride:dispatch_rejected', { rideId: id, driverProfileId });
   }
 
   async getRide(customerId: string, id: string) {
@@ -42,7 +89,7 @@ export class RideService {
   }
 
   async cancelRide(customerId: string, id: string, input: CancelRideInput) {
-    const ride = await withTransaction((client) =>
+    const ride = await this.transactionRunner((client) =>
       this.repository.cancel(id, customerId, input.reason, client),
     );
 
@@ -69,7 +116,7 @@ export class RideService {
 
   async acceptRide(driverProfileId: string, id: string) {
     try {
-      const ride = await withTransaction(async (client) => {
+      const ride = await this.transactionRunner(async (client) => {
         const accepted = await this.repository.accept(id, driverProfileId, client);
 
         if (
@@ -106,7 +153,7 @@ export class RideService {
   }
 
   async completeRide(id: string, driverProfileId: string) {
-    return withTransaction(async (client) => {
+    return this.transactionRunner(async (client) => {
       const ride = await this.repository.complete(id, driverProfileId, client);
 
       if (!ride) {

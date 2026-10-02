@@ -20,12 +20,16 @@ import type { RideService } from '../../modules/rides/services/ride.service.js';
 import type { RouteRecalculationService } from '../../modules/rides/services/route-recalculation.service.js';
 import type { Ride } from '../../modules/rides/types/ride.js';
 import { sanitizeRideForDriver } from '../../modules/rides/utils/ride-sanitizer.js';
+import type { MatchingService } from '../../modules/rides/services/matching.service.js';
+import { RideDispatchService } from '../../modules/rides/services/ride-dispatch.service.js';
 
 export interface RideSocketDependencies {
   driverService: DriverService;
   rideRepository: RideRepository;
   rideService: RideService;
   routeRecalculationService: RouteRecalculationService;
+  matchingService?: MatchingService;
+  dispatchResponseTimeoutMs?: number;
 }
 
 interface SocketAck {
@@ -54,43 +58,25 @@ export function createSocketServer(
   });
 
   if (rideDependencies) {
-    const onRideCreated = async (ride: unknown) => {
-      const r = ride as Ride;
-      const sector = r.sector || 'passenger';
-      const category = r.vehicleCategory;
+    const dispatchService = rideDependencies.matchingService
+      ? new RideDispatchService(
+          rideDependencies.rideRepository,
+          rideDependencies.matchingService,
+          (candidate, ride, expiresAt) => {
+            io.to(driverUserRoom(candidate.userId)).emit('ride:incoming', {
+              ride: sanitizeRideForDriver(ride),
+              expiresAt: expiresAt.toISOString(),
+            });
+          },
+          rideDependencies.dispatchResponseTimeoutMs,
+        )
+      : null;
 
-      const driverRide = sanitizeRideForDriver(r);
-
-      if (
-        r.pickup?.latitude != null &&
-        r.pickup?.longitude != null &&
-        rideDependencies.driverService?.nearby
-      ) {
-        try {
-          const candidates = await rideDependencies.driverService.nearby(
-            r.pickup.latitude,
-            r.pickup.longitude,
-            sector,
-            category ?? undefined,
-          );
-          if (candidates && candidates.length > 0) {
-            for (const candidate of candidates) {
-              io.to(driverUserRoom(candidate.userId)).emit('ride:incoming', { ride: driverRide });
-            }
-            return;
-          }
-        } catch {
-          // If nearby query fails, fall through to sector room broadcast
-        }
-      }
-
-      if (category) {
-        io.to(driverSectorCategoryRoom(sector, category)).emit('ride:incoming', {
-          ride: driverRide,
-        });
-      } else {
-        io.to(driverSectorRoom(sector)).emit('ride:incoming', { ride: driverRide });
-      }
+    const onRideCreated = (ride: unknown) => {
+      if (!dispatchService) return;
+      void dispatchService.dispatch(ride as Ride).catch((error: unknown) => {
+        console.error('Ride dispatch failed', error);
+      });
     };
 
     const onRideAccepted = (ride: {
@@ -116,6 +102,7 @@ export function createSocketServer(
     rideEvents.on('ride:cancelled', onRideCancelled);
 
     io.on('close', () => {
+      dispatchService?.dispose();
       rideEvents.off('ride:created', onRideCreated);
       rideEvents.off('ride:accepted', onRideAccepted);
       rideEvents.off('ride:cancelled', onRideCancelled);

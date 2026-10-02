@@ -21,8 +21,8 @@ export const createRideSchema = z
     pickupAddress: z.string().trim().min(1).max(500).optional(),
     destinationAddress: z.string().trim().min(1).max(500).optional(),
     fareEstimate: z.number().positive().optional(),
-    sector: z.enum(['passenger', 'logistics', 'service', 'premium']).optional(),
-    vehicleCategory: z.string().trim().min(1).max(50).optional(),
+    sector: z.enum(['passenger', 'logistics', 'service', 'premium']),
+    vehicleCategory: z.string().trim().min(1).max(50),
     goods: z
       .object({
         itemType: z.string().trim().min(1).max(100).optional(),
@@ -71,8 +71,8 @@ export const fareEstimateSchema = z
   .object({
     pickup: location,
     destination: location,
-    sector: z.enum(['passenger', 'logistics', 'service', 'premium']).optional(),
-    vehicleCategory: z.string().trim().min(1).max(50).optional(),
+    sector: z.enum(['passenger', 'logistics', 'service', 'premium']),
+    vehicleCategory: z.string().trim().min(1).max(50),
     waitingMinutes: z.number().nonnegative().optional(),
     weightKg: z.number().nonnegative().optional(),
     hasLoadingAssistance: z.boolean().optional(),
