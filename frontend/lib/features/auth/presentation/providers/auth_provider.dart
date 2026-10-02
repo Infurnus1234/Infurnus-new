@@ -113,7 +113,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
       return;
     }
     _isProcessing = true;
-    state = state.copyWith(status: AuthStatus.loading, contactValue: request.phone ?? request.email);
+    state = state.copyWith(
+      status: AuthStatus.loading,
+      contactValue: request.phone ?? request.email,
+      loginChallengeId: null,
+      errorMessage: null,
+    );
     try {
       final response = await ref.read(signupUseCaseProvider).execute(request);
       state = state.copyWith(
@@ -173,6 +178,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       status: AuthStatus.loading, 
       loginChannel: channel,
       contactValue: channel == 'email' ? request.email : request.phone,
+      signupId: null,
+      errorMessage: null,
     );
     try {
       final response = await ref.read(loginUseCaseProvider).execute(request, channel);

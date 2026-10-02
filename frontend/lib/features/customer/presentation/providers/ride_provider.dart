@@ -5,6 +5,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../../core/services/cashfree_checkout_service.dart';
 import '../../../../core/services/geocoding_service.dart';
+import '../../../../core/services/location_service.dart';
 import '../../../../core/services/socket_service.dart';
 import '../../../../core/storage/secure_storage.dart';
 import '../../data/models/fare_estimate_model.dart';
@@ -287,6 +288,19 @@ class RideNotifier extends StateNotifier<RideState> {
   Future<bool> geocodeAndSetPickup(String address) async {
     final trimmed = address.trim();
     if (trimmed.isEmpty) return false;
+
+    if (trimmed.toLowerCase().contains('current location')) {
+      if (state.pickupCoords != null) {
+        setPickupCoords(state.pickupCoords!, address: 'Current Location');
+        return true;
+      }
+      final pos = await ref.read(locationServiceProvider).getCurrentPosition();
+      if (pos != null) {
+        setPickupCoords(LatLng(pos.latitude, pos.longitude), address: 'Current Location');
+        return true;
+      }
+    }
+
     final coords = await ref
         .read(geocodingServiceProvider)
         .geocodeAddress(trimmed);
@@ -304,6 +318,19 @@ class RideNotifier extends StateNotifier<RideState> {
   Future<bool> geocodeAndSetDestination(String address) async {
     final trimmed = address.trim();
     if (trimmed.isEmpty) return false;
+
+    if (trimmed.toLowerCase().contains('current location')) {
+      if (state.destinationCoords != null) {
+        setDestinationCoords(state.destinationCoords!, address: 'Current Location');
+        return true;
+      }
+      final pos = await ref.read(locationServiceProvider).getCurrentPosition();
+      if (pos != null) {
+        setDestinationCoords(LatLng(pos.latitude, pos.longitude), address: 'Current Location');
+        return true;
+      }
+    }
+
     final coords = await ref
         .read(geocodingServiceProvider)
         .geocodeAddress(trimmed);

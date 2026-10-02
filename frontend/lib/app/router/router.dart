@@ -32,6 +32,7 @@ import '../../features/driver/presentation/screens/support_tickets_screen.dart';
 import '../../features/customer/presentation/screens/rentals_screen.dart';
 import '../../features/customer/presentation/screens/logistics_screen.dart';
 import '../../features/ai_assistant/presentation/screens/ai_assistant_screen.dart';
+import '../../core/config/legal_texts.dart';
 import '../../features/customer/presentation/screens/legal_document_screen.dart';
 import '../../features/customer/presentation/screens/delete_account_screen.dart';
 import '../../features/customer/presentation/screens/booking_history_screen.dart';
@@ -189,10 +190,21 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/legal/:title',
-        builder: (context, state) => LegalDocumentScreen(
-          title: state.pathParameters['title'] ?? 'Legal',
-          content: 'This is the canonical ${state.pathParameters['title']} for INFURNUS. Please review carefully.',
-        ),
+        builder: (context, state) {
+          final title = state.pathParameters['title'] ?? 'Legal Document';
+          String text = LegalTexts.privacyPolicy;
+          if (title.toLowerCase().contains('term')) {
+            text = LegalTexts.termsOfService;
+          } else if (title.toLowerCase().contains('content')) {
+            text = LegalTexts.contentPolicy;
+          } else if (title.toLowerCase().contains('privacy')) {
+            text = LegalTexts.privacyPolicy;
+          }
+          return LegalDocumentScreen(
+            title: title,
+            content: text,
+          );
+        },
       ),
       GoRoute(
         path: '/delete-account',
