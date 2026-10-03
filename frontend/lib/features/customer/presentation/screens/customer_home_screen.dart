@@ -58,7 +58,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
   // Green is strictly reserved for success states, confirmations, and active indicators
   static const Color successGreen = Color(0xFF16A34A);
   static const Color serviceRed = Color(0xFFDC2626);
-  static const Color logisticsOrange = Color(0xFFD97706);
   static const Color goldAccent = Color(0xFFCA8A04);
 
   @override
