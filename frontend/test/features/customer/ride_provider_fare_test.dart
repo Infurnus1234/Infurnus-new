@@ -4,8 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:infurnus/features/customer/data/models/fare_estimate_model.dart';
-import 'package:infurnus/features/customer/data/models/fleet_vehicle_model.dart';
-import 'package:infurnus/features/customer/data/models/ride_model.dart';
 import 'package:infurnus/features/customer/domain/repositories/ride_repository.dart';
 import 'package:infurnus/features/customer/presentation/providers/ride_provider.dart';
 import 'package:infurnus/features/customer/presentation/providers/ride_repository_provider.dart';
