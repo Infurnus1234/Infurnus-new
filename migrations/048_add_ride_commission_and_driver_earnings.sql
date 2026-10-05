@@ -1,0 +1,7 @@
+BEGIN;
+
+ALTER TABLE rides
+  ADD COLUMN IF NOT EXISTS commission_amount NUMERIC(10, 2) DEFAULT 0.00,
+  ADD COLUMN IF NOT EXISTS driver_earning_amount NUMERIC(10, 2) DEFAULT 0.00;
+
+COMMIT;
