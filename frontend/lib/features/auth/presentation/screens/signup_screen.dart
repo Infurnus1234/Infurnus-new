@@ -25,7 +25,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   bool _isEmail = true;
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
-  String _selectedRole = 'customer';
+  final String _selectedRole = 'customer';
   String? _validationError;
 
   @override
@@ -272,42 +272,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   ),
                   onPressed: () => setState(() => _isConfirmPasswordVisible = !_isConfirmPasswordVisible),
                 ),
-              ),
-              const SizedBox(height: 16),
-
-              // Role Selector
-              const Text(
-                'Register as:',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: RadioListTile<String>(
-                      title: const Text('Customer'),
-                      value: 'customer',
-                      groupValue: _selectedRole,
-                      activeColor: AppColors.primaryGreen,
-                      contentPadding: EdgeInsets.zero,
-                      onChanged: (val) {
-                        if (val != null) setState(() => _selectedRole = val);
-                      },
-                    ),
-                  ),
-                  Expanded(
-                    child: RadioListTile<String>(
-                      title: const Text('Driver'),
-                      value: 'driver',
-                      groupValue: _selectedRole,
-                      activeColor: AppColors.primaryGreen,
-                      contentPadding: EdgeInsets.zero,
-                      onChanged: (val) {
-                        if (val != null) setState(() => _selectedRole = val);
-                      },
-                    ),
-                  ),
-                ],
               ),
               const SizedBox(height: 24),
 

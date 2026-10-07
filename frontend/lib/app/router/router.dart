@@ -16,19 +16,6 @@ import '../../features/customer/presentation/screens/customer_home_screen.dart';
 import '../../features/customer/presentation/screens/profile_screen.dart';
 import '../../features/customer/presentation/screens/ride_booking_screen.dart';
 import '../../features/customer/presentation/screens/wallet_screen.dart';
-import '../../features/driver/presentation/screens/driver_dashboard_screen.dart';
-import '../../features/driver/presentation/screens/driver_onboarding_screen.dart';
-import '../../features/driver/presentation/screens/driver_ride_request_screen.dart';
-import '../../features/driver/presentation/screens/driver_financials_screen.dart';
-import '../../features/driver/presentation/screens/driver_profile_screen.dart';
-import '../../features/driver/presentation/screens/driver_documents_screen.dart';
-import '../../features/driver/presentation/screens/driver_vehicles_screen.dart';
-import '../../features/driver/presentation/screens/driver_notifications_screen.dart';
-import '../../features/driver/presentation/screens/fleet_dashboard_screen.dart';
-import '../../features/driver/presentation/screens/fleet_vehicles_screen.dart';
-import '../../features/driver/presentation/screens/fleet_drivers_screen.dart';
-import '../../features/driver/presentation/screens/provider_bank_account_screen.dart';
-import '../../features/driver/presentation/screens/support_tickets_screen.dart';
 import '../../features/customer/presentation/screens/rentals_screen.dart';
 import '../../features/customer/presentation/screens/logistics_screen.dart';
 import '../../features/ai_assistant/presentation/screens/ai_assistant_screen.dart';
@@ -37,7 +24,6 @@ import '../../features/customer/presentation/screens/legal_document_screen.dart'
 import '../../features/customer/presentation/screens/delete_account_screen.dart';
 import '../../features/customer/presentation/screens/booking_history_screen.dart';
 import '../../features/support/presentation/screens/support_screen.dart';
-import '../../features/admin/presentation/screens/fleet_analytics_dashboard_screen.dart';
 
 class RouterNotifier extends ChangeNotifier {
   final Ref _ref;
@@ -117,72 +103,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const WalletScreen(),
       ),
       GoRoute(
-        path: '/driver-dashboard',
-        builder: (context, state) => const DriverDashboardScreen(),
-      ),
-      GoRoute(
-        path: '/driver/dashboard',
-        redirect: (_, __) => '/driver-dashboard',
-      ),
-      GoRoute(
-        path: '/driver-onboarding',
-        builder: (context, state) => const DriverOnboardingScreen(),
-      ),
-      GoRoute(
-        path: '/driver-ride-request',
-        builder: (context, state) => const DriverRideRequestScreen(),
-      ),
-      GoRoute(
-        path: '/driver-financials',
-        builder: (context, state) => const DriverFinancialsScreen(),
-      ),
-      GoRoute(
-        path: '/driver-profile',
-        builder: (context, state) => const DriverProfileScreen(),
-      ),
-      GoRoute(
-        path: '/driver-documents',
-        builder: (context, state) => const DriverDocumentsScreen(),
-      ),
-      GoRoute(
-        path: '/driver-vehicles',
-        builder: (context, state) => const DriverVehiclesScreen(),
-      ),
-      GoRoute(
-        path: '/driver-notifications',
-        builder: (context, state) => const DriverNotificationsScreen(),
-      ),
-      GoRoute(
-        path: '/fleet-dashboard',
-        builder: (context, state) => const FleetDashboardScreen(),
-      ),
-      GoRoute(
-        path: '/fleet-vehicles',
-        builder: (context, state) => const FleetVehiclesScreen(),
-      ),
-      GoRoute(
-        path: '/fleet-drivers',
-        builder: (context, state) => const FleetDriversScreen(),
-      ),
-      GoRoute(
-        path: '/provider-bank-account',
-        builder: (context, state) => const ProviderBankAccountScreen(),
-      ),
-      GoRoute(
-        path: '/support-tickets',
-        builder: (context, state) => const SupportTicketsScreen(),
-      ),
-      GoRoute(
         path: '/rentals',
         builder: (context, state) => const RentalsScreen(),
       ),
       GoRoute(
         path: '/logistics',
         builder: (context, state) => const LogisticsScreen(),
-      ),
-      GoRoute(
-        path: '/admin/fleet-analytics',
-        builder: (context, state) => const FleetAnalyticsDashboardScreen(),
       ),
       GoRoute(
         path: '/ai-assistant/:role',
