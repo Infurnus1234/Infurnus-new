@@ -63,6 +63,23 @@ dev_dependencies:
   freezed: ^2.5.2
   json_serializable: ^6.8.0
   riverpod_generator: ^2.4.2
+  flutter_launcher_icons: ^0.13.1
+  flutter_native_splash: ^2.4.1
+
+flutter_launcher_icons:
+  image_path: "assets/images/infurnus_logo.png"
+  android: true
+  ios: true
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/images/infurnus_logo.png"
+
+flutter_native_splash:
+  color: "#FFFFFF"
+  image: "assets/images/infurnus_logo.png"
+  android_12:
+    color: "#FFFFFF"
+    image: "assets/images/infurnus_logo.png"
+  web: false
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
