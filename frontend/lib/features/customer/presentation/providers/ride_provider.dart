@@ -390,6 +390,12 @@ class RideNotifier extends StateNotifier<RideState> {
       }
     }
 
+    if (trimmed.toLowerCase().contains('standby') || trimmed.toLowerCase().contains('as directed')) {
+      final coords = state.pickupCoords ?? const LatLng(25.5941, 85.1376);
+      setDestinationCoords(coords, address: trimmed);
+      return true;
+    }
+
     final coords = await ref
         .read(geocodingServiceProvider)
         .geocodeAddress(trimmed);
