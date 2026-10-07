@@ -263,6 +263,8 @@ export class DriverApplicationService {
       throw new Error('Failed to update driver application.');
     }
 
+    if (this.repository.reviewIncludesDomainSynchronization) return updatedApplication;
+
     /*
      * Driver verification synchronization:
      *

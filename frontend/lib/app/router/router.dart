@@ -6,6 +6,9 @@ import '../../features/splash/presentation/screens/splash_screen.dart';
 import '../../features/onboarding/presentation/screens/onboarding_screen.dart';
 import '../../features/auth/presentation/screens/welcome_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
+import '../../features/auth/presentation/screens/password_recovery_screen.dart';
+import '../../features/auth/presentation/providers/user_provider.dart';
+import '../../features/auth/data/models/auth_models.dart';
 import '../../features/auth/presentation/screens/signup_screen.dart';
 import '../../features/auth/presentation/screens/otp_screen.dart';
 import '../../features/auth/presentation/screens/location_permission_screen.dart';
@@ -41,7 +44,9 @@ class RouterNotifier extends ChangeNotifier {
   AuthStatus get status => _status;
 }
 
-final routerNotifierProvider = ChangeNotifierProvider((ref) => RouterNotifier(ref));
+final routerNotifierProvider = ChangeNotifierProvider(
+  (ref) => RouterNotifier(ref),
+);
 
 final routerProvider = Provider<GoRouter>((ref) {
   final notifier = ref.read(routerNotifierProvider);
@@ -62,18 +67,18 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/onboarding',
         builder: (context, state) => const OnboardingScreen(),
       ),
+      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(
-        path: '/login',
-        builder: (context, state) => const LoginScreen(),
+        path: '/forgot-password',
+        builder: (context, state) => PasswordRecoveryScreen(
+          initialEmail: state.extra is String ? state.extra as String : '',
+        ),
       ),
       GoRoute(
         path: '/signup',
         builder: (context, state) => const SignupScreen(),
       ),
-      GoRoute(
-        path: '/otp',
-        builder: (context, state) => const OtpScreen(),
-      ),
+      GoRoute(path: '/otp', builder: (context, state) => const OtpScreen()),
       GoRoute(
         path: '/location-permission',
         builder: (context, state) => const LocationPermissionScreen(),
@@ -112,7 +117,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/ai-assistant/:role',
-        builder: (context, state) => AiAssistantScreen(role: state.pathParameters['role'] ?? 'customer'),
+        builder: (context, state) =>
+            AiAssistantScreen(role: state.pathParameters['role'] ?? 'customer'),
       ),
       GoRoute(
         path: '/legal/:title',
@@ -126,10 +132,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           } else if (title.toLowerCase().contains('privacy')) {
             text = LegalTexts.privacyPolicy;
           }
-          return LegalDocumentScreen(
-            title: title,
-            content: text,
-          );
+          return LegalDocumentScreen(title: title, content: text);
         },
       ),
       GoRoute(
@@ -147,25 +150,29 @@ final routerProvider = Provider<GoRouter>((ref) {
     ],
     redirect: (context, state) {
       final status = notifier.status;
-      
-      final isAuthFlow = state.matchedLocation == '/welcome' ||
-                         state.matchedLocation == '/onboarding' ||
-                         state.matchedLocation == '/login' || 
-                         state.matchedLocation == '/otp' || 
-                         state.matchedLocation == '/signup' ||
-                         state.matchedLocation == '/location-permission' ||
-                         state.matchedLocation == '/notifications-permission' ||
-                         state.matchedLocation == '/setup-complete';
+
+      final isAuthFlow =
+          state.matchedLocation == '/welcome' ||
+          state.matchedLocation == '/onboarding' ||
+          state.matchedLocation == '/login' ||
+          state.matchedLocation == '/forgot-password' ||
+          state.matchedLocation == '/otp' ||
+          state.matchedLocation == '/signup' ||
+          state.matchedLocation == '/location-permission' ||
+          state.matchedLocation == '/notifications-permission' ||
+          state.matchedLocation == '/setup-complete';
       final isSplash = state.matchedLocation == '/splash';
 
       if (status == AuthStatus.initial) return isSplash ? null : '/splash';
-      
+
       if (status == AuthStatus.unauthenticated) {
         return isAuthFlow ? null : '/welcome';
       }
 
       if (status == AuthStatus.authenticated) {
-        if (isAuthFlow || isSplash) return '/customer-home';
+        if (isAuthFlow || isSplash) {
+          return authHomeRoute(ref.read(userProvider)?.role);
+        }
       }
 
       return null;

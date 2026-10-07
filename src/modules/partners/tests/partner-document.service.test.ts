@@ -9,7 +9,7 @@ const ownerId = '550e8400-e29b-41d4-a716-446655440000';
 const documentId = '750e8400-e29b-41d4-a716-446655440000';
 const actor = {
   userId: ownerId,
-  role: 'customer',
+  role: 'fleet_owner',
 } as const;
 
 const document = (status: PartnerDocument['status'] = 'PENDING'): PartnerDocument => ({
@@ -96,7 +96,12 @@ describe('PartnerDocumentService', () => {
 
     const service = new PartnerDocumentService(repo);
 
-    await service.updateDocumentMetadata(partnerId, documentId, { status: 'VERIFIED' }, actor);
+    await service.updateDocumentMetadata(
+      partnerId,
+      documentId,
+      { status: 'VERIFIED' },
+      { userId: 'reviewer', role: 'admin' },
+    );
 
     expect(repo.update).toHaveBeenCalledWith(
       documentId,
@@ -110,11 +115,29 @@ describe('PartnerDocumentService', () => {
     const invalid = new PartnerDocumentService(repository(document('PENDING')));
 
     await expect(
-      invalid.updateDocumentMetadata(partnerId, documentId, { status: 'VERIFIED' }, actor),
+      invalid.updateDocumentMetadata(
+        partnerId,
+        documentId,
+        { status: 'VERIFIED' },
+        { userId: 'reviewer', role: 'admin' },
+      ),
     ).rejects.toMatchObject({
       code: 'INVALID_DOCUMENT_STATUS_TRANSITION',
       statusCode: 400,
     });
+  });
+
+  it('forbids a provider from reviewing their own submitted document', async () => {
+    const repo = repository(document('SUBMITTED'));
+    await expect(
+      new PartnerDocumentService(repo).updateDocumentMetadata(
+        partnerId,
+        documentId,
+        { status: 'VERIFIED' },
+        actor,
+      ),
+    ).rejects.toMatchObject({ statusCode: 403 });
+    expect(repo.update).not.toHaveBeenCalled();
   });
 
   it('allows submission and expiration transitions with consistent timestamps', async () => {
@@ -147,7 +170,7 @@ describe('PartnerDocumentService', () => {
       partnerId,
       documentId,
       { status: 'EXPIRED' },
-      actor,
+      { userId: 'reviewer', role: 'admin' },
     );
 
     expect(expiredRepository.update).toHaveBeenCalledWith(

@@ -155,3 +155,40 @@ export type VehicleDriverQuery = z.infer<typeof vehicleDriverQuerySchema>;
 export type VehicleFleetQuery = z.infer<typeof vehicleFleetQuerySchema>;
 
 export type DeactivateVehicleInput = z.infer<typeof deactivateVehicleSchema>;
+
+// Rupee API values must have at most two decimal places (no coercion).
+const exactFare = z
+  .number()
+  .finite()
+  .nonnegative()
+  .max(99_999_999.99)
+  .refine((v) => /^\d+(?:\.\d{1,2})?$/.test(String(v)), 'Use at most two decimal places');
+export const createVehicleTypeSchema = z
+  .object({
+    name: vehicleText,
+    code: z.string().regex(/^[a-z][a-z0-9_]{0,49}$/),
+    sector: z.enum(['passenger', 'logistics', 'service', 'premium']),
+    baseFare: exactFare,
+    perKmRate: exactFare,
+    currency: z.literal('INR').default('INR'),
+    active: z.boolean().default(false),
+  })
+  .strict();
+export const updateVehicleTypeSchema = z
+  .object({
+    name: vehicleText.optional(),
+    baseFare: exactFare.optional(),
+    perKmRate: exactFare.optional(),
+    active: z.boolean().optional(),
+    expectedVersion: z.number().int().positive(),
+  })
+  .strict()
+  .refine(
+    (v) => Object.keys(v).some((k) => k !== 'expectedVersion'),
+    'At least one change is required',
+  );
+export const vehicleTypeStatusSchema = z
+  .object({ active: z.boolean(), expectedVersion: z.number().int().positive() })
+  .strict();
+export type CreateVehicleTypeInput = z.infer<typeof createVehicleTypeSchema>;
+export type UpdateVehicleTypeInput = z.infer<typeof updateVehicleTypeSchema>;

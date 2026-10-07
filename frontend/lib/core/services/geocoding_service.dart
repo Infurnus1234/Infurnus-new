@@ -2,94 +2,62 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
+import '../network/dio_client.dart';
+
 class GeocodingService {
   final Dio _dio;
+  GeocodingService({Dio? dio}) : _dio = dio ?? Dio();
 
-  GeocodingService({Dio? dio})
-    : _dio =
-          dio ??
-          Dio(
-            BaseOptions(
-              connectTimeout: const Duration(seconds: 6),
-              receiveTimeout: const Duration(seconds: 6),
-              headers: {
-                'User-Agent': 'Infurnus-RideBooking/1.0',
-                'Accept': 'application/json',
-              },
-            ),
-          );
+  static bool validCoordinates(double lat, double lng) =>
+      lat.isFinite &&
+      lng.isFinite &&
+      lat >= -90 &&
+      lat <= 90 &&
+      lng >= -180 &&
+      lng <= 180;
 
-  /// Geocodes an address string to LatLng coordinates.
-  /// First checks if input is already formatted as "lat, lng" coordinates.
-  /// Otherwise queries the OpenStreetMap Nominatim geocoding service.
   Future<LatLng?> geocodeAddress(String query) async {
-    final trimmed = query.trim();
-    if (trimmed.isEmpty) return null;
-
-    // 1. Direct coordinate format parse: "12.9716, 77.5946" or "12.9716,77.5946"
-    final coordMatch = RegExp(
-      r'^([-+]?\d{1,2}(?:\.\d+)?)\s*,\s*([-+]?\d{1,3}(?:\.\d+)?)$',
-    ).firstMatch(trimmed);
-
-    if (coordMatch != null) {
-      final lat = double.tryParse(coordMatch.group(1)!);
-      final lng = double.tryParse(coordMatch.group(2)!);
-      if (lat != null &&
-          lng != null &&
-          lat >= -90.0 &&
-          lat <= 90.0 &&
-          lng >= -180.0 &&
-          lng <= 180.0) {
-        return LatLng(lat, lng);
-      }
+    final address = query.trim();
+    if (address.isEmpty) return null;
+    final match = RegExp(r'^([-+]?\d+(?:\.\d+)?)\s*,\s*([-+]?\d+(?:\.\d+)?)$')
+        .firstMatch(address);
+    if (match != null) {
+      final lat = double.parse(match.group(1)!);
+      final lng = double.parse(match.group(2)!);
+      return validCoordinates(lat, lng) ? LatLng(lat, lng) : null;
     }
-
-    // 2. Geocoding via Nominatim
-    try {
-      final response = await _dio.get<List<dynamic>>(
-        'https://nominatim.openstreetmap.org/search',
-        queryParameters: {'q': trimmed, 'format': 'json', 'limit': 1},
-      );
-
-      if (response.statusCode == 200 &&
-          response.data != null &&
-          response.data!.isNotEmpty) {
-        final first = response.data!.first as Map<String, dynamic>;
-        final latStr = first['lat'] as String?;
-        final lonStr = first['lon'] as String?;
-        if (latStr != null && lonStr != null) {
-          final lat = double.tryParse(latStr);
-          final lng = double.tryParse(lonStr);
-          if (lat != null && lng != null) {
-            return LatLng(lat, lng);
-          }
-        }
-      }
-    } catch (_) {
+    final response = await _dio.post(
+      '/maps/geocode',
+      data: {'address': address},
+    );
+    final point = response.data['data'];
+    final lat = point?['latitude'], lng = point?['longitude'];
+    if (lat is! num ||
+        lng is! num ||
+        !validCoordinates(lat.toDouble(), lng.toDouble())) {
       return null;
     }
-
-    return null;
+    return LatLng(lat.toDouble(), lng.toDouble());
   }
 
   Future<String?> reverseGeocode(LatLng coordinates) async {
-    try {
-      final response = await _dio.get<Map<String, dynamic>>(
-        'https://nominatim.openstreetmap.org/reverse',
-        queryParameters: {
-          'lat': coordinates.latitude,
-          'lon': coordinates.longitude,
-          'format': 'jsonv2',
-        },
-      );
-      final address = response.data?['display_name']?.toString().trim();
-      return address == null || address.isEmpty ? null : address;
-    } catch (_) {
+    if (!validCoordinates(coordinates.latitude, coordinates.longitude)) {
       return null;
     }
+    final response = await _dio.post(
+      '/maps/reverse-geocode',
+      data: {
+        'latitude': coordinates.latitude,
+        'longitude': coordinates.longitude,
+      },
+    );
+    final address = response.data['data']?['address'];
+    return address is String && address.trim().isNotEmpty
+        ? address.trim()
+        : null;
   }
 }
 
 final geocodingServiceProvider = Provider<GeocodingService>((ref) {
-  return GeocodingService();
+  return GeocodingService(dio: ref.read(dioProvider));
 });

@@ -57,6 +57,8 @@ const IMAGE_MAX_SIZE = 10 * MB;
 const DOCUMENT_MAX_SIZE = 15 * MB;
 
 const PRIVATE_DOCUMENT_CATEGORIES: readonly StorageDocumentCategory[] = [
+  'driver-profile-photo',
+  'partner-profile-photo',
   'owner-aadhaar',
   'owner-pan',
   'owner-address-proof',
@@ -82,7 +84,7 @@ const CATEGORY_POLICIES: Record<StorageDocumentCategory, FilePolicy> = {
 
   'driver-profile-photo': {
     resourceType: 'image',
-    accessMode: 'public',
+    accessMode: 'authenticated',
     maxSizeBytes: IMAGE_MAX_SIZE,
     mimeTypes: IMAGE_MIME_TYPES,
     extensions: IMAGE_EXTENSIONS,
@@ -98,7 +100,7 @@ const CATEGORY_POLICIES: Record<StorageDocumentCategory, FilePolicy> = {
 
   'partner-profile-photo': {
     resourceType: 'image',
-    accessMode: 'public',
+    accessMode: 'authenticated',
     maxSizeBytes: IMAGE_MAX_SIZE,
     mimeTypes: IMAGE_MIME_TYPES,
     extensions: IMAGE_EXTENSIONS,
@@ -108,96 +110,96 @@ const CATEGORY_POLICIES: Record<StorageDocumentCategory, FilePolicy> = {
     resourceType: 'raw',
     accessMode: 'authenticated',
     maxSizeBytes: DOCUMENT_MAX_SIZE,
-    mimeTypes: DOCUMENT_MIME_TYPES,
-    extensions: DOCUMENT_EXTENSIONS,
+    mimeTypes: [...DOCUMENT_MIME_TYPES, ...IMAGE_MIME_TYPES],
+    extensions: [...DOCUMENT_EXTENSIONS, ...IMAGE_EXTENSIONS],
   },
 
   'owner-pan': {
     resourceType: 'raw',
     accessMode: 'authenticated',
     maxSizeBytes: DOCUMENT_MAX_SIZE,
-    mimeTypes: DOCUMENT_MIME_TYPES,
-    extensions: DOCUMENT_EXTENSIONS,
+    mimeTypes: [...DOCUMENT_MIME_TYPES, ...IMAGE_MIME_TYPES],
+    extensions: [...DOCUMENT_EXTENSIONS, ...IMAGE_EXTENSIONS],
   },
 
   'owner-address-proof': {
     resourceType: 'raw',
     accessMode: 'authenticated',
     maxSizeBytes: DOCUMENT_MAX_SIZE,
-    mimeTypes: DOCUMENT_MIME_TYPES,
-    extensions: DOCUMENT_EXTENSIONS,
+    mimeTypes: [...DOCUMENT_MIME_TYPES, ...IMAGE_MIME_TYPES],
+    extensions: [...DOCUMENT_EXTENSIONS, ...IMAGE_EXTENSIONS],
   },
 
   'driver-license': {
     resourceType: 'raw',
     accessMode: 'authenticated',
     maxSizeBytes: DOCUMENT_MAX_SIZE,
-    mimeTypes: DOCUMENT_MIME_TYPES,
-    extensions: DOCUMENT_EXTENSIONS,
+    mimeTypes: [...DOCUMENT_MIME_TYPES, ...IMAGE_MIME_TYPES],
+    extensions: [...DOCUMENT_EXTENSIONS, ...IMAGE_EXTENSIONS],
   },
 
   'vehicle-rc': {
     resourceType: 'raw',
     accessMode: 'authenticated',
     maxSizeBytes: DOCUMENT_MAX_SIZE,
-    mimeTypes: DOCUMENT_MIME_TYPES,
-    extensions: DOCUMENT_EXTENSIONS,
+    mimeTypes: [...DOCUMENT_MIME_TYPES, ...IMAGE_MIME_TYPES],
+    extensions: [...DOCUMENT_EXTENSIONS, ...IMAGE_EXTENSIONS],
   },
 
   'vehicle-insurance': {
     resourceType: 'raw',
     accessMode: 'authenticated',
     maxSizeBytes: DOCUMENT_MAX_SIZE,
-    mimeTypes: DOCUMENT_MIME_TYPES,
-    extensions: DOCUMENT_EXTENSIONS,
+    mimeTypes: [...DOCUMENT_MIME_TYPES, ...IMAGE_MIME_TYPES],
+    extensions: [...DOCUMENT_EXTENSIONS, ...IMAGE_EXTENSIONS],
   },
 
   'vehicle-permit': {
     resourceType: 'raw',
     accessMode: 'authenticated',
     maxSizeBytes: DOCUMENT_MAX_SIZE,
-    mimeTypes: DOCUMENT_MIME_TYPES,
-    extensions: DOCUMENT_EXTENSIONS,
+    mimeTypes: [...DOCUMENT_MIME_TYPES, ...IMAGE_MIME_TYPES],
+    extensions: [...DOCUMENT_EXTENSIONS, ...IMAGE_EXTENSIONS],
   },
 
   'vehicle-fitness': {
     resourceType: 'raw',
     accessMode: 'authenticated',
     maxSizeBytes: DOCUMENT_MAX_SIZE,
-    mimeTypes: DOCUMENT_MIME_TYPES,
-    extensions: DOCUMENT_EXTENSIONS,
+    mimeTypes: [...DOCUMENT_MIME_TYPES, ...IMAGE_MIME_TYPES],
+    extensions: [...DOCUMENT_EXTENSIONS, ...IMAGE_EXTENSIONS],
   },
 
   'partner-aadhaar': {
     resourceType: 'raw',
     accessMode: 'authenticated',
     maxSizeBytes: DOCUMENT_MAX_SIZE,
-    mimeTypes: DOCUMENT_MIME_TYPES,
-    extensions: DOCUMENT_EXTENSIONS,
+    mimeTypes: [...DOCUMENT_MIME_TYPES, ...IMAGE_MIME_TYPES],
+    extensions: [...DOCUMENT_EXTENSIONS, ...IMAGE_EXTENSIONS],
   },
 
   'partner-pan': {
     resourceType: 'raw',
     accessMode: 'authenticated',
     maxSizeBytes: DOCUMENT_MAX_SIZE,
-    mimeTypes: DOCUMENT_MIME_TYPES,
-    extensions: DOCUMENT_EXTENSIONS,
+    mimeTypes: [...DOCUMENT_MIME_TYPES, ...IMAGE_MIME_TYPES],
+    extensions: [...DOCUMENT_EXTENSIONS, ...IMAGE_EXTENSIONS],
   },
 
   'partner-address-proof': {
     resourceType: 'raw',
     accessMode: 'authenticated',
     maxSizeBytes: DOCUMENT_MAX_SIZE,
-    mimeTypes: DOCUMENT_MIME_TYPES,
-    extensions: DOCUMENT_EXTENSIONS,
+    mimeTypes: [...DOCUMENT_MIME_TYPES, ...IMAGE_MIME_TYPES],
+    extensions: [...DOCUMENT_EXTENSIONS, ...IMAGE_EXTENSIONS],
   },
 
   'partner-document': {
     resourceType: 'raw',
     accessMode: 'authenticated',
     maxSizeBytes: DOCUMENT_MAX_SIZE,
-    mimeTypes: DOCUMENT_MIME_TYPES,
-    extensions: DOCUMENT_EXTENSIONS,
+    mimeTypes: [...DOCUMENT_MIME_TYPES, ...IMAGE_MIME_TYPES],
+    extensions: [...DOCUMENT_EXTENSIONS, ...IMAGE_EXTENSIONS],
   },
 
   other: {

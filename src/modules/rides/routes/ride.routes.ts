@@ -1,9 +1,14 @@
+import rateLimit from 'express-rate-limit';
+import { env } from '../../../config/env.js';
 import { Router } from 'express';
 
 import { requireAuth } from '../../auth/middleware/auth.middleware.js';
 import { requireRoles } from '../../auth/middleware/authorization.middleware.js';
 
-import { createRequiredSingleFileUpload } from '../../../infrastructure/storage/multipart.js';
+import {
+  createRequiredSingleFileUpload,
+  createRequiredMultipleFileUpload,
+} from '../../../infrastructure/storage/multipart.js';
 
 import type { DriverController } from '../controllers/driver.controller.js';
 import type { RideController } from '../controllers/ride.controller.js';
@@ -12,15 +17,22 @@ export function createRideRouter(controller: RideController, driverController?: 
   const router = Router();
 
   router.use(requireAuth);
+  const mapLimit = rateLimit({
+    windowMs: 60000,
+    limit: env.MAP_RATE_LIMIT_MAX,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    keyGenerator: (req) => req.auth!.userId,
+  });
 
   if (driverController) {
     // ==========================================================
     // Driver Profile
     // ==========================================================
 
-    router.get('/driver/profile', driverController.getProfile);
+    router.get('/driver/profile', requireRoles('driver'), driverController.getProfile);
 
-    router.post('/driver/profile', driverController.upsertProfile);
+    router.post('/driver/profile', requireRoles('driver'), driverController.upsertProfile);
 
     // ==========================================================
     // Driver Documents
@@ -29,10 +41,25 @@ export function createRideRouter(controller: RideController, driverController?: 
     router.post(
       '/driver/documents/:documentType',
       requireRoles('driver'),
+      mapLimit,
       ...createRequiredSingleFileUpload({
         fieldName: 'file',
       }),
       driverController.uploadDocument,
+    );
+
+    router.post(
+      '/driver/documents/:documentType/pages',
+      requireRoles('driver'),
+      mapLimit,
+      ...createRequiredMultipleFileUpload({ fieldName: 'files', maxFiles: 5 }),
+      driverController.uploadDocumentPages,
+    );
+
+    router.get(
+      '/driver/documents/:documentId/pages/access-urls',
+      requireRoles('driver'),
+      driverController.getDocumentPageAccessUrls,
     );
 
     router.get('/driver/documents', requireRoles('driver'), driverController.listDocuments);
@@ -68,6 +95,8 @@ export function createRideRouter(controller: RideController, driverController?: 
     router.get('/driver/available', requireRoles('driver'), driverController.listAvailableRides);
 
     router.post('/driver/available/:id/decline', requireRoles('driver'), driverController.decline);
+
+    router.get('/driver/rides/:id/map', requireRoles('driver'), mapLimit, driverController.map);
 
     router.get('/driver/current-trip', requireRoles('driver'), driverController.getCurrentTrip);
 
@@ -120,6 +149,8 @@ export function createRideRouter(controller: RideController, driverController?: 
 
   router.get('/', controller.list);
 
+  router.get('/:id/map', mapLimit, controller.map);
+  router.post('/:id/location', mapLimit, controller.location);
   router.get('/:id', controller.getById);
 
   router.post('/:id/cancel', controller.cancel);

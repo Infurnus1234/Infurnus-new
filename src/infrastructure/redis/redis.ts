@@ -7,6 +7,7 @@ if (!env.REDIS_URL) {
 
 const redisOptions = {
   connectTimeout: env.REDIS_CONNECT_TIMEOUT_MS,
+  commandTimeout: env.REDIS_CONNECT_TIMEOUT_MS,
   maxRetriesPerRequest: env.REDIS_MAX_RETRIES,
   enableReadyCheck: true,
   lazyConnect: true,
@@ -22,8 +23,8 @@ redis.on('ready', () => {
   console.log('[Redis] Connection ready');
 });
 
-redis.on('error', (error: Error) => {
-  console.error('[Redis] Connection error:', error.message);
+redis.on('error', () => {
+  console.error('[Redis] Connection unavailable');
 });
 
 redis.on('close', () => {
@@ -34,12 +35,41 @@ redis.on('reconnecting', (delay: number) => {
   console.warn(`[Redis] Reconnecting in ${delay}ms...`);
 });
 
-export async function connectRedis(): Promise<void> {
-  if (redis.status === 'ready' || redis.status === 'connecting') {
-    return;
-  }
+let connecting: Promise<void> | undefined;
 
-  await redis.connect();
+export async function connectRedis(): Promise<void> {
+  if (redis.status === 'ready') return;
+  if (connecting) return connecting;
+  connecting = (async () => {
+    if (redis.status === 'wait' || redis.status === 'end') {
+      await redis.connect();
+    } else {
+      await new Promise<void>((resolve, reject) => {
+        const cleanup = () => {
+          clearTimeout(timer);
+          redis.off('ready', ready);
+          redis.off('end', ended);
+        };
+        const ready = () => {
+          cleanup();
+          resolve();
+        };
+        const ended = () => {
+          cleanup();
+          reject(new Error('Redis connection ended'));
+        };
+        const timer = setTimeout(() => {
+          cleanup();
+          reject(new Error('Redis readiness timed out'));
+        }, env.REDIS_CONNECT_TIMEOUT_MS);
+        redis.once('ready', ready);
+        redis.once('end', ended);
+      });
+    }
+  })().finally(() => {
+    connecting = undefined;
+  });
+  return connecting;
 }
 
 export async function disconnectRedis(): Promise<void> {
@@ -47,16 +77,25 @@ export async function disconnectRedis(): Promise<void> {
     return;
   }
 
-  await redis.quit();
+  if (redis.status !== 'ready') {
+    redis.disconnect();
+    return;
+  }
+  try {
+    await redis.quit();
+  } finally {
+    redis.disconnect();
+  }
 }
 
 export async function checkRedisHealth(): Promise<boolean> {
   try {
+    if (redis.status !== 'ready') return false;
     const response = await redis.ping();
 
     return response === 'PONG';
-  } catch (error) {
-    console.error('[Redis] Health check failed:', error instanceof Error ? error.message : error);
+  } catch {
+    console.error('[Redis] Health check unavailable');
 
     return false;
   }

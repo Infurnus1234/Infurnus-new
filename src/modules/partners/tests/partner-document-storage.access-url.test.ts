@@ -67,7 +67,7 @@ function createApp(service: PartnerDocumentStorageService) {
   return app;
 }
 
-async function createAccessToken(role: 'user' | 'admin' | 'super_admin') {
+async function createAccessToken(role: 'fleet_owner' | 'admin' | 'super_admin') {
   return signAccessToken({
     sub: userId,
     role,
@@ -162,7 +162,7 @@ describe('Partner document storage access URL API', () => {
   });
 
   it('returns 403 when the storage service rejects sensitive document access', async () => {
-    const token = await createAccessToken('user');
+    const token = await createAccessToken('fleet_owner');
 
     const forbiddenError = new Error('You do not have permission to access this document');
 
@@ -184,7 +184,7 @@ describe('Partner document storage access URL API', () => {
       documentId,
       expect.objectContaining({
         userId,
-        role: 'user',
+        role: 'fleet_owner',
       }),
     );
 

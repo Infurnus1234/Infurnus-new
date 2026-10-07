@@ -200,7 +200,7 @@ describe('Partner document storage upload API', () => {
           storageProvider: 'cloudinary',
           storageKey: profilePhotoStorageKey,
           resourceType: 'image',
-          accessMode: 'public',
+          accessMode: 'authenticated',
           mimeType: 'image/jpeg',
           fileSize: 1024,
           originalFileName: 'profile.jpg',
@@ -215,7 +215,7 @@ describe('Partner document storage upload API', () => {
       storageProvider: 'cloudinary',
       storageKey: profilePhotoStorageKey,
       resourceType: 'image',
-      accessMode: 'public',
+      accessMode: 'authenticated',
       mimeType: 'image/jpeg',
       fileSize: 1024,
     });
@@ -241,7 +241,7 @@ describe('Partner document storage upload API', () => {
       expect.objectContaining({
         folder: `infurnus/partners/${partnerId}/documents/profile_photo`,
         resourceType: 'image',
-        accessMode: 'public',
+        accessMode: 'authenticated',
         file: expect.objectContaining({
           mimeType: 'image/jpeg',
           originalFileName: 'profile.jpg',
@@ -261,7 +261,7 @@ describe('Partner document storage upload API', () => {
             storageProvider: 'cloudinary',
             storageKey: profilePhotoStorageKey,
             resourceType: 'image',
-            accessMode: 'public',
+            accessMode: 'authenticated',
             mimeType: 'image/jpeg',
             fileSize: 1024,
             originalFileName: 'profile.jpg',

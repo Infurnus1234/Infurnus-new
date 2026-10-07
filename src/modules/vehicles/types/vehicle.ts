@@ -111,3 +111,26 @@ export interface UpdateVehicleData {
   isCommercial?: boolean | undefined;
   permitDetails?: string | null | undefined;
 }
+
+/** Admin catalog rates use integer paise internally; category is the code on rides/inventory. */
+export interface VehicleType {
+  id: string;
+  name: string;
+  code: string;
+  sector: 'passenger' | 'logistics' | 'service' | 'premium';
+  baseFare: number;
+  perKmRate: number;
+  currency: 'INR';
+  active: boolean;
+  version: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+export interface VehicleFareSnapshot {
+  id: string;
+  code: string;
+  sector: string;
+  version: number;
+  baseFarePaise: number;
+  perKmRatePaise: number;
+}

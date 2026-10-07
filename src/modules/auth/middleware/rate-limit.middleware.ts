@@ -116,3 +116,9 @@ export const authPasswordResetRateLimiter = createRateLimiter({
   windowMs: env.AUTH_PASSWORD_RESET_RATE_LIMIT_WINDOW_MS,
   limit: env.AUTH_PASSWORD_RESET_RATE_LIMIT_MAX,
 });
+
+// Independent Google budget: password-login traffic must not exhaust this flow.
+export const authGoogleRateLimiter = createRateLimiter({
+  windowMs: env.AUTH_GOOGLE_RATE_LIMIT_WINDOW_MS,
+  limit: env.AUTH_GOOGLE_RATE_LIMIT_MAX,
+});

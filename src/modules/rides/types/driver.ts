@@ -6,6 +6,9 @@ export interface DriverLocation {
   latitude: number;
   longitude: number;
   recordedAt: Date;
+  speed?: number | undefined;
+  heading?: number | undefined;
+  accuracy?: number | undefined;
 }
 
 export interface DriverCandidate {
@@ -29,6 +32,8 @@ export interface DriverProfile {
   licenseNumber: string;
   licenseExpiry: string;
   verificationStatus: string;
+  verifiedBy?: string | null;
+  verifiedAt?: Date | null;
   rejectionReason?: string | null;
   availabilityStatus?: DriverAvailabilityStatus | null;
   dob?: string | null;
@@ -39,6 +44,8 @@ export interface DriverProfile {
   pinCode?: string | null;
   emergencyContactName?: string | null;
   emergencyContactPhone?: string | null;
+  emergencyContactRelationship?: string | null;
+  alternateContactPhone?: string | null;
   activeVehicleId?: string | null;
   createdAt: Date;
   updatedAt: Date;

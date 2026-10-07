@@ -8,6 +8,21 @@ class AuthRepositoryImpl implements AuthRepository {
   AuthRepositoryImpl(this._remoteDataSource);
 
   @override
+  Future<PasswordRecoverySession> forgotPassword(String email) =>
+      _remoteDataSource.forgotPassword(email);
+  @override
+  Future<PasswordRecoverySession> verifyPasswordResetOtp(
+    String token,
+    String otp,
+  ) => _remoteDataSource.verifyPasswordResetOtp(token, otp);
+  @override
+  Future<void> resetPassword(
+    String token,
+    String password,
+    String confirmation,
+  ) => _remoteDataSource.resetPassword(token, password, confirmation);
+
+  @override
   Future<SignupResponse> signup(SignupRequest request) {
     return _remoteDataSource.signup(request);
   }
@@ -48,7 +63,9 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<LoginChallengeResponse> resendLoginEmailOtp(ResendLoginRequest request) {
+  Future<LoginChallengeResponse> resendLoginEmailOtp(
+    ResendLoginRequest request,
+  ) {
     return _remoteDataSource.resendLoginEmailOtp(request);
   }
 

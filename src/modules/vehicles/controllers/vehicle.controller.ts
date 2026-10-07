@@ -34,6 +34,8 @@ export class VehicleController {
     try {
       const { id } = vehicleIdSchema.parse(request.params);
 
+      await this.service.assertReadAccess(request.auth!, id);
+
       const vehicle = await this.service.getVehicle(id);
 
       response.json({
@@ -49,6 +51,8 @@ export class VehicleController {
   list = async (request: Request, response: Response, next: NextFunction) => {
     try {
       const query = vehicleDriverQuerySchema.parse(request.query);
+
+      await this.service.assertReadAccess(request.auth!, undefined, query.driverProfileId);
 
       const vehicles = await this.service.listVehicles(query);
 

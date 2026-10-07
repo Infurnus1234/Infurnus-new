@@ -52,3 +52,13 @@ emit `driver:accept`, `ride:status`, and `driver:location`. Room events include
 `ride:driver_assigned`, `ride:lifecycle_updated`, and
 `ride:driver_location_updated`. Disconnects mark driver availability stale
 without destroying active ride state.
+
+## Participant ride map contracts (MAP3)
+
+Customer: GET /rides/:id/map. Assigned driver with driver role: GET /rides/driver/rides/:id/map. Strict optional includeRoute=true explicitly requests existing routing; default polling performs no provider request. SQL binds real customer/assigned driver identity. Terminal/unassigned rides expose no live location/active route; strangers 404, unauthenticated 401, wrong driver role 403.
+
+Separate DTO views include rideId/view/type/status/category; fare (INR/bookedAmount/finalAmount/amount/authority); totalDistance (meters/source); pickup/drop (coordinates/address); driverLocation/userLocation (coordinates/timestamp or null); driverLocationFresh; pickupDistance/pickupEta; route/routeStatus/segment/progress/eta; routeVersion/updatedAt. Distance sources distinguish booking/geographic estimate/unavailable. ETA is provider_route or route_progress_estimate, not live traffic. Booking amount reads existing server-fixed fare_estimate; final fare is separate. No full entity/PIN/raw metadata/identity/history.
+
+Opt-in customer sharing: POST /rides/:id/location with latitude/longitude/timestamp, or authenticated ride:user_location with those fields plus rideId. Only active assigned ride's owning customer may publish. Stale/future/older/terminal writes reject; service/socket state and rate limits bounded. ride:user_location_updated delivers rideId/location only to authorized rideRoom. Never infer current user position from pickup. Existing driver GPS events remain with late freshness/assignment/lifecycle guards.
+
+Sanitized driver offer/current/action/history payloads add rideInformation (authoritative fare, canonical distance, endpoints/category/status), while raw billing/PIN remain stripped. Current trip queries active assignment. No new accept/reject/pricing decision. Google request-local routes need approved geometry/credentials; durable navigation retains MAP2 restriction. See [MAP3.md](../MAP3.md).

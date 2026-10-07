@@ -1,0 +1,35 @@
+services:
+  backend:
+    build: .
+    container_name: infurnus-backend
+    restart: unless-stopped
+    init: true
+    env_file:
+      - ${INFURNUS_RUNTIME_ENV_FILE:?Supply an approved runtime env file outside the repository}
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      MAP_SERVICE_AREA_BOUNDARY_FILE: /run/infurnus/service-area.geojson
+    volumes:
+      - type: bind
+        source: ${INFURNUS_APPROVED_BOUNDARY_FILE:?Supply the owner-approved GeoJSON geometry}
+        target: /run/infurnus/service-area.geojson
+        read_only: true
+    ports:
+      - '3000:3000'
+    deploy:
+      replicas: 1
+      update_config:
+        order: stop-first
+    stop_grace_period: 15s
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 3

@@ -16,6 +16,7 @@ export interface PartnerDocumentRepository {
     id: string,
     partnerId: string,
     data: UpdatePartnerDocumentData,
+    expectedVersion?: number,
   ): Promise<PartnerDocument | null>;
   delete(id: string, partnerId: string): Promise<PartnerDocument | null>;
 }
@@ -27,6 +28,7 @@ const projection = `
   document_type AS "documentType",
   status,
   metadata,
+  version, upload_source AS "uploadSource", reviewed_by AS "reviewedBy", reviewed_at AS "reviewedAt",
   issued_at AS "issuedAt",
   expires_at AS "expiresAt",
   uploaded_at AS "uploadedAt",
@@ -77,9 +79,9 @@ export class PostgresPartnerDocumentRepository implements PartnerDocumentReposit
           status,
           metadata,
           issued_at,
-          expires_at
+          expires_at, upload_source
         )
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING ${projection}`,
       [
         data.partnerId,
@@ -89,6 +91,7 @@ export class PostgresPartnerDocumentRepository implements PartnerDocumentReposit
         data.metadata ?? null,
         data.issuedAt ?? null,
         data.expiresAt ?? null,
+        data.metadata?.uploadSource ?? 'FILE',
       ],
     );
 
@@ -129,6 +132,7 @@ export class PostgresPartnerDocumentRepository implements PartnerDocumentReposit
     id: string,
     partnerId: string,
     data: UpdatePartnerDocumentData,
+    expectedVersion?: number,
   ): Promise<PartnerDocument | null> {
     const columns: Record<keyof UpdatePartnerDocumentData, string> = {
       status: 'status',
@@ -136,6 +140,8 @@ export class PostgresPartnerDocumentRepository implements PartnerDocumentReposit
       issuedAt: 'issued_at',
       expiresAt: 'expires_at',
       verifiedAt: 'verified_at',
+      reviewedBy: 'reviewed_by',
+      reviewedAt: 'reviewed_at',
     };
 
     const fields = Object.keys(data) as Array<keyof UpdatePartnerDocumentData>;
@@ -144,7 +150,7 @@ export class PostgresPartnerDocumentRepository implements PartnerDocumentReposit
       return this.findById(id, partnerId);
     }
 
-    const values = fields.map((field) => data[field]);
+    const values: unknown[] = fields.map((field) => data[field]);
 
     const assignments = fields.map((field, index) => `${columns[field]} = $${index + 1}`);
 
@@ -155,11 +161,13 @@ export class PostgresPartnerDocumentRepository implements PartnerDocumentReposit
       `UPDATE partner_documents
        SET
          ${assignments.join(', ')},
+         ${fields.includes('metadata') ? `upload_source=COALESCE(($${fields.indexOf('metadata') + 1}::jsonb)->>'uploadSource',upload_source),` : ''}
          updated_at = NOW()
        WHERE id = $${idParameter}
          AND partner_id = $${partnerParameter}
+         AND ($${partnerParameter + 1}::int IS NULL OR version=$${partnerParameter + 1})
        RETURNING ${projection}`,
-      [...values, id, partnerId],
+      [...values, id, partnerId, expectedVersion ?? null],
     );
 
     return result.rows[0] ?? null;

@@ -9,7 +9,7 @@ const phoneSchema = z
   .trim()
   .regex(/^\+?[1-9]\d{7,14}$/, 'Invalid phone number');
 
-const emailSchema = z
+export const emailSchema = z
   .string()
   .trim()
   .email('Invalid email address')
@@ -376,3 +376,13 @@ export const changePasswordSchema = z
       });
     }
   });
+
+export const googleAuthSchema = z
+  .object({
+    idToken: z
+      .string()
+      .min(1)
+      .max(16384)
+      .regex(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/),
+  })
+  .strict();

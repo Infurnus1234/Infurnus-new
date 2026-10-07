@@ -4,7 +4,7 @@ class PolylineDecoder {
   /// Decodes an encoded polyline string into a list of [LatLng] points.
   /// Uses Google's encoded polyline algorithm.
   static List<LatLng> decode(String encoded) {
-    if (encoded.isEmpty) return [];
+    if (encoded.isEmpty || encoded.length > 200000) return [];
 
     final points = <LatLng>[];
     int index = 0;
@@ -17,7 +17,9 @@ class PolylineDecoder {
       int shift = 0;
       int result = 0;
       do {
+        if (index >= len || shift >= 30) return [];
         b = encoded.codeUnitAt(index++) - 63;
+        if (b < 0 || b > 63) return [];
         result |= (b & 0x1f) << shift;
         shift += 5;
       } while (b >= 0x20);
@@ -27,12 +29,16 @@ class PolylineDecoder {
       shift = 0;
       result = 0;
       do {
+        if (index >= len || shift >= 30) return [];
         b = encoded.codeUnitAt(index++) - 63;
+        if (b < 0 || b > 63) return [];
         result |= (b & 0x1f) << shift;
         shift += 5;
       } while (b >= 0x20);
       final dlng = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
       lng += dlng;
+
+      if (lat.abs() > 9000000 || lng.abs() > 18000000) return [];
 
       points.add(LatLng(lat / 1e5, lng / 1e5));
     }

@@ -1,3 +1,4 @@
+import type { FleetListQuery } from '../schemas/fleet.schemas.js';
 import type { FleetRepository } from '../repositories/fleet.repository.js';
 import type { CreateFleetVehicleInput, UpdateFleetVehicleInput } from '../schemas/fleet.schemas.js';
 import type {
@@ -15,8 +16,10 @@ export class FleetService {
     return this.fleetRepo.getDashboard(ownerId);
   }
 
-  async listVehicles(ownerId: string): Promise<FleetVehicle[]> {
-    return this.fleetRepo.listVehicles(ownerId);
+  async listVehicles(ownerId: string, query?: FleetListQuery): Promise<FleetVehicle[]> {
+    return query
+      ? this.fleetRepo.listVehicles(ownerId, query)
+      : this.fleetRepo.listVehicles(ownerId);
   }
 
   async createVehicle(ownerId: string, input: CreateFleetVehicleInput): Promise<FleetVehicle> {
@@ -46,8 +49,8 @@ export class FleetService {
     return this.fleetRepo.unassignDriver(ownerId, vehicleId);
   }
 
-  async listDrivers(ownerId: string): Promise<FleetDriver[]> {
-    return this.fleetRepo.listDrivers(ownerId);
+  async listDrivers(ownerId: string, query?: FleetListQuery): Promise<FleetDriver[]> {
+    return query ? this.fleetRepo.listDrivers(ownerId, query) : this.fleetRepo.listDrivers(ownerId);
   }
 
   async listTrips(ownerId: string, limit?: number): Promise<FleetTrip[]> {

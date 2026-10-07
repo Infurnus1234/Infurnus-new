@@ -13,9 +13,14 @@ class EnvConfig {
     required this.environment,
   });
 
+  // Cloud Run backend (used by release builds and testers' APKs)
+  static const String _cloudRunUrl =
+      'https://infurnus-api-675633214574.asia-south2.run.app';
+
   // Dynamic configuration via compile-time environment flags:
   // flutter run --dart-define=API_URL=http://192.168.1.19:3001
-  // flutter build apk --release --dart-define=ENVIRONMENT=prod
+  // flutter build apk --release   (uses the Cloud Run URL by default)
+  // flutter build apk --release --dart-define=API_URL=https://other-url
   static const String _definedApiUrl =
       String.fromEnvironment('API_URL');
 
@@ -62,15 +67,15 @@ class EnvConfig {
 
   // Local development for physical Android device via USB adb reverse or LAN
   static const EnvConfig dev = EnvConfig(
-    baseUrl: 'http://10.86.91.230:3000',
-    socketUrl: 'http://10.86.91.230:3000',
+    baseUrl: 'http://10.99.55.230:3000',
+    socketUrl: 'http://10.99.55.230:3000',
     environment: Environment.dev,
   );
 
   // Android Emulator (10.0.2.2 points to host)
   static const EnvConfig emulator = EnvConfig(
-    baseUrl: 'http://10.86.91.230:3000',
-    socketUrl: 'http://10.86.91.230:3000', 
+    baseUrl: 'http://10.99.55.230:3000',
+    socketUrl: 'http://10.99.55.230:3000',
     environment: Environment.emulator,
   );
 
@@ -81,10 +86,10 @@ class EnvConfig {
     environment: Environment.staging,
   );
 
-  // Production environment
+  // Production environment (currently the Cloud Run service)
   static const EnvConfig prod = EnvConfig(
-    baseUrl: 'https://api.infurnus.com',
-    socketUrl: 'https://api.infurnus.com',
+    baseUrl: _cloudRunUrl,
+    socketUrl: _cloudRunUrl,
     environment: Environment.prod,
   );
 }

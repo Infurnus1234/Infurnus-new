@@ -5,6 +5,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthControllerDependencies } from '../controllers/auth.controller.js';
 
 const mockHandlers = {
+  google: vi.fn((_req, res) => {
+    res.status(200).json({ success: true });
+  }),
+  linkGoogle: vi.fn((_req, res) => {
+    res.status(200).json({ success: true });
+  }),
   signup: vi.fn((_req, res) => {
     res.status(201).json({
       success: true,
@@ -150,6 +156,17 @@ vi.mock('../../../config/env.js', async (importOriginal) => {
     env: {
       ...actual.env,
       AUTH_RATE_LIMIT_ENABLED: true,
+      // Small explicit budgets keep boundary tests fast; production defaults tested separately.
+      AUTH_LOGIN_RATE_LIMIT_MAX: 10,
+      AUTH_SIGNUP_RATE_LIMIT_MAX: 5,
+      AUTH_GOOGLE_RATE_LIMIT_MAX: 10,
+      AUTH_OTP_VERIFY_RATE_LIMIT_MAX: 10,
+      AUTH_OTP_RESEND_RATE_LIMIT_MAX: 5,
+      AUTH_REFRESH_RATE_LIMIT_MAX: 30,
+      AUTH_LOGOUT_RATE_LIMIT_MAX: 30,
+      AUTH_FORGOT_PASSWORD_RATE_LIMIT_MAX: 5,
+      AUTH_PASSWORD_RESET_VERIFY_RATE_LIMIT_MAX: 10,
+      AUTH_PASSWORD_RESET_RATE_LIMIT_MAX: 5,
     },
   };
 });
@@ -255,6 +272,22 @@ describe('Auth route rate limiting', { timeout: 15000 }, () => {
     expect(responses.filter((response) => response.status === 429)).toHaveLength(1);
   });
 
+  it('rate limits the Google login route', async () => {
+    const app = await createTestApp();
+
+    const responses = await Promise.all(
+      Array.from({ length: 11 }, () =>
+        request(app).post('/auth/google').send({
+          idToken: 'fixture-id-token',
+        }),
+      ),
+    );
+
+    expect(responses.filter((response) => response.status === 200)).toHaveLength(10);
+
+    expect(responses.filter((response) => response.status === 429)).toHaveLength(1);
+  });
+
   it('rate limits the refresh route', async () => {
     const app = await createTestApp();
 
@@ -312,5 +345,14 @@ describe('Auth route rate limiting', { timeout: 15000 }, () => {
     expect(response.status).toBe(200);
 
     expect(mockHandlers.login).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Independent Google rate budget', () => {
+  it('does not exhaust Google by exhausting password login', async () => {
+    const app = await createTestApp();
+    for (let i = 0; i < 11; i++) await request(app).post('/auth/login').send({});
+    expect((await request(app).post('/auth/login').send({})).status).toBe(429);
+    expect((await request(app).post('/auth/google').send({ idToken: 'fixture' })).status).toBe(200);
   });
 });

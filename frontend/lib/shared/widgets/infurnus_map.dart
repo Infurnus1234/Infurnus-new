@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -13,6 +15,7 @@ class InfurnusMap extends ConsumerStatefulWidget {
   final DriverLocation? driverLocation;
   final RouteModel? route;
   final CameraPosition? initialCameraPosition;
+  final double bottomOverlayHeight;
 
   const InfurnusMap({
     super.key,
@@ -21,48 +24,117 @@ class InfurnusMap extends ConsumerStatefulWidget {
     this.driverLocation,
     this.route,
     this.initialCameraPosition,
+    this.bottomOverlayHeight = 0,
   });
 
   @override
   ConsumerState<InfurnusMap> createState() => _InfurnusMapState();
 }
 
-class _InfurnusMapState extends ConsumerState<InfurnusMap> {
+class _InfurnusMapState extends ConsumerState<InfurnusMap>
+    with WidgetsBindingObserver {
   late MapService _mapService;
   LatLng? _currentLocation;
+  StreamSubscription? _locationSubscription;
+  String? _locationError;
+  bool _manualCamera = false;
+  bool _locating = false;
+  bool _locationSettingsRequired = false;
 
   @override
   void initState() {
     super.initState();
-    _mapService = ref.read(mapServiceProvider);
+    WidgetsBinding.instance.addObserver(this);
+    _mapService = ref.read(mapServiceProvider(this));
     _fetchInitialLocation();
   }
 
-  Future<void> _fetchInitialLocation() async {
-    // Only fetch current location if we don't have ride-specific coordinates
-    if (widget.pickup == null && widget.destination == null) {
+  Future<void> _fetchInitialLocation({bool recenter = false}) async {
+    if (_locating) return;
+    _locating = true;
+    try {
       final position = await ref
           .read(locationServiceProvider)
           .getCurrentPosition();
       if (position != null && mounted) {
         setState(() {
           _currentLocation = LatLng(position.latitude, position.longitude);
+          _locationError = null;
+          _locationSettingsRequired = false;
         });
-        _mapService.animateToLocation(_currentLocation!);
+        if (recenter ||
+            (widget.pickup == null &&
+                widget.destination == null &&
+                !_manualCamera)) {
+          if (recenter) _manualCamera = true;
+          await _mapService.animateToLocation(_currentLocation!);
+        }
+        if (!mounted) return;
+        await _locationSubscription?.cancel();
+        if (!mounted) return;
+        _locationSubscription = ref
+            .read(locationServiceProvider)
+            .getPositionStream()
+            .listen(
+              (position) {
+                if (!mounted) return;
+                setState(() {
+                  _locationError = null;
+                  _currentLocation = LatLng(
+                    position.latitude,
+                    position.longitude,
+                  );
+                });
+              },
+              onError: (_) {
+                if (mounted) {
+                  setState(
+                    () => _locationError =
+                        'Live location unavailable; showing last location.',
+                  );
+                }
+              },
+            );
       }
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _locationError = error.toString();
+          _locationSettingsRequired =
+              error is LocationUnavailableException && error.settingsRequired;
+        });
+      }
+    } finally {
+      _locating = false;
     }
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _fetchInitialLocation();
+  }
+
+  @override
   void dispose() {
-    _mapService.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    _locationSubscription?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(mapServiceProvider(this));
     final Set<Marker> markers = {};
     final Set<Polyline> polylines = {};
+    if (_currentLocation != null) {
+      markers.add(
+        _mapService.createMarker(
+          markerId: 'current',
+          position: _currentLocation!,
+          title: 'Your location',
+        ),
+      );
+    }
 
     if (widget.pickup != null) {
       markers.add(
@@ -116,24 +188,92 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap> {
 
     // Determine center for the fallback camera position
     final LatLng fallbackCenter =
-        widget.pickup ?? _currentLocation ?? const LatLng(20.5937, 78.9629);
+        widget.pickup ??
+        widget.destination ??
+        _currentLocation ??
+        const LatLng(25.6, 85.8);
     final double defaultZoom =
-        (widget.pickup != null || _currentLocation != null) ? 14.0 : 5.0;
+        (widget.pickup != null ||
+            widget.destination != null ||
+            _currentLocation != null)
+        ? 14.0
+        : 7.0;
 
-    return GoogleMap(
-      initialCameraPosition:
-          widget.initialCameraPosition ??
-          CameraPosition(target: fallbackCenter, zoom: defaultZoom),
-      markers: markers,
-      polylines: polylines,
-      onMapCreated: (controller) {
-        _mapService.onMapCreated(controller);
-        _fitBounds();
-      },
-      myLocationEnabled: true,
-      myLocationButtonEnabled: false,
-      zoomControlsEnabled: false,
-      mapToolbarEnabled: false,
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Listener(
+          onPointerDown: (_) => _manualCamera = true,
+          child: GoogleMap(
+            padding: EdgeInsets.only(bottom: widget.bottomOverlayHeight),
+            initialCameraPosition:
+                widget.initialCameraPosition ??
+                CameraPosition(target: fallbackCenter, zoom: defaultZoom),
+            markers: markers,
+            polylines: polylines,
+            onMapCreated: (controller) {
+              _mapService.onMapCreated(controller);
+              _fitBounds();
+            },
+            myLocationEnabled: _currentLocation != null,
+            myLocationButtonEnabled: false,
+            zoomControlsEnabled: false,
+            mapToolbarEnabled: false,
+          ),
+        ),
+        if (_locationError != null)
+          Positioned(
+            top: 8,
+            left: 8,
+            right: 8,
+            child: Material(
+              color: Theme.of(context).colorScheme.surface,
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Row(
+                  children: [
+                    Expanded(child: Text(_locationError!)),
+                    TextButton(
+                      onPressed: () async {
+                        if (_locationSettingsRequired) {
+                          await ref
+                              .read(locationServiceProvider)
+                              .openAppSettings();
+                        } else {
+                          await _fetchInitialLocation();
+                        }
+                      },
+                      child: Text(
+                        _locationSettingsRequired ? 'Settings' : 'Retry',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        Positioned(
+          top: 120,
+          right: 8,
+          child: IconButton.filled(
+            tooltip: 'Show current location',
+            icon: const Icon(Icons.my_location),
+            onPressed: () => _fetchInitialLocation(recenter: true),
+          ),
+        ),
+        Positioned(
+          top: 70,
+          right: 8,
+          child: IconButton.filled(
+            tooltip: 'Fit ride route',
+            icon: const Icon(Icons.center_focus_strong),
+            onPressed: () {
+              _manualCamera = false;
+              _fitBounds();
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -142,15 +282,25 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap> {
     super.didUpdateWidget(oldWidget);
     if (widget.pickup != oldWidget.pickup ||
         widget.destination != oldWidget.destination ||
-        widget.route != oldWidget.route) {
+        widget.route != oldWidget.route ||
+        widget.bottomOverlayHeight != oldWidget.bottomOverlayHeight) {
       _fitBounds();
     }
   }
 
   void _fitBounds() {
+    if (!mounted || _manualCamera) return;
     final points = <LatLng>[];
     if (widget.pickup != null) points.add(widget.pickup!);
     if (widget.destination != null) points.add(widget.destination!);
+    final encoded = widget.route?.encodedPolyline;
+    if (encoded != null) {
+      final polyline = _mapService.createPolyline(
+        polylineId: 'bounds',
+        encodedPolyline: encoded,
+      );
+      if (polyline != null) points.addAll(polyline.points);
+    }
     if (widget.driverLocation != null) {
       points.add(
         LatLng(
@@ -162,11 +312,15 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap> {
 
     if (points.length >= 2) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _mapService.fitBounds(points);
+        if (mounted && !_manualCamera) {
+          _mapService.fitBounds(points).catchError((_) {});
+        }
       });
     } else if (points.length == 1) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _mapService.animateToLocation(points.first);
+        if (mounted && !_manualCamera) {
+          _mapService.animateToLocation(points.first).catchError((_) {});
+        }
       });
     }
   }

@@ -77,7 +77,7 @@ describe('Phase 4 Step 3: Sector & Category Matching and Acceptance Isolation', 
       const candidates = await repo.findNearbyEligible(
         12.9,
         77.6,
-        5000,
+        2000,
         10,
         new Date(),
         'service',

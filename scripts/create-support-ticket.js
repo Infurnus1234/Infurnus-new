@@ -1,10 +1,14 @@
 import pg from 'pg';
 const { Pool } = pg;
 
-const pool = new Pool({ connectionString: 'postgresql://infurnus:infurnus_dev@localhost:5432/infurnus' });
+const pool = new Pool({
+  connectionString: 'postgresql://infurnus:infurnus_dev@localhost:5432/infurnus',
+});
 
 async function createTicket() {
-  const userRes = await pool.query("SELECT id FROM users WHERE email = 'user@infurnus.com' OR phone = '+919999999999' LIMIT 1");
+  const userRes = await pool.query(
+    "SELECT id FROM users WHERE email = 'user@infurnus.com' OR phone = '+919999999999' LIMIT 1",
+  );
   const userId = userRes.rows[0]?.id || 'f96be580-a039-4342-8a02-fed3d823b994';
 
   const category = 'Technical Issue / App Development';
@@ -59,13 +63,16 @@ Verify rejection, timeout, reassignment, and duplicate acceptance scenarios.`;
   const randomSuffix = Math.floor(1000 + Math.random() * 9000);
   const ticketNumber = `TCK-${Date.now().toString().slice(-4)}${randomSuffix}`;
 
-  const result = await pool.query(`
+  const result = await pool.query(
+    `
     INSERT INTO support_tickets (
       ticket_number, user_id, role, category, subject, message, status, created_at, updated_at
     )
     VALUES ($1, $2, 'driver', $3, $4, $5, 'OPEN', NOW(), NOW())
     RETURNING id, ticket_number, category, subject, status, created_at;
-  `, [ticketNumber, userId, category, subject, message]);
+  `,
+    [ticketNumber, userId, category, subject, message],
+  );
 
   console.log('SUPPORT TICKET CREATED SUCCESSFULLY:');
   console.log(JSON.stringify(result.rows[0], null, 2));

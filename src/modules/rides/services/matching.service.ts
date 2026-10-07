@@ -1,3 +1,4 @@
+import { serviceArea, type ServiceAreaGate } from '../../maps/service-area.js';
 import type { DriverRepository } from '../repositories/driver.repository.js';
 import type { Coordinates, MapProvider } from '../providers/map.provider.js';
 import type { DriverCandidate } from '../types/driver.js';
@@ -7,6 +8,7 @@ export class MatchingService {
   constructor(
     private readonly drivers: DriverRepository,
     private readonly maps?: MapProvider,
+    private readonly area: ServiceAreaGate = serviceArea,
   ) {}
 
   async findBestDriver(
@@ -22,13 +24,14 @@ export class MatchingService {
     sector?: string,
     vehicleCategory?: string,
   ): Promise<DriverCandidate[]> {
+    await this.area.assertSupported([pickup]);
     const staleBefore = new Date(Date.now() - env.DRIVER_LOCATION_STALE_SECONDS * 1000);
-    const candidates =
+    let candidates =
       sector !== undefined || vehicleCategory !== undefined
         ? await this.drivers.findNearbyEligible(
             pickup.latitude,
             pickup.longitude,
-            env.DRIVER_SEARCH_RADIUS_METERS,
+            env.MAP_DRIVER_RADII_METERS[0]!,
             env.MAX_DRIVER_MATCH_CANDIDATES,
             staleBefore,
             sector,
@@ -37,10 +40,23 @@ export class MatchingService {
         : await this.drivers.findNearbyEligible(
             pickup.latitude,
             pickup.longitude,
-            env.DRIVER_SEARCH_RADIUS_METERS,
+            env.MAP_DRIVER_RADII_METERS[0]!,
             env.MAX_DRIVER_MATCH_CANDIDATES,
             staleBefore,
           );
+
+    for (const radius of env.MAP_DRIVER_RADII_METERS.slice(1)) {
+      if (candidates.length) break;
+      candidates = await this.drivers.findNearbyEligible(
+        pickup.latitude,
+        pickup.longitude,
+        radius,
+        env.MAX_DRIVER_MATCH_CANDIDATES,
+        staleBefore,
+        sector,
+        vehicleCategory,
+      );
+    }
 
     if (candidates.length === 0 || !this.maps) {
       return [...candidates].sort(
@@ -50,13 +66,15 @@ export class MatchingService {
       );
     }
 
-    const routes = await this.maps.calculateMatrix(
-      candidates.map((candidate) => ({
-        latitude: candidate.latitude,
-        longitude: candidate.longitude,
-      })),
-      pickup,
-    );
+    const routes = await this.maps
+      .calculateMatrix(
+        candidates.map((candidate) => ({
+          latitude: candidate.latitude,
+          longitude: candidate.longitude,
+        })),
+        pickup,
+      )
+      .catch(() => []);
 
     return candidates
       .map((candidate) => ({
@@ -73,7 +91,7 @@ export class MatchingService {
             (right.route?.durationSeconds ?? Number.MAX_SAFE_INTEGER) ||
           left.candidate.distanceMeters - right.candidate.distanceMeters ||
           left.candidate.driverProfileId.localeCompare(right.candidate.driverProfileId),
-          )
-          .map(({ candidate }) => candidate);
+      )
+      .map(({ candidate }) => candidate);
   }
 }

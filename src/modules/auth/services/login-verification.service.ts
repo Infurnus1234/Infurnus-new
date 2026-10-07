@@ -133,7 +133,7 @@ export class LoginVerificationService {
 
     let verification: {
       verified: boolean;
-      attemptsRemaining: number;
+      attemptsRemaining: number | null;
     };
 
     try {
@@ -155,7 +155,7 @@ export class LoginVerificationService {
     // --------------------------------------------------------
 
     if (!verification.verified) {
-      if (verification.attemptsRemaining <= 0) {
+      if (verification.attemptsRemaining !== null && verification.attemptsRemaining <= 0) {
         throw new AppError('OTP_ATTEMPTS_EXCEEDED', 'Maximum OTP attempts exceeded', 429);
       }
 

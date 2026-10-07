@@ -57,10 +57,7 @@ describe('Support Ticket API', () => {
   const supportRepo = new MockSupportRepository();
   const app = express();
   app.use(express.json());
-  app.use(
-    '/support',
-    createSupportRouter(new SupportController(new SupportService(supportRepo))),
-  );
+  app.use('/support', createSupportRouter(new SupportController(new SupportService(supportRepo))));
 
   const userId = '770e8400-e29b-41d4-a716-446655440000';
 

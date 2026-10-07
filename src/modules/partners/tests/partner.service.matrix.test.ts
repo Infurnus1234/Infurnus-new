@@ -44,7 +44,7 @@ function repository(currentPartner: Partner = partner): PartnerRepository {
 
 const owner = {
   userId: ownerId,
-  role: 'customer',
+  role: 'fleet_owner',
 } as const;
 
 const admin = {

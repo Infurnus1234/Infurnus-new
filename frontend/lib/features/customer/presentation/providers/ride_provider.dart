@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -6,6 +9,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../../../core/services/cashfree_checkout_service.dart';
 import '../../../../core/services/geocoding_service.dart';
 import '../../../../core/services/location_service.dart';
+import '../../../../core/network/dio_client.dart';
 import '../../../../core/services/socket_service.dart';
 import '../../../../core/storage/secure_storage.dart';
 import '../../data/models/fare_estimate_model.dart';
@@ -55,6 +59,7 @@ class RideState {
   final model.RideModel? currentRide;
   final List<model.RideModel> history;
   final String? errorMessage;
+  final String? mapError;
   final DriverLocation? lastDriverLocation;
   final RouteModel? currentRoute;
   final int? userRating;
@@ -87,6 +92,7 @@ class RideState {
     this.currentRide,
     this.history = const [],
     this.errorMessage,
+    this.mapError,
     this.lastDriverLocation,
     this.currentRoute,
     this.userRating,
@@ -123,6 +129,9 @@ class RideState {
     model.RideModel? currentRide,
     List<model.RideModel>? history,
     String? errorMessage,
+    String? mapError,
+    bool clearMapData = false,
+    bool clearRide = false,
     DriverLocation? lastDriverLocation,
     RouteModel? currentRoute,
     int? userRating,
@@ -158,11 +167,14 @@ class RideState {
       isEstimatingFare: isEstimatingFare ?? this.isEstimatingFare,
       driverName: driverName ?? this.driverName,
       vehicleInfo: vehicleInfo ?? this.vehicleInfo,
-      currentRide: currentRide ?? this.currentRide,
+      currentRide: clearRide ? null : currentRide ?? this.currentRide,
       history: history ?? this.history,
       errorMessage: errorMessage,
-      lastDriverLocation: lastDriverLocation ?? this.lastDriverLocation,
-      currentRoute: currentRoute ?? this.currentRoute,
+      mapError: mapError,
+      lastDriverLocation: clearMapData
+          ? null
+          : lastDriverLocation ?? this.lastDriverLocation,
+      currentRoute: clearMapData ? null : currentRoute ?? this.currentRoute,
       userRating: userRating ?? this.userRating,
       userReview: userReview ?? this.userReview,
       isReviewSubmitted: isReviewSubmitted ?? this.isReviewSubmitted,
@@ -181,9 +193,116 @@ class RideNotifier extends StateNotifier<RideState> {
   final Ref ref;
   StreamSubscription<SocketServerEvent>? _eventSubscription;
   int _fareEstimateGeneration = 0;
+  int _mapGeneration = 0;
+  int _locationGeneration = 0;
+  StreamSubscription<SocketConnectionState>? _socketStateSubscription;
+  Future<bool>? _pendingFare;
+  String? _pendingFareKey;
+  int? _pendingFareGeneration;
 
   RideNotifier(this.ref) : super(RideState()) {
     _subscribeToSocketEvents();
+    _socketStateSubscription = ref
+        .read(socketServiceProvider)
+        .stateStream
+        .listen((connection) {
+          final id = state.currentRide?.id;
+          if (connection == SocketConnectionState.connected &&
+              id != null &&
+              _activeRide) {
+            ref.read(socketServiceProvider).joinRide(id);
+            refreshRideMap();
+          } else if (connection == SocketConnectionState.error ||
+              connection == SocketConnectionState.disconnected) {
+            if (mounted && _activeRide) {
+              state = state.copyWith(
+                mapError: 'Live connection interrupted; showing last update.',
+              );
+            }
+          }
+        });
+  }
+
+  bool get _activeRide =>
+      state.currentRide != null &&
+      state.status != RideStatus.completed &&
+      state.status != RideStatus.cancelled;
+
+  Future<void> refreshRideMap() async {
+    final generation = ++_mapGeneration;
+    final locationGeneration = _locationGeneration;
+    final id = state.currentRide?.id;
+    final pickup = state.pickupCoords, drop = state.destinationCoords;
+    if (id == null && (pickup == null || drop == null)) return;
+    if (id != null && !_activeRide) return;
+    try {
+      final dio = ref.read(dioProvider);
+      final response = id != null
+          ? await dio.get(
+              '/rides/$id/map',
+              queryParameters: {'includeRoute': true},
+            )
+          : await dio.post(
+              '/maps/route',
+              data: {
+                'origin': {
+                  'latitude': pickup!.latitude,
+                  'longitude': pickup.longitude,
+                },
+                'destination': {
+                  'latitude': drop!.latitude,
+                  'longitude': drop.longitude,
+                },
+              },
+            );
+      if (!mounted ||
+          generation != _mapGeneration ||
+          id != state.currentRide?.id) {
+        return;
+      }
+      final data = response.data['data'] as Map<String, dynamic>;
+      final route = id == null ? data : data['route'];
+      final location = id == null ? null : data['driverLocation'];
+      final currentLocation = locationGeneration != _locationGeneration
+          ? state.lastDriverLocation
+          : _parseDriverLocation(location);
+      state = state.copyWith(
+        clearMapData: true,
+        mapError: route == null
+            ? 'Road route unavailable; showing selected locations.'
+            : null,
+      );
+      state = state.copyWith(
+        currentRoute: route is Map<String, dynamic>
+            ? RouteModel.fromJson(route)
+            : null,
+        lastDriverLocation: currentLocation,
+        mapError: state.mapError,
+      );
+    } catch (_) {
+      if (mounted && generation == _mapGeneration) {
+        state = state.copyWith(
+          mapError: 'Map route unavailable. Please retry.',
+        );
+      }
+    }
+  }
+
+  DriverLocation? _parseDriverLocation(dynamic data) {
+    if (data is! Map || data['latitude'] is! num || data['longitude'] is! num) {
+      return null;
+    }
+    final lat = (data['latitude'] as num).toDouble(),
+        lng = (data['longitude'] as num).toDouble();
+    final timestamp = DateTime.tryParse(data['timestamp']?.toString() ?? '');
+    if (!GeocodingService.validCoordinates(lat, lng) || timestamp == null) {
+      return null;
+    }
+    if (state.lastDriverLocation != null &&
+        timestamp.isBefore(state.lastDriverLocation!.timestamp)) {
+      return null;
+    }
+    return DriverLocation(latitude: lat, longitude: lng, timestamp: timestamp);
   }
 
   void _subscribeToSocketEvents() {
@@ -196,7 +315,7 @@ class RideNotifier extends StateNotifier<RideState> {
   }
 
   void _handleSocketEvent(SocketServerEvent event) {
-    if (state.currentRide == null) return;
+    if (state.currentRide == null || event.data is! Map) return;
 
     switch (event.name) {
       case 'ride:driver_assigned':
@@ -215,6 +334,13 @@ class RideNotifier extends StateNotifier<RideState> {
                   : null,
             );
             _checkRoomLifecycle(updatedRide.status);
+            _mapGeneration++;
+            state = state.copyWith(clearMapData: true);
+            if (_activeRide) {
+              refreshRideMap();
+            } else {
+              state = state.copyWith(clearMapData: true);
+            }
           }
         }
         break;
@@ -223,18 +349,10 @@ class RideNotifier extends StateNotifier<RideState> {
         final rideId = event.data['rideId'];
         if (rideId == state.currentRide?.id) {
           final locationData = event.data['location'];
-          if (locationData != null && locationData is Map) {
-            state = state.copyWith(
-              lastDriverLocation: DriverLocation(
-                latitude: (locationData['latitude'] as num).toDouble(),
-                longitude: (locationData['longitude'] as num).toDouble(),
-                timestamp:
-                    DateTime.tryParse(
-                      locationData['timestamp']?.toString() ?? '',
-                    ) ??
-                    DateTime.now(),
-              ),
-            );
+          final location = _parseDriverLocation(locationData);
+          if (location != null && _activeRide) {
+            _locationGeneration++;
+            state = state.copyWith(lastDriverLocation: location);
           }
         }
         break;
@@ -243,11 +361,36 @@ class RideNotifier extends StateNotifier<RideState> {
         final rideId = event.data['rideId'];
         if (rideId == state.currentRide?.id) {
           final routeData = event.data['route'];
-          if (routeData != null && routeData is Map<String, dynamic>) {
-            state = state.copyWith(
-              currentRoute: RouteModel.fromJson(routeData),
-            );
+          final expectedSegment = state.status == RideStatus.active
+              ? 'destination'
+              : 'pickup';
+          if (event.data['segment'] != null &&
+              event.data['segment'] != expectedSegment) {
+            return;
           }
+          if (_activeRide &&
+              routeData != null &&
+              routeData is Map<String, dynamic>) {
+            try {
+              state = state.copyWith(
+                currentRoute: RouteModel.fromJson(routeData),
+              );
+            } catch (_) {
+              state = state.copyWith(
+                mapError: 'Invalid route update. Please retry.',
+              );
+            }
+          }
+        }
+        break;
+      case 'ride:cancelled':
+        if (event.data['rideId'] == state.currentRide?.id) {
+          _mapGeneration++;
+          state = state.copyWith(
+            status: RideStatus.cancelled,
+            clearMapData: true,
+          );
+          ref.read(socketServiceProvider).leaveRide(state.currentRide!.id);
         }
         break;
     }
@@ -279,8 +422,21 @@ class RideNotifier extends StateNotifier<RideState> {
     String dest, {
     LatLng? pickupCoords,
     LatLng? destCoords,
+    String? sector,
+    String? vehicleCategory,
+    Map<String, dynamic>? goods,
   }) {
+    if (state.pickup == pickup &&
+        state.destination == dest &&
+        (pickupCoords == null || pickupCoords == state.pickupCoords) &&
+        (destCoords == null || destCoords == state.destinationCoords) &&
+        (sector == null || sector == state.selectedSector) &&
+        (vehicleCategory == null || vehicleCategory == state.selectedTier) &&
+        (goods == null || mapEquals(goods, state.goods))) {
+      return;
+    }
     _fareEstimateGeneration++;
+    _mapGeneration++;
     final preservePickupCoords = state.pickup == pickup;
     final preserveDestinationCoords = state.destination == dest;
     state = state.copyWith(
@@ -291,14 +447,22 @@ class RideNotifier extends StateNotifier<RideState> {
       destinationCoords:
           destCoords ??
           (preserveDestinationCoords ? state.destinationCoords : null),
+      clearPickupCoords: pickupCoords == null && !preservePickupCoords,
+      clearDestinationCoords: destCoords == null && !preserveDestinationCoords,
+      selectedSector: sector,
+      selectedTier: vehicleCategory,
+      goods: goods,
       clearFareData: true,
       isEstimatingFare: false,
       status: RideStatus.initial,
       errorMessage: null,
       lastDriverLocation: null,
       currentRoute: null,
+      clearMapData: true,
+      clearRide: true,
     );
     if (state.pickupCoords != null && state.destinationCoords != null) {
+      refreshRideMap();
       estimateRouteFare();
     }
   }
@@ -338,9 +502,18 @@ class RideNotifier extends StateNotifier<RideState> {
       }
     }
 
-    final coords = await ref
-        .read(geocodingServiceProvider)
-        .geocodeAddress(trimmed);
+    LatLng? coords;
+    try {
+      coords = await ref.read(geocodingServiceProvider).geocodeAddress(trimmed);
+    } catch (_) {
+      if (mounted) {
+        state = state.copyWith(
+          errorMessage: 'Location lookup unavailable. Please retry.',
+        );
+      }
+      return false;
+    }
+    if (!mounted) return false;
     if (coords != null) {
       setPickupCoords(coords, address: trimmed);
       return true;
@@ -390,15 +563,29 @@ class RideNotifier extends StateNotifier<RideState> {
       }
     }
 
-    if (trimmed.toLowerCase().contains('standby') || trimmed.toLowerCase().contains('as directed')) {
-      final coords = state.pickupCoords ?? const LatLng(25.5941, 85.1376);
+    if (trimmed.toLowerCase().contains('standby') ||
+        trimmed.toLowerCase().contains('as directed')) {
+      final coords = state.pickupCoords;
+      if (coords == null) {
+        state = state.copyWith(errorMessage: 'Select a pickup location first.');
+        return false;
+      }
       setDestinationCoords(coords, address: trimmed);
       return true;
     }
 
-    final coords = await ref
-        .read(geocodingServiceProvider)
-        .geocodeAddress(trimmed);
+    LatLng? coords;
+    try {
+      coords = await ref.read(geocodingServiceProvider).geocodeAddress(trimmed);
+    } catch (_) {
+      if (mounted) {
+        state = state.copyWith(
+          errorMessage: 'Location lookup unavailable. Please retry.',
+        );
+      }
+      return false;
+    }
+    if (!mounted) return false;
     if (coords != null) {
       setDestinationCoords(coords, address: trimmed);
       return true;
@@ -411,20 +598,28 @@ class RideNotifier extends StateNotifier<RideState> {
   }
 
   void setPickupCoords(LatLng coords, {String? address}) {
+    if (!GeocodingService.validCoordinates(coords.latitude, coords.longitude)) {
+      return;
+    }
+    _mapGeneration++;
     state = state.copyWith(
+      clearMapData: true,
       pickupCoords: coords,
       pickup: address ?? state.pickup,
     );
     if (state.destinationCoords != null) {
+      refreshRideMap();
       estimateRouteFare();
     }
   }
 
   void updatePickupAddress(String address) {
+    _mapGeneration++;
     _fareEstimateGeneration++;
     state = state.copyWith(
       pickup: address,
       clearPickupCoords: true,
+      clearMapData: true,
       clearFareData: true,
       isEstimatingFare: false,
     );
@@ -435,20 +630,28 @@ class RideNotifier extends StateNotifier<RideState> {
   }
 
   void setDestinationCoords(LatLng coords, {String? address}) {
+    if (!GeocodingService.validCoordinates(coords.latitude, coords.longitude)) {
+      return;
+    }
+    _mapGeneration++;
     state = state.copyWith(
+      clearMapData: true,
       destinationCoords: coords,
       destination: address ?? state.destination,
     );
     if (state.pickupCoords != null) {
+      refreshRideMap();
       estimateRouteFare();
     }
   }
 
   void updateDestinationAddress(String address) {
+    _mapGeneration++;
     _fareEstimateGeneration++;
     state = state.copyWith(
       destination: address,
       clearDestinationCoords: true,
+      clearMapData: true,
       clearFareData: true,
       isEstimatingFare: false,
     );
@@ -484,7 +687,34 @@ class RideNotifier extends StateNotifier<RideState> {
     estimateRouteFare();
   }
 
-  Future<bool> estimateRouteFare() async {
+  Future<bool> estimateRouteFare() {
+    final key = jsonEncode([
+      state.pickupCoords?.latitude,
+      state.pickupCoords?.longitude,
+      state.destinationCoords?.latitude,
+      state.destinationCoords?.longitude,
+      state.selectedSector,
+      state.selectedTier,
+      state.goods,
+      state.serviceDetails,
+      state.rentalDetails,
+      state.waitingMinutes,
+    ]);
+    if (_pendingFare != null &&
+        _pendingFareKey == key &&
+        _pendingFareGeneration == _fareEstimateGeneration) {
+      return _pendingFare!;
+    }
+    final request = _performFareEstimate();
+    _pendingFare = request;
+    _pendingFareKey = key;
+    _pendingFareGeneration = _fareEstimateGeneration;
+    return request.whenComplete(() {
+      if (identical(_pendingFare, request)) _pendingFare = null;
+    });
+  }
+
+  Future<bool> _performFareEstimate() async {
     final generation = ++_fareEstimateGeneration;
     if (state.pickupCoords == null ||
         state.destinationCoords == null ||
@@ -550,10 +780,10 @@ class RideNotifier extends StateNotifier<RideState> {
           .read(estimateFareUseCaseProvider)
           .execute(payload);
 
-      if (generation != _fareEstimateGeneration) return false;
+      if (!mounted || generation != _fareEstimateGeneration) return false;
       state = state.copyWith(
         fareEstimate: estimate,
-        fare: estimate.grossAmount,
+        fare: estimate.bookingAmount,
         distanceKm: estimate.distanceKm,
         durationMinutes: estimate.durationMinutes,
         isEstimatingFare: false,
@@ -561,7 +791,7 @@ class RideNotifier extends StateNotifier<RideState> {
       );
       return true;
     } catch (e) {
-      if (generation != _fareEstimateGeneration) return false;
+      if (!mounted || generation != _fareEstimateGeneration) return false;
       state = state.copyWith(
         isEstimatingFare: false,
         errorMessage: 'Fare calculation unavailable: ${e.toString()}',
@@ -583,12 +813,17 @@ class RideNotifier extends StateNotifier<RideState> {
     state = state.copyWith(status: RideStatus.searching, errorMessage: null);
 
     try {
-      final quoteReady = await estimateRouteFare();
-      if (!quoteReady || state.fareEstimate == null) {
+      final quoteReady =
+          state.fareEstimate != null || await estimateRouteFare();
+      if (!mounted) return;
+      if (!quoteReady ||
+          state.fareEstimate == null ||
+          state.fareEstimate!.bookingAmount == null) {
         state = state.copyWith(
           status: RideStatus.error,
           errorMessage:
               state.errorMessage ??
+              state.fareEstimate?.message ??
               'A current fare estimate is required to book.',
         );
         return;
@@ -617,6 +852,10 @@ class RideNotifier extends StateNotifier<RideState> {
       }
       if (state.rentalDetails != null) {
         data['rentalDetails'] = state.rentalDetails;
+      }
+
+      if (state.selectedSector == 'passenger' && state.waitingMinutes != null) {
+        data['waitingMinutes'] = state.waitingMinutes;
       }
 
       final ride = await ref.read(createRideUseCaseProvider).execute(data);
@@ -663,6 +902,7 @@ class RideNotifier extends StateNotifier<RideState> {
       await _ensureSocketConnected();
       ref.read(socketServiceProvider).joinRide(id);
       _checkRoomLifecycle(ride.status);
+      refreshRideMap();
     } catch (e) {
       state = state.copyWith(errorMessage: e.toString());
     }
@@ -821,9 +1061,12 @@ class RideNotifier extends StateNotifier<RideState> {
   }
 
   void resetRide() {
+    _mapGeneration++;
     state = state.copyWith(
       status: RideStatus.initial,
       currentRide: null,
+      clearRide: true,
+      clearMapData: true,
       driverName: null,
       vehicleInfo: null,
       errorMessage: null,
@@ -859,6 +1102,7 @@ class RideNotifier extends StateNotifier<RideState> {
 
   @override
   void dispose() {
+    _socketStateSubscription?.cancel();
     _eventSubscription?.cancel();
     super.dispose();
   }

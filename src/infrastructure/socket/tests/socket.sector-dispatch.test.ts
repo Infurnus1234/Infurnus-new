@@ -95,20 +95,22 @@ describe('Socket.IO Sector-Constrained Driver Dispatch', () => {
                     ? 'driver-passenger'
                     : '';
           if (!userId) return [];
-          return [{
-            driverProfileId: userId,
-            userId,
-            vehicleId: `${userId}-vehicle`,
-            distanceMeters: 100,
-            latitude: 12.97,
-            longitude: 77.59,
-            availabilityStatus: 'available',
-            verificationStatus: 'approved',
-            activeRideCount: 0,
-            locationRecordedAt: new Date(),
-            sector,
-            vehicleCategory: category,
-          }];
+          return [
+            {
+              driverProfileId: userId,
+              userId,
+              vehicleId: `${userId}-vehicle`,
+              distanceMeters: 100,
+              latitude: 12.97,
+              longitude: 77.59,
+              availabilityStatus: 'available',
+              verificationStatus: 'approved',
+              activeRideCount: 0,
+              locationRecordedAt: new Date(),
+              sector,
+              vehicleCategory: category,
+            },
+          ];
         }),
       } as never,
       dispatchResponseTimeoutMs: 25,

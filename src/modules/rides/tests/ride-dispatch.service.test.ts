@@ -82,7 +82,12 @@ describe('RideDispatchService', () => {
     const notify = vi.fn(async (offered: DriverCandidate) => {
       rideEvents.emit('ride:accepted', { ...ride, assignedDriverId: offered.driverProfileId });
     });
-    const dispatcher = new RideDispatchService(repo as never, matching(first, candidate('driver-2')) as never, notify, 100);
+    const dispatcher = new RideDispatchService(
+      repo as never,
+      matching(first, candidate('driver-2')) as never,
+      notify,
+      100,
+    );
 
     await dispatcher.dispatch(ride);
 
@@ -106,7 +111,12 @@ describe('RideDispatchService', () => {
         rideEvents.emit('ride:accepted', { ...ride, assignedDriverId: offered.driverProfileId });
       }
     });
-    const dispatcher = new RideDispatchService(repo as never, matching(...drivers) as never, notify, 100);
+    const dispatcher = new RideDispatchService(
+      repo as never,
+      matching(...drivers) as never,
+      notify,
+      100,
+    );
 
     await dispatcher.dispatch(ride);
 
@@ -127,7 +137,12 @@ describe('RideDispatchService', () => {
         rideEvents.emit('ride:accepted', { ...ride, assignedDriverId: offered.driverProfileId });
       }
     });
-    const dispatcher = new RideDispatchService(repo as never, matching(...drivers) as never, notify, 5);
+    const dispatcher = new RideDispatchService(
+      repo as never,
+      matching(...drivers) as never,
+      notify,
+      5,
+    );
 
     await dispatcher.dispatch(ride);
 
@@ -144,13 +159,22 @@ describe('RideDispatchService', () => {
     const repo = fakeRideRepository();
     const driver = candidate('driver-1');
     let notified!: () => void;
-    const notify = vi.fn(() => new Promise<void>((resolve) => { notified = resolve; }));
-    const dispatcher = new RideDispatchService(repo as never, matching(driver) as never, notify, 100);
+    const notify = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          notified = resolve;
+        }),
+    );
+    const dispatcher = new RideDispatchService(
+      repo as never,
+      matching(driver) as never,
+      notify,
+      100,
+    );
 
     const firstDispatch = dispatcher.dispatch(ride);
     const duplicateDispatch = dispatcher.dispatch(ride);
-    await Promise.resolve();
-    await Promise.resolve();
+    await vi.waitFor(() => expect(notify).toHaveBeenCalledTimes(1));
     rideEvents.emit('ride:accepted', { ...ride, assignedDriverId: driver.driverProfileId });
     notified();
     await Promise.all([firstDispatch, duplicateDispatch]);
@@ -177,6 +201,75 @@ describe('RideDispatchService', () => {
       ride.id,
       'No eligible drivers accepted the ride',
     );
+    dispatcher.dispose();
+  });
+  it('recovers persisted searching rides and resumes at the next unattempted candidate', async () => {
+    const repo = {
+      ...fakeRideRepository(),
+      listRecoverableDispatch: vi.fn(async () => [ride]),
+      reconcileDispatch: vi.fn(async () => ride),
+      withDispatchLock: vi.fn(async (_id, work) => work()),
+    };
+    repo.offerDispatch.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    const notify = vi.fn((offered: DriverCandidate) => {
+      rideEvents.emit('ride:accepted', { ...ride, assignedDriverId: offered.driverProfileId });
+    });
+    const dispatcher = new RideDispatchService(
+      repo as never,
+      matching(candidate('old-driver'), candidate('next-driver')) as never,
+      notify,
+      100,
+    );
+    await dispatcher.recover();
+    expect(repo.reconcileDispatch).toHaveBeenCalledWith(ride.id);
+    expect(notify.mock.calls[0]?.[0].driverProfileId).toBe('next-driver');
+    expect(notify).toHaveBeenCalledTimes(1);
+    dispatcher.dispose();
+  });
+  it('leaves a durable live lease untouched when another instance owns it', async () => {
+    const repo = { ...fakeRideRepository(), reconcileDispatch: vi.fn(async () => null) };
+    const notify = vi.fn();
+    const dispatcher = new RideDispatchService(
+      repo as never,
+      matching(candidate('d')) as never,
+      notify,
+      100,
+    );
+    await dispatcher.dispatch(ride);
+    expect(notify).not.toHaveBeenCalled();
+    expect(repo.failDispatch).not.toHaveBeenCalled();
+    dispatcher.dispose();
+  });
+  it('stops immediately on cancellation without trying another candidate', async () => {
+    const repo = fakeRideRepository();
+    const notify = vi.fn(() => {
+      rideEvents.emit('ride:cancelled', ride.id);
+    });
+    const dispatcher = new RideDispatchService(
+      repo as never,
+      matching(candidate('a'), candidate('b')) as never,
+      notify,
+      100,
+    );
+    await dispatcher.dispatch(ride);
+    expect(notify).toHaveBeenCalledTimes(1);
+    expect(repo.failDispatch).not.toHaveBeenCalled();
+    dispatcher.dispose();
+  });
+  it('cleans up listeners after a synchronous socket notification error', async () => {
+    const repo = fakeRideRepository();
+    const dispatcher = new RideDispatchService(
+      repo as never,
+      matching(candidate('a')) as never,
+      () => {
+        throw new Error('delivery failed');
+      },
+      100,
+    );
+    await dispatcher.dispatch(ride);
+    expect(repo.finishDispatchAttempt).toHaveBeenCalledWith(ride.id, 'a', 'rejected');
+    expect(rideEvents.listenerCount('ride:accepted')).toBe(0);
+    expect(rideEvents.listenerCount('ride:dispatch_rejected')).toBe(0);
     dispatcher.dispose();
   });
 });

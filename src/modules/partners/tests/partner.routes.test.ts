@@ -118,7 +118,7 @@ describe('Partners API', () => {
 
     const partnerToken = await signAccessToken({
       sub: partner.userId,
-      role: 'customer',
+      role: 'fleet_owner',
       type: 'access',
     });
 

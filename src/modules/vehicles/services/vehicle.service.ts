@@ -12,6 +12,25 @@ import type { VehicleRepository } from '../repositories/vehicle.repository.js';
 
 export class VehicleService {
   constructor(private readonly repository: VehicleRepository) {}
+  async assertReadAccess(
+    actor: { userId: string; role: string },
+    vehicleId?: string,
+    driverProfileId?: string,
+  ) {
+    if (['admin', 'super_admin'].includes(actor.role)) return;
+    if (vehicleId) {
+      const vehicle = await this.getVehicle(vehicleId);
+      if (vehicle.ownerId === actor.userId) return;
+      driverProfileId = vehicle.driverProfileId ?? undefined;
+    }
+    if (
+      driverProfileId &&
+      this.repository.driverProfileOwnerId &&
+      (await this.repository.driverProfileOwnerId(driverProfileId)) === actor.userId
+    )
+      return;
+    throw new AppError('FORBIDDEN', 'Vehicle access is not authorized', 403);
+  }
 
   async createVehicle(data: CreateVehicleInput) {
     await this.validateVehicleReferences(data);

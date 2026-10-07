@@ -134,12 +134,12 @@ describe('PostgresLoginChallengeRepository', () => {
       `
         UPDATE login_challenges
         SET
-          expires_at = NOW() - INTERVAL '1 second',
-          provider_expires_at = NOW() - INTERVAL '1 second',
+          expires_at = $2,
+          provider_expires_at = $2,
           updated_at = NOW()
         WHERE id = $1
       `,
-      [challengeId],
+      [challengeId, new Date(Date.now() - 1000)],
     );
   }
 
@@ -148,11 +148,11 @@ describe('PostgresLoginChallengeRepository', () => {
       `
         UPDATE login_challenges
         SET
-          provider_expires_at = NOW() - INTERVAL '1 second',
+          provider_expires_at = $2,
           updated_at = NOW()
         WHERE id = $1
       `,
-      [challengeId],
+      [challengeId, new Date(Date.now() - 1000)],
     );
   }
 

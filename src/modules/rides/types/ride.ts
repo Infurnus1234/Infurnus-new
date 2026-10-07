@@ -58,6 +58,8 @@ export interface Ride {
   pickupAddress: string | null;
   destinationAddress: string | null;
   status: RideStatus;
+  bookingDistanceMeters?: number | null;
+  bookingPricingVersion?: string | null;
   fareEstimate?: number | null;
   finalFare?: number | null;
   actualDistanceMeters?: number | null;

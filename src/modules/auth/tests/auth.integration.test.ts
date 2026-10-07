@@ -460,6 +460,10 @@ describe.sequential('Auth integration', () => {
 
   async function cleanupUser(userId: string): Promise<void> {
     await pool.query(
+      'DELETE FROM provider_approval_requests WHERE requester_id=$1 OR fleet_id IN (SELECT id FROM partners WHERE user_id=$1)',
+      [userId],
+    );
+    await pool.query(
       `
         DELETE FROM login_challenges
         WHERE user_id = $1

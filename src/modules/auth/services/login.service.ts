@@ -171,6 +171,7 @@ export class LoginService {
     // ========================================================
 
     let providerSession: {
+      provider?: string;
       sessionId: string;
       sessionToken: string;
       expiresAt: string;
@@ -264,7 +265,7 @@ export class LoginService {
     const challenge = await this.loginChallengeRepository.create({
       userId: identity.id,
 
-      otpProvider: 'sendmator',
+      otpProvider: providerSession.provider ?? 'external',
 
       // IMPORTANT:
       // This was missing and caused your TS2345 error.

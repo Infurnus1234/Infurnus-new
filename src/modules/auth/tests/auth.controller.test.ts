@@ -396,8 +396,15 @@ describe('Auth Controller', () => {
           userId,
           accessToken: 'access-token',
           expiresAt,
+          csrfToken: expect.any(String),
         },
       });
+      const responseCsrf = json.mock.calls[0]![0].data.csrfToken;
+      expect(cookie).toHaveBeenCalledWith(
+        env.AUTH_CSRF_COOKIE_NAME,
+        responseCsrf,
+        expect.any(Object),
+      );
     });
 
     it('passes the request user-agent and IP address into refresh-token creation', async () => {

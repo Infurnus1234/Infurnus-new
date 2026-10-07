@@ -17,6 +17,12 @@ val mapsApiKey: String = localProperties.getProperty("MAPS_API_KEY")
     ?: System.getenv("MAPS_API_KEY")
     ?: ""
 
+// Public OAuth audience only; never package backend environment files or secrets.
+val googleWebClientId: String = localProperties.getProperty("GOOGLE_WEB_CLIENT_ID")
+    ?: (project.findProperty("GOOGLE_WEB_CLIENT_ID") as? String)
+    ?: System.getenv("GOOGLE_WEB_CLIENT_ID")
+    ?: ""
+
 android {
     namespace = "com.infurnus.app"
     compileSdk = 37
@@ -45,6 +51,9 @@ android {
         versionName = flutter.versionName
 
         manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
+        if (googleWebClientId.isNotBlank()) {
+            resValue("string", "default_web_client_id", googleWebClientId)
+        }
     }
 
     buildTypes {

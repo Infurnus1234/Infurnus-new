@@ -356,6 +356,127 @@ describe.sequential('Password reset integration', () => {
   // 1. FORGOT PASSWORD - REGISTERED EMAIL
   // ==========================================================
 
+  it.each(['admin', 'super_admin'])('public registration cannot create %s', async (role) => {
+    await request(app)
+      .post('/auth/signup')
+      .send({
+        firstName: 'Audit',
+        lastName: 'Role',
+        email: uniqueEmail('admin-denied'),
+        password: ORIGINAL_PASSWORD,
+        confirmPassword: ORIGINAL_PASSWORD,
+        role,
+      })
+      .expect(400);
+  });
+  it('expired reset challenge cannot verify OTP or change password', async () => {
+    const user = await createVerifiedUser('reset-expired');
+    try {
+      const session = await requestPasswordReset(user.email);
+      await pool.query(
+        "UPDATE password_reset_challenges SET created_at=NOW()-INTERVAL '20 minutes',expires_at=NOW()-INTERVAL '1 minute' WHERE user_id=$1",
+        [user.userId],
+      );
+      await request(app)
+        .post('/auth/forgot-password/verify')
+        .send({ resetSessionToken: session.resetSessionToken, otp: '123456' })
+        .expect(400);
+      const password = 'ExpiryPassword123!';
+      await request(app)
+        .post('/auth/reset-password')
+        .send({ resetSessionToken: session.resetSessionToken, password, confirmPassword: password })
+        .expect(400);
+      await request(app)
+        .post('/auth/login')
+        .send({ email: user.email, password: ORIGINAL_PASSWORD })
+        .expect(200);
+    } finally {
+      await cleanupUser(user.userId);
+    }
+  });
+  it('reset-password: concurrent requests have one success and a safe rejected loser', async () => {
+    const user = await createVerifiedUser('reset-race');
+    try {
+      const session = await requestPasswordReset(user.email);
+      await request(app)
+        .post('/auth/forgot-password/verify')
+        .send({ resetSessionToken: session.resetSessionToken, otp: '123456' })
+        .expect(200);
+      const responses = await Promise.all(
+        ['RacePassword123!', 'OtherPassword123!'].map((password) =>
+          request(app).post('/auth/reset-password').send({
+            resetSessionToken: session.resetSessionToken,
+            password,
+            confirmPassword: password,
+          }),
+        ),
+      );
+      expect(responses.map((r) => r.status).sort()).toEqual([200, 400]);
+    } finally {
+      await cleanupUser(user.userId);
+    }
+  });
+  it('forgot-password: suspended accounts receive no reset challenge', async () => {
+    const user = await createVerifiedUser('reset-suspended');
+    try {
+      await pool.query("UPDATE users SET status='suspended' WHERE id=$1", [user.userId]);
+      await requestPasswordReset(user.email);
+      expect(
+        (
+          await pool.query('SELECT id FROM password_reset_challenges WHERE user_id=$1', [
+            user.userId,
+          ])
+        ).rowCount,
+      ).toBe(0);
+    } finally {
+      await cleanupUser(user.userId);
+    }
+  });
+  it.each(['customer', 'driver', 'fleet_owner', 'driver_fleet_owner', 'admin', 'super_admin'])(
+    'email login and full password recovery for %s',
+    async (role) => {
+      const user = await createVerifiedUser('role-reset');
+      try {
+        await pool.query('UPDATE users SET role=$2 WHERE id=$1', [user.userId, role]);
+        const login = await request(app)
+          .post('/auth/login')
+          .send({ email: user.email, password: ORIGINAL_PASSWORD })
+          .expect(200);
+        await request(app)
+          .post('/auth/login/verify')
+          .send({ challengeId: login.body.data.challengeId, otp: '123456' })
+          .expect(200);
+        const session = await requestPasswordReset(user.email);
+        await request(app)
+          .post('/auth/forgot-password/verify')
+          .send({ resetSessionToken: session.resetSessionToken, otp: '123456' })
+          .expect(200);
+        const password = 'RoleReset123!';
+        await request(app)
+          .post('/auth/reset-password')
+          .send({
+            resetSessionToken: session.resetSessionToken,
+            password,
+            confirmPassword: password,
+          })
+          .expect(200);
+        await request(app)
+          .post('/auth/login')
+          .send({ email: user.email, password: ORIGINAL_PASSWORD })
+          .expect(401);
+        const updated = await request(app)
+          .post('/auth/login')
+          .send({ email: user.email, password })
+          .expect(200);
+        await request(app)
+          .post('/auth/login/verify')
+          .send({ challengeId: updated.body.data.challengeId, otp: '123456' })
+          .expect(200);
+      } finally {
+        await cleanupUser(user.userId);
+      }
+    },
+  );
   it('forgot-password: sends reset OTP for registered email', async () => {
     const user = await createVerifiedUser('forgot-registered');
 

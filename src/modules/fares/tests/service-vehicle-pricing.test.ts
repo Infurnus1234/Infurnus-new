@@ -317,7 +317,7 @@ describe('Phase 4 Step 5: Service Vehicle Trip-Based Refactoring', () => {
       const candidates = await repo.findNearbyEligible(
         12.9716,
         77.5946,
-        5000,
+        2000,
         10,
         new Date(),
         'service',

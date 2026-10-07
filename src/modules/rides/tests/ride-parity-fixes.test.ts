@@ -119,7 +119,7 @@ describe('BUG-P3-02 & BUG-P3-04: Parity Fixes — Real Details & Secure PIN', ()
       expect(fareEstimator.estimate).toHaveBeenCalledWith(
         { latitude: 12.9716, longitude: 77.5946 },
         { latitude: 12.9352, longitude: 77.6245 },
-        { sector: 'passenger', vehicleCategory: 'sedan' },
+        { sector: 'passenger', vehicleCategory: 'sedan', pricingMode: 'vehicle_range' },
       );
       expect(mockRepo.create).toHaveBeenCalledWith(
         'cust-uuid-1',

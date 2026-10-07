@@ -299,6 +299,7 @@ export class SignupService {
     // ========================================================
 
     let providerSession: {
+      provider?: string;
       sessionId: string;
       sessionToken: string;
       expiresAt: string;
@@ -394,7 +395,7 @@ export class SignupService {
 
       businessName,
 
-      otpProvider: 'sendmator',
+      otpProvider: providerSession.provider ?? 'external',
       otpProviderSessionId: providerSession.sessionId,
       otpProviderSessionToken: encryptedProviderSessionToken,
       otpProviderExpiresAt,

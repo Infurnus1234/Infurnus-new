@@ -9,7 +9,19 @@ abstract class AuthRepository {
   Future<AuthResponse> verifyLogin(VerifyLoginRequest request);
   Future<AuthResponse> verifyLoginEmail(VerifyLoginRequest request);
   Future<LoginChallengeResponse> resendLoginOtp(ResendLoginRequest request);
-  Future<LoginChallengeResponse> resendLoginEmailOtp(ResendLoginRequest request);
+  Future<LoginChallengeResponse> resendLoginEmailOtp(
+    ResendLoginRequest request,
+  );
+  Future<PasswordRecoverySession> forgotPassword(String email);
+  Future<PasswordRecoverySession> verifyPasswordResetOtp(
+    String token,
+    String otp,
+  );
+  Future<void> resetPassword(
+    String token,
+    String password,
+    String confirmation,
+  );
   Future<AuthResponse> refreshToken();
   Future<void> logout();
   Future<PublicUser> getUserProfile(String userId);

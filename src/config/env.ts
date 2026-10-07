@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { z } from 'zod';
 
-const envSchema = z
+export const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
 
@@ -54,7 +54,7 @@ const envSchema = z
       .positive()
       .default(15 * 60 * 1000),
 
-    AUTH_LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
+    AUTH_LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(30),
 
     AUTH_SIGNUP_RATE_LIMIT_WINDOW_MS: z.coerce
       .number()
@@ -62,7 +62,7 @@ const envSchema = z
       .positive()
       .default(15 * 60 * 1000),
 
-    AUTH_SIGNUP_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
+    AUTH_SIGNUP_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
 
     AUTH_OTP_VERIFY_RATE_LIMIT_WINDOW_MS: z.coerce
       .number()
@@ -70,7 +70,7 @@ const envSchema = z
       .positive()
       .default(10 * 60 * 1000),
 
-    AUTH_OTP_VERIFY_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
+    AUTH_OTP_VERIFY_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(30),
 
     AUTH_OTP_RESEND_RATE_LIMIT_WINDOW_MS: z.coerce
       .number()
@@ -78,7 +78,7 @@ const envSchema = z
       .positive()
       .default(10 * 60 * 1000),
 
-    AUTH_OTP_RESEND_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
+    AUTH_OTP_RESEND_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
 
     AUTH_OTP_RESEND_COOLDOWN_SECONDS: z.coerce.number().int().positive().default(60),
 
@@ -88,7 +88,7 @@ const envSchema = z
       .positive()
       .default(15 * 60 * 1000),
 
-    AUTH_REFRESH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(30),
+    AUTH_REFRESH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
 
     AUTH_LOGOUT_RATE_LIMIT_WINDOW_MS: z.coerce
       .number()
@@ -96,7 +96,7 @@ const envSchema = z
       .positive()
       .default(15 * 60 * 1000),
 
-    AUTH_LOGOUT_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(30),
+    AUTH_LOGOUT_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(60),
 
     // ============================================================
     // Forgot Password Rate Limits
@@ -108,7 +108,7 @@ const envSchema = z
       .positive()
       .default(15 * 60 * 1000),
 
-    AUTH_FORGOT_PASSWORD_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
+    AUTH_FORGOT_PASSWORD_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
 
     AUTH_PASSWORD_RESET_VERIFY_RATE_LIMIT_WINDOW_MS: z.coerce
       .number()
@@ -116,7 +116,7 @@ const envSchema = z
       .positive()
       .default(10 * 60 * 1000),
 
-    AUTH_PASSWORD_RESET_VERIFY_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
+    AUTH_PASSWORD_RESET_VERIFY_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(30),
 
     AUTH_PASSWORD_RESET_RATE_LIMIT_WINDOW_MS: z.coerce
       .number()
@@ -124,7 +124,14 @@ const envSchema = z
       .positive()
       .default(15 * 60 * 1000),
 
-    AUTH_PASSWORD_RESET_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
+    AUTH_PASSWORD_RESET_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
+
+    AUTH_GOOGLE_RATE_LIMIT_WINDOW_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(15 * 60 * 1000),
+    AUTH_GOOGLE_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(30),
 
     AUTH_RATE_LIMIT_ENABLED: z.preprocess((val) => {
       if (typeof val === 'string') {
@@ -143,29 +150,66 @@ const envSchema = z
 
     DRIVER_SEARCH_RADIUS_METERS: z.coerce.number().positive().default(5000),
 
-    MAX_DRIVER_MATCH_CANDIDATES: z.coerce.number().int().positive().default(20),
+    MAX_DRIVER_MATCH_CANDIDATES: z.coerce.number().int().positive().max(25).default(20),
 
-    DRIVER_DISPATCH_RESPONSE_TIMEOUT_MS: z.coerce
-      .number()
-      .int()
-      .positive()
-      .default(15000),
+    DRIVER_DISPATCH_RESPONSE_TIMEOUT_MS: z.coerce.number().int().positive().default(15000),
 
     // ============================================================
     // Google Maps
     // ============================================================
 
+    // Common maps: cache TTLs are seconds; intervals are milliseconds.
+    MAP_SERVICE_AREA_BOUNDARY_FILE: z.string().min(1).optional(),
+
+    MAP_REGION: z.string().trim().min(1).default('Bihar'),
+    MAP_COUNTRY: z
+      .string()
+      .regex(/^[a-z]{2}$/)
+      .default('in'),
+    MAP_SEARCH_CACHE_TTL: z.coerce.number().int().min(0).max(86400).default(300),
+    MAP_GEOCODE_CACHE_TTL: z.coerce.number().int().min(0).max(2592000).default(86400),
+    MAP_REVERSE_CACHE_TTL: z.coerce.number().int().min(0).max(86400).default(600),
+    MAP_ROUTE_CACHE_TTL: z.coerce.number().int().min(0).max(600).default(120),
+    MAP_DISTANCE_CACHE_TTL: z.coerce.number().int().min(0).max(600).default(120),
+    MAP_POPULAR_CACHE_TTL: z.coerce.number().int().min(0).max(86400).default(3600),
+    MAP_REVERSE_PRECISION: z.coerce.number().int().min(3).max(6).default(4),
+    MAP_MOVEMENT_THRESHOLD_METERS: z.coerce.number().positive().default(10),
+    MAP_OFF_ROUTE_ENTER_METERS: z.coerce.number().positive().default(60),
+    MAP_OFF_ROUTE_EXIT_METERS: z.coerce.number().positive().default(20),
+    MAP_MIN_REROUTE_INTERVAL_MS: z.coerce.number().int().min(10000).default(10000),
+    MAP_ROUTE_REFRESH_MS: z.coerce.number().int().min(10000).default(120000),
+    MAP_CACHE_TIMEOUT_MS: z.coerce.number().int().positive().max(1000).default(100),
+    MAP_REQUEST_LOCK_MS: z.coerce.number().int().min(20000).max(60000).default(30000),
+    MAP_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
+    // Enable only when the selected provider agreement permits content storage.
+    MAP_PROVIDER_CONTENT_CACHING: z.preprocess(
+      (v) => (v === 'true' ? true : v === 'false' ? false : v),
+      z.boolean().default(false),
+    ),
+    MAP_DRIVER_RADII_METERS: z
+      .string()
+      .default('1000,2000')
+      .transform((v) => v.split(',').map(Number))
+      .refine(
+        (v) =>
+          v.length > 0 &&
+          v.length <= 5 &&
+          v.every(
+            (n, i) => Number.isFinite(n) && n > 0 && n <= 50000 && (i === 0 || n > v[i - 1]!),
+          ),
+        'Driver radii must be increasing, positive and bounded',
+      ),
     GOOGLE_MAPS_API_KEY: z.string().min(1).optional(),
 
     GOOGLE_ROUTE_RECALCULATION_INTERVAL_SECONDS: z.coerce.number().int().positive().default(30),
 
     GOOGLE_ROUTE_RECALCULATION_DISTANCE_METERS: z.coerce.number().positive().default(500),
 
-    GOOGLE_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+    GOOGLE_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().max(10000).default(5000),
 
     GOOGLE_MAX_RETRIES: z.coerce.number().int().min(0).max(3).default(2),
 
-    GOOGLE_PLACES_MIN_QUERY_LENGTH: z.coerce.number().int().min(1).default(3),
+    GOOGLE_PLACES_MIN_QUERY_LENGTH: z.coerce.number().int().min(1).default(1),
 
     GOOGLE_PLACES_MIN_INTERVAL_MS: z.coerce.number().int().min(0).default(300),
 
@@ -213,7 +257,27 @@ const envSchema = z
     // Sendmator
     // ============================================================
 
+    GOOGLE_WEB_CLIENT_ID: z.string().trim().min(1).optional(),
+    GOOGLE_ANDROID_CLIENT_ID: z.string().trim().min(1).optional(),
+
     SENDMATOR_API_KEY: z.string().min(1, 'SENDMATOR_API_KEY must not be empty').optional(),
+    SENDMATOR_BASE_URL: z
+      .string()
+      .url()
+      .startsWith('https://')
+      .default('https://api.sendmator.com/api'),
+    SENDMATOR_TEAM_ID: z.string().trim().min(1).optional(),
+    SMS_PROVIDER: z.enum(['sendmator', 'message91']).default('sendmator'),
+    MSG91_AUTH_KEY: z.string().trim().min(1).optional(),
+    MSG91_TEMPLATE_ID: z.string().trim().min(1).optional(),
+    MSG91_SENDER_ID: z.string().trim().min(1).optional(),
+    MSG91_BASE_URL: z
+      .string()
+      .url()
+      .startsWith('https://')
+      .default('https://control.msg91.com/api/v5'),
+    MSG91_OTP_EXPIRY_MINUTES: z.coerce.number().int().min(1).max(10).default(10),
+    SMS_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().max(60000).default(10000),
 
     // ============================================================
     // Resend Email Provider
@@ -271,6 +335,22 @@ const envSchema = z
       ),
   })
   .superRefine((config, ctx) => {
+    if (
+      config.MAP_REQUEST_LOCK_MS <
+      config.GOOGLE_REQUEST_TIMEOUT_MS * (config.GOOGLE_MAX_RETRIES + 1) + 1000
+    )
+      ctx.addIssue({
+        code: 'custom',
+        path: ['MAP_REQUEST_LOCK_MS'],
+        message:
+          'Map request lock must cover the bounded Google request/retry budget plus one second',
+      });
+    if (config.MAP_OFF_ROUTE_EXIT_METERS >= config.MAP_OFF_ROUTE_ENTER_METERS)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['MAP_OFF_ROUTE_EXIT_METERS'],
+        message: 'Off-route exit must be below enter threshold',
+      });
     // ============================================================
     // Cookie Security
     // ============================================================

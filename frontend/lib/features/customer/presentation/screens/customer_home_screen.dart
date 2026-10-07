@@ -8,6 +8,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/services/places_autocomplete_service.dart';
+import '../../../../core/services/geocoding_service.dart';
 import '../../../../shared/widgets/infurnus_empty_state.dart';
 import '../../../../shared/widgets/infurnus_skeleton.dart';
 import '../../data/models/ride_model.dart' as model;
@@ -157,8 +158,25 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     });
   }
 
-  void _selectSuggestion(PlaceSuggestion suggestion) {
-    if (suggestion.latitude == null || suggestion.longitude == null) return;
+  Future<void> _selectSuggestion(PlaceSuggestion suggestion) async {
+    LatLng? coordinates;
+    try {
+      coordinates = suggestion.latitude != null && suggestion.longitude != null
+          ? LatLng(suggestion.latitude!, suggestion.longitude!)
+          : await ref
+                .read(geocodingServiceProvider)
+                .geocodeAddress(suggestion.toString());
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Location lookup unavailable. Please retry.'),
+          ),
+        );
+      }
+      return;
+    }
+    if (!mounted || coordinates == null) return;
     _debounceTimer?.cancel();
     _searchCancelToken?.cancel();
     _searchFocusNode.unfocus();
@@ -171,10 +189,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
 
     ref
         .read(rideProvider.notifier)
-        .setDestinationCoords(
-          LatLng(suggestion.latitude!, suggestion.longitude!),
-          address: suggestion.toString(),
-        );
+        .setDestinationCoords(coordinates, address: suggestion.toString());
 
     context.push('/ride-booking');
   }
@@ -541,7 +556,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                     children: [
                       Container(
                         padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           color: searchBg,
                           shape: BoxShape.circle,
                         ),
@@ -803,7 +818,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
   }
 
   Widget _buildPassengerSection(BuildContext context) {
-    final items = const [
+    const items = [
       _VehicleCategoryItem(
         title: 'Bike',
         capacity: '1 rider',
@@ -881,7 +896,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
   }
 
   Widget _buildLogisticsSection(BuildContext context) {
-    final items = const [
+    const items = [
       _VehicleCategoryItem(
         title: 'Bike Express',
         capacity: 'Up to 20 kg',
@@ -945,7 +960,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
   }
 
   Widget _buildServiceFleetSection(BuildContext context) {
-    final items = const [
+    const items = [
       _VehicleCategoryItem(
         title: 'Ambulance',
         capacity: 'Patient + Medical Triage',
@@ -1015,7 +1030,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
   }
 
   Widget _buildConciergeFleetSection(BuildContext context) {
-    final luxuryVehicles = const [
+    const luxuryVehicles = [
       _LuxuryVehicleItem(
         title: 'Mahindra Thar',
         badge: 'Off-road',

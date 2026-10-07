@@ -329,8 +329,8 @@ describe('storage validation', () => {
       resourceType: 'raw',
       accessMode: 'authenticated',
       maxSizeBytes: 15 * 1024 * 1024,
-      mimeTypes: ['application/pdf'],
-      extensions: ['pdf'],
+      mimeTypes: ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'],
+      extensions: ['pdf', 'jpg', 'jpeg', 'png', 'webp'],
     });
   });
 

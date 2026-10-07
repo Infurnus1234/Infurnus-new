@@ -1,3 +1,5 @@
+import { z } from 'zod';
+import { vehicleTypeStatusSchema } from '../../vehicles/schemas/vehicle.schemas.js';
 import type { NextFunction, Request, Response } from 'express';
 
 import {
@@ -22,6 +24,69 @@ export class AdminController {
     private readonly service: AdminService,
     private readonly driverApplicationService?: DriverApplicationService,
   ) {}
+
+  createVehicleType = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      res.status(201).json({
+        success: true,
+        data: await this.service.createVehicleType(req.auth!.userId, req.body),
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+  listVehicleTypes = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const q = z
+        .object({
+          limit: z.coerce.number().int().min(1).max(100).default(25),
+          offset: z.coerce.number().int().min(0).max(100000).default(0),
+        })
+        .strict()
+        .parse(req.query);
+      res.json({ success: true, data: await this.service.listVehicleTypes(q.limit, q.offset) });
+    } catch (error) {
+      next(error);
+    }
+  };
+  getVehicleType = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      res.json({
+        success: true,
+        data: await this.service.getVehicleType(adminIdSchema.parse(req.params).id),
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+  updateVehicleType = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      res.json({
+        success: true,
+        data: await this.service.updateVehicleType(
+          req.auth!.userId,
+          adminIdSchema.parse(req.params).id,
+          req.body,
+        ),
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+  updateVehicleTypeStatus = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      res.json({
+        success: true,
+        data: await this.service.updateVehicleType(
+          req.auth!.userId,
+          adminIdSchema.parse(req.params).id,
+          vehicleTypeStatusSchema.parse(req.body),
+        ),
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
 
   listUsers = async (req: Request, res: Response, next: NextFunction) => {
     try {

@@ -21,6 +21,7 @@ export const createRideSchema = z
     pickupAddress: z.string().trim().min(1).max(500).optional(),
     destinationAddress: z.string().trim().min(1).max(500).optional(),
     fareEstimate: z.number().positive().optional(),
+    waitingMinutes: z.number().finite().nonnegative().optional(),
     sector: z.enum(['passenger', 'logistics', 'service', 'premium']),
     vehicleCategory: z.string().trim().min(1).max(50),
     goods: z
@@ -102,6 +103,7 @@ export const fareEstimateSchema = z
         startDate: z.string().optional(),
         startTime: z.string().optional(),
         hours: z.number().positive().optional(),
+        rentalHours: z.number().positive().optional(),
         fuelRatePerKm: z.number().nonnegative().optional(),
       })
       .optional(),
@@ -133,3 +135,13 @@ export type FareEstimateInput = z.infer<typeof fareEstimateSchema>;
 export type CancelRideInput = z.infer<typeof cancelRideSchema>;
 
 export type ListRidesInput = z.infer<typeof listRidesSchema>;
+
+export const rideMapQuerySchema = z
+  .object({
+    includeRoute: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
+  })
+  .strict();
+export const userRideLocationSchema = location.extend({ timestamp: z.coerce.date() }).strict();

@@ -205,8 +205,9 @@ Cashfree sends real-time payment notifications via HTTP POST to the backend webh
 - Pass `GOOGLE_MAPS_API_KEY` with access to:
   - Directions API
   - Distance Matrix API
-  - Places API (New)
-- Recalculation engine falls back gracefully to Haversine calculations if the Google Maps API key is omitted or quotas are exceeded.
+  - Places API (Legacy autocomplete endpoint used by the backend)
+  - Geocoding API (forward and reverse)
+- Navigation keeps the previous valid route on provider failure; it does not fabricate a road route from Haversine. Fare fallback remains explicitly labelled `haversine_estimated`. See [MAP_CHANGES.md](../MAP_CHANGES.md) for verified behavior and deployment blockers.
 
 ### Client-Side (Android)
 
@@ -355,4 +356,16 @@ Cashfree sends real-time payment notifications via HTTP POST to the backend webh
 
 1. **Load Testing**: Local vitest concurrency tests verified 50+ concurrent socket connections. Enterprise-scale load testing (10,000+ simultaneous rides) should be executed in a dedicated staging load environment.
 2. **SMS Gateway Fallback**: In development, `DevOtpProvider` logs OTPs to terminal. In staging/production, `SENDMATOR_API_KEY` is required for real SMS delivery.
-3. **Google Maps Quotas**: Route recalculation incorporates exponential backoff and Haversine distance fallbacks if Google Maps API limits are encountered.
+3. **Google Maps Quotas**: Provider failures return controlled errors. New Google navigation JSONB storage is disabled pending approved retention and purge rules; GPS persistence and broadcasts continue. Public routing remains request-local unless an approved cache policy is configured. Staging/production service-area operations fail closed until MAP_SERVICE_AREA_BOUNDARY_FILE supplies an operator-approved GeoJSON Polygon or MultiPolygon. No Bihar boundary is bundled.
+
+## 14. Authoritative map hardening and deployment update
+
+The final map pass is documented in [MAP2.md](../MAP2.md). Its evidence and limitations supersede earlier map totals and distributed-topology assumptions. Supported staging/production deployment is one serving process per database, enforced by PostgreSQL session ownership before listening. Use scripts/start-production.ps1 with an explicit approved runtime environment file and approved WGS84 service-area GeoJSON; -ValidateOnly checks configuration without starting containers. The production Compose profile uses one always-running backend and stop-first updates. Do not use the general rolling/blue-green guidance above to overlap serving instances of this backend.
+
+Startup fails closed without approved service-area geometry, Google credential presence or the existing configured SMS provider. Resend is email-only; development OTP logging is prohibited in staging/production. Durable Google navigation remains disabled pending approved retention rules. Real Google and deployed-host verification still require owner-supplied credentials, geometry and infrastructure. Final backend regression: 1,460 passed, 0 failed, 16 existing skips, 1,476 total across 123 test files. See MAP2.md for the exact tests, preservation audit, operational tools and remaining external actions.
+
+## 15. MAP3 participant map and current CI verification
+
+[MAP3.md](../MAP3.md) is the current user/driver map report; MAP2 deployment/retention safeguards remain. New participant subresources/opt-in customer GPS bind actual PostgreSQL identity, assignment and lifecycle. Default polling requests no routing; explicit routing reuses CommonMapService. Booking/final fare and quote distance remain database facts; pending GPS/socket work bounded.
+
+Final Node 22/npm 11.3/PostGIS 16.4 + 3.4/Redis 7 local CI-equivalent result: 1,474 passed, zero failed, 16 existing skips; all eight required gates PASS. Windows build still needs matching MSVC 14.50 ATL/atlstr.h. Required tariff/FTL, Bihar geometry, trusted Google/storage and production/device owner actions remain. No remote CI/live Google/deployed readiness asserted. Frontend untouched.

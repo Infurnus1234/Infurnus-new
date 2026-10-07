@@ -1,5 +1,7 @@
+import { driverDocumentMetadataSchema } from '../schemas/driver.schemas.js';
 import type { NextFunction, Request, Response } from 'express';
 import { AppError } from '../../../common/errors/app-error.js';
+import { rideEvents } from '../events/ride.events.js';
 
 import {
   claimAssignmentCodeSchema,
@@ -10,7 +12,7 @@ import {
   verifyAssignmentCodeSchema,
 } from '../schemas/driver.schemas.js';
 
-import { rideIdSchema, rideStatusSchema } from '../schemas/ride.schemas.js';
+import { rideIdSchema, rideStatusSchema, rideMapQuerySchema } from '../schemas/ride.schemas.js';
 
 import type { DriverService } from '../services/driver.service.js';
 import type { DriverDocumentStorageService } from '../services/driver-document-storage.service.js';
@@ -26,6 +28,9 @@ const DRIVER_DOCUMENT_TYPES: readonly DriverDocumentType[] = [
   'profile_photo',
   'driver_license',
   'vehicle_rc',
+  'identity',
+  'pan',
+  'other',
 ];
 
 export class DriverController {
@@ -92,6 +97,7 @@ export class DriverController {
       const profileId = await this.driverService.profileForUser(req.auth!.userId);
 
       const ride = await this.rideService.completeRide(id, profileId);
+      rideEvents.emit('ride:lifecycle_updated', ride);
 
       res.json({
         success: true,
@@ -114,6 +120,7 @@ export class DriverController {
       const pin = typeof req.body.pin === 'string' ? req.body.pin.trim() : undefined;
 
       const ride = await this.rideService.transitionRide(id, status, profileId, pin);
+      rideEvents.emit('ride:lifecycle_updated', ride);
 
       res.json({
         success: true,
@@ -225,13 +232,22 @@ export class DriverController {
     }
   };
 
+  map = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = rideIdSchema.parse(req.params);
+      const { includeRoute } = rideMapQuerySchema.parse(req.query);
+      res.json({
+        success: true,
+        data: await this.rideService.getDriverMap(req.auth!.userId, id, includeRoute),
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   getCurrentTrip = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const history = await this.driverService.getDriverHistory(req.auth!.userId, 10, true);
-
-      const activeTrip = history.rides.find((r) =>
-        ['driver_assigned', 'driver_arriving', 'driver_arrived', 'in_progress'].includes(r.status),
-      );
+      const activeTrip = await this.rideService.getDriverCurrentRide(req.auth!.userId);
 
       res.json({
         success: true,
@@ -313,11 +329,14 @@ export class DriverController {
 
       const file = this.extractUploadedFile(req);
 
+      const metadata = driverDocumentMetadataSchema.parse(req.body ?? {});
       const document = await this.driverDocumentStorageService.upload({
         driverProfileId: profileId,
         documentType,
         file,
         uploadedBy: req.auth!.userId,
+        uploadSource: metadata.uploadSource,
+        documentMetadata: metadata,
       });
 
       res.status(201).json({
@@ -325,6 +344,31 @@ export class DriverController {
         data: document,
         message: 'Driver document uploaded successfully',
       });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  uploadDocumentPages = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const documentType = this.parseDocumentType(String(req.params.documentType ?? ''));
+      const profileId = await this.driverService.profileForUser(req.auth!.userId);
+      const metadata = driverDocumentMetadataSchema.parse(req.body ?? {});
+      const files = Array.isArray(req.files) ? req.files : [];
+      const document = await this.driverDocumentStorageService.uploadPages({
+        driverProfileId: profileId,
+        documentType,
+        uploadedBy: req.auth!.userId,
+        uploadSource: metadata.uploadSource,
+        documentMetadata: metadata,
+        files: files.map((file) => ({
+          buffer: file.buffer,
+          mimeType: file.mimetype,
+          originalFileName: file.originalname,
+          fileSize: file.size,
+        })),
+      });
+      res.status(201).json({ success: true, data: document });
     } catch (error) {
       next(error);
     }
@@ -364,6 +408,20 @@ export class DriverController {
         data: document,
         message: 'Driver document retrieved',
       });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getDocumentPageAccessUrls = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const profileId = await this.driverService.profileForUser(req.auth!.userId);
+      const data = await this.driverDocumentStorageService.getPageAccessUrls(
+        profileId,
+        String(req.params.documentId ?? ''),
+      );
+      if (!data) throw new AppError('DRIVER_DOCUMENT_NOT_FOUND', 'Driver document not found', 404);
+      res.json({ success: true, data });
     } catch (error) {
       next(error);
     }

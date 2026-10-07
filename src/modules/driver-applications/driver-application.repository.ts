@@ -8,6 +8,7 @@ import type {
 } from './driver-application.types.js';
 
 export interface DriverApplicationRepository {
+  readonly reviewIncludesDomainSynchronization?: boolean;
   create(input: CreateDriverApplicationInput): Promise<DriverApplication>;
 
   findById(id: string): Promise<DriverApplication | null>;
@@ -32,6 +33,7 @@ export interface DriverApplicationRepository {
 }
 
 export class PostgresDriverApplicationRepository implements DriverApplicationRepository {
+  readonly reviewIncludesDomainSynchronization = true;
   async create(input: CreateDriverApplicationInput): Promise<DriverApplication> {
     const result = await pool.query<DriverApplication>(
       `
@@ -282,20 +284,20 @@ export class PostgresDriverApplicationRepository implements DriverApplicationRep
       `
         UPDATE driver_applications
         SET
-          status = $1,
+          status = $1::driver_application_status,
           reviewed_at = NOW(),
           reviewed_by = $2,
           review_reason = $3,
           approved_at = CASE
-            WHEN $1 = 'APPROVED' THEN NOW()
+            WHEN $1::driver_application_status = 'APPROVED' THEN NOW()
             ELSE NULL
           END,
           approved_by = CASE
-            WHEN $1 = 'APPROVED' THEN $2
+            WHEN $1::driver_application_status = 'APPROVED' THEN $2::uuid
             ELSE NULL
           END,
           updated_at = NOW()
-        WHERE id = $4
+        WHERE id = $4 AND status IN ('PENDING','UNDER_REVIEW','CHANGES_REQUESTED')
         RETURNING
           id,
           partner_id AS "partnerId",

@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../utils/polyline_decoder.dart';
 
 abstract class MapService {
   void onMapCreated(GoogleMapController controller);
   void dispose();
-  
+
   Future<void> animateToLocation(LatLng position, {double zoom = 15.0});
   Future<void> fitBounds(List<LatLng> points, {double padding = 50.0});
-  
+
   Marker createMarker({
     required String markerId,
     required LatLng position,
@@ -38,7 +39,7 @@ class GoogleMapServiceImpl implements MapService {
 
   @override
   void dispose() {
-    _controller?.dispose();
+    // GoogleMap owns/disposes its platform controller.
     _controller = null;
   }
 
@@ -52,7 +53,7 @@ class GoogleMapServiceImpl implements MapService {
   @override
   Future<void> fitBounds(List<LatLng> points, {double padding = 50.0}) async {
     if (points.isEmpty || _controller == null) return;
-    
+
     final bounds = boundsFromLatLngList(points);
     await _controller?.animateCamera(
       CameraUpdate.newLatLngBounds(bounds, padding),
@@ -71,7 +72,9 @@ class GoogleMapServiceImpl implements MapService {
       markerId: MarkerId(markerId),
       position: position,
       icon: icon,
-      infoWindow: title != null ? InfoWindow(title: title, snippet: snippet) : InfoWindow.noText,
+      infoWindow: title != null
+          ? InfoWindow(title: title, snippet: snippet)
+          : InfoWindow.noText,
     );
   }
 
@@ -103,8 +106,12 @@ class GoogleMapServiceImpl implements MapService {
     for (final latLng in list) {
       if (minLat == null || latLng.latitude < minLat) minLat = latLng.latitude;
       if (maxLat == null || latLng.latitude > maxLat) maxLat = latLng.latitude;
-      if (minLng == null || latLng.longitude < minLng) minLng = latLng.longitude;
-      if (maxLng == null || latLng.longitude > maxLng) maxLng = latLng.longitude;
+      if (minLng == null || latLng.longitude < minLng) {
+        minLng = latLng.longitude;
+      }
+      if (maxLng == null || latLng.longitude > maxLng) {
+        maxLng = latLng.longitude;
+      }
     }
 
     return LatLngBounds(
@@ -114,6 +121,11 @@ class GoogleMapServiceImpl implements MapService {
   }
 }
 
-final mapServiceProvider = Provider<MapService>((ref) {
-  return GoogleMapServiceImpl();
+final mapServiceProvider = Provider.autoDispose.family<MapService, Object>((
+  ref,
+  owner,
+) {
+  final service = GoogleMapServiceImpl();
+  ref.onDispose(service.dispose);
+  return service;
 });

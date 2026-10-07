@@ -1,5 +1,7 @@
 # Google Maps Usage
 
+Current implementation: [MAP_CHANGES.md](../MAP_CHANGES.md). Production GPS uses the common map service and geometry-based navigation. The older GOOGLE_ROUTE_RECALCULATION_* settings below now apply only to explicit compatibility callers, not active GPS rerouting.
+
 Google credentials are server-side only. `GOOGLE_MAPS_API_KEY` is optional in
 local configuration, is never returned by an API, and must be supplied through
 deployment secret management after the exposed key is revoked and rotated.

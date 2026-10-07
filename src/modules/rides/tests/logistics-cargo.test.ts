@@ -233,7 +233,7 @@ describe('Phase 4 Step 6: Logistics Cargo Delivery Enhancements', () => {
       const candidates = await repo.findNearbyEligible(
         12.9716,
         77.5946,
-        5000,
+        2000,
         10,
         new Date(),
         'logistics',

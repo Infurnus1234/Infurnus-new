@@ -45,6 +45,7 @@ describeLoad('controlled ride load benchmark', () => {
     const rideRepository = {
       isParticipant: vi.fn().mockResolvedValue(true),
       isAssignedDriver: vi.fn().mockResolvedValue(true),
+      findById: vi.fn().mockResolvedValue({ id: rideId, status: 'in_progress' }),
       findNearbyEligible: vi.fn().mockResolvedValue(nearbyCandidates),
     };
     const driverService = {

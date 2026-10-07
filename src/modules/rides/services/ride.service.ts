@@ -1,3 +1,15 @@
+import type { CommonMapService } from '../../maps/map.service.js';
+import type { RideMapData, UserRideMapData, DriverRideMapData } from '../types/ride-map.js';
+import { activeMapStatuses, freshRideLocation, rideInformation } from '../utils/ride-map-mapper.js';
+import {
+  geographicDistance,
+  validRouteResult,
+  routeProgress,
+  decodePolyline,
+} from '../../maps/geometry.js';
+import { userRideLocationSchema } from '../schemas/ride.schemas.js';
+import { env } from '../../../config/env.js';
+import { serviceArea, type ServiceAreaGate } from '../../maps/service-area.js';
 import { withTransaction } from '../../../infrastructure/database/postgres.js';
 import { AppError } from '../../../common/errors/app-error.js';
 import type { CancelRideInput, CreateRideInput, ListRidesInput } from '../schemas/ride.schemas.js';
@@ -7,19 +19,24 @@ import type { DriverRepository } from '../repositories/driver.repository.js';
 import type { DriverDocumentStorageService } from '../services/driver-document-storage.service.js';
 import { rideEvents } from '../events/ride.events.js';
 import type { FareEstimateService } from '../../fares/services/fare-estimate.service.js';
+import { FIXED_QUOTE_REQUIRED_MESSAGE } from '../../fares/config/fare.config.js';
 
 export type RideTransactionRunner = typeof withTransaction;
 
 export class RideService {
+  private readonly userLocationPending = new Map<string, number>();
   constructor(
     private readonly repository: RideRepository,
     private readonly driverRepository?: DriverRepository,
     private readonly driverDocumentStorageService?: DriverDocumentStorageService,
     private readonly fareEstimateService?: FareEstimateService,
     private readonly transactionRunner: RideTransactionRunner = withTransaction,
+    private readonly area: ServiceAreaGate = serviceArea,
+    private readonly maps?: CommonMapService,
   ) {}
 
   async createRide(customerId: string, input: CreateRideInput) {
+    await this.area.assertSupported([input.pickup, input.destination]);
     if (!this.fareEstimateService) {
       throw new AppError(
         'FARE_ESTIMATOR_UNAVAILABLE',
@@ -29,8 +46,12 @@ export class RideService {
     }
 
     const fare = await this.fareEstimateService.estimate(input.pickup, input.destination, {
+      pricingMode: 'vehicle_range',
       sector: input.sector,
       vehicleCategory: input.vehicleCategory,
+      ...(input.sector === 'passenger' && input.waitingMinutes !== undefined
+        ? { waitingMinutes: input.waitingMinutes }
+        : {}),
       weightKg: input.sector === 'logistics' ? input.goods?.weightKg : undefined,
       hasLoadingAssistance:
         input.sector === 'logistics'
@@ -40,16 +61,222 @@ export class RideService {
         input.sector === 'premium'
           ? (input.rentalDetails?.hours ?? input.rentalDetails?.rentalHours)
           : undefined,
-      fuelRatePerKm:
-        input.sector === 'premium' ? input.rentalDetails?.fuelRatePerKm : undefined,
+      fuelRatePerKm: input.sector === 'premium' ? input.rentalDetails?.fuelRatePerKm : undefined,
     });
+    const bookingFare =
+      'estimateType' in fare
+        ? fare.estimateType === 'range' && fare.bookable
+          ? fare.bookingFare
+          : undefined
+        : fare;
+    if (
+      !bookingFare ||
+      !Number.isSafeInteger(bookingFare.grossAmount) ||
+      bookingFare.grossAmount < 0
+    ) {
+      throw new AppError('FARE_FIXED_QUOTE_REQUIRED', FIXED_QUOTE_REQUIRED_MESSAGE, 422);
+    }
+    // rides.fare_estimate is NUMERIC(10, 2): reject overflow before persistence.
+    if (bookingFare.grossAmount > 9_999_999_999) {
+      throw new AppError(
+        'FARE_AMOUNT_UNSUPPORTED',
+        'The booking quote exceeds the supported amount.',
+        422,
+      );
+    }
     const ride = await this.repository.create(customerId, {
       ...input,
-      fareEstimate: fare.grossAmount / 100,
+      fareEstimate: bookingFare.grossAmount / 100,
+      bookingDistanceMeters: bookingFare.distanceMeters,
+      bookingFareSnapshot: bookingFare,
     });
     const hydratedRide = await this.hydrateDriverPhoto(ride);
     rideEvents.emit('ride:created', hydratedRide);
     return hydratedRide;
+  }
+
+  async getUserMap(userId: string, id: string, includeRoute = false): Promise<UserRideMapData> {
+    return { ...(await this.participantMap(userId, id, 'user', includeRoute)), view: 'user' };
+  }
+  async getDriverMap(userId: string, id: string, includeRoute = false): Promise<DriverRideMapData> {
+    return { ...(await this.participantMap(userId, id, 'driver', includeRoute)), view: 'driver' };
+  }
+  async getDriverCurrentRide(userId: string) {
+    if (!this.driverRepository || !this.repository.findActiveForDriver)
+      throw new AppError('RIDE_MAP_UNAVAILABLE', 'Ride map is unavailable', 503);
+    const profile = await this.driverRepository.findProfileIdByUserId(userId);
+    return profile ? this.repository.findActiveForDriver(profile) : null;
+  }
+  async updateUserLocation(userId: string, id: string, input: unknown) {
+    const pending = this.userLocationPending.get(userId) ?? 0;
+    if (pending >= 3 || (!pending && this.userLocationPending.size >= 1000))
+      throw new AppError('RIDE_LOCATION_CAPACITY', 'Too many pending location updates', 429);
+    this.userLocationPending.set(userId, pending + 1);
+    try {
+      return await this.persistUserLocation(userId, id, input);
+    } finally {
+      const remaining = (this.userLocationPending.get(userId) ?? 1) - 1;
+      if (remaining) this.userLocationPending.set(userId, remaining);
+      else this.userLocationPending.delete(userId);
+    }
+  }
+  private async persistUserLocation(userId: string, id: string, input: unknown) {
+    const location = userRideLocationSchema.parse(input),
+      now = Date.now();
+    const age = now - location.timestamp.getTime();
+    if (age < 0 || age > env.DRIVER_LOCATION_STALE_SECONDS * 1000)
+      throw new AppError(
+        'RIDE_LOCATION_TIMESTAMP_INVALID',
+        'Location must be fresh and not in the future',
+        400,
+      );
+    if (!this.repository.getRideMapSnapshot || !this.repository.updateUserLocation)
+      throw new AppError('RIDE_MAP_UNAVAILABLE', 'Ride location is unavailable', 503);
+    const snapshot = await this.repository.getRideMapSnapshot(id, userId, 'user');
+    if (!snapshot) throw new AppError('RIDE_NOT_FOUND', 'Ride not found', 404);
+    await this.area.assertSupported([location, snapshot.ride.pickup, snapshot.ride.destination]);
+    const value = {
+      latitude: location.latitude,
+      longitude: location.longitude,
+      timestamp: location.timestamp.toISOString(),
+    };
+    if (!(await this.repository.updateUserLocation(id, userId, value)))
+      throw new AppError('RIDE_LOCATION_CONFLICT', 'Location is older or ride is inactive', 409);
+    rideEvents.emit('ride:user_location_updated', { rideId: id, userId, location: value });
+    return value;
+  }
+  private async participantMap(
+    userId: string,
+    id: string,
+    view: 'user' | 'driver',
+    includeRoute: boolean,
+  ): Promise<RideMapData> {
+    const snapshot = await this.repository.getRideMapSnapshot?.(id, userId, view);
+    if (!snapshot) throw new AppError('RIDE_NOT_FOUND', 'Ride not found', 404);
+    let { ride } = snapshot;
+    await this.area.assertSupported([ride.pickup, ride.destination]);
+    const active = activeMapStatuses.includes(ride.status) && !!ride.assignedDriverId;
+    let driverLocation = active ? freshRideLocation(snapshot.driverLocation) : null;
+    let userLocation = active ? freshRideLocation(snapshot.userLocation) : null;
+    const segment = active ? (ride.status === 'in_progress' ? 'destination' : 'pickup') : null;
+    const metadata = snapshot.metadata;
+    let route: RideMapData['route'] = null,
+      progress: RideMapData['progress'] = null,
+      eta: RideMapData['eta'] = null;
+    let routeStatus: RideMapData['routeStatus'] = active
+      ? includeRoute
+        ? 'unavailable'
+        : 'not_requested'
+      : 'inactive';
+    let routeVersion = 0;
+    const target = segment === 'destination' ? ride.destination : ride.pickup;
+    if (
+      active &&
+      this.maps?.navigationStorageAllowed &&
+      metadata?.segment === segment &&
+      metadata.destination?.latitude === target.latitude &&
+      metadata.destination?.longitude === target.longitude &&
+      metadata.route &&
+      validRouteResult(metadata.route)
+    ) {
+      route = metadata.route;
+      routeStatus = 'available';
+      routeVersion = metadata.routeVersion ?? 0;
+      if (driverLocation && route.encodedPolyline)
+        progress = routeProgress(driverLocation, decodePolyline(route.encodedPolyline));
+      eta = {
+        seconds: progress
+          ? Math.ceil(route.durationSeconds * progress.remainingFraction)
+          : route.durationSeconds,
+        source: progress ? 'route_progress_estimate' : 'provider_route',
+      };
+    } else if (
+      active &&
+      includeRoute &&
+      this.maps &&
+      (segment === 'destination' || driverLocation)
+    ) {
+      route = await this.maps
+        .calculateRoute(segment === 'destination' ? ride.pickup : driverLocation!, target, {
+          source: 'RIDE',
+        })
+        .catch((error: unknown) => {
+          if (error instanceof AppError && error.code === 'MAP_PROVIDER_INVALID') throw error;
+          return null;
+        });
+      if (route && !validRouteResult(route))
+        throw new AppError('MAP_PROVIDER_INVALID', 'Invalid ride route', 503);
+      if (route) {
+        routeStatus = 'available';
+        eta = { seconds: route.durationSeconds, source: 'provider_route' };
+      }
+    }
+    // Provider work is asynchronous: re-authorize lifecycle/assignment before exposing locations.
+    const current = await this.repository.getRideMapSnapshot?.(id, userId, view);
+    if (!current) throw new AppError('RIDE_NOT_FOUND', 'Ride not found', 404);
+    if (
+      current.ride.status !== ride.status ||
+      current.ride.assignedDriverId !== ride.assignedDriverId
+    )
+      return this.inactiveMap(current.ride);
+    ride = current.ride;
+    driverLocation = active ? freshRideLocation(current.driverLocation) : null;
+    userLocation = active ? freshRideLocation(current.userLocation) : null;
+    if ((current.metadata?.routeVersion ?? 0) > (metadata?.routeVersion ?? 0)) {
+      route = null;
+      progress = null;
+      eta = null;
+      routeVersion = 0;
+      routeStatus = 'unavailable';
+    }
+    if (route && driverLocation && route.encodedPolyline) {
+      progress = routeProgress(driverLocation, decodePolyline(route.encodedPolyline));
+      if (progress)
+        eta = {
+          seconds: Math.ceil(route.durationSeconds * progress.remainingFraction),
+          source: 'route_progress_estimate',
+        };
+    }
+    return {
+      ...rideInformation(ride),
+      rideId: ride.id,
+      driverLocation,
+      userLocation,
+      driverLocationFresh: !!driverLocation,
+      pickupDistance:
+        segment === 'pickup' && driverLocation
+          ? {
+              meters: Math.round(geographicDistance(driverLocation, ride.pickup)),
+              source: 'geographic',
+            }
+          : null,
+      pickupEta: segment === 'pickup' ? eta : null,
+      route,
+      routeStatus,
+      segment,
+      progress,
+      eta,
+      routeVersion,
+      updatedAt: ride.updatedAt.toISOString(),
+    };
+  }
+  private inactiveMap(ride: import('../types/ride.js').Ride): RideMapData {
+    return {
+      ...rideInformation(ride),
+      rideId: ride.id,
+      driverLocation: null,
+      userLocation: null,
+      driverLocationFresh: false,
+      pickupDistance: null,
+      pickupEta: null,
+      route: null,
+      routeStatus: 'inactive',
+      segment: null,
+      progress: null,
+      eta: null,
+      routeVersion: 0,
+      updatedAt: ride.updatedAt.toISOString(),
+    };
   }
 
   async listRides(customerId: string, query: ListRidesInput) {
@@ -63,11 +290,7 @@ export class RideService {
   }
 
   async rejectRide(driverProfileId: string, id: string): Promise<void> {
-    const released = await this.repository.finishDispatchAttempt(
-      id,
-      driverProfileId,
-      'rejected',
-    );
+    const released = await this.repository.finishDispatchAttempt(id, driverProfileId, 'rejected');
     if (!released) {
       throw new AppError(
         'RIDE_DISPATCH_OFFER_EXPIRED',
@@ -89,9 +312,12 @@ export class RideService {
   }
 
   async cancelRide(customerId: string, id: string, input: CancelRideInput) {
-    const ride = await this.transactionRunner((client) =>
-      this.repository.cancel(id, customerId, input.reason, client),
-    );
+    const ride = await this.transactionRunner(async (client) => {
+      const cancelled = await this.repository.cancel(id, customerId, input.reason, client);
+      if (cancelled?.assignedDriverId && this.driverRepository)
+        await this.driverRepository.releaseBusy(cancelled.assignedDriverId, client);
+      return cancelled;
+    });
 
     if (!ride) {
       const existing = await this.repository.findByIdForCustomer(id, customerId);
@@ -115,9 +341,17 @@ export class RideService {
   }
 
   async acceptRide(driverProfileId: string, id: string) {
+    if (this.area.configured || this.area.required) {
+      const existing = await this.repository.findById(id);
+      await this.area.assertSupported(existing ? [existing.pickup, existing.destination] : []);
+    }
     try {
       const ride = await this.transactionRunner(async (client) => {
         const accepted = await this.repository.accept(id, driverProfileId, client);
+        // A CTE can update the ride but lose offer consumption to a competing timeout.
+        // Reject inside the transaction so every partial write rolls back.
+        if (!accepted)
+          throw new AppError('RIDE_ACCEPTANCE_CONFLICT', 'Ride is no longer available', 409);
 
         if (
           accepted &&
@@ -178,7 +412,7 @@ export class RideService {
         throw new AppError('DRIVER_RELEASE_CONFLICT', 'Assigned driver could not be released', 409);
       }
 
-      if (ride.sector === 'premium') {
+      if (ride.sector === 'premium' && !ride.bookingPricingVersion?.startsWith('vehicle-type:')) {
         const bookedHours = Math.max(
           1,
           Number(ride.rentalDetails?.rentalHours ?? ride.rentalDetails?.hours ?? 1),

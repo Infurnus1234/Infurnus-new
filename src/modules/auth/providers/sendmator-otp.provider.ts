@@ -30,6 +30,9 @@ export class SendmatorOtpProvider implements OtpProvider {
 
     this.client = new Sendmator({
       apiKey,
+      baseURL: env.SENDMATOR_BASE_URL,
+      ...(env.SENDMATOR_TEAM_ID ? { teamId: env.SENDMATOR_TEAM_ID } : {}),
+      timeout: env.SMS_REQUEST_TIMEOUT_MS,
     });
   }
 
@@ -54,7 +57,7 @@ export class SendmatorOtpProvider implements OtpProvider {
         sessionIdPresent: Boolean(response.session_id),
         sessionTokenPresent: Boolean(response.session_token),
         expiresAtPresent: Boolean(response.expires_at),
-        channelsSent: response.channels_sent,
+        channelsReported: Boolean(response.channels_sent),
       });
 
       return this.parseSendResponse(response);
@@ -288,7 +291,6 @@ export class SendmatorOtpProvider implements OtpProvider {
         errorType: 'AppError',
         code: error.code,
         statusCode: error.statusCode,
-        message: error.message,
       });
 
       return;
@@ -310,7 +312,6 @@ export class SendmatorOtpProvider implements OtpProvider {
         type: providerError.type,
         status: providerError.status,
         statusCode: providerError.statusCode,
-        message: providerError.message,
       });
 
       return;

@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import 'dart:async';
+
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_brand_mark.dart';
 import '../providers/auth_provider.dart';
+import '../../data/models/auth_models.dart';
 import '../providers/user_provider.dart';
 
 class OtpScreen extends ConsumerStatefulWidget {
@@ -15,7 +18,10 @@ class OtpScreen extends ConsumerStatefulWidget {
 }
 
 class _OtpScreenState extends ConsumerState<OtpScreen> {
-  final List<TextEditingController> _controllers = List.generate(6, (_) => TextEditingController());
+  final List<TextEditingController> _controllers = List.generate(
+    6,
+    (_) => TextEditingController(),
+  );
   final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
   int _timerSeconds = 30;
   Timer? _timer;
@@ -66,11 +72,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     ref.listen(authProvider, (previous, next) {
       if (next.status == AuthStatus.authenticated) {
         final user = ref.read(userProvider);
-        if (user?.role == 'driver') {
-          context.go('/driver-dashboard');
-        } else {
-          context.go('/customer-home');
-        }
+        context.go(authHomeRoute(user?.role));
       }
     });
 
@@ -100,7 +102,9 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
               ),
               const SizedBox(height: 32),
               Text(
-                authState.loginChannel == 'email' ? 'Verify your email' : 'Verify your number',
+                authState.loginChannel == 'email'
+                    ? 'Verify your email'
+                    : 'Verify your number',
                 style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -110,13 +114,10 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
               const SizedBox(height: 8),
               Text(
                 'Enter the 6-digit code sent to\n${authState.contactValue ?? ""}',
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey,
-                ),
+                style: const TextStyle(fontSize: 16, color: Colors.grey),
               ),
               const SizedBox(height: 48),
-              
+
               // OTP Boxes
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -129,7 +130,10 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                       keyboardType: TextInputType.number,
                       textAlign: TextAlign.center,
                       maxLength: 1,
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
                       decoration: InputDecoration(
                         counterText: '',
                         enabledBorder: OutlineInputBorder(
@@ -138,7 +142,10 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: AppColors.primaryGreen, width: 2),
+                          borderSide: const BorderSide(
+                            color: AppColors.primaryGreen,
+                            width: 2,
+                          ),
                         ),
                         fillColor: Colors.grey[50],
                         filled: true,
@@ -159,9 +166,9 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                   );
                 }),
               ),
-              
+
               const SizedBox(height: 32),
-              
+
               Center(
                 child: Column(
                   children: [
@@ -187,13 +194,13 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                   ],
                 ),
               ),
-              
+
               if (authState.status == AuthStatus.loading)
                 const Padding(
                   padding: EdgeInsets.only(top: 20),
                   child: Center(child: CircularProgressIndicator()),
                 ),
-                
+
               if (authState.errorMessage != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 16),
