@@ -1380,14 +1380,48 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
   }
 
   IconData _vehicleIcon(FleetVehicleModel vehicle) {
-    if (vehicle.sector == 'logistics') return Icons.local_shipping_rounded;
-    if (vehicle.sector == 'service') return Icons.build_rounded;
-    if (vehicle.category.toLowerCase().contains('bike')) {
+    final cat = vehicle.category.toLowerCase();
+    final name = vehicle.displayName.toLowerCase();
+
+    if (cat.contains('bike') || name.contains('bike')) {
       return Icons.two_wheeler_rounded;
     }
-    if (vehicle.category.toLowerCase().contains('auto') ||
-        vehicle.category.toLowerCase().contains('three_wheeler')) {
+    if (cat.contains('auto') ||
+        name.contains('auto') ||
+        cat.contains('three_wheeler')) {
       return Icons.electric_rickshaw_rounded;
+    }
+    if (cat.contains('ambulance') || name.contains('ambulance')) {
+      return Icons.medical_services_rounded;
+    }
+    if (cat.contains('towing') || name.contains('towing')) {
+      return Icons.car_repair_rounded;
+    }
+    if (cat.contains('jcb') || name.contains('jcb')) {
+      return Icons.agriculture_rounded;
+    }
+    if (cat.contains('thar') || name.contains('thar')) {
+      return Icons.terrain_rounded;
+    }
+    if (cat.contains('fortuner') || name.contains('fortuner')) {
+      return Icons.directions_car_filled_rounded;
+    }
+    if (cat.contains('luxury') ||
+        cat.contains('bmw') ||
+        cat.contains('mercedes') ||
+        name.contains('suv')) {
+      return Icons.stars_rounded;
+    }
+    if (vehicle.sector == 'logistics' ||
+        cat.contains('truck') ||
+        cat.contains('shipping')) {
+      return Icons.local_shipping_rounded;
+    }
+    if (vehicle.sector == 'service') {
+      return Icons.build_rounded;
+    }
+    if (cat.contains('sedan')) {
+      return Icons.airport_shuttle_rounded;
     }
     return Icons.directions_car_rounded;
   }
