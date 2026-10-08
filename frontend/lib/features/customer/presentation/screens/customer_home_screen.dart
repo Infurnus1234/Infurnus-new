@@ -421,78 +421,272 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     );
   }
 
-  Widget _buildDestinationSearchBar(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: surfaceWhite,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: searchBorder),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
+  final List<Map<String, dynamic>> _quickDestinations = [
+    {
+      'label': 'Airport T1',
+      'icon': Icons.flight_rounded,
+      'address': 'Airport Terminal 1, International Hub',
+      'coords': const LatLng(25.5913, 85.0880),
+    },
+    {
+      'label': 'Railway Station',
+      'icon': Icons.train_rounded,
+      'address': 'Patna Junction Railway Station',
+      'coords': const LatLng(25.6022, 85.1376),
+    },
+    {
+      'label': 'Gandhi Maidan',
+      'icon': Icons.location_city_rounded,
+      'address': 'Gandhi Maidan, Patna',
+      'coords': const LatLng(25.6154, 85.1437),
+    },
+    {
+      'label': 'Boring Road',
+      'icon': Icons.business_rounded,
+      'address': 'Boring Road Chauraha, Patna',
+      'coords': const LatLng(25.6127, 85.1189),
+    },
+  ];
+
+  void _showSearchModal(BuildContext context) {
+    List<PlaceSuggestion> modalSuggestions = [];
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: surfaceWhite,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      child: Row(
-        children: [
-          const SizedBox(width: 16),
-          const Icon(Icons.search_rounded, color: textBlack, size: 22),
-          const SizedBox(width: 12),
-          Expanded(
-            child: TextField(
-              controller: _searchController,
-              focusNode: _searchFocusNode,
-              onChanged: _onSearchQueryChanged,
-              style: const TextStyle(
-                color: textBlack,
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
               ),
-              decoration: const InputDecoration(
-                hintText: 'Search',
-                hintStyle: TextStyle(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Where to?',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            color: textBlack,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded, color: textBlack),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: searchBg,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: cardBorder),
+                      ),
+                      child: Column(
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.my_location_rounded, color: successGreen, size: 18),
+                              SizedBox(width: 12),
+                              Text(
+                                'Current Location (GPS Active)',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: textBlack,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.only(left: 8, top: 4, bottom: 4),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: SizedBox(
+                                height: 16,
+                                child: VerticalDivider(color: textMuted, thickness: 2),
+                              ),
+                            ),
+                          ),
+                          Row(
+                            children: [
+                              const Icon(Icons.location_on_rounded, color: serviceRed, size: 18),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: TextField(
+                                  autofocus: true,
+                                  style: const TextStyle(color: textBlack, fontWeight: FontWeight.w600),
+                                  decoration: const InputDecoration(
+                                    hintText: 'Search destination (e.g. Airport, Mall...)',
+                                    hintStyle: TextStyle(color: textMuted),
+                                    border: InputBorder.none,
+                                    isDense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
+                                  onChanged: (val) async {
+                                    if (val.trim().length >= 1) {
+                                      final service = ref.read(placesAutocompleteServiceProvider);
+                                      final results = await service.getSuggestions(val);
+                                      setModalState(() {
+                                        modalSuggestions = results;
+                                      });
+                                    } else {
+                                      setModalState(() {
+                                        modalSuggestions = [];
+                                      });
+                                    }
+                                  },
+                                  onSubmitted: (val) {
+                                    if (val.trim().isNotEmpty) {
+                                      Navigator.pop(context);
+                                      ref.read(rideProvider.notifier).setRoute('Current Location', val.trim());
+                                      context.push('/ride-booking');
+                                    }
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Quick Destinations',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textSecondary),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      height: 38,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        children: _quickDestinations.map((dest) {
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: ActionChip(
+                              avatar: Icon(dest['icon'] as IconData, size: 16, color: successGreen),
+                              label: Text(dest['label'] as String, style: const TextStyle(fontSize: 12, color: textBlack)),
+                              backgroundColor: searchBg,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18),
+                                side: const BorderSide(color: cardBorder),
+                              ),
+                              onPressed: () {
+                                Navigator.pop(context);
+                                ref.read(rideProvider.notifier).setRoute('Current Location', dest['address'] as String);
+                                if (dest['coords'] != null) {
+                                  ref.read(rideProvider.notifier).setDestinationCoords(
+                                        dest['coords'] as LatLng,
+                                        address: dest['address'] as String,
+                                      );
+                                }
+                                context.push('/ride-booking');
+                              },
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                    if (modalSuggestions.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Suggestions',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textSecondary),
+                      ),
+                      const SizedBox(height: 8),
+                      ...modalSuggestions.map((s) {
+                        return InkWell(
+                          onTap: () {
+                            Navigator.pop(context);
+                            _selectSuggestion(s);
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.location_on_outlined, size: 18, color: textBlack),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(s.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textBlack)),
+                                      Text(s.subtitle, style: const TextStyle(fontSize: 12, color: textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildDestinationSearchBar(BuildContext context) {
+    return GestureDetector(
+      onTap: () => _showSearchModal(context),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: surfaceWhite,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: searchBorder),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.search_rounded, color: textBlack, size: 22),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Where to? Search destination...',
+                style: TextStyle(
                   color: textMuted,
                   fontSize: 15,
-                  fontWeight: FontWeight.w400,
+                  fontWeight: FontWeight.w500,
                 ),
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: EdgeInsets.symmetric(vertical: 14),
               ),
-              onSubmitted: (val) {
-                if (val.trim().isNotEmpty) {
-                  ref
-                      .read(rideProvider.notifier)
-                      .setRoute('Current Location', val.trim());
-                  context.push('/ride-booking');
-                }
-              },
             ),
-          ),
-          if (_searchController.text.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.close_rounded, size: 18, color: textMuted),
-              onPressed: () {
-                _searchController.clear();
-                _onSearchQueryChanged('');
-              },
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: const BoxDecoration(
+                color: searchBg,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.arrow_forward_rounded, size: 16, color: textBlack),
             ),
-          Container(
-            margin: const EdgeInsets.only(right: 8),
-            padding: const EdgeInsets.all(8),
-            decoration: const BoxDecoration(
-              color: buttonBlack,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.arrow_forward_rounded,
-              color: Colors.white,
-              size: 16,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
