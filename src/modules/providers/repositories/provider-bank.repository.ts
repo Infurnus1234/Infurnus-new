@@ -1,4 +1,5 @@
 import type { Pool } from 'pg';
+import { encryptSecret } from '../../../common/crypto/encryption.js';
 import type { UpsertBankAccountInput } from '../schemas/provider.schemas.js';
 import type { ProviderBankAccount } from '../types/provider.js';
 
@@ -53,7 +54,7 @@ export class PostgresProviderBankRepository implements ProviderBankRepository {
     input: UpsertBankAccountInput,
   ): Promise<ProviderBankAccount> {
     const last4 = input.accountNumber.slice(-4);
-    const encrypted = Buffer.from(input.accountNumber, 'utf-8').toString('base64');
+    const encrypted = encryptSecret(input.accountNumber);
 
     const result = await this.pool.query<{
       id: string;

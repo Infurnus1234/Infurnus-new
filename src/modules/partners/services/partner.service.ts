@@ -12,12 +12,30 @@ export class PartnerService {
   constructor(private readonly repository: PartnerRepository) {}
 
   async createPartner(data: CreatePartnerInput, actor: AuthenticatedUser) {
+    if (
+      !['driver', 'fleet_owner', 'driver_fleet_owner', 'admin', 'super_admin'].includes(actor.role)
+    ) {
+      throw new AppError(
+        'FORBIDDEN',
+        'Provider registration requires an authorized provider account',
+        403,
+      );
+    }
     if (actor.role !== 'admin' && actor.role !== 'super_admin' && actor.userId !== data.userId) {
       throw new AppError('FORBIDDEN', 'You do not have permission to create this partner', 403);
     }
 
     try {
-      return await this.repository.create(data);
+      return await this.repository.create({
+        ...data,
+        providerType: ['admin', 'super_admin'].includes(actor.role)
+          ? data.providerType
+          : actor.role === 'driver_fleet_owner'
+            ? 'DRIVER_AND_FLEET_OWNER'
+            : actor.role === 'fleet_owner'
+              ? 'FLEET_OWNER'
+              : 'DRIVER',
+      });
     } catch (error) {
       if (isForeignKeyViolation(error)) {
         throw new AppError('USER_NOT_FOUND', 'User not found', 404);
@@ -94,6 +112,8 @@ export class PartnerService {
       throw new AppError('PARTNER_NOT_FOUND', 'Partner not found', 404);
     }
 
+    if (partner.userId === actor.userId)
+      throw new AppError('SELF_REVIEW_FORBIDDEN', 'Cannot review your own fleet', 403);
     assertValidApprovalTransition(partner.approvalStatus, data.status);
 
     if (data.status === 'rejected' && !data.reason?.trim()) {

@@ -1,11 +1,19 @@
+import { attachProviderTracking } from './modules/providers/services/provider-tracking.socket.js';
+import { PostgresProviderOperationsRepository } from './modules/providers/repositories/provider-operations.repository.js';
+import { PostgresProviderFinanceRepository } from './modules/providers/repositories/provider-finance.repository.js';
+import { AppError } from './common/errors/app-error.js';
+import { CommonMapService } from './modules/maps/map.service.js';
+import { RedisMapCache } from './modules/maps/map.cache.js';
 import { createServer } from 'node:http';
-
 import { GoogleMapsProvider } from './modules/rides/providers/google.maps.provider.js';
 import { RouteRecalculationService } from './modules/rides/services/route-recalculation.service.js';
-
 import { createApp } from './app.js';
 import { env } from './config/env.js';
-import { checkDatabaseConnection, pool } from './infrastructure/database/postgres.js';
+import {
+  acquireBackendInstance,
+  checkDatabaseConnection,
+  pool,
+} from './infrastructure/database/postgres.js';
 import { createSocketServer } from './infrastructure/socket/socket.server.js';
 
 import { PostgresPartnerRepository } from './modules/partners/repositories/partner.repository.js';
@@ -27,7 +35,9 @@ import { PostgresRentalRepository } from './modules/rentals/repositories/rental.
 import { SendmatorOtpProvider } from './modules/auth/providers/sendmator-otp.provider.js';
 import { DevOtpProvider } from './modules/auth/providers/dev-otp.provider.js';
 import { ResendOtpProvider } from './modules/auth/providers/resend-otp.provider.js';
-import { FallbackOtpProvider } from './modules/auth/providers/fallback-otp.provider.js';
+import { selectOtpProvider } from './modules/auth/providers/otp-provider-selection.js';
+import { Message91OtpProvider } from './modules/auth/providers/message91-otp.provider.js';
+import { serviceArea } from './modules/maps/service-area.js';
 import { PostgresResendOtpSessionRepository } from './modules/auth/repositories/resend-otp.repository.js';
 
 import { FareCalculatorService } from './modules/fares/services/fare-calculator.service.js';
@@ -44,12 +54,26 @@ import { PostgresFleetRepository } from './modules/fleet/repositories/fleet.repo
 import { PostgresProviderBankRepository } from './modules/providers/repositories/provider-bank.repository.js';
 import { PostgresSupportRepository } from './modules/support/repositories/support.repository.js';
 
+let releaseInstance: (() => Promise<void>) | undefined;
+
 async function startServer() {
   // ==========================================================
   // Database
   // ==========================================================
 
   await checkDatabaseConnection();
+
+  if (env.NODE_ENV === 'production' || env.NODE_ENV === 'staging') {
+    await serviceArea.assertSupported([]);
+
+    if (!env.GOOGLE_MAPS_API_KEY?.trim()) {
+      throw new AppError(
+        'MAP_PROVIDER_NOT_CONFIGURED',
+        'Map provider credentials are not configured',
+        503,
+      );
+    }
+  }
 
   // ==========================================================
   // OTP provider
@@ -61,9 +85,25 @@ async function startServer() {
     ? new ResendOtpProvider(new PostgresResendOtpSessionRepository(pool))
     : undefined;
 
-  const otpProvider = sendmatorProvider
-    ? new FallbackOtpProvider(sendmatorProvider, resendOtpProvider)
-    : new DevOtpProvider();
+  const otpProvider = selectOtpProvider(
+    sendmatorProvider,
+    resendOtpProvider,
+    () => new DevOtpProvider(),
+    env.NODE_ENV === 'production' || env.NODE_ENV === 'staging',
+    env.SMS_PROVIDER === 'message91'
+      ? {
+          name: 'message91',
+          adapter: new Message91OtpProvider({
+            apiKey: env.MSG91_AUTH_KEY ?? '',
+            templateId: env.MSG91_TEMPLATE_ID ?? '',
+            baseUrl: env.MSG91_BASE_URL,
+            ...(env.MSG91_SENDER_ID ? { senderId: env.MSG91_SENDER_ID } : {}),
+            expiryMinutes: env.MSG91_OTP_EXPIRY_MINUTES,
+            timeoutMs: env.SMS_REQUEST_TIMEOUT_MS,
+          }),
+        }
+      : undefined,
+  );
 
   // ==========================================================
   // Repositories
@@ -120,7 +160,22 @@ async function startServer() {
   // - Socket.IO ride infrastructure
   // ==========================================================
 
-  const googleMapsProvider = new GoogleMapsProvider();
+  let mapCache: RedisMapCache | undefined;
+
+  if (env.REDIS_URL) {
+    const { redis, connectRedis } = await import('./infrastructure/redis/index.js');
+
+    void connectRedis().catch(() => console.warn('Map Redis unavailable; cache fallback active'));
+
+    mapCache = new RedisMapCache(redis);
+  }
+
+  const googleMapsProvider = new CommonMapService(
+    new GoogleMapsProvider(env.GOOGLE_MAPS_API_KEY, fetch, Date.now, (event, metadata) =>
+      console.info(JSON.stringify({ event, ...metadata })),
+    ),
+    mapCache,
+  );
 
   // ==========================================================
   // Fare services
@@ -128,7 +183,12 @@ async function startServer() {
 
   const fareCalculatorService = new FareCalculatorService();
 
-  const fareEstimateService = new FareEstimateService(googleMapsProvider, fareCalculatorService);
+  const fareEstimateService = new FareEstimateService(
+    googleMapsProvider,
+    fareCalculatorService,
+    undefined,
+    vehicleRepository,
+  );
 
   // ==========================================================
   // Coupon services
@@ -166,6 +226,10 @@ async function startServer() {
     providerBankRepository,
     supportRepository,
     cashfreePaymentProvider,
+    undefined,
+    googleMapsProvider,
+    new PostgresProviderFinanceRepository(pool),
+    new PostgresProviderOperationsRepository(pool),
   );
 
   // ==========================================================
@@ -178,16 +242,31 @@ async function startServer() {
   // Ride services
   // ==========================================================
 
-  const rideService = new RideService(rideRepository, driverRepository);
+  const rideService = new RideService(
+    rideRepository,
+    driverRepository,
+    undefined,
+    fareEstimateService,
+    undefined,
+    undefined,
+    googleMapsProvider,
+  );
 
   const driverService = new DriverService(driverRepository, undefined, rideRepository);
 
   const routeRecalculationService = new RouteRecalculationService(googleMapsProvider);
+
   const matchingService = new MatchingService(driverRepository, googleMapsProvider);
 
   // ==========================================================
   // Socket.IO
   // ==========================================================
+
+  let onInstanceLost = () => process.exit(1);
+
+  if (env.NODE_ENV === 'production' || env.NODE_ENV === 'staging') {
+    releaseInstance = await acquireBackendInstance(() => onInstanceLost());
+  }
 
   const io = createSocketServer(server, {
     driverService,
@@ -197,9 +276,19 @@ async function startServer() {
     matchingService,
   });
 
-  io.on('connection', (socket) => {
-    console.log(`Socket connected: ${socket.id}`);
-  });
+  attachProviderTracking(io, new PostgresProviderOperationsRepository(pool));
+
+  onInstanceLost = () => {
+    console.error(
+      JSON.stringify({
+        event: 'backend_instance_session_lost',
+      }),
+    );
+
+    io.disconnectSockets(true);
+    io.close();
+    process.exit(1);
+  };
 
   // ==========================================================
   // Start server
@@ -216,7 +305,17 @@ async function startServer() {
   const shutdown = async (signal: string) => {
     console.log(`${signal} received. Shutting down gracefully...`);
 
-    server.close(async () => {
+    io.disconnectSockets(true);
+
+    io.close(async () => {
+      await releaseInstance?.();
+
+      if (env.REDIS_URL) {
+        const { disconnectRedis } = await import('./infrastructure/redis/index.js');
+
+        await disconnectRedis().catch(() => {});
+      }
+
       await pool.end();
 
       console.log('INFURNUS API shut down.');
@@ -239,7 +338,25 @@ async function startServer() {
 // ============================================================
 
 startServer().catch(async (error: unknown) => {
-  console.error('Failed to start INFURNUS API:', error);
+  // Temporary detailed startup diagnostics.
+  // This is intentionally verbose so the actual TypeError,
+  // message, and stack trace are visible during local debugging.
+
+  console.error('========== BACKEND STARTUP ERROR ==========');
+  console.error(error);
+  console.error('===========================================');
+
+  console.error(
+    JSON.stringify({
+      event: 'backend_startup_failed',
+      code: error instanceof AppError ? error.code : 'BACKEND_STARTUP_UNAVAILABLE',
+      reason: error instanceof Error ? error.name : 'unknown',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    }),
+  );
+
+  await releaseInstance?.();
 
   await pool.end();
 

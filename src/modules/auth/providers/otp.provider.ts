@@ -7,6 +7,7 @@ export interface OtpProvider {
     sessionId: string;
     sessionToken: string;
     expiresAt: string;
+    provider?: string;
   }>;
 
   verifySmsOtp(
@@ -14,7 +15,7 @@ export interface OtpProvider {
     otp: string,
   ): Promise<{
     verified: boolean;
-    attemptsRemaining: number;
+    attemptsRemaining: number | null;
   }>;
 
   resendSmsOtp(sessionToken: string): Promise<{
@@ -26,6 +27,7 @@ export interface OtpProvider {
   // ============================================================
 
   sendEmailOtp(email: string): Promise<{
+    provider?: string;
     sessionId: string;
     sessionToken: string;
     expiresAt: string;
@@ -36,10 +38,12 @@ export interface OtpProvider {
     otp: string,
   ): Promise<{
     verified: boolean;
-    attemptsRemaining: number;
+    attemptsRemaining: number | null;
   }>;
 
   resendEmailOtp(sessionToken: string): Promise<{
     expiresAt: string;
   }>;
 }
+
+export type SmsOtpProvider = Pick<OtpProvider, 'sendSmsOtp' | 'verifySmsOtp' | 'resendSmsOtp'>;

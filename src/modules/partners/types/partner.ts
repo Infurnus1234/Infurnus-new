@@ -7,6 +7,8 @@ export interface Partner {
   userId: string;
 
   businessName: string;
+  businessType?: string | null | undefined;
+  gstNumber?: string | null | undefined;
   businessDescription: string | null;
 
   ownerName?: string | null;
@@ -32,6 +34,8 @@ export interface Partner {
 export interface CreatePartnerData {
   userId: string;
   businessName: string;
+  businessType?: string | null | undefined;
+  gstNumber?: string | null | undefined;
   businessDescription?: string | undefined;
 
   ownerName?: string | undefined;
@@ -45,6 +49,8 @@ export interface CreatePartnerData {
 
 export interface UpdatePartnerData {
   businessName?: string | undefined;
+  businessType?: string | null | undefined;
+  gstNumber?: string | null | undefined;
   businessDescription?: string | null | undefined;
 
   ownerName?: string | null | undefined;

@@ -588,13 +588,15 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
           fareEstimate: 4000,
         });
         expect(await repo.offerDispatch(rejectedRide.id, driverProfileId, 1000)).toBe(true);
-        expect(await repo.finishDispatchAttempt(rejectedRide.id, driverProfileId, 'rejected')).toBe(true);
+        expect(await repo.finishDispatchAttempt(rejectedRide.id, driverProfileId, 'rejected')).toBe(
+          true,
+        );
         expect(await repo.listAvailableForDriver(driverProfileId)).toHaveLength(0);
         expect(await repo.offerDispatch(rejectedRide.id, secondProfileId, 1000)).toBe(true);
         expect(await repo.listAvailableForDriver(secondProfileId)).toHaveLength(1);
-        expect(
-          await repo.finishDispatchAttempt(rejectedRide.id, secondProfileId, 'rejected'),
-        ).toBe(true);
+        expect(await repo.finishDispatchAttempt(rejectedRide.id, secondProfileId, 'rejected')).toBe(
+          true,
+        );
 
         const timeoutRide = await repo.create(customerId, {
           pickup: { latitude: 12.9716, longitude: 77.5946 },
@@ -605,7 +607,9 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
         });
         expect(await repo.offerDispatch(timeoutRide.id, driverProfileId, 1)).toBe(true);
         await new Promise((resolve) => setTimeout(resolve, 5));
-        expect(await repo.finishDispatchAttempt(timeoutRide.id, driverProfileId, 'timed_out')).toBe(true);
+        expect(await repo.finishDispatchAttempt(timeoutRide.id, driverProfileId, 'timed_out')).toBe(
+          true,
+        );
         expect(await repo.listAvailableForDriver(driverProfileId)).toHaveLength(0);
         expect(await repo.offerDispatch(timeoutRide.id, secondProfileId, 1000)).toBe(true);
       } finally {
@@ -688,7 +692,9 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
       expect(await repo.offerDispatch(ride.id, driverProfileId, 15000)).toBe(true);
       expect(await repo.offerDispatch(ride.id, driverProfileId, 15000)).toBe(false);
       expect(await repo.listAvailableForDriver(driverProfileId)).toHaveLength(1);
-      expect(await repo.listAvailableForDriver('00000000-0000-0000-0000-000000000001')).toHaveLength(0);
+      expect(
+        await repo.listAvailableForDriver('00000000-0000-0000-0000-000000000001'),
+      ).toHaveLength(0);
       const simultaneousAccepts = await Promise.allSettled([
         rideService.acceptRide(driverProfileId, ride.id),
         rideService.acceptRide(driverProfileId, ride.id),

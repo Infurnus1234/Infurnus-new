@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../../core/services/location_service.dart';
+import '../../../../shared/widgets/route_distance_summary.dart';
 import '../../../../core/services/geocoding_service.dart';
 import '../../../../core/services/places_autocomplete_service.dart';
 import '../../../../shared/widgets/infurnus_button.dart';
@@ -14,6 +15,7 @@ import '../../../../shared/widgets/infurnus_map.dart';
 import '../../../../shared/widgets/infurnus_outlined_button.dart';
 import '../../data/models/fleet_vehicle_model.dart';
 import '../providers/ride_provider.dart';
+import '../widgets/fare_range_details.dart';
 import '../providers/ride_use_case_providers.dart';
 
 class RideBookingScreen extends ConsumerStatefulWidget {
@@ -45,6 +47,8 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
   CancelToken? _destinationAutocompleteToken;
   List<PlaceSuggestion> _pickupSuggestions = [];
   List<PlaceSuggestion> _destinationSuggestions = [];
+  String? _pickupSearchError;
+  String? _destinationSearchError;
   bool _isLoadingPickupSuggestions = false;
   bool _isLoadingDestinationSuggestions = false;
   bool? _activeAutocompleteIsPickup;
@@ -110,12 +114,14 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
     previousToken?.cancel();
 
     if (isPickup) {
+      _pickupSearchError = null;
       ref.read(rideProvider.notifier).updatePickupAddress(query);
     } else {
+      _destinationSearchError = null;
       ref.read(rideProvider.notifier).updateDestinationAddress(query);
     }
 
-    if (query.trim().length < 2) {
+    if (query.trim().isEmpty) {
       setState(() {
         _activeAutocompleteIsPickup = null;
         _pickupSuggestions = [];
@@ -163,17 +169,22 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
             _isLoadingDestinationSuggestions = false;
           }
         });
-      } catch (_) {
+      } catch (error) {
         if (mounted && !cancelToken.isCancelled) {
           setState(() {
             if (isPickup) {
               _pickupSuggestions = [];
+              _pickupSearchError = locationSearchErrorMessage(error);
               _isLoadingPickupSuggestions = false;
             } else {
               _destinationSuggestions = [];
+              _destinationSearchError = locationSearchErrorMessage(error);
               _isLoadingDestinationSuggestions = false;
             }
           });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(locationSearchErrorMessage(error))),
+          );
         }
       }
     });
@@ -184,13 +195,38 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
     }
   }
 
-  void _selectLocationSuggestion(
+  Future<void> _selectLocationSuggestion(
     PlaceSuggestion suggestion, {
     required bool isPickup,
-  }) {
-    final latitude = suggestion.latitude;
-    final longitude = suggestion.longitude;
-    if (latitude == null || longitude == null) return;
+  }) async {
+    final controller = isPickup ? _pickupController : _destinationController;
+    final selectedQuery = controller.text;
+    LatLng? resolved;
+    try {
+      resolved = suggestion.latitude != null && suggestion.longitude != null
+          ? LatLng(suggestion.latitude!, suggestion.longitude!)
+          : await ref
+                .read(geocodingServiceProvider)
+                .geocodeAddress(suggestion.toString());
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Unable to resolve this location. Please retry.'),
+          ),
+        );
+      }
+      return;
+    }
+    if (!mounted || controller.text != selectedQuery) return;
+    if (resolved == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Selected location could not be resolved.'),
+        ),
+      );
+      return;
+    }
 
     final timer = isPickup
         ? _pickupAutocompleteTimer
@@ -215,7 +251,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
       }
     });
 
-    final coordinates = LatLng(latitude, longitude);
+    final coordinates = resolved;
     if (isPickup) {
       ref
           .read(rideProvider.notifier)
@@ -254,11 +290,12 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
               ),
             )
           : suggestions.isEmpty
-          ? const Padding(
-              padding: EdgeInsets.all(14),
+          ? Padding(
+              padding: const EdgeInsets.all(14),
               child: Text(
-                'No locations found',
-                style: TextStyle(color: textGray, fontSize: 13),
+                (isPickup ? _pickupSearchError : _destinationSearchError) ??
+                    'No matching locations found',
+                style: const TextStyle(color: textGray, fontSize: 13),
               ),
             )
           : Column(
@@ -303,6 +340,10 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
       }
       final pos = await ref.read(locationServiceProvider).getCurrentPosition();
       if (pos != null && mounted) {
+        if (preserveSelection &&
+            _pickupController.text.trim() != currentPickup) {
+          return;
+        }
         _pickupController.text = 'Current Location';
         ref
             .read(rideProvider.notifier)
@@ -453,6 +494,8 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
               const SizedBox(height: 14),
               if (estimate == null) ...[
                 _buildBreakdownRow('Status', 'Fare estimate calculating...'),
+              ] else if (estimate.isRange || estimate.isUnavailable) ...[
+                FareRangeDetails(estimate: estimate),
               ] else if (isService) ...[
                 _buildBreakdownRow(
                   'Base Mobilization / Dispatch',
@@ -561,11 +604,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                     ),
                   ),
                   Text(
-                    state.fare != null
-                        ? '₹${state.fare!.toStringAsFixed(2)}'
-                        : (estimate != null
-                              ? '₹${estimate.grossAmount.toStringAsFixed(2)}'
-                              : '--'),
+                    estimate?.displayFare ?? '--',
                     style: const TextStyle(
                       fontWeight: FontWeight.w900,
                       fontSize: 20,
@@ -643,43 +682,80 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
           },
         ),
       ),
-      body: Stack(
-        children: [
-          // 1. Google Map
-          InfurnusMap(
-            pickup: pickupLatLng,
-            destination: destinationLatLng,
-            driverLocation: rideState.lastDriverLocation,
-            route: rideState.currentRoute,
-          ),
-
-          // 2. Dynamic Bottom Panel
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: SingleChildScrollView(
-              child: Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
+      body: LayoutBuilder(
+        builder: (context, constraints) => Stack(
+          fit: StackFit.expand,
+          children: [
+            // 1. Google Map
+            InfurnusMap(
+              bottomOverlayHeight: constraints.maxHeight * .55,
+              pickup: pickupLatLng,
+              destination: destinationLatLng,
+              driverLocation: rideState.lastDriverLocation,
+              route: rideState.currentRoute,
+            ),
+            if (rideState.mapError != null)
+              Positioned(
+                top: 120,
+                left: 8,
+                right: 8,
+                child: Material(
                   color: cardBg,
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(24),
-                  ),
-                  border: const Border(
-                    top: BorderSide(color: borderCard, width: 1.0),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.6),
-                      blurRadius: 16,
-                      offset: const Offset(0, -4),
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            rideState.mapError!,
+                            style: const TextStyle(color: textWhite),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Retry route',
+                          onPressed: () =>
+                              ref.read(rideProvider.notifier).refreshRideMap(),
+                          icon: const Icon(Icons.refresh, color: textWhite),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-                child: _buildPanelContent(rideState),
+              ),
+
+            // 2. Dynamic Bottom Panel
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: constraints.maxHeight * 0.55,
+                ),
+                child: SingleChildScrollView(
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: cardBg,
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(24),
+                      ),
+                      border: const Border(
+                        top: BorderSide(color: borderCard, width: 1.0),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.6),
+                          blurRadius: 16,
+                          offset: const Offset(0, -4),
+                        ),
+                      ],
+                    ),
+                    child: _buildPanelContent(rideState),
+                  ),
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -723,6 +799,8 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
 
         // Route Inputs
         _buildRouteInputs(),
+        if (state.currentRoute != null)
+          RouteDistanceSummary(route: state.currentRoute!),
         const SizedBox(height: 12),
 
         // Established Sector Fleet Display
@@ -865,7 +943,9 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
         ],
 
         // Route Estimate Info Pill
-        if (state.distanceKm != null && state.durationMinutes != null)
+        if (state.currentRoute == null &&
+            state.distanceKm != null &&
+            state.durationMinutes != null)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
@@ -939,12 +1019,30 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
         const SizedBox(height: 16),
 
         // Confirm CTA
+        if (state.errorMessage != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              state.errorMessage!,
+              style: const TextStyle(color: textGray),
+            ),
+          ),
+        if (state.fareEstimate?.message != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              state.fareEstimate!.message!,
+              style: const TextStyle(color: textGray),
+            ),
+          ),
         InfurnusButton(
           text: state.fare != null
               ? 'Confirm Booking • ₹${state.fare!.toStringAsFixed(0)}'
               : 'Confirm Booking',
           isLoading: state.isEstimatingFare,
-          onPressed: _handleBooking,
+          onPressed: state.fareEstimate?.bookingAmount == null
+              ? null
+              : _handleBooking,
         ),
       ],
     );
@@ -1099,8 +1197,8 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
     if (selectedVehicle != null && !_isChangingVehicle) {
       final String displayPriceText = state.isEstimatingFare
           ? 'Calculating fare...'
-          : (state.fare != null
-                ? 'Estimated Fare: ₹${state.fare!.toStringAsFixed(0)}'
+          : (state.fareEstimate != null
+                ? 'Estimated Fare: ${state.fareEstimate!.displayFare}'
                 : 'Fare estimate unavailable');
 
       return Container(
@@ -1205,8 +1303,8 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
               if (isSelected) {
                 if (state.isEstimatingFare) {
                   displayPriceText = '...';
-                } else if (state.fare != null) {
-                  displayPriceText = '₹${state.fare!.toStringAsFixed(0)}';
+                } else if (state.fareEstimate != null) {
+                  displayPriceText = state.fareEstimate!.displayFare;
                 } else {
                   displayPriceText = 'View Est.';
                 }
@@ -1262,6 +1360,8 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                       ),
                       Text(
                         displayPriceText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 13,
@@ -1280,14 +1380,48 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
   }
 
   IconData _vehicleIcon(FleetVehicleModel vehicle) {
-    if (vehicle.sector == 'logistics') return Icons.local_shipping_rounded;
-    if (vehicle.sector == 'service') return Icons.build_rounded;
-    if (vehicle.category.toLowerCase().contains('bike')) {
+    final cat = vehicle.category.toLowerCase();
+    final name = vehicle.displayName.toLowerCase();
+
+    if (cat.contains('bike') || name.contains('bike')) {
       return Icons.two_wheeler_rounded;
     }
-    if (vehicle.category.toLowerCase().contains('auto') ||
-        vehicle.category.toLowerCase().contains('three_wheeler')) {
+    if (cat.contains('auto') ||
+        name.contains('auto') ||
+        cat.contains('three_wheeler')) {
       return Icons.electric_rickshaw_rounded;
+    }
+    if (cat.contains('ambulance') || name.contains('ambulance')) {
+      return Icons.medical_services_rounded;
+    }
+    if (cat.contains('towing') || name.contains('towing')) {
+      return Icons.car_repair_rounded;
+    }
+    if (cat.contains('jcb') || name.contains('jcb')) {
+      return Icons.agriculture_rounded;
+    }
+    if (cat.contains('thar') || name.contains('thar')) {
+      return Icons.terrain_rounded;
+    }
+    if (cat.contains('fortuner') || name.contains('fortuner')) {
+      return Icons.directions_car_filled_rounded;
+    }
+    if (cat.contains('luxury') ||
+        cat.contains('bmw') ||
+        cat.contains('mercedes') ||
+        name.contains('suv')) {
+      return Icons.stars_rounded;
+    }
+    if (vehicle.sector == 'logistics' ||
+        cat.contains('truck') ||
+        cat.contains('shipping')) {
+      return Icons.local_shipping_rounded;
+    }
+    if (vehicle.sector == 'service') {
+      return Icons.build_rounded;
+    }
+    if (cat.contains('sedan')) {
+      return Icons.airport_shuttle_rounded;
     }
     return Icons.directions_car_rounded;
   }

@@ -28,7 +28,7 @@ class SetupCompleteScreen extends StatelessWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.check_circle, size: 80, color: AppColors.primaryGreen),
+                      const Icon(Icons.check_circle, size: 80, color: AppColors.primaryGreen),
                       const SizedBox(height: 16),
                       Icon(Icons.directions_car, size: 50, color: Colors.grey[400]),
                     ],

@@ -28,6 +28,7 @@ const partnerProjection = `
   id,
   user_id AS "userId",
   business_name AS "businessName",
+  business_type AS "businessType",gst_number AS "gstNumber",
   business_description AS "businessDescription",
   owner_name AS "ownerName",
   provider_type AS "providerType",
@@ -61,7 +62,7 @@ export class PostgresPartnerRepository implements PartnerRepository {
          city,
          state,
          pin_code,
-         number_of_vehicles
+         number_of_vehicles,business_type,gst_number
        )
        VALUES (
          $1,
@@ -73,7 +74,7 @@ export class PostgresPartnerRepository implements PartnerRepository {
          $7,
          $8,
          $9,
-         $10
+         $10,$11,$12
        )
        RETURNING ${partnerProjection}`,
       [
@@ -81,12 +82,14 @@ export class PostgresPartnerRepository implements PartnerRepository {
         data.businessName,
         data.businessDescription ?? null,
         data.ownerName ?? null,
-        data.providerType ?? null,
+        data.providerType ?? 'DRIVER',
         data.address ?? null,
         data.city ?? null,
         data.state ?? null,
         data.pinCode ?? null,
-        data.numberOfVehicles ?? null,
+        data.numberOfVehicles ?? 1,
+        data.businessType ?? null,
+        data.gstNumber ?? null,
       ],
     );
 
@@ -153,6 +156,8 @@ export class PostgresPartnerRepository implements PartnerRepository {
   async update(id: string, data: UpdatePartnerData): Promise<Partner | null> {
     const columns: Record<string, string> = {
       businessName: 'business_name',
+      businessType: 'business_type',
+      gstNumber: 'gst_number',
       businessDescription: 'business_description',
       ownerName: 'owner_name',
       providerType: 'provider_type',

@@ -1,3 +1,7 @@
+import { driverEligibilitySql } from './driver-eligibility.js';
+import { AppError } from '../../../common/errors/app-error.js';
+import { env } from '../../../config/env.js';
+import { validateCoordinates } from '../../maps/geometry.js';
 import type { Pool, PoolClient } from 'pg';
 import type {
   DriverAvailabilityStatus,
@@ -68,6 +72,15 @@ export interface DriverRepository {
     vehicleCategory?: string,
   ): Promise<DriverCandidate[]>;
 
+  countNearbyEligible?(
+    latitude: number,
+    longitude: number,
+    radiusMeters: number,
+    staleBefore: Date,
+    sector?: string,
+    vehicleCategory?: string,
+  ): Promise<number>;
+
   verifyAssignmentCode(code: string): Promise<AssignmentCodePreview | null>;
 
   claimAssignmentCode(
@@ -100,6 +113,7 @@ const driverProjection = `
   license_number AS "licenseNumber",
   license_expiry::text AS "licenseExpiry",
   verification_status AS "verificationStatus",
+  verified_by AS "verifiedBy",verified_at AS "verifiedAt",
   rejection_reason AS "rejectionReason",
   availability_status AS "availabilityStatus",
   dob::text AS "dob",
@@ -110,6 +124,7 @@ const driverProjection = `
   pin_code AS "pinCode",
   emergency_contact_name AS "emergencyContactName",
   emergency_contact_phone AS "emergencyContactPhone",
+  emergency_contact_relationship AS "emergencyContactRelationship",alternate_contact_phone AS "alternateContactPhone",
   active_vehicle_id AS "activeVehicleId",
   created_at AS "createdAt",
   updated_at AS "updatedAt"
@@ -164,7 +179,7 @@ export class PostgresDriverRepository implements DriverRepository {
          state,
          pin_code,
          emergency_contact_name,
-         emergency_contact_phone
+         emergency_contact_phone,emergency_contact_relationship,alternate_contact_phone
        )
        VALUES (
          $1,
@@ -178,10 +193,12 @@ export class PostgresDriverRepository implements DriverRepository {
          $9,
          $10,
          $11,
-         $12
+         $12,$13,$14
        )
        ON CONFLICT (user_id) DO UPDATE
-       SET license_number = EXCLUDED.license_number,
+       SET emergency_contact_relationship=COALESCE(EXCLUDED.emergency_contact_relationship,driver_profiles.emergency_contact_relationship),
+           alternate_contact_phone=COALESCE(EXCLUDED.alternate_contact_phone,driver_profiles.alternate_contact_phone),
+           license_number = EXCLUDED.license_number,
            license_expiry = EXCLUDED.license_expiry,
            dob = COALESCE(
              EXCLUDED.dob,
@@ -229,6 +246,8 @@ export class PostgresDriverRepository implements DriverRepository {
         input.pinCode ?? null,
         input.emergencyContactName ?? null,
         input.emergencyContactPhone ?? null,
+        input.emergencyContactRelationship ?? null,
+        input.alternateContactPhone ?? null,
       ],
     );
 
@@ -285,6 +304,9 @@ export class PostgresDriverRepository implements DriverRepository {
        SET availability_status = $2
        WHERE id = $1
          AND user_id IS NOT NULL
+         AND EXISTS(SELECT 1 FROM users u WHERE u.id=user_id AND u.status='active' AND u.deleted_at IS NULL AND u.role IN ('driver','driver_fleet_owner'))
+         AND ($2::text<>'available' OR (verification_status='approved' AND license_expiry>=CURRENT_DATE AND EXISTS(SELECT 1 FROM vehicles v WHERE v.id=active_vehicle_id AND v.driver_profile_id=driver_profiles.id AND v.is_active AND v.verification_status='approved' AND (v.registration_expiry IS NULL OR v.registration_expiry>=CURRENT_DATE) AND (v.owner_id=user_id OR EXISTS(SELECT 1 FROM partners p JOIN partner_drivers pd ON pd.partner_id=p.id WHERE p.user_id=v.owner_id AND p.approval_status='approved' AND pd.driver_profile_id=driver_profiles.id AND pd.status='ACTIVE')) AND provider_compliance_satisfied(user_id,driver_profiles.id,NULL,v.id,v.category))))
+         AND NOT EXISTS (SELECT 1 FROM rides WHERE assigned_driver_id=driver_profiles.id AND status NOT IN ('completed','cancelled'))
        RETURNING id`,
       [profileId, status],
     );
@@ -312,9 +334,10 @@ export class PostgresDriverRepository implements DriverRepository {
 
     const result = await executor.query(
       `UPDATE driver_profiles
-       SET availability_status = 'available'
+       SET availability_status = CASE WHEN availability_status='busy' THEN 'available'::driver_availability_status ELSE availability_status END
        WHERE id = $1
-         AND availability_status = 'busy'
+         AND availability_status IN ('busy','stale')
+         AND NOT EXISTS (SELECT 1 FROM rides WHERE assigned_driver_id=driver_profiles.id AND status NOT IN ('completed','cancelled'))
        RETURNING id`,
       [profileId],
     );
@@ -333,6 +356,9 @@ export class PostgresDriverRepository implements DriverRepository {
                4326
              )::geography,
            last_location_at = $4,
+           location_speed = $5,
+           location_heading = $6,
+           location_accuracy = $7,
            availability_status = CASE
              WHEN availability_status = 'stale'
                   AND NOT EXISTS (
@@ -353,7 +379,15 @@ export class PostgresDriverRepository implements DriverRepository {
            OR last_location_at < $4
          )
        RETURNING id`,
-      [profileId, location.longitude, location.latitude, location.recordedAt],
+      [
+        profileId,
+        location.longitude,
+        location.latitude,
+        location.recordedAt,
+        location.speed ?? null,
+        location.heading ?? null,
+        location.accuracy ?? null,
+      ],
     );
 
     return result.rowCount === 1;
@@ -420,24 +454,65 @@ export class PostgresDriverRepository implements DriverRepository {
     sector?: string,
     vehicleCategory?: string,
   ): Promise<DriverCandidate[]> {
+    return this.queryNearby(
+      latitude,
+      longitude,
+      radiusMeters,
+      limit,
+      staleBefore,
+      sector,
+      vehicleCategory,
+    );
+  }
+  async countNearbyEligible(
+    latitude: number,
+    longitude: number,
+    radiusMeters: number,
+    staleBefore: Date,
+    sector?: string,
+    vehicleCategory?: string,
+  ): Promise<number> {
+    return (
+      (
+        await this.queryNearby(
+          latitude,
+          longitude,
+          radiusMeters,
+          1,
+          staleBefore,
+          sector,
+          vehicleCategory,
+          true,
+        )
+      )[0]?.count ?? 0
+    );
+  }
+  private async queryNearby(
+    latitude: number,
+    longitude: number,
+    radiusMeters: number,
+    limit: number,
+    staleBefore: Date,
+    sector?: string,
+    vehicleCategory?: string,
+    countOnly = false,
+  ): Promise<(DriverCandidate & { count?: number })[]> {
+    validateCoordinates({ latitude, longitude });
+    if (
+      !Number.isFinite(radiusMeters) ||
+      radiusMeters <= 0 ||
+      radiusMeters > env.MAP_DRIVER_RADII_METERS.at(-1)!
+    )
+      throw new AppError('MAP_INPUT_INVALID', 'Driver radius exceeds the configured maximum', 400);
+    if (!Number.isInteger(limit) || limit < 1 || limit > env.MAX_DRIVER_MATCH_CANDIDATES)
+      throw new AppError(
+        'MAP_INPUT_INVALID',
+        'Driver candidate limit exceeds the configured maximum',
+        400,
+      );
     const values: unknown[] = [longitude, latitude, radiusMeters, staleBefore, limit];
 
-    const conditions: string[] = [
-      `dp.availability_status = 'available'`,
-      `dp.verification_status = 'approved'`,
-      `dp.last_location IS NOT NULL`,
-      `dp.last_location_at >= $4`,
-      `v.is_active = TRUE`,
-      `v.verification_status = 'approved'`,
-      `v.driver_profile_id = dp.id`,
-      `NOT EXISTS (
-         SELECT 1
-         FROM rides pending_offer
-         WHERE pending_offer.dispatch_driver_id = dp.id
-           AND pending_offer.dispatch_expires_at > NOW()
-           AND pending_offer.status = 'searching'
-       )`,
-    ];
+    const conditions: string[] = [driverEligibilitySql('$4')];
 
     if (sector) {
       values.push(sector);
@@ -457,8 +532,11 @@ export class PostgresDriverRepository implements DriverRepository {
       ...(vehicleCategory ? [`v2.category = $${values.indexOf(vehicleCategory) + 1}`] : []),
     ];
 
-    const result = await this.pool.query<DriverCandidate>(
-      `SELECT
+    const result = await this.pool.query<DriverCandidate & { count?: number }>(
+      `SELECT ${
+        countOnly
+          ? 'COUNT(*)::int AS count'
+          : `
            dp.id AS "driverProfileId",
            dp.user_id AS "userId",
            v.id AS "vehicleId",
@@ -477,6 +555,8 @@ export class PostgresDriverRepository implements DriverRepository {
            dp.last_location_at AS "locationRecordedAt",
            v.sector AS sector,
            v.category AS "vehicleCategory"
+`
+      }
          FROM driver_profiles dp
          JOIN users u
            ON u.id = dp.user_id
@@ -511,7 +591,7 @@ export class PostgresDriverRepository implements DriverRepository {
              )::geography,
              $3
            )
-         ORDER BY "distanceMeters" ASC
+         ${countOnly ? '' : 'ORDER BY "distanceMeters" ASC, dp.id ASC'}
          LIMIT $5`,
       values,
     );
@@ -570,6 +650,17 @@ export class PostgresDriverRepository implements DriverRepository {
 
     try {
       await client.query('BEGIN');
+      const lockVehicle = (
+        await client.query<{ vehicle_id: string }>(
+          'SELECT vehicle_id FROM driver_assignment_codes WHERE code=$1',
+          [code],
+        )
+      ).rows[0];
+      if (lockVehicle)
+        await client.query(
+          "SELECT pg_advisory_xact_lock(hashtextextended('provider_vehicle:'||$1::text,0))",
+          [lockVehicle.vehicle_id],
+        );
 
       /*
        * Lock the assignment code first so two drivers cannot

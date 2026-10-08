@@ -1,3 +1,4 @@
+import type { VehicleFareSnapshot } from '../../vehicles/types/vehicle.js';
 /**
  * Fare domain types.
  *
@@ -5,8 +6,8 @@
  *   Gross Fare = Base Fare + Distance Fare + Time Fare
  *
  * This is intentionally a simple v1 pricing model.
- * Coupons, taxes, surge, payment fees, vehicle-category pricing,
- * and other pricing adjustments will be added in later phases.
+ * Legacy scalar callers retain this contract. Vehicle range estimates reuse
+ * the same engine and preserve existing ancillary charges.
  */
 
 export const FARE_CURRENCY = 'INR' as const;
@@ -60,6 +61,7 @@ export interface FareBreakdown {
  * future pricing-model changes without ambiguity.
  */
 export interface FareCalculationResult extends FareBreakdown {
+  vehicleConfiguration?: VehicleFareSnapshot;
   distanceMeters: number;
   durationSeconds: number;
   currency: FareCurrency;
@@ -86,3 +88,32 @@ export interface FarePricingConfig {
   currency: FareCurrency;
   pricingVersion: string;
 }
+
+/** Original approximate rates, in paise. Null maximum means an open upper bound. */
+export interface VehiclePricing {
+  displayName: string;
+  baseFare: { minimum: number; maximum: number | null } | null;
+  perKmRate: { minimum: number; maximum: number };
+  routeBased?: boolean;
+  /** Explicit operational decision; never derived automatically from the range. */
+  fixedRates?: { baseFare: number; distanceRatePerKm: number };
+}
+
+export interface VehicleFareEstimate {
+  estimateType: 'range' | 'quote_required';
+  vehicleCategory: string;
+  pricing: VehiclePricing;
+  currency: FareCurrency;
+  pricingVersion: string;
+  distanceMeters: number;
+  durationSeconds: number;
+  routeSource?: 'google_maps_road' | 'haversine_estimated';
+  straightLineDistanceMeters?: number;
+  estimatedFare?: { minimum: FareCalculationResult; maximum: FareCalculationResult | null };
+  bookingFare?: FareCalculationResult;
+  bookable: boolean;
+  message: string;
+  grossAmount?: never;
+}
+
+export type FareEstimateResult = FareCalculationResult | VehicleFareEstimate;

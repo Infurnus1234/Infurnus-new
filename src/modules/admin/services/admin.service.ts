@@ -1,3 +1,14 @@
+import type { VehicleRepository } from '../../vehicles/repositories/vehicle.repository.js';
+import {
+  createVehicleTypeSchema,
+  updateVehicleTypeSchema,
+} from '../../vehicles/schemas/vehicle.schemas.js';
+import {
+  LEGACY_SERVICE_CATEGORIES,
+  LEGACY_PREMIUM_CATEGORIES,
+  VEHICLE_FARE_PRICING,
+  VEHICLE_PRICING_ALIASES,
+} from '../../fares/config/fare.config.js';
 import { AppError } from '../../../common/errors/app-error.js';
 
 import type { AdminRepository } from '../repositories/admin.repository.js';
@@ -5,7 +16,64 @@ import type { AdminRepository } from '../repositories/admin.repository.js';
 import type { AdminFilters, FleetFilters } from '../types/admin.js';
 
 export class AdminService {
-  constructor(private readonly repository: AdminRepository) {}
+  constructor(
+    private readonly repository: AdminRepository,
+    private readonly vehicles?: VehicleRepository,
+  ) {}
+  private catalog() {
+    if (
+      !this.vehicles?.createType ||
+      !this.vehicles.updateType ||
+      !this.vehicles.getType ||
+      !this.vehicles.listTypes
+    )
+      throw new AppError(
+        'VEHICLE_CATALOG_UNAVAILABLE',
+        'Vehicle configuration is unavailable',
+        503,
+      );
+    return this.vehicles as Required<
+      Pick<VehicleRepository, 'createType' | 'updateType' | 'getType' | 'listTypes'>
+    >;
+  }
+  async createVehicleType(actorId: string, body: unknown) {
+    const input = createVehicleTypeSchema.parse(body);
+    // Canonical pricing aliases cannot acquire a conflicting second tariff.
+    if (
+      input.code === 'ftl' ||
+      Object.values(VEHICLE_PRICING_ALIASES).some((a) => Object.hasOwn(a, input.code))
+    )
+      throw new AppError(
+        'VEHICLE_TYPE_INVALID',
+        'Use a canonical vehicle code; FTL remains route based.',
+        422,
+      );
+    const definedSectors = Object.keys(VEHICLE_FARE_PRICING).filter((sector) =>
+      Object.hasOwn(VEHICLE_FARE_PRICING[sector]!, input.code),
+    );
+    if ((LEGACY_SERVICE_CATEGORIES as readonly string[]).includes(input.code))
+      definedSectors.push('service');
+    if ((LEGACY_PREMIUM_CATEGORIES as readonly string[]).includes(input.code))
+      definedSectors.push('premium');
+    if (definedSectors.length && !definedSectors.includes(input.sector))
+      throw new AppError(
+        'VEHICLE_TYPE_INVALID',
+        'Existing vehicle code belongs to another sector',
+        422,
+      );
+    return this.catalog().createType(actorId, input);
+  }
+  updateVehicleType(actorId: string, id: string, body: unknown) {
+    return this.catalog().updateType(actorId, id, updateVehicleTypeSchema.parse(body));
+  }
+  listVehicleTypes(limit: number, offset: number) {
+    return this.catalog().listTypes(limit, offset);
+  }
+  async getVehicleType(id: string) {
+    const type = await this.catalog().getType(id);
+    if (!type) throw new AppError('VEHICLE_TYPE_NOT_FOUND', 'Vehicle type not found', 404);
+    return type;
+  }
 
   listUsers(filters: AdminFilters) {
     return this.repository.listUsers(filters);

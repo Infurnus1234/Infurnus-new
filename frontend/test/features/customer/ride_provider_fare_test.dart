@@ -36,6 +36,27 @@ FareEstimateModel _estimate(double amount) => FareEstimateModel(
 
 void main() {
   test(
+    'late fare completion after disposal does not update provider state',
+    () async {
+      final repository = _RecordingRideRepository();
+      final container = ProviderContainer(
+        overrides: [rideRepositoryProvider.overrideWithValue(repository)],
+      );
+      final notifier = container.read(rideProvider.notifier);
+      notifier.setRoute(
+        'A',
+        'B',
+        pickupCoords: const LatLng(12, 77),
+        destCoords: const LatLng(13, 78),
+        vehicleCategory: 'bike',
+      );
+      final pending = notifier.estimateRouteFare();
+      container.dispose();
+      repository.estimates.single.complete(_estimate(40));
+      expect(await pending, isFalse);
+    },
+  );
+  test(
     'sends current route coordinates and selected category to fare API',
     () async {
       final repository = _RecordingRideRepository();

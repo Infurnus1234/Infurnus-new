@@ -141,7 +141,7 @@ describe('DriverService', () => {
 
     const service = new DriverService(repo, () => now);
 
-    const olderTime = new Date(now.getTime() - 10 * 60 * 1000);
+    const olderTime = new Date(now.getTime() - 1000);
 
     await expect(
       service.updateLocation(userId, {
@@ -202,4 +202,63 @@ describe('DriverService', () => {
       code: 'DRIVER_PROFILE_NOT_FOUND',
     });
   });
+});
+
+describe('driver GPS freshness and legacy discovery', () => {
+  it('rejects stale GPS before persistence', async () => {
+    const repo = repository();
+    await expect(
+      new DriverService(repo, () => now).updateLocation(userId, {
+        latitude: 12.9,
+        longitude: 77.5,
+        timestamp: new Date(now.getTime() - 31000),
+      }),
+    ).rejects.toMatchObject({ code: 'DRIVER_LOCATION_STALE' });
+    expect(repo.updateLocation).not.toHaveBeenCalled();
+  });
+  it('uses canonical 1km then 2km discovery rather than the legacy 5km setting', async () => {
+    const repo = repository();
+    repo.findNearbyEligible = vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    await new DriverService(repo, () => now).nearby(12.9, 77.5);
+    expect(vi.mocked(repo.findNearbyEligible).mock.calls.map((args) => args[2])).toEqual([
+      1000, 2000,
+    ]);
+  });
+});
+
+it('rechecks driver presence after delayed profile lookup before marking disconnected', async () => {
+  const repo = repository();
+  let resolve!: (id: string) => void;
+  repo.findProfileIdByUserId = vi.fn(
+    () =>
+      new Promise<string>((done) => {
+        resolve = done;
+      }),
+  );
+  let disconnected = true;
+  const work = new DriverService(repo).markDisconnected(userId, () => disconnected);
+  disconnected = false;
+  resolve(profileId);
+  await work;
+  expect(repo.markStale).not.toHaveBeenCalled();
+});
+
+it('bounds concurrent GPS ingestion before profile queries and releases capacity afterwards', async () => {
+  const repo = repository();
+  const profiles: Array<(id: string) => void> = [];
+  repo.findProfileIdByUserId = vi.fn(
+    () => new Promise<string>((resolve) => profiles.push(resolve)),
+  );
+  const driver = new DriverService(repo, () => now);
+  const input = { latitude: 12.9, longitude: 77.5, timestamp: now };
+  const accepted = Array.from({ length: 3 }, () => driver.updateLocation(userId, input));
+  await expect(driver.updateLocation(userId, input)).rejects.toMatchObject({
+    code: 'DRIVER_LOCATION_CAPACITY_EXCEEDED',
+    statusCode: 429,
+  });
+  expect(repo.findProfileIdByUserId).toHaveBeenCalledTimes(3);
+  profiles.forEach((resolve) => resolve(profileId));
+  await Promise.all(accepted);
+  repo.findProfileIdByUserId = vi.fn(async () => profileId);
+  await driver.updateLocation(userId, input);
 });

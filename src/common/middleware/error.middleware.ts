@@ -3,8 +3,31 @@ import type { NextFunction, Request, Response } from 'express';
 import { ZodError } from 'zod';
 
 import { AppError } from '../errors/app-error.js';
+import { StorageValidationError } from '../../infrastructure/storage/validation.js';
+import { MulterError } from 'multer';
 
 export function errorMiddleware(err: unknown, _req: Request, res: Response, _next: NextFunction) {
+  if (err && typeof err === 'object' && 'code' in err && err.code === '23514') {
+    res.status(409).json({
+      success: false,
+      error: {
+        code: 'CONSTRAINT_VIOLATION',
+        message: 'The operation conflicts with current data or configured requirements',
+      },
+    });
+    return;
+  }
+  if (err instanceof StorageValidationError || err instanceof MulterError) {
+    const oversized = err.code === 'FILE_TOO_LARGE' || err.code === 'LIMIT_FILE_SIZE';
+    res.status(oversized ? 413 : 400).json({
+      success: false,
+      error: {
+        code: err.code,
+        message: oversized ? 'Document exceeds upload limits' : 'Invalid document upload',
+      },
+    });
+    return;
+  }
   // ==========================================================
   // Validation errors
   // ==========================================================

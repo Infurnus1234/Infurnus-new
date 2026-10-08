@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
+import { AppError } from '../../../common/errors/app-error.js';
 
 import { partnerIdSchema } from '../schemas/partner.schemas.js';
 
@@ -42,6 +43,7 @@ export class PartnerDocumentController {
       }
 
       const input = createPartnerDocumentSchema.parse(request.body);
+      assertClientMetadata(input.metadata);
 
       const document = await this.service.createDocumentMetadata(id, input, request.auth);
 
@@ -64,6 +66,7 @@ export class PartnerDocumentController {
       }
 
       const input = updatePartnerDocumentSchema.parse(request.body);
+      assertClientMetadata(input.metadata);
 
       const document = await this.service.updateDocumentMetadata(
         id,
@@ -81,4 +84,27 @@ export class PartnerDocumentController {
       next(error);
     }
   };
+}
+
+function assertClientMetadata(metadata: Record<string, unknown> | null | undefined) {
+  if (
+    metadata &&
+    [
+      'storage',
+      'pages',
+      'reviewedBy',
+      'reviewedAt',
+      'uploadedBy',
+      'verifiedBy',
+      'verificationStatus',
+      'version',
+      'status',
+    ].some((key) => Object.hasOwn(metadata, key))
+  ) {
+    throw new AppError(
+      'INVALID_DOCUMENT_METADATA',
+      'Storage and review metadata are server controlled',
+      400,
+    );
+  }
 }

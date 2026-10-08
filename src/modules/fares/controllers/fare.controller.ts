@@ -24,7 +24,9 @@ export class FareController {
             input.goods?.loadingAssistance)
           : undefined;
       const rentalHours =
-        sector === 'premium' ? (input.rentalHours ?? input.rentalDetails?.hours) : undefined;
+        sector === 'premium'
+          ? (input.rentalHours ?? input.rentalDetails?.hours ?? input.rentalDetails?.rentalHours)
+          : undefined;
       const fuelRatePerKm =
         sector === 'premium'
           ? (input.fuelRatePerKm ?? input.rentalDetails?.fuelRatePerKm)
@@ -48,6 +50,7 @@ export class FareController {
             hasLoadingAssistance,
             rentalHours,
             fuelRatePerKm,
+            pricingMode: 'vehicle_range',
           })
         : await this.fareEstimateService.estimate(input.pickup, input.destination);
 

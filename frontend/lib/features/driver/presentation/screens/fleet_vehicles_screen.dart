@@ -32,7 +32,7 @@ class _FleetVehiclesScreenState extends ConsumerState<FleetVehiclesScreen> {
   final _seatingController = TextEditingController(text: '4');
   final _loadCapacityController = TextEditingController(text: '0');
   String _selectedSector = 'passenger';
-  String _selectedCategory = 'sedan';
+  final String _selectedCategory = 'sedan';
   bool _isCreating = false;
 
   @override

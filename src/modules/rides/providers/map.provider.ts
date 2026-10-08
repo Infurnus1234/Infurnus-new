@@ -19,9 +19,38 @@ export interface PlaceSuggestion {
   description: string;
 }
 
+export interface ReverseGeocodeResult {
+  address: string;
+  placeId?: string;
+  coordinates: Coordinates;
+}
+export interface MapRequestOptions {
+  locationBias?: Coordinates;
+  mode?: 'driving' | 'walking' | 'bicycling';
+  avoidTolls?: boolean;
+  source?: 'RIDE' | 'LOGISTICS' | 'RENTAL' | 'USER' | 'PARTNER' | 'ADMIN';
+  beforeExternalRequest?: () => Promise<void>;
+  onExternalRequest?: () => void;
+}
+
 export interface MapProvider {
-  calculateRoute(origin: Coordinates, destination: Coordinates): Promise<RouteResult | null>;
-  calculateMatrix(origins: Coordinates[], destination: Coordinates): Promise<MatrixRouteResult[]>;
-  geocode(address: string): Promise<Coordinates | null>;
-  places(query: string): Promise<PlaceSuggestion[]>;
+  forSource?(source: NonNullable<MapRequestOptions['source']>): MapProvider;
+  readonly providerName?: string;
+  readonly navigationStorageAllowed?: boolean;
+  reverseGeocode?(
+    point: Coordinates,
+    options?: MapRequestOptions,
+  ): Promise<ReverseGeocodeResult | null>;
+  calculateRoute(
+    origin: Coordinates,
+    destination: Coordinates,
+    options?: MapRequestOptions,
+  ): Promise<RouteResult | null>;
+  calculateMatrix(
+    origins: Coordinates[],
+    destination: Coordinates,
+    options?: MapRequestOptions,
+  ): Promise<MatrixRouteResult[]>;
+  geocode(address: string, options?: MapRequestOptions): Promise<Coordinates | null>;
+  places(query: string, options?: MapRequestOptions): Promise<PlaceSuggestion[]>;
 }

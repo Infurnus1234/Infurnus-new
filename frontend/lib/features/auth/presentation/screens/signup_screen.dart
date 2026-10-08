@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_brand_mark.dart';
 import '../../../../shared/widgets/infurnus_button.dart';
 import '../../data/models/auth_models.dart';
 import '../providers/auth_provider.dart';
+import '../providers/user_provider.dart';
+import '../widgets/google_sign_in_button.dart';
 
 class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
@@ -25,7 +28,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   bool _isEmail = true;
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
-  String _selectedRole = 'customer';
+  final String _selectedRole = 'customer';
   String? _validationError;
 
   @override
@@ -36,6 +39,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     _phoneController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+
     super.dispose();
   }
 
@@ -48,7 +52,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     final confirmPassword = _confirmPasswordController.text;
 
     if (firstName.isEmpty || lastName.isEmpty) {
-      setState(() => _validationError = 'Please enter your first and last name.');
+      setState(
+        () => _validationError = 'Please enter your first and last name.',
+      );
       return;
     }
 
@@ -62,8 +68,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       return;
     }
 
-    if (password.length < 6) {
-      setState(() => _validationError = 'Password must be at least 6 characters.');
+    if (password.length < 8 || password.length > 128) {
+      setState(() => _validationError = 'Password must be 8–128 characters.');
       return;
     }
 
@@ -103,7 +109,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       if (next.status == AuthStatus.otpRequired && next.signupId != null) {
         context.push('/otp');
       } else if (next.status == AuthStatus.authenticated) {
-        context.go('/customer-home');
+        context.go(authHomeRoute(ref.read(userProvider)?.role));
       }
     });
 
@@ -142,10 +148,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               const SizedBox(height: 8),
               const Text(
                 'Sign up to get started with INFURNUS',
-                style: TextStyle(
-                  fontSize: 15,
-                  color: Colors.grey,
-                ),
+                style: TextStyle(fontSize: 15, color: Colors.grey),
               ),
               const SizedBox(height: 24),
 
@@ -185,7 +188,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 10),
                           decoration: BoxDecoration(
-                            color: _isEmail ? AppColors.primaryGreen : Colors.transparent,
+                            color: _isEmail
+                                ? AppColors.primaryGreen
+                                : Colors.transparent,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Center(
@@ -206,7 +211,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 10),
                           decoration: BoxDecoration(
-                            color: !_isEmail ? AppColors.primaryGreen : Colors.transparent,
+                            color: !_isEmail
+                                ? AppColors.primaryGreen
+                                : Colors.transparent,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Center(
@@ -251,10 +258,13 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 obscureText: !_isPasswordVisible,
                 suffixIcon: IconButton(
                   icon: Icon(
-                    _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                    _isPasswordVisible
+                        ? Icons.visibility
+                        : Icons.visibility_off,
                     color: Colors.grey,
                   ),
-                  onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
+                  onPressed: () =>
+                      setState(() => _isPasswordVisible = !_isPasswordVisible),
                 ),
               ),
               const SizedBox(height: 16),
@@ -267,47 +277,16 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 obscureText: !_isConfirmPasswordVisible,
                 suffixIcon: IconButton(
                   icon: Icon(
-                    _isConfirmPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                    _isConfirmPasswordVisible
+                        ? Icons.visibility
+                        : Icons.visibility_off,
                     color: Colors.grey,
                   ),
-                  onPressed: () => setState(() => _isConfirmPasswordVisible = !_isConfirmPasswordVisible),
+                  onPressed: () => setState(
+                    () =>
+                        _isConfirmPasswordVisible = !_isConfirmPasswordVisible,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-
-              // Role Selector
-              const Text(
-                'Register as:',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: RadioListTile<String>(
-                      title: const Text('Customer'),
-                      value: 'customer',
-                      groupValue: _selectedRole,
-                      activeColor: AppColors.primaryGreen,
-                      contentPadding: EdgeInsets.zero,
-                      onChanged: (val) {
-                        if (val != null) setState(() => _selectedRole = val);
-                      },
-                    ),
-                  ),
-                  Expanded(
-                    child: RadioListTile<String>(
-                      title: const Text('Driver'),
-                      value: 'driver',
-                      groupValue: _selectedRole,
-                      activeColor: AppColors.primaryGreen,
-                      contentPadding: EdgeInsets.zero,
-                      onChanged: (val) {
-                        if (val != null) setState(() => _selectedRole = val);
-                      },
-                    ),
-                  ),
-                ],
               ),
               const SizedBox(height: 24),
 
@@ -323,6 +302,14 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   ),
                 ),
 
+              Center(
+                child: GoogleSignInButton(
+                  signUp: true,
+                  enabled: authState.status != AuthStatus.loading,
+                  onIdToken: ref.read(authProvider.notifier).signInWithGoogle,
+                ),
+              ),
+              const SizedBox(height: 16),
               if (authState.errorMessage != null)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 16),
@@ -346,7 +333,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text('Already have an account? ', style: TextStyle(color: Colors.grey)),
+                    const Text(
+                      'Already have an account? ',
+                      style: TextStyle(color: Colors.grey),
+                    ),
                     GestureDetector(
                       onTap: () => context.push('/login'),
                       child: const Text(

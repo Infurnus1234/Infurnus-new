@@ -1,3 +1,5 @@
+import { readdir } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { randomUUID } from 'node:crypto';
@@ -273,9 +275,19 @@ try {
     `);
 
     const checksRow = checks.rows[0]!;
+    const expectedFiles = (await readdir(resolve('migrations')))
+      .filter((file) => file.endsWith('.sql'))
+      .sort();
+    const applied = await testPool.query<{ filename: string }>(
+      'SELECT filename FROM schema_migrations',
+    );
+    const appliedFiles = applied.rows.map((row) => row.filename).sort();
+    if (JSON.stringify(appliedFiles) !== JSON.stringify(expectedFiles)) {
+      throw new Error('Applied migrations do not match repository migration filenames');
+    }
 
     if (
-      checksRow.migrationCount !== '40' ||
+      Number(checksRow.migrationCount) !== expectedFiles.length ||
       !checksRow.rides ||
       checksRow.postgis !== 'postgis' ||
       !checksRow.rideIndex ||
@@ -311,6 +323,17 @@ try {
       throw new Error(`Migration verification failed: ${JSON.stringify(checksRow)}`);
     }
 
+    const catalog = await testPool.query(
+      "SELECT to_regclass('public.vehicle_types') AS catalog, to_regclass('public.vehicle_types_code_key') AS unique_code, to_regclass('public.vehicle_types_sector_active_idx') AS active_index, (SELECT count(*) FROM vehicle_types) AS seeded",
+    );
+    if (
+      !catalog.rows[0].catalog ||
+      !catalog.rows[0].unique_code ||
+      !catalog.rows[0].active_index ||
+      Number(catalog.rows[0].seeded) !== 0
+    )
+      throw new Error('Vehicle pricing migration must create a constrained, empty catalog');
+    console.log('Vehicle type catalog constraints/indexes present; no invented seed prices');
     console.log(`Clean migration verification passed for ${databaseName}`);
 
     console.log(JSON.stringify(checksRow));

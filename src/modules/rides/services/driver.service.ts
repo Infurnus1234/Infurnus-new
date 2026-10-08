@@ -1,3 +1,6 @@
+import { MatchingService } from './matching.service.js';
+import { rideEvents } from '../events/ride.events.js';
+import { validateCoordinates } from '../../maps/geometry.js';
 import { env } from '../../../config/env.js';
 import { AppError } from '../../../common/errors/app-error.js';
 import type {
@@ -11,6 +14,7 @@ import type { RideRepository } from '../repositories/ride.repository.js';
 import { sanitizeRideForDriver } from '../utils/ride-sanitizer.js';
 
 export class DriverService {
+  private readonly locationUpdates = new Map<string, number>();
   constructor(
     private readonly repository: DriverRepository,
     private readonly clock: () => Date = () => new Date(),
@@ -105,33 +109,60 @@ export class DriverService {
   }
 
   async updateLocation(userId: string, input: DriverLocationInput): Promise<void> {
-    const profileId = await this.profileForUser(userId);
-    const now = this.clock();
-    if (input.timestamp.getTime() > now.getTime()) {
+    validateCoordinates(input);
+    const pending = this.locationUpdates.get(userId) ?? 0;
+    if (pending >= 3 || (pending === 0 && this.locationUpdates.size >= 1000))
       throw new AppError(
-        'DRIVER_LOCATION_FUTURE',
-        'Location timestamp cannot be in the future',
-        400,
+        'DRIVER_LOCATION_CAPACITY_EXCEEDED',
+        'Location ingestion is busy; retry shortly',
+        429,
       );
-    }
-    if (
-      !(await this.repository.updateLocation(profileId, {
-        latitude: input.latitude,
-        longitude: input.longitude,
-        recordedAt: input.timestamp,
-      }))
-    ) {
-      throw new AppError(
-        'DRIVER_LOCATION_OUT_OF_ORDER',
-        'Location timestamp must be newer than the stored location',
-        409,
-      );
+    this.locationUpdates.set(userId, pending + 1);
+    try {
+      const profileId = await this.profileForUser(userId);
+      const now = this.clock();
+      if (
+        !Number.isFinite(input.timestamp.getTime()) ||
+        input.timestamp.getTime() > now.getTime()
+      ) {
+        throw new AppError(
+          'DRIVER_LOCATION_FUTURE',
+          'Location timestamp cannot be in the future',
+          400,
+        );
+      }
+      if (now.getTime() - input.timestamp.getTime() > env.DRIVER_LOCATION_STALE_SECONDS * 1000)
+        throw new AppError('DRIVER_LOCATION_STALE', 'Location timestamp is too old', 400);
+      if (
+        !(await this.repository.updateLocation(profileId, {
+          latitude: input.latitude,
+          longitude: input.longitude,
+          recordedAt: input.timestamp,
+          speed: input.speed,
+          heading: input.heading,
+          accuracy: input.accuracy,
+        }))
+      ) {
+        throw new AppError(
+          'DRIVER_LOCATION_OUT_OF_ORDER',
+          'Location timestamp must be newer than the stored location',
+          409,
+        );
+      }
+      rideEvents.emit('driver:location_updated', { profileId, userId, location: input });
+    } finally {
+      const remaining = (this.locationUpdates.get(userId) ?? 1) - 1;
+      if (remaining) this.locationUpdates.set(userId, remaining);
+      else this.locationUpdates.delete(userId);
     }
   }
 
-  async markDisconnected(userId: string): Promise<void> {
+  async markDisconnected(
+    userId: string,
+    stillDisconnected: () => boolean = () => true,
+  ): Promise<void> {
     const profileId = await this.profileForUser(userId);
-    await this.repository.markStale(profileId);
+    if (stillDisconnected()) await this.repository.markStale(profileId);
   }
 
   async getActiveVehicleForUser(
@@ -193,24 +224,10 @@ export class DriverService {
   }
 
   async nearby(latitude: number, longitude: number, sector?: string, vehicleCategory?: string) {
-    const staleBefore = new Date(this.clock().getTime() - env.DRIVER_LOCATION_STALE_SECONDS * 1000);
-    if (sector !== undefined || vehicleCategory !== undefined) {
-      return this.repository.findNearbyEligible(
-        latitude,
-        longitude,
-        env.DRIVER_SEARCH_RADIUS_METERS,
-        env.MAX_DRIVER_MATCH_CANDIDATES,
-        staleBefore,
-        sector,
-        vehicleCategory,
-      );
-    }
-    return this.repository.findNearbyEligible(
-      latitude,
-      longitude,
-      env.DRIVER_SEARCH_RADIUS_METERS,
-      env.MAX_DRIVER_MATCH_CANDIDATES,
-      staleBefore,
+    return new MatchingService(this.repository).findRankedDrivers(
+      { latitude, longitude },
+      sector,
+      vehicleCategory,
     );
   }
 }

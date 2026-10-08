@@ -13,6 +13,7 @@ export const partnerDocumentTypes = [
   'VEHICLE_INSURANCE',
   'VEHICLE_PERMIT',
   'VEHICLE_FITNESS',
+  'VEHICLE_PUC',
   'OTHER',
 ] as const;
 
@@ -54,6 +55,10 @@ export interface PartnerDocument {
   metadata: PartnerDocumentMetadata | null;
   issuedAt: string | null;
   expiresAt: string | null;
+  version?: number;
+  uploadSource?: string;
+  reviewedBy?: string | null;
+  reviewedAt?: Date | null;
   uploadedAt: Date;
   verifiedAt: Date | null;
   createdAt: Date;
@@ -76,4 +81,6 @@ export interface UpdatePartnerDocumentData {
   issuedAt?: string | null | undefined;
   expiresAt?: string | null | undefined;
   verifiedAt?: Date | null | undefined;
+  reviewedBy?: string | null | undefined;
+  reviewedAt?: Date | null | undefined;
 }

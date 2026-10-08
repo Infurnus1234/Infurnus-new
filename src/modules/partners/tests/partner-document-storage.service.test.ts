@@ -28,7 +28,7 @@ const userId = '650e8400-e29b-41d4-a716-446655440000';
 
 const actor: AuthenticatedUser = {
   userId,
-  role: 'user',
+  role: 'fleet_owner',
 };
 
 const adminActor: AuthenticatedUser = {
@@ -140,6 +140,7 @@ function createSafeDocument(
 
 function createServiceMock() {
   return {
+    assertAccess: vi.fn().mockResolvedValue(undefined),
     createDocumentMetadata: vi.fn(),
     getDocument: vi.fn(),
     getDocuments: vi.fn(),
@@ -240,7 +241,7 @@ describe('PartnerDocumentStorageService', () => {
     expect(result).not.toHaveProperty('metadata');
   });
 
-  it('uses public access for profile photo uploads', async () => {
+  it('uses authenticated access for profile photo uploads', async () => {
     const profilePhoto = createJpegFile();
 
     vi.mocked(partnerDocumentService.createDocumentMetadata).mockResolvedValue(
@@ -259,7 +260,7 @@ describe('PartnerDocumentStorageService', () => {
     expect(storageUploadMock).toHaveBeenCalledWith(
       expect.objectContaining({
         resourceType: 'image',
-        accessMode: 'public',
+        accessMode: 'authenticated',
       }),
     );
   });
@@ -481,6 +482,7 @@ describe('PartnerDocumentStorageService', () => {
 
   it('returns a short-lived access URL for authorized admin access', async () => {
     const document = createDocument();
+    vi.mocked(partnerDocumentService.getDocument).mockResolvedValue(document);
 
     const url = await service.getDocumentAccessUrl(document, adminActor);
 
@@ -496,8 +498,11 @@ describe('PartnerDocumentStorageService', () => {
     });
   });
 
-  it('rejects sensitive document access for normal users', async () => {
+  it('rejects sensitive document access for unrelated users', async () => {
     const document = createDocument();
+    vi.mocked(partnerDocumentService.getDocument).mockRejectedValue(
+      Object.assign(new Error('Forbidden'), { code: 'FORBIDDEN', statusCode: 403 }),
+    );
 
     await expect(service.getDocumentAccessUrl(document, actor)).rejects.toMatchObject({
       code: 'FORBIDDEN',
@@ -538,5 +543,108 @@ describe('PartnerDocumentStorageService', () => {
     await service.deleteDocumentStorage(document);
 
     expect(storageDeleteMock).not.toHaveBeenCalled();
+  });
+  it('authorizes partner ownership before any external upload', async () => {
+    vi.mocked(partnerDocumentService.assertAccess).mockRejectedValue(
+      Object.assign(new Error('Forbidden'), { statusCode: 403 }),
+    );
+    await expect(
+      service.uploadDocument({ partnerId, documentType: 'AADHAAR', file, actor }),
+    ).rejects.toMatchObject({ statusCode: 403 });
+    expect(storageUploadMock).not.toHaveBeenCalled();
+  });
+  it('supports camera front/back pages and preserves source/number metadata', async () => {
+    vi.mocked(partnerDocumentService.createDocumentMetadata).mockResolvedValue(
+      createSafeDocument(),
+    );
+    await service.uploadDocument({
+      partnerId,
+      documentType: 'AADHAAR',
+      file: createJpegFile(),
+      files: [createJpegFile(), createJpegFile()],
+      documentMetadata: { uploadSource: 'CAMERA', documentNumber: 'identity' },
+      actor,
+    });
+    expect(storageUploadMock).toHaveBeenCalledTimes(2);
+    expect(partnerDocumentService.createDocumentMetadata).toHaveBeenCalledWith(
+      partnerId,
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          uploadSource: 'CAMERA',
+          documentNumber: 'identity',
+          pages: [
+            expect.objectContaining({ side: 'FRONT' }),
+            expect.objectContaining({ side: 'BACK' }),
+          ],
+        }),
+      }),
+      actor,
+    );
+  });
+  it('validates all pages before upload and rejects oversized or excessive bundles', async () => {
+    const invalid = { ...createJpegFile(), buffer: Buffer.from('invalid'), size: 7 };
+    await expect(
+      service.uploadDocument({
+        partnerId,
+        documentType: 'AADHAAR',
+        file: createJpegFile(),
+        files: [createJpegFile(), invalid],
+        actor,
+      }),
+    ).rejects.toMatchObject({ code: 'FILE_CONTENT_MISMATCH' });
+    await expect(
+      service.uploadDocument({
+        partnerId,
+        documentType: 'AADHAAR',
+        file: createJpegFile(),
+        files: Array.from({ length: 6 }, () => createJpegFile()),
+        actor,
+      }),
+    ).rejects.toMatchObject({ statusCode: 400 });
+    await expect(
+      service.uploadDocument({
+        partnerId,
+        documentType: 'AADHAAR',
+        file: { ...file, size: 50 * 1024 * 1024 },
+        actor,
+      }),
+    ).rejects.toMatchObject({ code: 'FILE_TOO_LARGE' });
+    expect(storageUploadMock).not.toHaveBeenCalled();
+  });
+  it('renews non-photo documents with optimistic version and resets verification', async () => {
+    const current = createDocument({ documentType: 'PAN', version: 2, status: 'VERIFIED' });
+    vi.mocked(partnerDocumentService.getDocument).mockResolvedValue(current);
+    vi.mocked(partnerDocumentService.updateDocumentMetadata).mockResolvedValue(
+      createSafeDocument({ documentType: 'PAN', version: 3, status: 'PENDING' }),
+    );
+    await service.replaceDocument({
+      partnerId,
+      documentId: current.id,
+      file,
+      actor,
+      documentMetadata: { expiresAt: '2099-01-01', uploadSource: 'CAMERA' },
+    });
+    expect(partnerDocumentService.updateDocumentMetadata).toHaveBeenCalledWith(
+      partnerId,
+      current.id,
+      expect.objectContaining({ expiresAt: '2099-01-01' }),
+      actor,
+      2,
+    );
+  });
+  it('allows an authorized owner access and rechecks the current storage version', async () => {
+    const document = createDocument();
+    vi.mocked(partnerDocumentService.getDocument).mockResolvedValue(document);
+    expect(await service.getDocumentAccessUrl(document, actor)).toBe(
+      'https://secure.example.com/document',
+    );
+    vi.mocked(partnerDocumentService.getDocument).mockResolvedValue(
+      createDocument({
+        metadata: { storage: { ...document.metadata!.storage!, storageKey: 'new-key' } },
+      }),
+    );
+    await expect(service.getDocumentAccessUrl(document, actor)).rejects.toMatchObject({
+      statusCode: 409,
+    });
   });
 });

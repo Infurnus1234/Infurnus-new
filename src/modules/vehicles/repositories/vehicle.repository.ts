@@ -1,3 +1,6 @@
+import { AppError } from '../../../common/errors/app-error.js';
+import type { VehicleType } from '../types/vehicle.js';
+import type { CreateVehicleTypeInput, UpdateVehicleTypeInput } from '../schemas/vehicle.schemas.js';
 import type { Pool } from 'pg';
 import type { CreateVehicleData, UpdateVehicleData, Vehicle } from '../types/vehicle.js';
 
@@ -13,6 +16,12 @@ export interface CustomerFleetVehicle {
 }
 
 export interface VehicleRepository {
+  driverProfileOwnerId?(id: string): Promise<string | null>;
+  createType?(actorId: string, input: CreateVehicleTypeInput): Promise<VehicleType>;
+  updateType?(actorId: string, id: string, input: UpdateVehicleTypeInput): Promise<VehicleType>;
+  getType?(id: string): Promise<VehicleType | null>;
+  findTypeByCode?(code: string): Promise<VehicleType | null>;
+  listTypes?(limit: number, offset: number): Promise<VehicleType[]>;
   driverProfileExists(id: string): Promise<boolean>;
 
   create(data: CreateVehicleData): Promise<Vehicle>;
@@ -64,6 +73,125 @@ function mapVehicleRow(row: Vehicle): Vehicle {
 
 export class PostgresVehicleRepository implements VehicleRepository {
   constructor(private readonly pool: Pool) {}
+  async driverProfileOwnerId(id: string) {
+    return (
+      (
+        await this.pool.query<{ user_id: string }>(
+          'SELECT user_id FROM driver_profiles WHERE id=$1',
+          [id],
+        )
+      ).rows[0]?.user_id ?? null
+    );
+  }
+
+  async getType(id: string): Promise<VehicleType | null> {
+    const result = await this.pool.query('SELECT * FROM vehicle_types WHERE id=$1', [id]);
+    return result.rows[0] ? mapType(result.rows[0]) : null;
+  }
+  async findTypeByCode(code: string): Promise<VehicleType | null> {
+    const result = await this.pool.query('SELECT * FROM vehicle_types WHERE code=$1', [code]);
+    return result.rows[0] ? mapType(result.rows[0]) : null;
+  }
+  async listTypes(limit: number, offset: number): Promise<VehicleType[]> {
+    const result = await this.pool.query(
+      'SELECT * FROM vehicle_types ORDER BY code LIMIT $1 OFFSET $2',
+      [limit, offset],
+    );
+    return result.rows.map(mapType);
+  }
+  async createType(actorId: string, input: CreateVehicleTypeInput): Promise<VehicleType> {
+    return this.mutateType(actorId, undefined, input);
+  }
+  async updateType(
+    actorId: string,
+    id: string,
+    input: UpdateVehicleTypeInput,
+  ): Promise<VehicleType> {
+    return this.mutateType(actorId, id, input);
+  }
+  private async mutateType(
+    actorId: string,
+    id: string | undefined,
+    input: CreateVehicleTypeInput | UpdateVehicleTypeInput,
+  ): Promise<VehicleType> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Defense in depth: reuse the platform roles, including active/deleted state.
+      const actor = await client.query(
+        "SELECT id FROM users WHERE id=$1 AND role IN ('admin','super_admin') AND status='active' AND deleted_at IS NULL FOR SHARE",
+        [actorId],
+      );
+      if (!actor.rowCount) throw new AppError('FORBIDDEN', 'Admin access required', 403);
+      // Serialize creation as well as updates against in-flight bookings for this code.
+      // Row locks alone cannot protect a catalog entry that does not exist yet.
+      const identity = id
+        ? (await client.query('SELECT code FROM vehicle_types WHERE id=$1', [id])).rows[0]?.code
+        : (input as CreateVehicleTypeInput).code;
+      if (!identity) throw new AppError('VEHICLE_TYPE_NOT_FOUND', 'Vehicle type not found', 404);
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,648032))', [identity]);
+      let old: VehicleType | null = null;
+      let result;
+      if (id) {
+        const previous = await client.query('SELECT * FROM vehicle_types WHERE id=$1 FOR UPDATE', [
+          id,
+        ]);
+        if (!previous.rows[0])
+          throw new AppError('VEHICLE_TYPE_NOT_FOUND', 'Vehicle type not found', 404);
+        old = mapType(previous.rows[0]);
+        const update = input as UpdateVehicleTypeInput;
+        if (old.version !== update.expectedVersion)
+          throw new AppError(
+            'VEHICLE_TYPE_VERSION_CONFLICT',
+            'Configuration changed; reload before updating.',
+            409,
+          );
+        result = await client.query(
+          'UPDATE vehicle_types SET name=$2,base_fare_paise=$3,per_km_rate_paise=$4,active=$5,version=version+1 WHERE id=$1 RETURNING *',
+          [
+            id,
+            update.name ?? old.name,
+            Math.round((update.baseFare ?? old.baseFare) * 100),
+            Math.round((update.perKmRate ?? old.perKmRate) * 100),
+            update.active ?? old.active,
+          ],
+        );
+      } else {
+        const create = input as CreateVehicleTypeInput;
+        result = await client.query(
+          'INSERT INTO vehicle_types(name,code,sector,base_fare_paise,per_km_rate_paise,currency,active) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *',
+          [
+            create.name,
+            create.code,
+            create.sector,
+            Math.round(create.baseFare * 100),
+            Math.round(create.perKmRate * 100),
+            create.currency,
+            create.active,
+          ],
+        );
+      }
+      const vehicle = mapType(result.rows[0]);
+      await client.query(
+        "INSERT INTO user_history(user_id,event_type,entity_type,entity_id,metadata) VALUES($1,$2,'vehicle_type',$3,$4::jsonb)",
+        [
+          actorId,
+          id ? 'vehicle_type_updated' : 'vehicle_type_created',
+          vehicle.id,
+          JSON.stringify({ old, new: vehicle }),
+        ],
+      );
+      await client.query('COMMIT');
+      return vehicle;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      if ((error as { code?: string }).code === '23505')
+        throw new AppError('VEHICLE_TYPE_DUPLICATE', 'Vehicle code already exists', 409);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
 
   async driverProfileExists(id: string): Promise<boolean> {
     const result = await this.pool.query(
@@ -294,4 +422,20 @@ export class PostgresVehicleRepository implements VehicleRepository {
       loadCapacityKg: Number(row.loadCapacityKg ?? 0),
     }));
   }
+}
+
+function mapType(row: Record<string, unknown>): VehicleType {
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    code: String(row.code),
+    sector: row.sector as VehicleType['sector'],
+    baseFare: Number(row.base_fare_paise) / 100,
+    perKmRate: Number(row.per_km_rate_paise) / 100,
+    currency: 'INR',
+    active: row.active as boolean,
+    version: Number(row.version),
+    createdAt: row.created_at as Date,
+    updatedAt: row.updated_at as Date,
+  };
 }

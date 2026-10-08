@@ -5,8 +5,8 @@ import type { DriverRepository } from '../repositories/driver.repository.js';
 import type { RideRepository } from '../repositories/ride.repository.js';
 import type { Ride } from '../types/ride.js';
 
-describe('Driver Zero-Fare Financial Isolation & Sanitization', () => {
-  it('strips all fare and financial billing fields from ride payloads sent to driver', () => {
+describe('Driver booked-fare information and sensitive-field sanitization', () => {
+  it('exposes authoritative booked fare through the DTO while stripping billing and PIN', () => {
     const rawRide = {
       id: '990e8400-e29b-41d4-a716-446655440000',
       customerId: '110e8400-e29b-41d4-a716-446655440000',
@@ -30,13 +30,16 @@ describe('Driver Zero-Fare Financial Isolation & Sanitization', () => {
 
     expect(sanitized.id).toBe(rawRide.id);
     expect(sanitized.pickupAddress).toBe('MG Road, Bangalore');
-    // Financial data & customer PIN must NEVER reach driver
+    // Legacy financial fields and customer PIN stay stripped; the approved DTO exposes booked fare.
     expect(sanitized.fareEstimate).toBeUndefined();
     expect(sanitized.finalFare).toBeUndefined();
     expect(sanitized.actualFuelCost).toBeUndefined();
     expect(sanitized.billing).toBeUndefined();
     expect(sanitized.pin).toBeUndefined();
     expect(sanitized.pinVerified).toBe(true);
+    expect(sanitized.rideInformation).toMatchObject({
+      fare: { amount: 350.5, bookedAmount: 350.5, finalAmount: null, authority: 'booked' },
+    });
   });
 
   it('hides total earnings and ride fares in driver history when isDriverRole is true', async () => {

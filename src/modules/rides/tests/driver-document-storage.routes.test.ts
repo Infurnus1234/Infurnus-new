@@ -30,7 +30,7 @@ const driverDocument = {
   storageProvider: 'cloudinary',
   storageKey: uploadedStorageKey,
   resourceType: 'image' as const,
-  accessMode: 'public' as const,
+  accessMode: 'authenticated' as const,
   mimeType: 'image/jpeg',
   fileSize: 1024,
   verificationStatus: 'pending' as const,
@@ -119,6 +119,8 @@ function createTestApp() {
    * even though these tests only exercise driver document routes.
    */
   const rideController = {
+    map: vi.fn(),
+    location: vi.fn(),
     create: vi.fn(),
     list: vi.fn(),
     getById: vi.fn(),

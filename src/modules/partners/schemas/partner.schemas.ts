@@ -32,6 +32,8 @@ export const createPartnerSchema = z
   .object({
     userId: partnerId,
     businessName,
+    businessType: z.string().trim().min(1).max(100).optional(),
+    gstNumber: z.string().trim().min(1).max(30).optional(),
     businessDescription,
     ownerName: ownerName.optional(),
     providerType: providerType.optional(),
@@ -46,6 +48,8 @@ export const createPartnerSchema = z
 export const updatePartnerSchema = z
   .object({
     businessName: businessName.optional(),
+    businessType: z.string().trim().min(1).max(100).nullable().optional(),
+    gstNumber: z.string().trim().min(1).max(30).nullable().optional(),
 
     businessDescription: z.string().trim().max(5000).nullable().optional(),
 

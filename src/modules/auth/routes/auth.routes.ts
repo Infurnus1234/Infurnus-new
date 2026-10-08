@@ -11,6 +11,7 @@ import { requireCsrf } from '../middleware/csrf.middleware.js';
 import {
   authForgotPasswordRateLimiter,
   authLoginRateLimiter,
+  authGoogleRateLimiter,
   authLogoutRateLimiter,
   authOtpResendRateLimiter,
   authOtpVerifyRateLimiter,
@@ -32,6 +33,8 @@ export function createAuthRouter(
   const router = Router();
 
   const {
+    google,
+    linkGoogle,
     signup,
     verifySignup,
     resendSignupOtp,
@@ -56,6 +59,15 @@ export function createAuthRouter(
   const enableRateLimiting = options.enableRateLimiting ?? true;
 
   const enableCsrfProtection = options.enableCsrfProtection ?? true;
+
+  router.post('/google', ...(enableRateLimiting ? [authGoogleRateLimiter] : []), google);
+  router.post(
+    '/google/link',
+    ...(enableRateLimiting ? [authGoogleRateLimiter] : []),
+    requireAuth,
+    ...(enableCsrfProtection ? [requireCsrf] : []),
+    linkGoogle,
+  );
 
   // ==========================================================
   // POST /auth/signup

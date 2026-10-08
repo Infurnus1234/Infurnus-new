@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../../shared/widgets/infurnus_button.dart';
 import '../../../../shared/widgets/infurnus_brand_mark.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../data/models/auth_models.dart';
 import '../providers/auth_provider.dart';
+import '../providers/user_provider.dart';
+import '../widgets/google_sign_in_button.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -30,54 +33,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   void _showForgotPasswordDialog() {
-    final forgotController = TextEditingController(
-      text: _isEmailLogin ? _emailController.text.trim() : _phoneController.text.trim(),
-    );
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Forgot Password', style: TextStyle(fontWeight: FontWeight.bold)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Enter your registered email or phone number to receive a password reset code.',
-                style: TextStyle(fontSize: 14, color: Colors.grey),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: forgotController,
-                decoration: const InputDecoration(
-                  labelText: 'Email or Phone',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryGreen),
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('If registered, password reset instructions have been sent.'),
-                    backgroundColor: AppColors.primaryGreen,
-                  ),
-                );
-              },
-              child: const Text('Reset Password', style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        );
-      },
+    context.push(
+      '/forgot-password',
+      extra: _isEmailLogin ? _emailController.text.trim() : '',
     );
   }
 
@@ -87,7 +45,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     ref.listen(authProvider, (previous, next) {
       if (next.status == AuthStatus.authenticated) {
-        context.go('/customer-home');
+        context.go(authHomeRoute(ref.read(userProvider)?.role));
       } else if (next.status == AuthStatus.otpRequired) {
         context.push('/otp');
       }
@@ -128,16 +86,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                _isEmailLogin 
+                _isEmailLogin
                     ? 'Enter your email to continue'
                     : 'Enter your mobile number to continue',
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey,
-                ),
+                style: const TextStyle(fontSize: 16, color: Colors.grey),
               ),
               const SizedBox(height: 32),
-              
+
               // Login Mode Toggle
               Container(
                 decoration: BoxDecoration(
@@ -152,14 +107,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           decoration: BoxDecoration(
-                            color: !_isEmailLogin ? AppColors.primaryGreen : Colors.transparent,
+                            color: !_isEmailLogin
+                                ? AppColors.primaryGreen
+                                : Colors.transparent,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Center(
                             child: Text(
                               'Phone',
                               style: TextStyle(
-                                color: !_isEmailLogin ? Colors.white : Colors.grey,
+                                color: !_isEmailLogin
+                                    ? Colors.white
+                                    : Colors.grey,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -173,14 +132,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           decoration: BoxDecoration(
-                            color: _isEmailLogin ? AppColors.primaryGreen : Colors.transparent,
+                            color: _isEmailLogin
+                                ? AppColors.primaryGreen
+                                : Colors.transparent,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Center(
                             child: Text(
                               'Email',
                               style: TextStyle(
-                                color: _isEmailLogin ? Colors.white : Colors.grey,
+                                color: _isEmailLogin
+                                    ? Colors.white
+                                    : Colors.grey,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -207,9 +170,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         children: [
                           const Text('🇮🇳', style: TextStyle(fontSize: 20)),
                           const SizedBox(width: 8),
-                          const Text('+91', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                          const Text(
+                            '+91',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                           const SizedBox(width: 8),
-                          Container(height: 24, width: 1, color: Colors.grey[300]),
+                          Container(
+                            height: 24,
+                            width: 1,
+                            color: Colors.grey[300],
+                          ),
                         ],
                       ),
                       const SizedBox(width: 16),
@@ -245,7 +218,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     keyboardType: TextInputType.emailAddress,
                     decoration: const InputDecoration(
                       hintText: 'name@example.com',
-                      prefixIcon: Icon(Icons.email_outlined, color: Colors.grey),
+                      prefixIcon: Icon(
+                        Icons.email_outlined,
+                        color: Colors.grey,
+                      ),
                       border: InputBorder.none,
                       hintStyle: TextStyle(color: Colors.grey),
                     ),
@@ -255,9 +231,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ),
                 ),
-              
+
               const SizedBox(height: 16),
-              
+
               // Password Input
               Container(
                 decoration: BoxDecoration(
@@ -270,13 +246,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   obscureText: !_isPasswordVisible,
                   decoration: InputDecoration(
                     hintText: 'Password',
-                    prefixIcon: const Icon(Icons.lock_outline, color: Colors.grey),
+                    prefixIcon: const Icon(
+                      Icons.lock_outline,
+                      color: Colors.grey,
+                    ),
                     suffixIcon: IconButton(
                       icon: Icon(
-                        _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                        _isPasswordVisible
+                            ? Icons.visibility
+                            : Icons.visibility_off,
                         color: Colors.grey,
                       ),
-                      onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
+                      onPressed: () => setState(
+                        () => _isPasswordVisible = !_isPasswordVisible,
+                      ),
                     ),
                     border: InputBorder.none,
                     hintStyle: const TextStyle(color: Colors.grey),
@@ -289,7 +272,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
 
               const SizedBox(height: 8),
-              
+
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
@@ -305,7 +288,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
 
               const SizedBox(height: 16),
-              
+
               InfurnusButton(
                 text: 'Send OTP   →',
                 isLoading: authState.status == AuthStatus.loading,
@@ -314,7 +297,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     return;
                   }
                   if (_isEmailLogin) {
-                    if (_emailController.text.isNotEmpty && _passwordController.text.isNotEmpty) {
+                    if (_emailController.text.isNotEmpty &&
+                        _passwordController.text.isNotEmpty) {
                       final request = LoginRequest(
                         email: _emailController.text.trim(),
                         password: _passwordController.text,
@@ -322,10 +306,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ref.read(authProvider.notifier).login(request, 'email');
                     }
                   } else {
-                    if (_phoneController.text.isNotEmpty && _passwordController.text.isNotEmpty) {
-                      final phone = _phoneController.text.trim().replaceAll(RegExp(r'[^\d+]'), '');
-                      final fullPhone = phone.startsWith('+') ? phone : '+91$phone';
-                      
+                    if (_phoneController.text.isNotEmpty &&
+                        _passwordController.text.isNotEmpty) {
+                      final phone = _phoneController.text.trim().replaceAll(
+                        RegExp(r'[^\d+]'),
+                        '',
+                      );
+                      final fullPhone = phone.startsWith('+')
+                          ? phone
+                          : '+91$phone';
+
                       final request = LoginRequest(
                         phone: fullPhone,
                         password: _passwordController.text,
@@ -335,22 +325,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   }
                 },
               ),
-              
+
               const SizedBox(height: 16),
-              
+
               Center(
                 child: Text(
-                  _isEmailLogin 
+                  _isEmailLogin
                       ? "We'll send a 6-digit code to verify your email"
                       : "We'll send a 6-digit code to verify your number",
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.grey,
-                    fontSize: 12,
-                  ),
+                  style: const TextStyle(color: Colors.grey, fontSize: 12),
                 ),
               ),
-              
+
+              Center(
+                child: GoogleSignInButton(
+                  enabled: authState.status != AuthStatus.loading,
+                  onIdToken: ref.read(authProvider.notifier).signInWithGoogle,
+                ),
+              ),
+
               if (authState.errorMessage != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 16),
@@ -369,7 +363,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text("Don't have an account? ", style: TextStyle(color: Colors.grey)),
+                    const Text(
+                      "Don't have an account? ",
+                      style: TextStyle(color: Colors.grey),
+                    ),
                     GestureDetector(
                       onTap: () => context.push('/signup'),
                       child: const Text(

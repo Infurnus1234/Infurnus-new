@@ -1,3 +1,5 @@
+import { GoogleAuthService } from '../services/google-auth.service.js';
+import { googleAuthSchema } from '../schemas/auth.schemas.js';
 import type { NextFunction, Request, Response } from 'express';
 
 import { AppError } from '../../../common/errors/app-error.js';
@@ -55,6 +57,7 @@ import { clearRefreshTokenCookie, setRefreshTokenCookie } from '../utils/refresh
 // ============================================================
 
 export interface AuthControllerDependencies {
+  googleAuthService?: GoogleAuthService;
   signupService: SignupService;
   signupVerificationService: SignupVerificationService;
   otpResendService: OtpResendService;
@@ -165,6 +168,7 @@ export function createAuthController(
   const tokenService = new TokenService();
 
   return {
+    googleAuthService: new GoogleAuthService(),
     signupService,
     signupVerificationService,
     otpResendService,
@@ -192,6 +196,7 @@ export function createAuthController(
 // ============================================================
 
 export function createAuthHandlers(dependencies: AuthControllerDependencies) {
+  const googleAuthService = dependencies.googleAuthService ?? new GoogleAuthService();
   const {
     signupService,
     signupVerificationService,
@@ -263,28 +268,7 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
 
       const result = await signupVerificationService.verify(input.signupId, input.otp);
 
-      const accessToken = await tokenService.createAccessToken({
-        userId: result.userId,
-        role: result.role,
-      });
-
-      const refreshToken = await refreshTokenService.create(result.userId, {
-        userAgent: req.get('user-agent') ?? null,
-        ipAddress: req.ip ?? null,
-      });
-
-      setRefreshTokenCookie(res, refreshToken.refreshToken);
-
-      setCsrfTokenCookie(res, generateCsrfToken());
-
-      res.status(200).json({
-        success: true,
-        data: {
-          userId: result.userId,
-          accessToken,
-          expiresAt: refreshToken.expiresAt,
-        },
-      });
+      await issueAuthentication(req, res, result.userId, result.role);
     } catch (error) {
       next(error);
     }
@@ -351,28 +335,7 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
 
       const result = await loginVerificationService.verify(input.challengeId, input.otp);
 
-      const accessToken = await tokenService.createAccessToken({
-        userId: result.userId,
-        role: result.role,
-      });
-
-      const refreshToken = await refreshTokenService.create(result.userId, {
-        userAgent: req.get('user-agent') ?? null,
-        ipAddress: req.ip ?? null,
-      });
-
-      setRefreshTokenCookie(res, refreshToken.refreshToken);
-
-      setCsrfTokenCookie(res, generateCsrfToken());
-
-      res.status(200).json({
-        success: true,
-        data: {
-          userId: result.userId,
-          accessToken,
-          expiresAt: refreshToken.expiresAt,
-        },
-      });
+      await issueAuthentication(req, res, result.userId, result.role);
     } catch (error) {
       next(error);
     }
@@ -678,11 +641,54 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
     }
   }
 
+  async function issueAuthentication(
+    req: Request,
+    res: Response,
+    userId: string,
+    role: string,
+  ): Promise<void> {
+    const accessToken = await tokenService.createAccessToken({ userId, role });
+    const refreshToken = await refreshTokenService.create(userId, {
+      userAgent: req.get('user-agent') ?? null,
+      ipAddress: req.ip ?? null,
+    });
+    setRefreshTokenCookie(res, refreshToken.refreshToken);
+    const csrfToken = generateCsrfToken();
+    setCsrfTokenCookie(res, csrfToken);
+    res.status(200).json({
+      success: true,
+      data: { userId, accessToken, expiresAt: refreshToken.expiresAt, csrfToken },
+    });
+  }
+
+  async function google(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const input = googleAuthSchema.parse(req.body);
+      const identity = await googleAuthService.authenticate(input.idToken);
+      await issueAuthentication(req, res, identity.id, identity.role);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async function linkGoogle(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const input = googleAuthSchema.parse(req.body);
+      if (!req.auth) throw new AppError('AUTHENTICATION_REQUIRED', 'Authentication required', 401);
+      await googleAuthService.authenticate(input.idToken, req.auth.userId);
+      res.status(200).json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // ==========================================================
   // Return handlers
   // ==========================================================
 
   return {
+    google,
+    linkGoogle,
     signup,
     verifySignup,
     resendSignupOtp,

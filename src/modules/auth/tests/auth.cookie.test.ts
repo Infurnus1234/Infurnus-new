@@ -7,6 +7,12 @@ import type { AuthControllerDependencies } from '../controllers/auth.controller.
 const refreshToken = 'test-refresh-token';
 
 const mockHandlers = {
+  google: vi.fn((_req, res) => {
+    res.status(200).json({ success: true });
+  }),
+  linkGoogle: vi.fn((_req, res) => {
+    res.status(200).json({ success: true });
+  }),
   signup: vi.fn((_req, res) => {
     res.status(201).json({
       success: true,

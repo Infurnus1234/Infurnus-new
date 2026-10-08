@@ -29,8 +29,23 @@ jobs:
           --health-timeout=5s
           --health-retries=5
 
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=5
+
     env:
       DATABASE_URL: postgresql://infurnus@localhost:5432/infurnus
+      NODE_ENV: test
+      RIDE_DB_TESTS: 'true'
+      MAP_REDIS_TESTS: 'true'
+      REDIS_URL: redis://localhost:6379
+      GOOGLE_MAPS_API_KEY: non-secret-ci-fixture-key
 
       JWT_ACCESS_SECRET: ${{ secrets.CI_JWT_ACCESS_SECRET }}
       JWT_ACCESS_PREVIOUS_SECRET: ${{ secrets.CI_JWT_ACCESS_PREVIOUS_SECRET }}
@@ -61,18 +76,10 @@ jobs:
         run: npm ci
 
       - name: Run database migrations
-        shell: bash
-        run: |
-          for migration in migrations/*.sql; do
-            echo "Running $migration"
-            psql \
-              -h localhost \
-              -p 5432 \
-              -U infurnus \
-              -d infurnus \
-              -v ON_ERROR_STOP=1 \
-              -f "$migration"
-          done
+        run: npm run migrate
+
+      - name: Validate clean-database migrations
+        run: npm run test:migrations
 
       - name: Typecheck
         run: npm run typecheck

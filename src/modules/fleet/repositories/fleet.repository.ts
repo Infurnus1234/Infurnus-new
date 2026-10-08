@@ -1,4 +1,6 @@
+import type { FleetListQuery } from '../schemas/fleet.schemas.js';
 import type { Pool } from 'pg';
+import { randomInt } from 'node:crypto';
 import type { CreateFleetVehicleInput, UpdateFleetVehicleInput } from '../schemas/fleet.schemas.js';
 import type {
   FleetDashboardMetrics,
@@ -11,7 +13,7 @@ import type {
 export interface FleetRepository {
   getDashboard(ownerId: string): Promise<FleetDashboardMetrics>;
 
-  listVehicles(ownerId: string): Promise<FleetVehicle[]>;
+  listVehicles(ownerId: string, query?: FleetListQuery): Promise<FleetVehicle[]>;
 
   createVehicle(ownerId: string, input: CreateFleetVehicleInput): Promise<FleetVehicle>;
 
@@ -30,7 +32,7 @@ export interface FleetRepository {
 
   unassignDriver(ownerId: string, vehicleId: string): Promise<boolean>;
 
-  listDrivers(ownerId: string): Promise<FleetDriver[]>;
+  listDrivers(ownerId: string, query?: FleetListQuery): Promise<FleetDriver[]>;
 
   listTrips(ownerId: string, limit?: number): Promise<FleetTrip[]>;
 
@@ -149,7 +151,7 @@ export class PostgresFleetRepository implements FleetRepository {
     };
   }
 
-  async listVehicles(ownerId: string): Promise<FleetVehicle[]> {
+  async listVehicles(ownerId: string, query?: FleetListQuery): Promise<FleetVehicle[]> {
     const result = await this.pool.query<{
       id: string;
       ownerId: string;
@@ -240,8 +242,19 @@ export class PostgresFleetRepository implements FleetRepository {
          LIMIT 1
        ) ac ON TRUE
        WHERE v.owner_id = $1
-       ORDER BY v.created_at DESC`,
-      [ownerId],
+         AND ($2::text IS NULL OR concat_ws(' ',v.plate_number,v.make,v.model) ILIKE '%'||$2||'%')
+         AND ($3::text IS NULL OR v.sector=$3) AND ($4::text IS NULL OR v.category=$4)
+         AND ($5::boolean IS NULL OR v.is_active=$5)
+       ORDER BY v.created_at DESC,v.id LIMIT $6 OFFSET $7`,
+      [
+        ownerId,
+        query?.search ?? null,
+        query?.sector ?? null,
+        query?.category ?? null,
+        query?.active === undefined ? null : query.active === 'true',
+        query?.limit ?? 50,
+        query?.offset ?? 0,
+      ],
     );
 
     return result.rows.map((row) => ({
@@ -321,7 +334,7 @@ export class PostgresFleetRepository implements FleetRepository {
          $15,
          $16,
          'pending',
-         TRUE
+         FALSE
        )
        RETURNING
          id,
@@ -444,6 +457,11 @@ export class PostgresFleetRepository implements FleetRepository {
 
     try {
       await client.query('BEGIN');
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended('provider_vehicle:'||$1::text,0))",
+        [vehicleId],
+      );
+      await client.query("SELECT set_config('infurnus.actor_id',$1,TRUE)", [ownerId]);
 
       const vehicleResult = await client.query<{
         driverProfileId: string | null;
@@ -532,6 +550,11 @@ export class PostgresFleetRepository implements FleetRepository {
 
     try {
       await client.query('BEGIN');
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended('provider_vehicle:'||$1::text,0))",
+        [vehicleId],
+      );
+      await client.query("SELECT set_config('infurnus.actor_id',$1,TRUE)", [ownerId]);
 
       /*
        * Lock the vehicle so its assignment/deactivation state
@@ -570,22 +593,17 @@ export class PostgresFleetRepository implements FleetRepository {
         [vehicleId],
       );
 
-      const randomSuffix = Math.floor(10000 + Math.random() * 90000);
-
-      const code = `FLEET-${randomSuffix}`;
-
       const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
-
-      await client.query(
-        `INSERT INTO driver_assignment_codes (
-           code,
-           vehicle_id,
-           fleet_owner_id,
-           expires_at
-         )
-         VALUES ($1, $2, $3, $4)`,
-        [code, vehicleId, ownerId, expiresAt],
-      );
+      let code: string | null = null;
+      for (let attempt = 0; attempt < 20 && !code; attempt++) {
+        const candidate = 'FLEET-' + randomInt(10000, 100000);
+        const inserted = await client.query<{ code: string }>(
+          'INSERT INTO driver_assignment_codes(code,vehicle_id,fleet_owner_id,expires_at) VALUES($1,$2,$3,$4) ON CONFLICT(code) DO NOTHING RETURNING code',
+          [candidate, vehicleId, ownerId, expiresAt],
+        );
+        code = inserted.rows[0]?.code ?? null;
+      }
+      if (!code) throw new Error('ASSIGNMENT_CODE_CAPACITY_EXCEEDED');
 
       await client.query('COMMIT');
 
@@ -611,6 +629,11 @@ export class PostgresFleetRepository implements FleetRepository {
 
     try {
       await client.query('BEGIN');
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended('provider_vehicle:'||$1::text,0))",
+        [vehicleId],
+      );
+      await client.query("SELECT set_config('infurnus.actor_id',$1,TRUE)", [ownerId]);
 
       const vRes = await client.query<{
         driver_profile_id: string | null;
@@ -675,7 +698,7 @@ export class PostgresFleetRepository implements FleetRepository {
     }
   }
 
-  async listDrivers(ownerId: string): Promise<FleetDriver[]> {
+  async listDrivers(ownerId: string, query?: FleetListQuery): Promise<FleetDriver[]> {
     const result = await this.pool.query<{
       id: string;
       userId: string;
@@ -728,7 +751,7 @@ export class PostgresFleetRepository implements FleetRepository {
 
        JOIN partner_drivers pd
          ON pd.partner_id = p.id
-        AND pd.status = 'ACTIVE'
+        AND pd.status::text = COALESCE($2::text,'ACTIVE')
 
        JOIN driver_profiles dp
          ON dp.id = pd.driver_profile_id
@@ -747,6 +770,8 @@ export class PostgresFleetRepository implements FleetRepository {
         AND r.status = 'completed'
 
        WHERE p.user_id = $1
+         AND ($3::text IS NULL OR concat_ws(' ',u.first_name,u.last_name,u.phone,u.email) ILIKE '%'||$3||'%')
+         AND ($4::text IS NULL OR dp.availability_status::text=$4)
 
        GROUP BY
          dp.id,
@@ -765,8 +790,15 @@ export class PostgresFleetRepository implements FleetRepository {
          v.model,
          v.plate_number
 
-       ORDER BY u.first_name ASC`,
-      [ownerId],
+       ORDER BY u.first_name ASC,dp.id LIMIT $5 OFFSET $6`,
+      [
+        ownerId,
+        query?.status ?? null,
+        query?.search ?? null,
+        query?.availability ?? null,
+        query?.limit ?? 50,
+        query?.offset ?? 0,
+      ],
     );
 
     return result.rows.map((row) => ({
@@ -927,7 +959,11 @@ export class PostgresFleetRepository implements FleetRepository {
 
     const thisMonthRevenue = parseFloat(row?.thisMonthRevenue ?? '0');
 
-    const commission = thisMonthRevenue * 0.1;
+    const settled = await this.pool.query<{ commission: string; net: string }>(
+      "SELECT COALESCE(-SUM(amount_paise) FILTER(WHERE entry_type='COMMISSION'),0)::text AS commission,COALESCE(SUM(amount_paise) FILTER(WHERE entry_type IN ('EARNING','COMMISSION','ADJUSTMENT')),0)::text AS net FROM provider_wallet_entries WHERE user_id=$1 AND created_at>=date_trunc('month',CURRENT_DATE)",
+      [ownerId],
+    );
+    const commission = Number(settled.rows[0]?.commission ?? '0') / 100;
 
     return {
       todayRevenue: parseFloat(row?.todayRevenue ?? '0'),
@@ -935,7 +971,7 @@ export class PostgresFleetRepository implements FleetRepository {
       thisMonthRevenue,
       totalTrips: parseInt(row?.totalTrips ?? '0', 10),
       platformCommission: commission,
-      netPayout: thisMonthRevenue - commission,
+      netPayout: Number(settled.rows[0]?.net ?? '0') / 100,
     };
   }
 }

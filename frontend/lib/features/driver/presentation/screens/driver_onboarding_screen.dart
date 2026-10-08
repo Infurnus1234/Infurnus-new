@@ -307,10 +307,10 @@ class _DriverOnboardingScreenState extends ConsumerState<DriverOnboardingScreen>
           ),
           if (partner.approvalStatus == 'approved') ...[
             const SizedBox(height: 6),
-            Row(
+            const Row(
               children: [
-                const Icon(Icons.check_circle, color: AppColors.primaryGreen, size: 16),
-                const SizedBox(width: 6),
+                Icon(Icons.check_circle, color: AppColors.primaryGreen, size: 16),
+                SizedBox(width: 6),
                 Text(
                   'Partner Account Approved',
                   style: TextStyle(color: AppColors.primaryGreen, fontSize: 12, fontWeight: FontWeight.w600),

@@ -33,13 +33,17 @@ export interface UploadPartnerDocumentInput {
   documentType: PartnerDocumentType;
   vehicleId?: string | null | undefined;
   file: PartnerDocumentUploadFile;
+  files?: PartnerDocumentUploadFile[] | undefined;
   actor: AuthenticatedUser;
+  documentMetadata?: Record<string, unknown> | undefined;
 }
 
 export interface ReplacePartnerDocumentInput {
   partnerId: string;
   documentId: string;
   file: PartnerDocumentUploadFile;
+  files?: PartnerDocumentUploadFile[] | undefined;
+  documentMetadata?: Record<string, unknown> | undefined;
   actor: AuthenticatedUser;
 }
 
@@ -55,6 +59,7 @@ export class PartnerDocumentStorageService {
   constructor(private readonly partnerDocumentService: PartnerDocumentService) {}
 
   async uploadDocument(input: UploadPartnerDocumentInput): Promise<SafePartnerDocument> {
+    await this.partnerDocumentService.assertAccess(input.partnerId, input.actor);
     const category = getDocumentCategory(input.documentType);
 
     const accessMode = getStorageAccessMode(category);
@@ -74,12 +79,12 @@ export class PartnerDocumentStorageService {
       resourceType,
     });
 
-    const uploaded = await storageService.upload({
-      file: storageFile,
-      folder: buildStorageFolder(input.partnerId, input.documentType),
-      resourceType,
-      accessMode,
-    });
+    const uploads = await uploadPages(
+      input.files ?? [input.file],
+      category,
+      buildStorageFolder(input.partnerId, input.documentType),
+    );
+    const uploaded = uploads[0]!;
 
     try {
       const document = await this.partnerDocumentService.createDocumentMetadata(
@@ -88,7 +93,14 @@ export class PartnerDocumentStorageService {
           vehicleId: input.vehicleId ?? null,
           documentType: input.documentType,
           status: 'PENDING',
+          issuedAt: input.documentMetadata?.issuedAt as string | undefined,
+          expiresAt: input.documentMetadata?.expiresAt as string | undefined,
           metadata: {
+            ...input.documentMetadata,
+            pages: uploads.map((page, index) => ({
+              ...page,
+              side: index === 0 ? 'FRONT' : index === 1 ? 'BACK' : 'PAGE',
+            })),
             storage: {
               storageProvider: uploaded.storageProvider,
               storageKey: uploaded.storageKey,
@@ -106,7 +118,8 @@ export class PartnerDocumentStorageService {
 
       return document;
     } catch (error) {
-      await cleanupUploadedFile(uploaded.storageKey, uploaded.resourceType, uploaded.accessMode);
+      for (const page of uploads)
+        await cleanupUploadedFile(page.storageKey, page.resourceType, page.accessMode);
 
       throw error;
     }
@@ -118,14 +131,6 @@ export class PartnerDocumentStorageService {
       input.documentId,
       input.actor,
     );
-
-    if (existing.documentType !== 'PROFILE_PHOTO') {
-      throw new AppError(
-        'INVALID_DOCUMENT_TYPE',
-        'Only profile photos can be replaced through this operation',
-        400,
-      );
-    }
 
     const category = getDocumentCategory(existing.documentType);
 
@@ -148,15 +153,8 @@ export class PartnerDocumentStorageService {
 
     const folder = buildStorageFolder(input.partnerId, existing.documentType);
 
-    const newStorageKey = buildUniqueStorageKey(folder);
-
-    const uploaded = await storageService.upload({
-      file: storageFile,
-      folder,
-      resourceType,
-      accessMode,
-      storageKey: newStorageKey,
-    });
+    const uploads = await uploadPages(input.files ?? [input.file], category, folder);
+    const uploaded = uploads[0]!;
 
     const previousStorage = existing.metadata?.storage;
 
@@ -165,8 +163,11 @@ export class PartnerDocumentStorageService {
         input.partnerId,
         input.documentId,
         {
+          issuedAt: input.documentMetadata?.issuedAt as string | undefined,
+          expiresAt: input.documentMetadata?.expiresAt as string | undefined,
           metadata: {
             ...(existing.metadata ?? {}),
+            ...input.documentMetadata,
             storage: {
               storageProvider: uploaded.storageProvider,
               storageKey: uploaded.storageKey,
@@ -180,6 +181,7 @@ export class PartnerDocumentStorageService {
           },
         },
         input.actor,
+        existing.version,
       );
 
       if (previousStorage) {
@@ -217,13 +219,13 @@ export class PartnerDocumentStorageService {
 
     const storage = document.metadata.storage;
 
-    if (
-      storage.accessMode === 'authenticated' &&
-      actor.role !== 'admin' &&
-      actor.role !== 'super_admin'
-    ) {
-      throw new AppError('FORBIDDEN', 'You do not have permission to access this document', 403);
-    }
+    const authorized = await this.partnerDocumentService.getDocument(
+      document.partnerId,
+      document.id,
+      actor,
+    );
+    if (authorized.metadata?.storage?.storageKey !== storage.storageKey)
+      throw new AppError('DOCUMENT_CHANGED', 'Document changed; request a new access URL', 409);
 
     return storageService.getAccessUrl({
       storageKey: storage.storageKey,
@@ -233,6 +235,25 @@ export class PartnerDocumentStorageService {
         expiresIn: 300,
       },
     });
+  }
+
+  async getPageAccessUrls(partnerId: string, documentId: string, actor: AuthenticatedUser) {
+    const document = await this.partnerDocumentService.getDocument(partnerId, documentId, actor);
+    const pages = document.metadata?.pages;
+    if (!Array.isArray(pages)) return [];
+    if (pages.length > 5)
+      throw new AppError('INVALID_DOCUMENT_BUNDLE', 'Invalid stored page count', 500);
+    return Promise.all(
+      pages.map(async (page, index) => ({
+        side: index === 0 ? 'FRONT' : index === 1 ? 'BACK' : 'PAGE',
+        accessUrl: await storageService.getAccessUrl({
+          storageKey: page.storageKey,
+          resourceType: page.resourceType,
+          accessMode: 'authenticated',
+          options: { expiresIn: 300 },
+        }),
+      })),
+    );
   }
 
   async deleteDocument(input: DeletePartnerDocumentInput): Promise<void> {
@@ -301,6 +322,9 @@ function getDocumentCategory(documentType: PartnerDocumentType): StorageDocument
     case 'VEHICLE_FITNESS':
       return 'vehicle-fitness';
 
+    case 'VEHICLE_PUC':
+      return 'partner-document';
+
     case 'OTHER':
       return 'partner-document';
   }
@@ -329,5 +353,55 @@ async function cleanupUploadedFile(
     // Storage cleanup is best-effort.
     // The original database/business operation
     // must remain the primary result.
+  }
+}
+
+async function uploadPages(
+  files: PartnerDocumentUploadFile[],
+  category: StorageDocumentCategory,
+  folder: string,
+) {
+  if (
+    files.length < 1 ||
+    files.length > 5 ||
+    (category === 'partner-profile-photo' && files.length !== 1)
+  )
+    throw new AppError('INVALID_DOCUMENT_BUNDLE', 'Invalid page count', 400);
+  if (files.reduce((sum, file) => sum + file.size, 0) > 30 * 1024 * 1024)
+    throw new AppError('DOCUMENT_TOO_LARGE', 'Bundle exceeds 30 MB', 413);
+  const resourceType = getStorageResourceType(category),
+    accessMode = getStorageAccessMode(category);
+  for (const file of files)
+    validateStorageFile(
+      {
+        buffer: file.buffer,
+        mimeType: file.mimetype,
+        originalFileName: file.originalname,
+        fileSize: file.size,
+      },
+      { category, resourceType, accessMode },
+    );
+  const uploaded: Awaited<ReturnType<typeof storageService.upload>>[] = [];
+  try {
+    for (const file of files)
+      uploaded.push(
+        await storageService.upload({
+          file: {
+            buffer: file.buffer,
+            mimeType: file.mimetype,
+            originalFileName: file.originalname,
+            fileSize: file.size,
+          },
+          folder,
+          resourceType,
+          accessMode,
+          storageKey: buildUniqueStorageKey(folder),
+        }),
+      );
+    return uploaded;
+  } catch (error) {
+    for (const page of uploaded)
+      await cleanupUploadedFile(page.storageKey, page.resourceType, page.accessMode);
+    throw error;
   }
 }

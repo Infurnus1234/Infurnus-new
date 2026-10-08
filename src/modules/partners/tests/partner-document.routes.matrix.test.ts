@@ -71,7 +71,7 @@ describe('Partner document API route matrix', () => {
   it('lists safe document projections for the owner', async () => {
     const app = createApp(undefined, undefined, undefined, repository());
 
-    const accessToken = await token('customer');
+    const accessToken = await token('fleet_owner');
 
     const response = await request(app)
       .get(`/partners/${partnerId}/documents`)
@@ -87,7 +87,7 @@ describe('Partner document API route matrix', () => {
 
     const app = createApp(undefined, undefined, undefined, repo);
 
-    const accessToken = await token('customer');
+    const accessToken = await token('fleet_owner');
 
     const response = await request(app)
       .post(`/partners/${partnerId}/documents`)
@@ -105,7 +105,7 @@ describe('Partner document API route matrix', () => {
   it('updates document lifecycle metadata for the owner', async () => {
     const app = createApp(undefined, undefined, undefined, repository());
 
-    const accessToken = await token('customer');
+    const accessToken = await token('fleet_owner');
 
     const response = await request(app)
       .patch(`/partners/${partnerId}/documents/${documentId}`)
@@ -133,7 +133,7 @@ describe('Partner document API route matrix', () => {
   it('rejects an outsider from partner documents', async () => {
     const app = createApp(undefined, undefined, undefined, repository());
 
-    const accessToken = await token('customer', '960e8400-e29b-41d4-a716-446655440000');
+    const accessToken = await token('fleet_owner', '960e8400-e29b-41d4-a716-446655440000');
 
     const response = await request(app)
       .get(`/partners/${partnerId}/documents`)
@@ -148,7 +148,7 @@ describe('Partner document API route matrix', () => {
   ] as const)('rejects invalid document route id %s', async (method, path) => {
     const app = createApp(undefined, undefined, undefined, repository());
 
-    const accessToken = await token('customer');
+    const accessToken = await token('fleet_owner');
 
     const response =
       method === 'get'
@@ -164,7 +164,7 @@ describe('Partner document API route matrix', () => {
   it('rejects unknown document fields', async () => {
     const app = createApp(undefined, undefined, undefined, repository());
 
-    const accessToken = await token('customer');
+    const accessToken = await token('fleet_owner');
 
     const response = await request(app)
       .post(`/partners/${partnerId}/documents`)
@@ -184,7 +184,7 @@ describe('Partner document API route matrix', () => {
 
     const app = createApp(undefined, undefined, undefined, repo);
 
-    const accessToken = await token('customer');
+    const accessToken = await token('fleet_owner');
 
     const response = await request(app)
       .post(`/partners/${partnerId}/documents`)
@@ -207,7 +207,7 @@ describe('Partner document API route matrix', () => {
 
     const app = createApp(undefined, undefined, undefined, repo);
 
-    const accessToken = await token('customer');
+    const accessToken = await token('fleet_owner');
 
     const response = await request(app)
       .post(`/partners/${partnerId}/documents`)
@@ -224,7 +224,7 @@ describe('Partner document API route matrix', () => {
 
     const app = createApp(undefined, undefined, undefined, repo);
 
-    const accessToken = await token('customer');
+    const accessToken = await token('fleet_owner');
 
     const response = await request(app)
       .patch(`/partners/${partnerId}/documents/${documentId}`)
@@ -233,4 +233,20 @@ describe('Partner document API route matrix', () => {
 
     expect(response.status).toBe(404);
   });
+  it.each(['storage', 'pages', 'uploadedBy', 'reviewedBy', 'reviewedAt', 'status'])(
+    'rejects client-controlled %s metadata',
+    async (key) => {
+      const repo = repository();
+      const app = createApp(undefined, undefined, undefined, repo);
+      const response = await request(app)
+        .post('/partners/' + partnerId + '/documents')
+        .set('authorization', 'Bearer ' + (await token('fleet_owner')))
+        .send({
+          documentType: 'PAN',
+          metadata: { [key]: key === 'pages' ? [{ storageKey: 'other-fleet/private' }] : 'forged' },
+        });
+      expect(response.status).toBe(400);
+      expect(repo.create).not.toHaveBeenCalled();
+    },
+  );
 });

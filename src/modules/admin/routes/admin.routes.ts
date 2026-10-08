@@ -10,6 +10,13 @@ export function createAdminRouter(controller: AdminController) {
 
   router.use(requireAuth, requireRoles('admin', 'super_admin'));
 
+  // Physical /vehicles inventory endpoints retain their existing meaning.
+  router.post('/vehicle-types', controller.createVehicleType);
+  router.get('/vehicle-types', controller.listVehicleTypes);
+  router.get('/vehicle-types/:id', controller.getVehicleType);
+  router.patch('/vehicle-types/:id', controller.updateVehicleType);
+  router.patch('/vehicle-types/:id/status', controller.updateVehicleTypeStatus);
+
   router.get('/users', controller.listUsers);
   router.get('/users/:id', controller.getUser);
   router.patch('/users/:id/status', controller.updateUserStatus);

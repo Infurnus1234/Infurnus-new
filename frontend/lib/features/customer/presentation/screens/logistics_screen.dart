@@ -7,12 +7,14 @@ import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../../core/services/location_service.dart';
+import '../../../../core/services/geocoding_service.dart';
 import '../../../../core/services/places_autocomplete_service.dart';
 import '../../../../shared/widgets/infurnus_button.dart';
 import '../../../../shared/widgets/infurnus_text_field.dart';
 import '../../data/models/fleet_vehicle_model.dart';
 import '../providers/ride_use_case_providers.dart';
 import '../providers/ride_provider.dart';
+import '../widgets/fare_range_details.dart';
 
 class LogisticsScreen extends ConsumerStatefulWidget {
   const LogisticsScreen({super.key});
@@ -207,13 +209,28 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
     }
   }
 
-  void _selectLocationSuggestion(
+  Future<void> _selectLocationSuggestion(
     PlaceSuggestion suggestion, {
     required bool isPickup,
-  }) {
-    final latitude = suggestion.latitude;
-    final longitude = suggestion.longitude;
-    if (latitude == null || longitude == null) return;
+  }) async {
+    LatLng? resolved;
+    try {
+      resolved = suggestion.latitude != null && suggestion.longitude != null
+          ? LatLng(suggestion.latitude!, suggestion.longitude!)
+          : await ref
+                .read(geocodingServiceProvider)
+                .geocodeAddress(suggestion.toString());
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Location lookup unavailable. Please retry.'),
+          ),
+        );
+      }
+      return;
+    }
+    if (!mounted || resolved == null) return;
 
     (isPickup ? _pickupAutocompleteTimer : _destinationAutocompleteTimer)
         ?.cancel();
@@ -221,7 +238,7 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
         ?.cancel();
 
     final address = suggestion.toString();
-    final coordinates = LatLng(latitude, longitude);
+    final coordinates = resolved;
     setState(() {
       _activeAutocompleteIsPickup = null;
       if (isPickup) {
@@ -328,16 +345,19 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
 
     ref
         .read(rideProvider.notifier)
-        .setRoute(_pickupController.text.trim(), _dropController.text.trim());
-    ref.read(rideProvider.notifier).selectSector('logistics');
-    ref.read(rideProvider.notifier).selectTier(_selectedVehicle);
-    ref.read(rideProvider.notifier).setGoods({
-      'itemType': _selectedCategory,
-      'description': _itemDescController.text.trim(),
-      'weightKg': weight,
-      'quantity': qty,
-      'loadingAssistance': _needLoadingHelper,
-    });
+        .setRoute(
+          _pickupController.text.trim(),
+          _dropController.text.trim(),
+          sector: 'logistics',
+          vehicleCategory: _selectedVehicle,
+          goods: {
+            'itemType': _selectedCategory,
+            'description': _itemDescController.text.trim(),
+            'weightKg': weight,
+            'quantity': qty,
+            'loadingAssistance': _needLoadingHelper,
+          },
+        );
   }
 
   Future<void> _handleBooking() async {
@@ -435,15 +455,15 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
                   color: logisticsOrange.withValues(alpha: 0.4),
                 ),
               ),
-              child: Row(
-                children: const [
-                  const Icon(
+              child: const Row(
+                children: [
+                  Icon(
                     Icons.local_shipping_rounded,
                     color: logisticsOrange,
                     size: 24,
                   ),
-                  const SizedBox(width: 12),
-                  const Expanded(
+                  SizedBox(width: 12),
+                  Expanded(
                     child: Text(
                       'On-demand intra-city freight with live GPS tracking and verified cargo drivers.',
                       style: TextStyle(
@@ -502,6 +522,12 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
                                 query,
                                 isPickup: true,
                               ),
+                              onSubmitted: (address) async {
+                                if (address.trim().isEmpty) return;
+                                await ref
+                                    .read(rideProvider.notifier)
+                                    .geocodeAndSetPickup(address.trim());
+                              },
                             ),
                           ),
                           IconButton(
@@ -542,6 +568,12 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
                                 query,
                                 isPickup: false,
                               ),
+                              onSubmitted: (address) async {
+                                if (address.trim().isEmpty) return;
+                                await ref
+                                    .read(rideProvider.notifier)
+                                    .geocodeAndSetDestination(address.trim());
+                              },
                             ),
                           ),
                         ],
@@ -683,26 +715,29 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
                     ],
                   ),
                   const SizedBox(height: 14),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text(
-                      'Driver Loading & Unloading Help',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: textWhite,
+                  Material(
+                    color: Colors.transparent,
+                    child: SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text(
+                        'Driver Loading & Unloading Help',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: textWhite,
+                        ),
                       ),
+                      subtitle: const Text(
+                        'Helper assistance for heavy goods (server rate applies)',
+                        style: TextStyle(fontSize: 12, color: textGray),
+                      ),
+                      value: _needLoadingHelper,
+                      activeThumbColor: brandGreen,
+                      onChanged: (val) {
+                        setState(() => _needLoadingHelper = val);
+                        _recalculateFare();
+                      },
                     ),
-                    subtitle: const Text(
-                      'Helper assistance for heavy goods (server rate applies)',
-                      style: TextStyle(fontSize: 12, color: textGray),
-                    ),
-                    value: _needLoadingHelper,
-                    activeThumbColor: brandGreen,
-                    onChanged: (val) {
-                      setState(() => _needLoadingHelper = val);
-                      _recalculateFare();
-                    },
                   ),
                 ],
               ),
@@ -729,7 +764,14 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
               child: Column(
                 children: [
                   if (estimate == null) ...[
-                    _buildFareRow('Status', 'Fare estimate calculating...'),
+                    Text(
+                      rideState.isEstimatingFare
+                          ? 'Fare estimate calculating...'
+                          : rideState.errorMessage ?? 'Select locations and a vehicle to estimate the fare.',
+                      style: const TextStyle(color: textGray),
+                    ),
+                  ] else if (estimate.isRange || estimate.isUnavailable) ...[
+                    FareRangeDetails(estimate: estimate),
                   ] else ...[
                     _buildFareRow(
                       'Base Logistics Charge',
@@ -764,8 +806,10 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
                     ],
                   ],
                   const Divider(height: 20, color: borderCard),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    spacing: 12,
+                    runSpacing: 8,
                     children: [
                       const Text(
                         'Total Estimated Fare',
@@ -776,11 +820,7 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
                         ),
                       ),
                       Text(
-                        rideState.fare != null
-                            ? '₹${rideState.fare!.toStringAsFixed(2)}'
-                            : (estimate != null
-                                  ? '₹${estimate.grossAmount.toStringAsFixed(2)}'
-                                  : '--'),
+                        estimate?.displayFare ?? '--',
                         style: const TextStyle(
                           fontWeight: FontWeight.w900,
                           fontSize: 20,
@@ -800,7 +840,9 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
                   ? 'Book Logistics Delivery • ₹${rideState.fare!.toStringAsFixed(0)}'
                   : 'Book Logistics Delivery',
               isLoading: rideState.isEstimatingFare || _isSubmittingBooking,
-              onPressed: _handleBooking,
+              onPressed: estimate?.bookingAmount == null
+                  ? null
+                  : _handleBooking,
             ),
             const SizedBox(height: 20),
           ],

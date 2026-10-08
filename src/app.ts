@@ -1,3 +1,13 @@
+import { requireAuth } from './modules/auth/middleware/auth.middleware.js';
+import type { PostgresProviderOperationsRepository } from './modules/providers/repositories/provider-operations.repository.js';
+import {
+  createProviderOperationsRouter,
+  createProviderApprovalRouter,
+} from './modules/providers/routes/provider-operations.routes.js';
+import type { PostgresProviderFinanceRepository } from './modules/providers/repositories/provider-finance.repository.js';
+import { createProviderFinanceRouter } from './modules/providers/routes/provider-finance.routes.js';
+import type { CommonMapService } from './modules/maps/map.service.js';
+import { createMapRouter } from './modules/maps/map.routes.js';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import express from 'express';
@@ -124,6 +134,9 @@ export function createApp(
   supportRepository?: SupportRepository,
   paymentProvider?: PaymentProvider,
   driverApplicationService?: DriverApplicationService,
+  maps?: CommonMapService,
+  providerFinanceRepository?: PostgresProviderFinanceRepository,
+  providerOperationsRepository?: PostgresProviderOperationsRepository,
 ): express.Express;
 
 // ============================================================
@@ -159,6 +172,9 @@ export function createApp(
   supportRepository?: SupportRepository,
   paymentProvider?: PaymentProvider,
   driverApplicationService?: DriverApplicationService,
+  maps?: CommonMapService,
+  providerFinanceRepository?: PostgresProviderFinanceRepository,
+  providerOperationsRepository?: PostgresProviderOperationsRepository,
 ) {
   const app = express();
 
@@ -266,6 +282,20 @@ export function createApp(
   // to use the same FleetService without creating duplicate
   // service instances.
   let fleetService: FleetService | undefined;
+  if (providerOperationsRepository) {
+    app.use(
+      ['/fleet', '/provider', '/partners', '/rides/driver', '/vehicles', '/driver-applications'],
+      requireAuth,
+      async (req, _res, next) => {
+        try {
+          await providerOperationsRepository.authorize(req.auth!.userId, req.auth!.role);
+          next();
+        } catch (error) {
+          next(error);
+        }
+      },
+    );
+  }
 
   // If the dedicated production auth provider is supplied,
   // it always takes precedence.
@@ -385,7 +415,10 @@ export function createApp(
     app.use(
       '/admin',
       createAdminRouter(
-        new AdminController(new AdminService(adminRepository), driverApplicationService),
+        new AdminController(
+          new AdminService(adminRepository, vehicleRepository),
+          driverApplicationService,
+        ),
       ),
     );
   }
@@ -415,6 +448,9 @@ export function createApp(
       driverRepository,
       driverDocumentStorageService,
       fareEstimateService,
+      undefined,
+      undefined,
+      maps,
     );
 
     const driverController = driverRepository
@@ -540,6 +576,13 @@ export function createApp(
   // Error middleware
   // ==========================================================
 
+  if (maps) app.use('/maps', createMapRouter(maps, driverRepository));
+  if (providerFinanceRepository)
+    app.use('/provider', createProviderFinanceRouter(providerFinanceRepository));
+  if (providerOperationsRepository) {
+    app.use('/provider', createProviderOperationsRouter(providerOperationsRepository));
+    app.use('/provider-approvals', createProviderApprovalRouter(providerOperationsRepository));
+  }
   app.use(errorMiddleware);
 
   return app;

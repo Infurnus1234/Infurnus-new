@@ -1,5 +1,5 @@
 import { AppError } from '../../../common/errors/app-error.js';
-import type { OtpProvider } from './otp.provider.js';
+import type { OtpProvider, SmsOtpProvider } from './otp.provider.js';
 import { ResendOtpProvider } from './resend-otp.provider.js';
 
 const SENDMATOR_TOKEN_PREFIX = 'sendmator:';
@@ -7,8 +7,9 @@ const RESEND_TOKEN_PREFIX = 'resend:';
 
 export class FallbackOtpProvider implements OtpProvider {
   constructor(
-    private readonly sendmatorProvider: OtpProvider,
+    private readonly sendmatorProvider: OtpProvider | undefined,
     private readonly resendProvider?: ResendOtpProvider,
+    private readonly smsProvider?: { name: string; adapter: SmsOtpProvider },
   ) {}
 
   // ==========================================================
@@ -16,31 +17,25 @@ export class FallbackOtpProvider implements OtpProvider {
   // ==========================================================
 
   async sendSmsOtp(phone: string) {
-    const result = await this.sendmatorProvider.sendSmsOtp(phone);
+    const adapter = this.smsProvider?.adapter ?? this.requireSendmator();
+    const name = this.smsProvider?.name ?? 'sendmator';
+    const result = await adapter.sendSmsOtp(phone);
 
     return {
       ...result,
-      sessionToken: `${SENDMATOR_TOKEN_PREFIX}${result.sessionToken}`,
+      provider: name,
+      sessionToken: `${name}:${result.sessionToken}`,
     };
   }
 
   async verifySmsOtp(sessionToken: string, otp: string) {
-    if (!sessionToken.startsWith(SENDMATOR_TOKEN_PREFIX)) {
-      throw new AppError('OTP_PROVIDER_SESSION_INVALID', 'Invalid SMS OTP provider session', 400);
-    }
-
-    return this.sendmatorProvider.verifySmsOtp(
-      sessionToken.slice(SENDMATOR_TOKEN_PREFIX.length),
-      otp,
-    );
+    const { adapter, token } = this.resolveSms(sessionToken);
+    return adapter.verifySmsOtp(token, otp);
   }
 
   async resendSmsOtp(sessionToken: string) {
-    if (!sessionToken.startsWith(SENDMATOR_TOKEN_PREFIX)) {
-      throw new AppError('OTP_PROVIDER_SESSION_INVALID', 'Invalid SMS OTP provider session', 400);
-    }
-
-    return this.sendmatorProvider.resendSmsOtp(sessionToken.slice(SENDMATOR_TOKEN_PREFIX.length));
+    const { adapter, token } = this.resolveSms(sessionToken);
+    return adapter.resendSmsOtp(token);
   }
 
   // ==========================================================
@@ -49,10 +44,14 @@ export class FallbackOtpProvider implements OtpProvider {
 
   async sendEmailOtp(email: string) {
     try {
+      if (!this.sendmatorProvider) {
+        throw new AppError('OTP_PROVIDER_SEND_FAILED', 'Email OTP provider is not configured', 503);
+      }
       const result = await this.sendmatorProvider.sendEmailOtp(email);
 
       return {
         ...result,
+        provider: 'sendmator',
         sessionToken: `${SENDMATOR_TOKEN_PREFIX}${result.sessionToken}`,
       };
     } catch (error: unknown) {
@@ -64,6 +63,7 @@ export class FallbackOtpProvider implements OtpProvider {
 
       return {
         ...result,
+        provider: 'resend',
         sessionToken: `${RESEND_TOKEN_PREFIX}${result.sessionToken}`,
       };
     }
@@ -71,7 +71,7 @@ export class FallbackOtpProvider implements OtpProvider {
 
   async verifyEmailOtp(sessionToken: string, otp: string) {
     if (sessionToken.startsWith(SENDMATOR_TOKEN_PREFIX)) {
-      return this.sendmatorProvider.verifyEmailOtp(
+      return this.requireSendmator().verifyEmailOtp(
         sessionToken.slice(SENDMATOR_TOKEN_PREFIX.length),
         otp,
       );
@@ -97,7 +97,7 @@ export class FallbackOtpProvider implements OtpProvider {
 
   async resendEmailOtp(sessionToken: string) {
     if (sessionToken.startsWith(SENDMATOR_TOKEN_PREFIX)) {
-      return this.sendmatorProvider.resendEmailOtp(
+      return this.requireSendmator().resendEmailOtp(
         sessionToken.slice(SENDMATOR_TOKEN_PREFIX.length),
       );
     }
@@ -123,5 +123,29 @@ export class FallbackOtpProvider implements OtpProvider {
 
   private isProviderSendFailure(error: unknown): boolean {
     return error instanceof AppError && error.code === 'OTP_PROVIDER_SEND_FAILED';
+  }
+
+  private requireSendmator(): OtpProvider {
+    if (!this.sendmatorProvider) {
+      throw new AppError('OTP_PROVIDER_NOT_CONFIGURED', 'OTP provider is not configured', 503);
+    }
+    return this.sendmatorProvider;
+  }
+
+  private resolveSms(sessionToken: string) {
+    if (this.smsProvider && sessionToken.startsWith(`${this.smsProvider.name}:`)) {
+      return {
+        adapter: this.smsProvider.adapter,
+        token: sessionToken.slice(this.smsProvider.name.length + 1),
+      };
+    }
+    // Preserve outstanding SendMator sessions when switching providers.
+    if (sessionToken.startsWith(SENDMATOR_TOKEN_PREFIX)) {
+      return {
+        adapter: this.requireSendmator(),
+        token: sessionToken.slice(SENDMATOR_TOKEN_PREFIX.length),
+      };
+    }
+    throw new AppError('OTP_PROVIDER_SESSION_INVALID', 'Invalid SMS OTP provider session', 400);
   }
 }

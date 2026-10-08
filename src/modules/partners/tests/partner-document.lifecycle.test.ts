@@ -12,7 +12,7 @@ const ownerId = '550e8400-e29b-41d4-a716-446655440000';
 
 const documentId = '750e8400-e29b-41d4-a716-446655440000';
 
-const owner = { userId: ownerId, role: 'customer' } as const;
+const owner = { userId: ownerId, role: 'fleet_owner' } as const;
 
 const admin = {
   userId: '450e8400-e29b-41d4-a716-446655440000',
@@ -71,7 +71,7 @@ describe('Partner document lifecycle matrix', () => {
       partnerId,
       documentId,
       { status: to },
-      owner,
+      admin,
     );
 
     expect(repo.update).toHaveBeenCalledWith(
@@ -103,7 +103,7 @@ describe('Partner document lifecycle matrix', () => {
         partnerId,
         documentId,
         { status: to },
-        owner,
+        admin,
       ),
     ).rejects.toMatchObject({
       code: 'INVALID_DOCUMENT_STATUS_TRANSITION',
@@ -125,7 +125,7 @@ describe('Partner document lifecycle matrix', () => {
         partnerId,
         documentId,
         { expiresAt, status },
-        owner,
+        admin,
       ),
     ).rejects.toMatchObject({
       code: 'INVALID_DOCUMENT_EXPIRY',
@@ -144,7 +144,7 @@ describe('Partner document lifecycle matrix', () => {
           status: 'VERIFIED',
           expiresAt: '2099-01-01',
         },
-        owner,
+        admin,
       ),
     ).resolves.toBeDefined();
   });
@@ -168,7 +168,7 @@ describe('Partner document lifecycle matrix', () => {
     await expect(
       new PartnerDocumentService(repo).getDocuments(partnerId, {
         userId: '660e8400-e29b-41d4-a716-446655440000',
-        role: 'customer',
+        role: 'fleet_owner',
       }),
     ).rejects.toMatchObject({
       code: 'FORBIDDEN',

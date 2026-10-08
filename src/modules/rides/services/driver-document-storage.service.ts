@@ -1,3 +1,4 @@
+import { AppError } from '../../../common/errors/app-error.js';
 import { randomUUID } from 'node:crypto';
 
 import {
@@ -19,6 +20,8 @@ export interface UploadDriverDocumentInput {
   documentType: DriverDocumentType;
   file: StorageFile;
   uploadedBy: string;
+  uploadSource?: 'CAMERA' | 'GALLERY' | 'FILE' | undefined;
+  documentMetadata?: Record<string, unknown> | undefined;
 }
 
 export interface DriverDocumentStorageServiceDependencies {
@@ -38,7 +41,7 @@ const DOCUMENT_CONFIG: Record<
   profile_photo: {
     folderName: 'profile-photo',
     resourceType: 'image',
-    accessMode: 'public',
+    accessMode: 'authenticated',
     allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
     maxFileSize: 10 * 1024 * 1024,
   },
@@ -46,14 +49,35 @@ const DOCUMENT_CONFIG: Record<
     folderName: 'driver-license',
     resourceType: 'auto',
     accessMode: 'authenticated',
-    allowedMimeTypes: ['application/pdf'],
+    allowedMimeTypes: ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'],
     maxFileSize: 15 * 1024 * 1024,
   },
   vehicle_rc: {
     folderName: 'vehicle-rc',
     resourceType: 'auto',
     accessMode: 'authenticated',
-    allowedMimeTypes: ['application/pdf'],
+    allowedMimeTypes: ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'],
+    maxFileSize: 15 * 1024 * 1024,
+  },
+  identity: {
+    folderName: 'identity',
+    resourceType: 'auto',
+    accessMode: 'authenticated',
+    allowedMimeTypes: ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'],
+    maxFileSize: 15 * 1024 * 1024,
+  },
+  pan: {
+    folderName: 'pan',
+    resourceType: 'auto',
+    accessMode: 'authenticated',
+    allowedMimeTypes: ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'],
+    maxFileSize: 15 * 1024 * 1024,
+  },
+  other: {
+    folderName: 'other',
+    resourceType: 'auto',
+    accessMode: 'authenticated',
+    allowedMimeTypes: ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'],
     maxFileSize: 15 * 1024 * 1024,
   },
 };
@@ -62,6 +86,12 @@ export class DriverDocumentStorageService {
   constructor(private readonly dependencies: DriverDocumentStorageServiceDependencies) {}
 
   async upload(input: UploadDriverDocumentInput): Promise<DriverDocument> {
+    if (input.documentType !== 'other' && input.documentMetadata?.documentCode)
+      throw new AppError(
+        'INVALID_DOCUMENT_TYPE',
+        'Custom document codes require the other document type',
+        400,
+      );
     const config = DOCUMENT_CONFIG[input.documentType];
 
     this.validateFile(input.file, config.allowedMimeTypes, config.maxFileSize);
@@ -84,8 +114,29 @@ export class DriverDocumentStorageService {
     });
 
     try {
+      if (this.dependencies.repository.saveBundle) {
+        const saved = await this.dependencies.repository.saveBundle(
+          {
+            driverProfileId: input.driverProfileId,
+            documentType: input.documentType,
+            ...uploaded,
+            uploadedBy: input.uploadedBy,
+            uploadSource: input.uploadSource,
+            documentMetadata: input.documentMetadata,
+          },
+          [],
+        );
+        if (saved.previous) await this.cleanupUploadedFile(saved.previous);
+        return saved.document;
+      }
       if (existing) {
-        return await this.replaceDatabaseDocument(existing, uploaded, input.uploadedBy);
+        return await this.replaceDatabaseDocument(
+          existing,
+          uploaded,
+          input.uploadedBy,
+          input.uploadSource,
+          input.documentMetadata,
+        );
       }
 
       const documentInput: CreateDriverDocumentInput = {
@@ -98,11 +149,71 @@ export class DriverDocumentStorageService {
         mimeType: uploaded.mimeType,
         fileSize: uploaded.fileSize,
         uploadedBy: input.uploadedBy,
+        uploadSource: input.uploadSource,
+        documentMetadata: input.documentMetadata,
       };
 
       return await this.dependencies.repository.create(documentInput);
     } catch (error) {
       await this.cleanupUploadedFile(uploaded);
+      throw error;
+    }
+  }
+
+  async uploadPages(
+    input: Omit<UploadDriverDocumentInput, 'file'> & { files: StorageFile[] },
+  ): Promise<DriverDocument> {
+    if (!this.dependencies.repository.saveBundle)
+      throw new Error('Document bundle storage is unavailable');
+    if (input.documentType === 'profile_photo' || input.files.length < 1 || input.files.length > 5)
+      throw new AppError(
+        'INVALID_DOCUMENT_BUNDLE',
+        'Document bundles require one to five pages',
+        400,
+      );
+    if (input.documentType !== 'other' && input.documentMetadata?.documentCode)
+      throw new AppError(
+        'INVALID_DOCUMENT_TYPE',
+        'Custom document codes require the other document type',
+        400,
+      );
+    const config = DOCUMENT_CONFIG[input.documentType];
+    for (const file of input.files)
+      this.validateFile(file, config.allowedMimeTypes, config.maxFileSize);
+    if (input.files.reduce((total, file) => total + file.fileSize, 0) > 30 * 1024 * 1024)
+      throw new AppError('DOCUMENT_TOO_LARGE', 'Document bundle exceeds 30 MB', 413);
+    const uploaded = [];
+    try {
+      for (const file of input.files)
+        uploaded.push(
+          await storageService.upload({
+            file,
+            folder: this.buildStorageFolder(input.driverProfileId, config.folderName),
+            resourceType: config.resourceType,
+            accessMode: 'authenticated',
+            storageKey: this.buildStorageKey(input.documentType, file.originalFileName),
+          }),
+        );
+      const first = uploaded[0]!;
+      const saved = await this.dependencies.repository.saveBundle(
+        {
+          driverProfileId: input.driverProfileId,
+          documentType: input.documentType,
+          ...first,
+          uploadedBy: input.uploadedBy,
+          uploadSource: input.uploadSource,
+          documentMetadata: input.documentMetadata,
+        },
+        uploaded.map((page, index) => ({
+          ...page,
+          side:
+            index === 0 ? ('FRONT' as const) : index === 1 ? ('BACK' as const) : ('PAGE' as const),
+        })),
+      );
+      if (saved.previous) await this.cleanupUploadedFile(saved.previous);
+      return saved.document;
+    } catch (error) {
+      for (const file of uploaded) await this.cleanupUploadedFile(file);
       throw error;
     }
   }
@@ -119,6 +230,22 @@ export class DriverDocumentStorageService {
 
   async listDocuments(driverProfileId: string): Promise<DriverDocument[]> {
     return this.dependencies.repository.listByDriver(driverProfileId);
+  }
+  async getPageAccessUrls(driverProfileId: string, documentId: string) {
+    if (!(await this.getDocument(driverProfileId, documentId))) return null;
+    const pages =
+      (await this.dependencies.repository.currentPages?.(driverProfileId, documentId)) ?? [];
+    return Promise.all(
+      pages.map(async (page) => ({
+        side: page.side,
+        accessUrl: await storageService.getAccessUrl({
+          storageKey: page.storageKey,
+          resourceType: page.resourceType,
+          accessMode: 'authenticated',
+          options: { expiresIn: 300 },
+        }),
+      })),
+    );
   }
 
   async getAccessUrl(
@@ -197,6 +324,8 @@ export class DriverDocumentStorageService {
       fileSize: number;
     },
     uploadedBy: string,
+    uploadSource?: 'CAMERA' | 'GALLERY' | 'FILE',
+    documentMetadata?: Record<string, unknown>,
   ): Promise<DriverDocument> {
     const replacement = await this.dependencies.repository.replace(existing.id, {
       storageProvider: uploaded.storageProvider,
@@ -206,6 +335,8 @@ export class DriverDocumentStorageService {
       mimeType: uploaded.mimeType,
       fileSize: uploaded.fileSize,
       uploadedBy,
+      uploadSource,
+      documentMetadata,
     });
 
     if (!replacement) {
@@ -232,23 +363,56 @@ export class DriverDocumentStorageService {
     maxFileSize: number,
   ): void {
     if (!file.buffer || file.buffer.length === 0) {
-      throw new Error('Driver document file is empty');
+      throw new AppError('INVALID_DOCUMENT_UPLOAD', 'Driver document file is empty', 400);
     }
 
     if (!file.mimeType) {
-      throw new Error('Driver document MIME type is required');
+      throw new AppError('INVALID_DOCUMENT_UPLOAD', 'Driver document MIME type is required', 400);
     }
 
     if (!allowedMimeTypes.includes(file.mimeType)) {
-      throw new Error(`Unsupported driver document MIME type: ${file.mimeType}`);
+      throw new AppError(
+        'INVALID_DOCUMENT_UPLOAD',
+        `Unsupported driver document MIME type: ${file.mimeType}`,
+        400,
+      );
     }
 
     if (file.fileSize <= 0) {
-      throw new Error('Driver document file size must be greater than zero');
+      throw new AppError(
+        'INVALID_DOCUMENT_UPLOAD',
+        'Driver document file size must be greater than zero',
+        400,
+      );
     }
 
     if (file.fileSize > maxFileSize) {
-      throw new Error(`Driver document exceeds the maximum allowed size of ${maxFileSize} bytes`);
+      throw new AppError(
+        'DOCUMENT_TOO_LARGE',
+        `Driver document exceeds the maximum allowed size of ${maxFileSize} bytes`,
+        413,
+      );
+    }
+
+    if (!Number.isInteger(file.fileSize) || file.fileSize !== file.buffer.length) {
+      throw new AppError(
+        'INVALID_DOCUMENT_UPLOAD',
+        'Driver document file size does not match its content',
+        400,
+      );
+    }
+    const extensions: Record<string, readonly string[]> = {
+      'image/jpeg': ['.jpg', '.jpeg'],
+      'image/png': ['.png'],
+      'image/webp': ['.webp'],
+      'application/pdf': ['.pdf'],
+    };
+    if (!extensions[file.mimeType]?.includes(this.extractExtension(file.originalFileName))) {
+      throw new AppError(
+        'INVALID_DOCUMENT_UPLOAD',
+        'Driver document extension does not match its MIME type',
+        400,
+      );
     }
 
     this.validateFileContent(file.buffer, file.mimeType);
@@ -258,30 +422,50 @@ export class DriverDocumentStorageService {
     switch (mimeType) {
       case 'image/jpeg':
         if (!this.isJpeg(buffer)) {
-          throw new Error('Driver document file content does not match image/jpeg');
+          throw new AppError(
+            'INVALID_DOCUMENT_UPLOAD',
+            'Driver document file content does not match image/jpeg',
+            400,
+          );
         }
         break;
 
       case 'image/png':
         if (!this.isPng(buffer)) {
-          throw new Error('Driver document file content does not match image/png');
+          throw new AppError(
+            'INVALID_DOCUMENT_UPLOAD',
+            'Driver document file content does not match image/png',
+            400,
+          );
         }
         break;
 
       case 'image/webp':
         if (!this.isWebp(buffer)) {
-          throw new Error('Driver document file content does not match image/webp');
+          throw new AppError(
+            'INVALID_DOCUMENT_UPLOAD',
+            'Driver document file content does not match image/webp',
+            400,
+          );
         }
         break;
 
       case 'application/pdf':
         if (!this.isPdf(buffer)) {
-          throw new Error('Driver document file content does not match application/pdf');
+          throw new AppError(
+            'INVALID_DOCUMENT_UPLOAD',
+            'Driver document file content does not match application/pdf',
+            400,
+          );
         }
         break;
 
       default:
-        throw new Error(`Unsupported driver document MIME type: ${mimeType}`);
+        throw new AppError(
+          'INVALID_DOCUMENT_UPLOAD',
+          `Unsupported driver document MIME type: ${mimeType}`,
+          400,
+        );
     }
   }
 

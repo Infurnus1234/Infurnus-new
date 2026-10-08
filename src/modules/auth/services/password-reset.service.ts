@@ -257,7 +257,7 @@ export class PasswordResetService {
 
     let verification: {
       verified: boolean;
-      attemptsRemaining: number;
+      attemptsRemaining: number | null;
     };
 
     try {
@@ -275,7 +275,7 @@ export class PasswordResetService {
     // --------------------------------------------------------
 
     if (!verification.verified) {
-      if (verification.attemptsRemaining <= 0) {
+      if (verification.attemptsRemaining !== null && verification.attemptsRemaining <= 0) {
         throw new AppError(
           'OTP_ATTEMPTS_EXCEEDED',
           'Maximum OTP verification attempts exceeded',
@@ -398,27 +398,15 @@ export class PasswordResetService {
     // Update password
     // --------------------------------------------------------
 
-    await this.userCredentialsRepository.updatePasswordHash(challenge.userId, newPasswordHash);
-
-    // --------------------------------------------------------
-    // Revoke all refresh-token sessions
-    //
-    // This logs the user out from all existing devices/sessions.
-    // --------------------------------------------------------
-
-    await this.refreshTokenRepository.revokeAllForUser(challenge.userId);
-
-    // --------------------------------------------------------
-    // Consume reset session
-    // --------------------------------------------------------
-
-    const consumed = await this.passwordResetRepository.consume(resetSessionTokenHash);
-
-    if (!consumed) {
+    const completed = await this.passwordResetRepository.completeReset(
+      resetSessionTokenHash,
+      newPasswordHash,
+    );
+    if (!completed) {
       throw new AppError(
-        'PASSWORD_RESET_SESSION_CONSUME_FAILED',
-        'Password reset session could not be consumed',
-        500,
+        'INVALID_PASSWORD_RESET_SESSION',
+        'Password reset session is no longer valid',
+        400,
       );
     }
 

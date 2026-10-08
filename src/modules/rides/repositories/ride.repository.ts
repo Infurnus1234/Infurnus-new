@@ -1,3 +1,11 @@
+import { AppError } from '../../../common/errors/app-error.js';
+import type { FareCalculationResult } from '../../fares/types/fare.js';
+import {
+  canonicalVehicleCode,
+  VEHICLE_UNAVAILABLE_MESSAGE,
+} from '../../fares/config/fare.config.js';
+import type { RideMapSnapshot, LiveRideLocation } from '../types/ride-map.js';
+import { driverEligibilitySql } from './driver-eligibility.js';
 import { randomInt } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { withTransaction } from '../../../infrastructure/database/postgres.js';
@@ -7,6 +15,16 @@ import type { CreateRideInput, ListRidesInput } from '../schemas/ride.schemas.js
 import type { Ride } from '../types/ride.js';
 
 export interface RouteMetadata {
+  externalRequestReservedAt?: number;
+  lastExternalRequestAt?: number;
+  lastValidatedTimestamp?: number;
+  lastValidatedOrigin?: { latitude: number; longitude: number };
+  destination?: { latitude: number; longitude: number };
+  segment?: 'pickup' | 'destination';
+  routeState?: 'ON_ROUTE' | 'OFF_ROUTE';
+  etaSeconds?: number;
+  deviationMeters?: number;
+  routeVersion?: number;
   lastCalculatedAt: number | null;
   lastOrigin: {
     latitude: number;
@@ -23,8 +41,21 @@ export interface RouteMetadata {
 }
 
 export interface RideRepository {
-  create(customerId: string, input: CreateRideInput): Promise<Ride>;
+  getRideMapSnapshot?(
+    id: string,
+    userId: string,
+    view: 'user' | 'driver',
+  ): Promise<RideMapSnapshot | null>;
+  updateUserLocation?(id: string, userId: string, location: LiveRideLocation): Promise<boolean>;
+  create(
+    customerId: string,
+    input: CreateRideInput & {
+      bookingDistanceMeters?: number;
+      bookingFareSnapshot?: FareCalculationResult;
+    },
+  ): Promise<Ride>;
 
+  findActiveForDriver?(profileId: string): Promise<Ride | null>;
   findById(id: string): Promise<Ride | null>;
 
   findByIdForCustomer(id: string, customerId: string): Promise<Ride | null>;
@@ -35,7 +66,11 @@ export interface RideRepository {
 
   accept(id: string, driverProfileId: string, client?: PoolClient): Promise<Ride | null>;
 
-  offerDispatch(rideId: string, driverProfileId: string, responseTimeoutMs: number): Promise<boolean>;
+  offerDispatch(
+    rideId: string,
+    driverProfileId: string,
+    responseTimeoutMs: number,
+  ): Promise<boolean>;
 
   finishDispatchAttempt(
     rideId: string,
@@ -62,6 +97,11 @@ export interface RideRepository {
 
   isAssignedDriverProfile(id: string, driverProfileId: string): Promise<boolean>;
 
+  listRecoverableDispatch?(limit?: number): Promise<Ride[]>;
+  reconcileDispatch?(id: string): Promise<Ride | null>;
+  withDispatchLock?<T>(id: string, work: () => Promise<T>): Promise<T | null>;
+  withRouteLock?<T>(id: string, work: () => Promise<T>): Promise<T | null>;
+
   getRouteMetadata(id: string): Promise<RouteMetadata | null>;
 
   getDestination(id: string): Promise<{
@@ -69,7 +109,11 @@ export interface RideRepository {
     longitude: number;
   } | null>;
 
-  updateRouteMetadata(id: string, metadata: RouteMetadata): Promise<boolean>;
+  updateRouteMetadata(
+    id: string,
+    metadata: RouteMetadata,
+    expectedVersion?: number,
+  ): Promise<boolean>;
 
   getRidePin(id: string): Promise<string | null>;
 
@@ -111,6 +155,8 @@ const detailedRideColumns = (tableAlias = 'r') => `
     (${tableAlias}.route_metadata->>'fareEstimate')::numeric
   ) AS "fareEstimate",
   ${tableAlias}.final_fare AS "finalFare",
+  ${tableAlias}.route_metadata->>'bookingDistanceMeters' AS "bookingDistanceMeters",
+  ${tableAlias}.route_metadata->'bookingFareSnapshot'->>'pricingVersion' AS "bookingPricingVersion",
   ${tableAlias}.actual_distance_meters AS "actualDistanceMeters",
   ${tableAlias}.actual_fuel_cost AS "actualFuelCost",
   COALESCE(
@@ -228,6 +274,10 @@ function mapRide(row: Record<string, unknown>, forCustomer = false): Ride {
 
     fareEstimate: row.fareEstimate != null ? Number(row.fareEstimate) : null,
 
+    bookingDistanceMeters:
+      row.bookingDistanceMeters != null ? Number(row.bookingDistanceMeters) : null,
+
+    bookingPricingVersion: (row.bookingPricingVersion as string | null) ?? null,
     finalFare: row.finalFare != null ? Number(row.finalFare) : null,
 
     actualDistanceMeters: row.actualDistanceMeters != null ? Number(row.actualDistanceMeters) : 0,
@@ -290,10 +340,84 @@ function mapRide(row: Record<string, unknown>, forCustomer = false): Ride {
 export class PostgresRideRepository implements RideRepository {
   constructor(private readonly pool: Pool) {}
 
-  async create(customerId: string, input: CreateRideInput): Promise<Ride> {
+  async create(
+    customerId: string,
+    input: CreateRideInput & {
+      bookingDistanceMeters?: number;
+      bookingFareSnapshot?: FareCalculationResult;
+    },
+  ): Promise<Ride> {
+    const snapshot = input.bookingFareSnapshot;
+    if (snapshot) {
+      const client = await this.pool.connect();
+      try {
+        await client.query('BEGIN');
+        const code = canonicalVehicleCode(input.sector, input.vehicleCategory);
+        await client.query('SELECT pg_advisory_xact_lock_shared(hashtextextended($1,648032))', [
+          code,
+        ]);
+        const config = snapshot.vehicleConfiguration;
+        const locked = await client.query('SELECT * FROM vehicle_types WHERE code=$1 FOR SHARE', [
+          code,
+        ]);
+        const row = locked.rows[0];
+        if (!config) {
+          if (row && row.sector === input.sector) {
+            if (!row.active)
+              throw new AppError('FARE_CONFIGURATION_MISSING', VEHICLE_UNAVAILABLE_MESSAGE, 422);
+            throw new AppError(
+              'FARE_CONFIGURATION_CHANGED',
+              'Vehicle pricing changed; request a new quote.',
+              409,
+            );
+          }
+          const ride = await this.insertRide(customerId, input, client);
+          await client.query('COMMIT');
+          return ride;
+        }
+        if (
+          !row ||
+          !row.active ||
+          row.id !== config.id ||
+          row.sector !== input.sector ||
+          row.code !== config.code ||
+          row.code === 'ftl'
+        )
+          throw new AppError('FARE_CONFIGURATION_MISSING', VEHICLE_UNAVAILABLE_MESSAGE, 422);
+        if (
+          Number(row.version) !== config.version ||
+          Number(row.base_fare_paise) !== config.baseFarePaise ||
+          Number(row.per_km_rate_paise) !== config.perKmRatePaise
+        )
+          throw new AppError(
+            'FARE_CONFIGURATION_CHANGED',
+            'Vehicle pricing changed; request a new quote.',
+            409,
+          );
+        const ride = await this.insertRide(customerId, input, client);
+        await client.query('COMMIT');
+        return ride;
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    }
+    return this.insertRide(customerId, input);
+  }
+
+  private async insertRide(
+    customerId: string,
+    input: CreateRideInput & {
+      bookingDistanceMeters?: number;
+      bookingFareSnapshot?: FareCalculationResult;
+    },
+    queryable: Pool | PoolClient = this.pool,
+  ): Promise<Ride> {
     const pin = randomInt(1000, 10000).toString();
 
-    const result = await this.pool.query(
+    const result = await queryable.query(
       `WITH inserted AS (
          INSERT INTO rides
          (
@@ -327,6 +451,10 @@ export class PostgresRideRepository implements RideRepository {
            $8::numeric,
            $14::text,
            jsonb_build_object(
+             'bookingFareSnapshot',
+             $16::jsonb,
+             'bookingDistanceMeters',
+             $15::numeric,
              'fareEstimate',
              $8::numeric,
              'sector',
@@ -369,12 +497,22 @@ export class PostgresRideRepository implements RideRepository {
         input.serviceDetails ? JSON.stringify(input.serviceDetails) : null,
         input.rentalDetails ? JSON.stringify(input.rentalDetails) : null,
         pin,
+        input.bookingDistanceMeters ?? null,
+        input.bookingFareSnapshot ? JSON.stringify(input.bookingFareSnapshot) : null,
       ],
     );
 
     return mapRide(result.rows[0], true);
   }
 
+  async findActiveForDriver(profileId: string): Promise<Ride | null> {
+    const result = await this.pool.query(
+      `SELECT ${detailedRideColumns('r')} FROM rides r ${detailedRideJoins('r')}
+       WHERE r.assigned_driver_id = $1 AND r.status NOT IN ('completed','cancelled') LIMIT 1`,
+      [profileId],
+    );
+    return result.rows[0] ? mapRide(result.rows[0], true) : null;
+  }
   async findById(id: string): Promise<Ride | null> {
     const result = await this.pool.query(
       `SELECT ${detailedRideColumns('r')}
@@ -436,7 +574,9 @@ export class PostgresRideRepository implements RideRepository {
          SET
            status = 'cancelled',
            cancellation_reason = $3,
-           cancelled_at = NOW()
+           cancelled_at = NOW(),
+           dispatch_driver_id = NULL,
+           dispatch_expires_at = NULL
          WHERE id = $1
            AND customer_id = $2
            AND status IN (
@@ -447,21 +587,9 @@ export class PostgresRideRepository implements RideRepository {
              'driver_arrived'
            )
          RETURNING *
-       ), accepted_attempt AS (
-         UPDATE ride_dispatch_attempts attempt
-         SET status = 'accepted', responded_at = NOW()
-         FROM updated
-         WHERE attempt.ride_id = updated.id
-           AND attempt.driver_profile_id = $2
-           AND attempt.status = 'offered'
-         RETURNING attempt.ride_id AS id
-       ), accepted AS (
-         SELECT updated.*
-         FROM updated
-         JOIN accepted_attempt USING (id)
        )
        SELECT ${detailedRideColumns('u_r')}
-       FROM accepted u_r
+       FROM updated u_r
        ${detailedRideJoins('u_r')}`,
       [id, customerId, reason],
     );
@@ -516,52 +644,11 @@ export class PostgresRideRepository implements RideRepository {
                   AND offered.expires_at > NOW()
               )
            AND EXISTS (
-             SELECT 1
-             FROM driver_profiles dp
-             JOIN users u
-               ON u.id = dp.user_id
-             WHERE dp.id = $2
-               AND u.status = 'active'
-               AND dp.verification_status = 'approved'
-               AND dp.availability_status = 'available'
-               AND dp.last_location IS NOT NULL
-               AND dp.last_location_at >= NOW() -
-                 (
-                   $3::int *
-                   INTERVAL '1 second'
-                 )
-               AND ST_DWithin(
-                 dp.last_location,
-                 r.pickup_location,
-                 $4
-               )
-               AND NOT EXISTS (
-                 SELECT 1
-                 FROM rides active_ride
-                 WHERE active_ride.assigned_driver_id = dp.id
-                   AND active_ride.status NOT IN ('completed', 'cancelled')
-               )
-           )
-           AND EXISTS (
-             SELECT 1
-             FROM vehicles v
-             WHERE v.driver_profile_id = $2
-               AND (
-                 (
-                   SELECT dp.active_vehicle_id
-                   FROM driver_profiles dp
-                   WHERE dp.id = $2
-                 ) IS NULL
-                 OR v.id = (
-                   SELECT dp.active_vehicle_id
-                   FROM driver_profiles dp
-                   WHERE dp.id = $2
-                 )
-               )
-               AND v.is_active = TRUE
-               AND v.verification_status = 'approved'
-               AND v.sector = r.sector
-               AND v.category = r.vehicle_category
+             SELECT 1 FROM driver_profiles dp JOIN users u ON u.id=dp.user_id
+             JOIN vehicles v ON v.driver_profile_id=dp.id
+             WHERE dp.id=$2 AND ${driverEligibilitySql("NOW() - ($3::int * INTERVAL '1 second')", 'r.id')}
+               AND ST_DWithin(dp.last_location,r.pickup_location,$4)
+               AND v.sector=r.sector AND v.category=r.vehicle_category
            )
          RETURNING *
        ), accepted_attempt AS (
@@ -571,6 +658,9 @@ export class PostgresRideRepository implements RideRepository {
          WHERE attempt.ride_id = updated.id
            AND attempt.driver_profile_id = $2
            AND attempt.status = 'offered'
+           AND attempt.attempt = (SELECT MAX(offered.attempt) FROM ride_dispatch_attempts offered
+             WHERE offered.ride_id=updated.id AND offered.driver_profile_id=$2
+               AND offered.status='offered' AND offered.expires_at>NOW())
          RETURNING attempt.ride_id AS id
        ), accepted AS (
          SELECT updated.*
@@ -580,12 +670,7 @@ export class PostgresRideRepository implements RideRepository {
        SELECT ${detailedRideColumns('u_r')}
        FROM accepted u_r
        ${detailedRideJoins('u_r')}`,
-      [
-        id,
-        driverProfileId,
-        env.DRIVER_LOCATION_STALE_SECONDS,
-        env.DRIVER_SEARCH_RADIUS_METERS,
-      ],
+      [id, driverProfileId, env.DRIVER_LOCATION_STALE_SECONDS, env.MAP_DRIVER_RADII_METERS.at(-1)!],
     );
 
     return result.rows[0] ? mapRide(result.rows[0], false) : null;
@@ -641,31 +726,9 @@ export class PostgresRideRepository implements RideRepository {
              JOIN users u ON u.id = dp.user_id
              JOIN vehicles v ON v.driver_profile_id = dp.id
              WHERE dp.id = $2
-               AND u.status = 'active'
-               AND dp.verification_status = 'approved'
-               AND dp.availability_status = 'available'
-               AND dp.last_location IS NOT NULL
-               AND dp.last_location_at >= NOW() - ($4::int * INTERVAL '1 second')
-               AND v.is_active = TRUE
-               AND v.verification_status = 'approved'
-               AND v.sector = r.sector
-               AND v.category = r.vehicle_category
-               AND (
-                 dp.active_vehicle_id IS NULL
-                 OR dp.active_vehicle_id = v.id
-               )
-               AND ST_DWithin(dp.last_location, r.pickup_location, $5)
-               AND NOT EXISTS (
-                 SELECT 1 FROM rides active_ride
-                 WHERE active_ride.assigned_driver_id = dp.id
-                   AND active_ride.status NOT IN ('completed', 'cancelled')
-               )
-               AND NOT EXISTS (
-                 SELECT 1 FROM rides pending_offer
-                 WHERE pending_offer.dispatch_driver_id = dp.id
-                   AND pending_offer.dispatch_expires_at > NOW()
-                   AND pending_offer.status = 'searching'
-               )
+               AND ${driverEligibilitySql("NOW() - ($4::int * INTERVAL '1 second')")}
+               AND v.sector=r.sector AND v.category=r.vehicle_category
+               AND ST_DWithin(dp.last_location,r.pickup_location,$5)
            )
          RETURNING dispatch_attempt AS attempt`,
         [
@@ -673,7 +736,7 @@ export class PostgresRideRepository implements RideRepository {
           driverProfileId,
           responseTimeoutMs,
           env.DRIVER_LOCATION_STALE_SECONDS,
-          env.DRIVER_SEARCH_RADIUS_METERS,
+          env.MAP_DRIVER_RADII_METERS.at(-1)!,
         ],
       );
       const attempt = leased.rows[0]?.attempt;
@@ -825,7 +888,7 @@ export class PostgresRideRepository implements RideRepository {
            status = 'completed',
            completed_at = NOW(),
            actual_fuel_cost = CASE
-             WHEN cr.sector = 'premium' THEN
+             WHEN cr.sector = 'premium' AND cr.route_metadata->'bookingFareSnapshot'->'vehicleConfiguration' IS NULL THEN
                ROUND(
                  (
                    (
@@ -845,7 +908,7 @@ export class PostgresRideRepository implements RideRepository {
              ELSE NULL
            END,
            final_fare = CASE
-             WHEN cr.sector = 'premium' THEN
+             WHEN cr.sector = 'premium' AND cr.route_metadata->'bookingFareSnapshot'->'vehicleConfiguration' IS NULL THEN
                ROUND(
                  (
                    (
@@ -1041,6 +1104,129 @@ export class PostgresRideRepository implements RideRepository {
     return (result.rowCount ?? 0) === 1;
   }
 
+  private activeAdvisoryLocks = 0;
+  async withDispatchLock<T>(id: string, work: () => Promise<T>): Promise<T | null> {
+    return this.withRouteLock('dispatch:' + id, work);
+  }
+  async listRecoverableDispatch(limit = 20): Promise<Ride[]> {
+    const result = await this.pool.query(
+      `SELECT ${detailedRideColumns('r')} FROM rides r ${detailedRideJoins('r')}
+       WHERE r.status='searching' AND r.assigned_driver_id IS NULL
+       AND (r.dispatch_expires_at <= NOW() OR
+         (r.dispatch_driver_id IS NULL AND r.created_at <= NOW() - INTERVAL '5 seconds'))
+       ORDER BY r.created_at ASC, r.id ASC LIMIT $1`,
+      [limit],
+    );
+    return result.rows.map((row) => mapRide(row, false));
+  }
+  async reconcileDispatch(id: string): Promise<Ride | null> {
+    // Existing durable leases and attempts are sufficient to resume after a crash.
+    // The caller holds the existing session advisory lock for this dispatch run.
+    await withTransaction(async (client) => {
+      await client.query('SELECT id FROM rides WHERE id=$1 FOR UPDATE', [id]);
+      await client.query(
+        `UPDATE ride_dispatch_attempts a SET status='timed_out', responded_at=NOW()
+         FROM rides r WHERE r.id=$1 AND r.status='searching'
+         AND r.dispatch_expires_at<=NOW() AND a.ride_id=r.id
+         AND a.driver_profile_id=r.dispatch_driver_id AND a.status='offered'`,
+        [id],
+      );
+      await client.query(
+        `UPDATE rides SET dispatch_driver_id=NULL,dispatch_expires_at=NULL
+         WHERE id=$1 AND status='searching' AND dispatch_expires_at<=NOW()`,
+        [id],
+      );
+    });
+    const result = await this.pool.query(
+      `SELECT ${detailedRideColumns('r')} FROM rides r ${detailedRideJoins('r')}
+       WHERE r.id=$1 AND r.status='searching' AND r.assigned_driver_id IS NULL
+       AND r.dispatch_driver_id IS NULL`,
+      [id],
+    );
+    return result.rows[0] ? mapRide(result.rows[0], false) : null;
+  }
+  async withRouteLock<T>(id: string, work: () => Promise<T>): Promise<T | null> {
+    // Reserve pool headroom for queries made by lock holders; never wait holding
+    // every pool connection while work needs another connection.
+    if (this.activeAdvisoryLocks >= Math.max(1, Math.floor((this.pool.options?.max ?? 20) / 2)))
+      return null;
+    this.activeAdvisoryLocks++;
+    try {
+      return await this.runRouteLock(id, work);
+    } finally {
+      this.activeAdvisoryLocks--;
+    }
+  }
+  private async runRouteLock<T>(id: string, work: () => Promise<T>): Promise<T | null> {
+    const client = await this.pool.connect();
+    let locked = false;
+    try {
+      const result = await client.query<{ locked: boolean }>(
+        'SELECT pg_try_advisory_lock(hashtextextended($1, 874)) AS locked',
+        [id],
+      );
+      locked = result.rows[0]!.locked;
+      return locked ? await work() : null;
+    } finally {
+      await this.releaseRouteLock(client, id, locked);
+    }
+  }
+  private async releaseRouteLock(client: PoolClient, id: string, locked: boolean): Promise<void> {
+    try {
+      if (locked) await client.query('SELECT pg_advisory_unlock(hashtextextended($1, 874))', [id]);
+    } catch (error) {
+      // Never return a possibly locked session to the pool.
+      client.release(error instanceof Error ? error : new Error('Advisory unlock failed'));
+      throw error;
+    }
+    client.release();
+  }
+  async getRideMapSnapshot(
+    id: string,
+    userId: string,
+    view: 'user' | 'driver',
+  ): Promise<RideMapSnapshot | null> {
+    const result = await this.pool.query(
+      `SELECT ${detailedRideColumns()}, r.route_metadata AS metadata,
+       ST_Y(dp.last_location::geometry) AS "driverLatitude", ST_X(dp.last_location::geometry) AS "driverLongitude", dp.last_location_at AS "driverTimestamp"
+       FROM rides r ${detailedRideJoins()}
+       WHERE r.id=$1 AND (CASE WHEN $3='user' THEN r.customer_id=$2::uuid ELSE dp.user_id=$2::uuid END)`,
+      [id, userId, view],
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    const metadata = row.metadata;
+    return {
+      ride: mapRide(row),
+      metadata: metadata ?? null,
+      driverLocation:
+        row.driverTimestamp && row.driverLatitude != null && row.driverLongitude != null
+          ? {
+              latitude: Number(row.driverLatitude),
+              longitude: Number(row.driverLongitude),
+              timestamp: new Date(row.driverTimestamp).toISOString(),
+            }
+          : null,
+      userLocation: metadata?.userLocation ?? null,
+    };
+  }
+
+  async updateUserLocation(
+    id: string,
+    userId: string,
+    location: LiveRideLocation,
+  ): Promise<boolean> {
+    const result = await this.pool.query(
+      `UPDATE rides SET route_metadata=jsonb_set(COALESCE(route_metadata,'{}'::jsonb),'{userLocation}',$3::jsonb), updated_at=NOW()
+      WHERE id=$1 AND customer_id=$2 AND assigned_driver_id IS NOT NULL
+      AND status IN ('driver_assigned','driver_arriving','driver_arrived','in_progress')
+      AND ((route_metadata->'userLocation'->>'timestamp') IS NULL OR (route_metadata->'userLocation'->>'timestamp')::timestamptz < $4::timestamptz)
+      RETURNING id`,
+      [id, userId, JSON.stringify(location), location.timestamp],
+    );
+    return result.rowCount === 1;
+  }
+
   async getRouteMetadata(id: string): Promise<RouteMetadata | null> {
     const result = await this.pool.query(
       `SELECT
@@ -1084,24 +1270,42 @@ export class PostgresRideRepository implements RideRepository {
     };
   }
 
-  async updateRouteMetadata(id: string, metadata: RouteMetadata): Promise<boolean> {
-    const result = await this.pool.query(
-      `UPDATE rides
-       SET
-         route_metadata =
-           COALESCE(
-             route_metadata,
-             '{}'::jsonb
-           ) ||
-           $2::jsonb,
-         updated_at = NOW()
-       WHERE id = $1`,
-      [id, JSON.stringify(metadata)],
+  async updateRouteMetadata(
+    id: string,
+    metadata: RouteMetadata,
+    expectedVersion?: number,
+  ): Promise<boolean> {
+    // Compare the version read before calculation, the active segment and target.
+    // A rejected late response may advance cooldown, but cannot regress it.
+    const applicable = `(
+      ($3::int IS NULL OR COALESCE((route_metadata->>'routeVersion')::int,0)=$3)
+      AND COALESCE(($2::jsonb->>'routeVersion')::int,0)>=COALESCE((route_metadata->>'routeVersion')::int,0)
+      AND (($2::jsonb->>'lastValidatedTimestamp') IS NULL OR
+        (route_metadata->>'lastValidatedTimestamp') IS NULL OR
+        ($2::jsonb->>'lastValidatedTimestamp')::float8 >= (route_metadata->>'lastValidatedTimestamp')::float8)
+      AND (($2::jsonb->>'segment') IS NULL OR
+        ($2::jsonb->>'segment')=CASE WHEN status='in_progress' THEN 'destination' ELSE 'pickup' END)
+      AND (($2::jsonb->'destination') IS NULL OR ST_DWithin(
+        CASE WHEN status='in_progress' THEN destination_location ELSE pickup_location END,
+        ST_SetSRID(ST_MakePoint(($2::jsonb->'destination'->>'longitude')::float8,
+          ($2::jsonb->'destination'->>'latitude')::float8),4326)::geography,1))
+    )`;
+    const result = await this.pool.query<{ applied: boolean }>(
+      `WITH current AS (SELECT id, ${applicable} AS applied FROM rides
+       WHERE id=$1 AND status NOT IN ('completed','cancelled') FOR UPDATE)
+       UPDATE rides SET route_metadata=COALESCE(route_metadata,'{}'::jsonb) ||
+       CASE WHEN current.applied THEN ($2::jsonb - 'userLocation' - 'bookingDistanceMeters' - 'bookingFareSnapshot') ELSE '{}'::jsonb END ||
+       jsonb_strip_nulls(jsonb_build_object('lastExternalRequestAt',GREATEST(
+         (route_metadata->>'lastExternalRequestAt')::float8,
+         ($2::jsonb->>'lastExternalRequestAt')::float8),
+         'externalRequestReservedAt',GREATEST(
+         (route_metadata->>'externalRequestReservedAt')::float8,
+         ($2::jsonb->>'externalRequestReservedAt')::float8))), updated_at=NOW()
+       FROM current WHERE rides.id=current.id RETURNING current.applied`,
+      [id, JSON.stringify(metadata), expectedVersion ?? null],
     );
-
-    return result.rowCount === 1;
+    return result.rows[0]?.applied ?? false;
   }
-
   async getRidePin(id: string): Promise<string | null> {
     const result = await this.pool.query(
       `SELECT

@@ -31,6 +31,7 @@ export interface PasswordResetChallenge {
 }
 
 export interface PasswordResetRepository {
+  completeReset(sessionTokenHash: string, passwordHash: string): Promise<boolean>;
   findActiveUserByEmail(email: string): Promise<PasswordResetUser | null>;
 
   create(data: CreatePasswordResetChallengeData): Promise<{ id: string }>;
@@ -53,6 +54,47 @@ export interface PasswordResetRepository {
 export class PostgresPasswordResetRepository implements PasswordResetRepository {
   constructor(private readonly pool: Pool) {}
 
+  async completeReset(sessionTokenHash: string, passwordHash: string): Promise<boolean> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const challenge = await client.query<{ user_id: string }>(
+        `SELECT c.user_id FROM password_reset_challenges c JOIN users u ON u.id=c.user_id
+         WHERE c.session_token_hash=$1 AND c.verified_at IS NOT NULL AND c.consumed_at IS NULL
+         AND c.expires_at>NOW() AND u.status='active' AND u.deleted_at IS NULL FOR UPDATE OF u,c`,
+        [sessionTokenHash],
+      );
+      const userId = challenge.rows[0]?.user_id;
+      if (!userId) {
+        await client.query('ROLLBACK');
+        return false;
+      }
+      const updated = await client.query(
+        'UPDATE user_credentials SET password_hash=$2,updated_at=NOW() WHERE user_id=$1',
+        [userId, passwordHash],
+      );
+      if (updated.rowCount !== 1) {
+        await client.query('ROLLBACK');
+        return false;
+      }
+      await client.query(
+        'UPDATE refresh_tokens SET revoked_at=NOW() WHERE user_id=$1 AND revoked_at IS NULL',
+        [userId],
+      );
+      await client.query(
+        'UPDATE password_reset_challenges SET consumed_at=NOW(),updated_at=NOW() WHERE session_token_hash=$1',
+        [sessionTokenHash],
+      );
+      await client.query('COMMIT');
+      return true;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async findActiveUserByEmail(email: string): Promise<PasswordResetUser | null> {
     const result = await this.pool.query<PasswordResetUser>(
       `
@@ -62,6 +104,7 @@ export class PostgresPasswordResetRepository implements PasswordResetRepository 
         FROM users
         WHERE email = $1
           AND deleted_at IS NULL
+          AND status = 'active'
         LIMIT 1
       `,
       [email],

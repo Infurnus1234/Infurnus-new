@@ -43,6 +43,9 @@ export class PartnerDocumentService {
     if (data.issuedAt && data.expiresAt && data.expiresAt < data.issuedAt) {
       throw new AppError('INVALID_DOCUMENT_EXPIRY', 'expiresAt must be on or after issuedAt', 400);
     }
+    if (data.expiresAt && data.expiresAt < today()) {
+      throw new AppError('INVALID_DOCUMENT_EXPIRY', 'Expired documents cannot be submitted', 400);
+    }
 
     try {
       const document = await this.repository.create({
@@ -94,8 +97,15 @@ export class PartnerDocumentService {
     documentId: string,
     data: UpdatePartnerDocumentInput,
     actor: AuthenticatedUser,
+    expectedVersion?: number,
   ) {
     await this.assertAccess(partnerId, actor);
+    if (
+      data.status &&
+      ['VERIFIED', 'REJECTED', 'EXPIRED'].includes(data.status) &&
+      (await this.repository.partnerOwnerId(partnerId)) === actor.userId
+    )
+      throw new AppError('SELF_REVIEW_FORBIDDEN', 'Cannot review your own documents', 403);
 
     const current = await this.repository.findById(documentId, partnerId);
 
@@ -103,7 +113,25 @@ export class PartnerDocumentService {
       throw new AppError('DOCUMENT_NOT_FOUND', 'Document not found', 404);
     }
 
-    const nextStatus = data.status ?? current.status;
+    if (expectedVersion !== undefined && current.version !== expectedVersion)
+      throw new AppError('DOCUMENT_CHANGED', 'Document changed; retry replacement', 409);
+    const replacementStorage = data.metadata?.storage;
+    const replacingStorage = Boolean(
+      replacementStorage &&
+      typeof replacementStorage === 'object' &&
+      'storageKey' in replacementStorage &&
+      replacementStorage.storageKey !== current.metadata?.storage?.storageKey,
+    );
+    const nextStatus = replacingStorage ? 'PENDING' : (data.status ?? current.status);
+
+    if (
+      data.status &&
+      ['VERIFIED', 'REJECTED', 'EXPIRED'].includes(data.status) &&
+      actor.role !== 'admin' &&
+      actor.role !== 'super_admin'
+    ) {
+      throw new AppError('FORBIDDEN', 'Document review requires an authorized reviewer', 403);
+    }
 
     if (
       data.status &&
@@ -125,7 +153,7 @@ export class PartnerDocumentService {
       throw new AppError('INVALID_DOCUMENT_EXPIRY', 'expiresAt must be on or after issuedAt', 400);
     }
 
-    if (nextStatus === 'EXPIRED' && (!expiresAt || expiresAt > today())) {
+    if (nextStatus === 'EXPIRED' && (!expiresAt || expiresAt >= today())) {
       throw new AppError(
         'INVALID_DOCUMENT_EXPIRY',
         'Expired documents must have a past expiry date',
@@ -133,7 +161,10 @@ export class PartnerDocumentService {
       );
     }
 
-    if (nextStatus === 'VERIFIED' && expiresAt && expiresAt <= today()) {
+    if (nextStatus === 'PENDING' && expiresAt && expiresAt < today())
+      throw new AppError('INVALID_DOCUMENT_EXPIRY', 'Expired documents cannot be submitted', 400);
+
+    if (nextStatus === 'VERIFIED' && expiresAt && expiresAt < today()) {
       throw new AppError(
         'INVALID_DOCUMENT_EXPIRY',
         'Verified documents cannot already be expired',
@@ -141,9 +172,15 @@ export class PartnerDocumentService {
       );
     }
 
-    const document = await this.repository.update(documentId, partnerId, {
+    const updateData: import('../types/partner-document.js').UpdatePartnerDocumentData = {
       ...data,
+      ...(data.metadata !== undefined
+        ? { metadata: { ...current.metadata, ...data.metadata } }
+        : {}),
       status: nextStatus,
+      ...(['VERIFIED', 'REJECTED'].includes(nextStatus) && data.status
+        ? { reviewedBy: actor.userId, reviewedAt: new Date() }
+        : {}),
       verifiedAt:
         nextStatus === 'VERIFIED'
           ? (current.verifiedAt ?? new Date())
@@ -152,10 +189,15 @@ export class PartnerDocumentService {
             : nextStatus === current.status
               ? current.verifiedAt
               : null,
-    });
+    };
+    const version = expectedVersion ?? current.version;
+    const document =
+      version === undefined
+        ? await this.repository.update(documentId, partnerId, updateData)
+        : await this.repository.update(documentId, partnerId, updateData, version);
 
     if (!document) {
-      throw new AppError('DOCUMENT_NOT_FOUND', 'Document not found', 404);
+      throw new AppError('DOCUMENT_CHANGED', 'Document not found', 404);
     }
 
     return toSafeDocument(document);
@@ -177,7 +219,11 @@ export class PartnerDocumentService {
     return document;
   }
 
-  private async assertAccess(partnerId: string, actor: AuthenticatedUser): Promise<void> {
+  async assertAccess(partnerId: string, actor: AuthenticatedUser): Promise<void> {
+    if (
+      !['driver', 'fleet_owner', 'driver_fleet_owner', 'admin', 'super_admin'].includes(actor.role)
+    )
+      throw new AppError('FORBIDDEN', 'Provider document access requires a provider role', 403);
     if (actor.role === 'admin' || actor.role === 'super_admin') {
       return;
     }
@@ -214,8 +260,23 @@ function isUniqueViolation(error: unknown): error is { code: string } {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === '23505';
 }
 
-function toSafeDocument(document: PartnerDocument) {
-  const { metadata: _metadata, ...safeDocument } = document;
-
-  return safeDocument;
+function toSafeDocument(
+  document: PartnerDocument,
+): Omit<PartnerDocument, 'metadata'> & { documentMetadata?: Record<string, unknown> } {
+  const { metadata, ...safeDocument } = document;
+  const safeMetadata = Object.fromEntries(
+    Object.entries(metadata ?? {}).filter(([key]) =>
+      [
+        'documentCode',
+        'documentNumber',
+        'issuingAuthority',
+        'issuedAt',
+        'expiresAt',
+        'uploadSource',
+        'side',
+        'rejectionReason',
+      ].includes(key),
+    ),
+  );
+  return { ...safeDocument, documentMetadata: safeMetadata };
 }

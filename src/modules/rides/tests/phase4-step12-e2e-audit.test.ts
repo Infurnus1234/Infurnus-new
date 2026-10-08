@@ -513,6 +513,6 @@ describe('Phase 4 Step 12: End-to-End Validation & Final Audit Suite', () => {
     expect(sanitized.id).toBe(rawRide.id);
     expect(sanitized.pin).toBeUndefined(); // Zero PIN exposure to driver
     expect(sanitized.pinVerified).toBe(false);
-    expect(sanitized.fareEstimate).toBeUndefined(); // Zero fare exposure
+    expect(sanitized.fareEstimate).toBeUndefined(); // Fare is exposed only through the explicit ride-information DTO
   });
 });

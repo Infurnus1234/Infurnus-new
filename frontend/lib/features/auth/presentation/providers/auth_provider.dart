@@ -1,13 +1,23 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../../core/services/socket_service.dart';
+import '../../../../core/network/dio_client.dart';
 import '../../../../core/storage/secure_storage.dart';
 import '../../data/models/auth_models.dart';
 import 'auth_use_case_providers.dart';
 import 'user_provider.dart';
 
-enum AuthStatus { initial, authenticated, unauthenticated, loading, otpRequired }
+enum AuthStatus {
+  initial,
+  authenticated,
+  unauthenticated,
+  loading,
+  otpRequired,
+}
+
+const _unchanged = Object();
 
 class AuthState {
   final AuthStatus status;
@@ -28,19 +38,27 @@ class AuthState {
 
   AuthState copyWith({
     AuthStatus? status,
-    String? errorMessage,
-    String? signupId,
-    String? loginChallengeId,
+    Object? errorMessage = _unchanged,
+    Object? signupId = _unchanged,
+    Object? loginChallengeId = _unchanged,
     String? loginChannel,
-    String? contactValue,
+    Object? contactValue = _unchanged,
   }) {
     return AuthState(
       status: status ?? this.status,
-      errorMessage: errorMessage ?? this.errorMessage,
-      signupId: signupId ?? this.signupId,
-      loginChallengeId: loginChallengeId ?? this.loginChallengeId,
+      errorMessage: identical(errorMessage, _unchanged)
+          ? this.errorMessage
+          : errorMessage as String?,
+      signupId: identical(signupId, _unchanged)
+          ? this.signupId
+          : signupId as String?,
+      loginChallengeId: identical(loginChallengeId, _unchanged)
+          ? this.loginChallengeId
+          : loginChallengeId as String?,
       loginChannel: loginChannel ?? this.loginChannel,
-      contactValue: contactValue ?? this.contactValue,
+      contactValue: identical(contactValue, _unchanged)
+          ? this.contactValue
+          : contactValue as String?,
     );
   }
 }
@@ -58,41 +76,56 @@ class AuthNotifier extends StateNotifier<AuthState> {
     _isProcessing = true;
     debugPrint('AuthNotifier: Checking auth status...');
     try {
-      final token = await ref.read(secureStorageProvider).read(key: 'auth_token').timeout(
-        const Duration(seconds: 3),
-        onTimeout: () {
-          debugPrint('AuthNotifier: token read timeout');
-          return null;
-        },
+      final token = await ref
+          .read(secureStorageProvider)
+          .read(key: 'auth_token')
+          .timeout(
+            const Duration(seconds: 3),
+            onTimeout: () {
+              debugPrint('AuthNotifier: token read timeout');
+              return null;
+            },
+          );
+      final userId = await ref
+          .read(secureStorageProvider)
+          .read(key: 'user_id')
+          .timeout(
+            const Duration(seconds: 3),
+            onTimeout: () {
+              debugPrint('AuthNotifier: userId read timeout');
+              return null;
+            },
+          );
+
+      debugPrint(
+        'AuthNotifier: token: ${token != null ? "found" : "null"}, userId: $userId',
       );
-      final userId = await ref.read(secureStorageProvider).read(key: 'user_id').timeout(
-        const Duration(seconds: 3),
-        onTimeout: () {
-          debugPrint('AuthNotifier: userId read timeout');
-          return null;
-        },
-      );
-      
-      debugPrint('AuthNotifier: token: ${token != null ? "found" : "null"}, userId: $userId');
 
       if (token != null && userId != null) {
         try {
           debugPrint('AuthNotifier: Fetching user profile for $userId');
-          final publicUser = await ref.read(getUserProfileUseCaseProvider).execute(userId).timeout(
-            const Duration(seconds: 7),
+          final publicUser = await ref
+              .read(getUserProfileUseCaseProvider)
+              .execute(userId)
+              .timeout(const Duration(seconds: 7));
+          final currentToken = await ref
+              .read(secureStorageProvider)
+              .read(key: 'auth_token');
+          final role = authRoleFromToken(currentToken ?? token);
+          await ref
+              .read(secureStorageProvider)
+              .write(key: 'user_role', value: role);
+          debugPrint(
+            'AuthNotifier: Profile fetched, role: $role. Authenticating...',
           );
-          final role = await ref.read(secureStorageProvider).read(key: 'user_role').timeout(
-            const Duration(seconds: 3),
-            onTimeout: () => 'customer',
-          ) ?? 'customer';
-          
-          debugPrint('AuthNotifier: Profile fetched, role: $role. Authenticating...');
           ref.read(userProvider.notifier).setUser(publicUser.toEntity(role));
           ref.read(socketServiceProvider).connect(token);
           state = state.copyWith(status: AuthStatus.authenticated);
           debugPrint('AuthNotifier: Authenticated successfully');
         } catch (e) {
-          debugPrint('AuthNotifier: Profile fetch failed: $e. Reverting to unauthenticated.');
+          debugPrint(
+            'AuthNotifier: Profile fetch failed: $e. Reverting to unauthenticated.',
+          );
           state = state.copyWith(status: AuthStatus.unauthenticated);
         }
       } else {
@@ -101,7 +134,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
       }
     } catch (e) {
       debugPrint('AuthNotifier: Fatal error in checkAuthStatus: $e');
-      state = state.copyWith(status: AuthStatus.unauthenticated, errorMessage: e.toString());
+      state = state.copyWith(
+        status: AuthStatus.unauthenticated,
+        errorMessage: e.toString(),
+      );
     } finally {
       _isProcessing = false;
     }
@@ -124,10 +160,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(
         status: AuthStatus.otpRequired,
         signupId: response.signupId,
+        loginChannel: response.contactType,
       );
     } catch (e) {
       final message = _parseError(e);
-      state = state.copyWith(status: AuthStatus.unauthenticated, errorMessage: message);
+      state = state.copyWith(
+        status: AuthStatus.unauthenticated,
+        errorMessage: message,
+      );
     } finally {
       _isProcessing = false;
     }
@@ -142,24 +182,40 @@ class AuthNotifier extends StateNotifier<AuthState> {
     if (state.signupId != null) {
       state = state.copyWith(status: AuthStatus.loading);
       try {
-        final request = VerifySignupRequest(signupId: state.signupId!, otp: otp);
-        final response = await ref.read(verifySignupOtpUseCaseProvider).execute(request);
+        final request = VerifySignupRequest(
+          signupId: state.signupId!,
+          otp: otp,
+        );
+        final response = await ref
+            .read(verifySignupOtpUseCaseProvider)
+            .execute(request);
         await _handleAuthSuccess(response);
       } catch (e) {
         final message = _parseError(e);
-        state = state.copyWith(status: AuthStatus.otpRequired, errorMessage: message);
+        state = state.copyWith(
+          status: AuthStatus.otpRequired,
+          errorMessage: message,
+        );
       } finally {
         _isProcessing = false;
       }
     } else if (state.loginChallengeId != null) {
       state = state.copyWith(status: AuthStatus.loading);
       try {
-        final request = VerifyLoginRequest(challengeId: state.loginChallengeId!, otp: otp);
-        final response = await ref.read(verifyLoginOtpUseCaseProvider).execute(request, state.loginChannel);
+        final request = VerifyLoginRequest(
+          challengeId: state.loginChallengeId!,
+          otp: otp,
+        );
+        final response = await ref
+            .read(verifyLoginOtpUseCaseProvider)
+            .execute(request, state.loginChannel);
         await _handleAuthSuccess(response);
       } catch (e) {
         final message = _parseError(e);
-        state = state.copyWith(status: AuthStatus.otpRequired, errorMessage: message);
+        state = state.copyWith(
+          status: AuthStatus.otpRequired,
+          errorMessage: message,
+        );
       } finally {
         _isProcessing = false;
       }
@@ -175,21 +231,72 @@ class AuthNotifier extends StateNotifier<AuthState> {
     _isProcessing = true;
 
     state = state.copyWith(
-      status: AuthStatus.loading, 
+      status: AuthStatus.loading,
       loginChannel: channel,
       contactValue: channel == 'email' ? request.email : request.phone,
       signupId: null,
       errorMessage: null,
     );
     try {
-      final response = await ref.read(loginUseCaseProvider).execute(request, channel);
+      final response = await ref
+          .read(loginUseCaseProvider)
+          .execute(request, channel);
       state = state.copyWith(
         status: AuthStatus.otpRequired,
         loginChallengeId: response.challengeId,
       );
     } catch (e) {
       final message = _parseError(e);
-      state = state.copyWith(status: AuthStatus.unauthenticated, errorMessage: message);
+      state = state.copyWith(
+        status: AuthStatus.unauthenticated,
+        errorMessage: message,
+      );
+    } finally {
+      _isProcessing = false;
+    }
+  }
+
+  Future<void> signInWithGoogle(String idToken) async {
+    if (_isProcessing) return;
+    _isProcessing = true;
+    state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
+    var stage = 'API request';
+    try {
+      final response = await ref
+          .read(dioProvider)
+          .post(
+            '/auth/google',
+            data: {'idToken': idToken},
+            options: Options(extra: {'withCredentials': true}),
+          );
+      debugPrint('Google auth: API HTTP ${response.statusCode}');
+      stage = 'session/profile';
+      await _handleAuthSuccess(AuthResponse.fromJson(response.data['data']));
+      debugPrint('Google auth: existing session established');
+    } catch (error) {
+      debugPrint(
+        'Google auth: failure during $stage; type=${error.runtimeType}',
+      );
+      String message = 'Google sign-in could not be completed.';
+      if (error is DioException) {
+        debugPrint(
+          'Google auth: HTTP ${error.response?.statusCode}; transport=${error.type.name}',
+        );
+        final body = error.response?.data;
+        if (body is Map &&
+            body['error'] is Map &&
+            body['error']['message'] is String) {
+          message = body['error']['message'] as String;
+        }
+      }
+      if (error is DioException &&
+          error.type == DioExceptionType.connectionError) {
+        message = 'Google returned an ID token, but the API request failed. Check the local server and allowed browser origin.';
+      }
+      state = state.copyWith(
+        status: AuthStatus.unauthenticated,
+        errorMessage: message,
+      );
     } finally {
       _isProcessing = false;
     }
@@ -198,10 +305,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
   String _parseError(dynamic e) {
     if (e is DioException) {
       final data = e.response?.data;
-      if (data is Map && data['error'] != null) {
-        return data['error']['message'] ?? 'An error occurred';
+      if (data is Map && data['error'] is Map) {
+        final message = (data['error'] as Map)['message'];
+        if (message is String && message.isNotEmpty) return message;
       }
-      if (e.type == DioExceptionType.connectionTimeout || e.type == DioExceptionType.receiveTimeout) {
+      if (e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout) {
         return 'Connection timed out. Please check your internet or firewall settings.';
       }
       if (e.type == DioExceptionType.connectionError) {
@@ -213,30 +322,41 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> resendOtp() async {
+    state = state.copyWith(errorMessage: null);
     if (state.signupId != null) {
       try {
         final request = ResendSignupRequest(signupId: state.signupId!);
         await ref.read(resendSignupOtpUseCaseProvider).execute(request);
       } catch (e) {
-        state = state.copyWith(errorMessage: e.toString());
+        state = state.copyWith(errorMessage: _parseError(e));
       }
     } else if (state.loginChallengeId != null) {
       try {
-        final request = ResendLoginRequest(challengeId: state.loginChallengeId!);
-        await ref.read(resendLoginOtpUseCaseProvider).execute(request, state.loginChannel);
+        final request = ResendLoginRequest(
+          challengeId: state.loginChallengeId!,
+        );
+        await ref
+            .read(resendLoginOtpUseCaseProvider)
+            .execute(request, state.loginChannel);
       } catch (e) {
-        state = state.copyWith(errorMessage: e.toString());
+        state = state.copyWith(errorMessage: _parseError(e));
       }
     }
   }
 
   Future<void> _handleAuthSuccess(AuthResponse response) async {
-    await ref.read(secureStorageProvider).write(key: 'auth_token', value: response.accessToken);
-    await ref.read(secureStorageProvider).write(key: 'user_id', value: response.userId);
-    
-    final publicUser = await ref.read(getUserProfileUseCaseProvider).execute(response.userId);
-    
-    const role = 'customer';
+    final role = authRoleFromToken(response.accessToken);
+    await ref
+        .read(secureStorageProvider)
+        .write(key: 'auth_token', value: response.accessToken);
+    await ref
+        .read(secureStorageProvider)
+        .write(key: 'user_id', value: response.userId);
+
+    final publicUser = await ref
+        .read(getUserProfileUseCaseProvider)
+        .execute(response.userId);
+
     await ref.read(secureStorageProvider).write(key: 'user_role', value: role);
 
     ref.read(userProvider.notifier).setUser(publicUser.toEntity(role));
@@ -245,15 +365,23 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
+    String? logoutError;
     try {
       await ref.read(logoutUseCaseProvider).execute();
-    } catch (_) {} finally {
+    } catch (_) {
+      logoutError =
+          'Signed out locally; the server session could not be revoked.';
+    } finally {
       await ref.read(secureStorageProvider).delete(key: 'auth_token');
       await ref.read(secureStorageProvider).delete(key: 'user_id');
       await ref.read(secureStorageProvider).delete(key: 'user_role');
+      await ref.read(secureStorageProvider).delete(key: 'auth_csrf_token');
       ref.read(socketServiceProvider).disconnect();
       ref.read(userProvider.notifier).logout();
-      state = state.copyWith(status: AuthStatus.unauthenticated, signupId: null);
+      state = AuthState(
+        status: AuthStatus.unauthenticated,
+        errorMessage: logoutError,
+      );
     }
   }
 }

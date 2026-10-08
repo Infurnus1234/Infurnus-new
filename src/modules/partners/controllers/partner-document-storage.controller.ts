@@ -1,3 +1,4 @@
+import { driverDocumentMetadataSchema } from '../../rides/schemas/driver.schemas.js';
 import type { NextFunction, Request, Response } from 'express';
 
 import { partnerIdSchema } from '../schemas/partner.schemas.js';
@@ -10,6 +11,13 @@ import type {
 } from '../services/partner-document-storage.service.js';
 
 type StorageUploadRequest = Request & {
+  storageFiles?: Array<{
+    buffer: Buffer;
+    mimeType: string;
+    originalFileName: string;
+    fileSize: number;
+    fieldName: string;
+  }>;
   storageFile?: {
     buffer: Buffer;
     mimeType: string;
@@ -32,7 +40,7 @@ export class PartnerDocumentStorageController {
 
       const storageRequest = request as StorageUploadRequest;
 
-      const file = storageRequest.storageFile;
+      const file = storageRequest.storageFile ?? storageRequest.storageFiles?.[0];
 
       if (!file) {
         throw new Error('A file is required');
@@ -54,7 +62,22 @@ export class PartnerDocumentStorageController {
         documentType,
         vehicleId,
         file: uploadFile,
+        files: storageRequest.storageFiles?.map((page) => ({
+          buffer: page.buffer,
+          mimetype: page.mimeType,
+          originalname: page.originalFileName,
+          size: page.fileSize,
+        })),
         actor: request.auth,
+        documentMetadata: driverDocumentMetadataSchema.parse({
+          uploadSource: request.body?.uploadSource,
+          documentCode: request.body?.documentCode,
+          documentNumber: request.body?.documentNumber,
+          issuingAuthority: request.body?.issuingAuthority,
+          issuedAt: request.body?.issuedAt,
+          expiresAt: request.body?.expiresAt,
+          side: request.body?.side,
+        }),
       });
 
       response.status(201).json({
@@ -77,7 +100,7 @@ export class PartnerDocumentStorageController {
 
       const storageRequest = request as StorageUploadRequest;
 
-      const file = storageRequest.storageFile;
+      const file = storageRequest.storageFile ?? storageRequest.storageFiles?.[0];
 
       if (!file) {
         throw new Error('A file is required');
@@ -94,13 +117,45 @@ export class PartnerDocumentStorageController {
         partnerId,
         documentId,
         file: uploadFile,
+        files: storageRequest.storageFiles?.map((page) => ({
+          buffer: page.buffer,
+          mimetype: page.mimeType,
+          originalname: page.originalFileName,
+          size: page.fileSize,
+        })),
         actor: request.auth,
+        documentMetadata: driverDocumentMetadataSchema.parse({
+          uploadSource: request.body?.uploadSource,
+          documentCode: request.body?.documentCode,
+          documentNumber: request.body?.documentNumber,
+          issuingAuthority: request.body?.issuingAuthority,
+          issuedAt: request.body?.issuedAt,
+          expiresAt: request.body?.expiresAt,
+          side: request.body?.side,
+        }),
       });
 
       response.json({
         success: true,
         data: document,
-        message: 'Partner profile photo replaced',
+        message: 'Partner document replaced',
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getPageAccessUrls = async (
+    request: Request,
+    response: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const { id, documentId } = partnerDocumentIdSchema.parse(request.params);
+      if (!request.auth) throw new Error('Authentication required');
+      response.json({
+        success: true,
+        data: await this.service.getPageAccessUrls(id, documentId, request.auth),
       });
     } catch (error) {
       next(error);

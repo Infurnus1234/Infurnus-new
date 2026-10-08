@@ -43,7 +43,7 @@ function createDocument(overrides: Partial<DriverDocument> = {}): DriverDocument
     storageProvider: 'cloudinary',
     storageKey: `infurnus/drivers/${driverProfileId}/documents/profile-photo/profile_photo-test.jpg`,
     resourceType: 'image',
-    accessMode: 'public',
+    accessMode: 'authenticated',
     mimeType: 'image/jpeg',
     fileSize: file.fileSize,
     verificationStatus: 'pending',
@@ -120,7 +120,7 @@ describe('DriverDocumentStorageService', () => {
       storageProvider: 'cloudinary',
       storageKey: `infurnus/drivers/${driverProfileId}/documents/profile-photo/profile_photo-uploaded.jpg`,
       resourceType: 'image',
-      accessMode: 'public',
+      accessMode: 'authenticated',
       mimeType: 'image/jpeg',
       fileSize: file.fileSize,
     });
@@ -157,7 +157,7 @@ describe('DriverDocumentStorageService', () => {
         file,
         folder: `infurnus/drivers/${driverProfileId}/documents/profile-photo`,
         resourceType: 'image',
-        accessMode: 'public',
+        accessMode: 'authenticated',
       }),
     );
 
@@ -167,7 +167,7 @@ describe('DriverDocumentStorageService', () => {
         documentType: 'profile_photo',
         storageProvider: 'cloudinary',
         resourceType: 'image',
-        accessMode: 'public',
+        accessMode: 'authenticated',
         mimeType: 'image/jpeg',
         fileSize: file.fileSize,
         uploadedBy,
@@ -276,7 +276,7 @@ describe('DriverDocumentStorageService', () => {
     expect(repository.create).not.toHaveBeenCalled();
   });
 
-  it('rejects a driver license that is not a PDF', async () => {
+  it('rejects a forged camera image for a driver licence', async () => {
     await expect(
       service.upload({
         driverProfileId,
@@ -289,7 +289,7 @@ describe('DriverDocumentStorageService', () => {
         },
         uploadedBy,
       }),
-    ).rejects.toThrow('Unsupported driver document MIME type: image/jpeg');
+    ).rejects.toThrow('Driver document file content does not match image/jpeg');
 
     expect(mockStorageUpload).not.toHaveBeenCalled();
   });
@@ -506,7 +506,7 @@ describe('DriverDocumentStorageService', () => {
         storageProvider: 'cloudinary',
         storageKey: `infurnus/drivers/${driverProfileId}/documents/profile-photo/profile_photo-uploaded.jpg`,
         resourceType: 'image',
-        accessMode: 'public',
+        accessMode: 'authenticated',
         mimeType: 'image/jpeg',
         fileSize: file.fileSize,
         uploadedBy,
@@ -545,7 +545,7 @@ describe('DriverDocumentStorageService', () => {
     expect(mockStorageDelete).toHaveBeenCalledWith({
       storageKey: `infurnus/drivers/${driverProfileId}/documents/profile-photo/profile_photo-uploaded.jpg`,
       resourceType: 'image',
-      accessMode: 'public',
+      accessMode: 'authenticated',
     });
   });
 
@@ -579,7 +579,7 @@ describe('DriverDocumentStorageService', () => {
     expect(mockStorageAccessUrl).toHaveBeenCalledWith({
       storageKey: `infurnus/drivers/${driverProfileId}/documents/profile-photo/profile_photo-test.jpg`,
       resourceType: 'image',
-      accessMode: 'public',
+      accessMode: 'authenticated',
       options: {
         expiresIn: 300,
       },

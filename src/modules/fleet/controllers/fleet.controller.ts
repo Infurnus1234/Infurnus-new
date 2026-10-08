@@ -1,3 +1,4 @@
+import { fleetListQuerySchema } from '../schemas/fleet.schemas.js';
 import type { NextFunction, Request, Response } from 'express';
 import { AppError } from '../../../common/errors/app-error.js';
 import {
@@ -21,7 +22,10 @@ export class FleetController {
 
   listVehicles = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const vehicles = await this.fleetService.listVehicles(req.auth!.userId);
+      const vehicles = await this.fleetService.listVehicles(
+        req.auth!.userId,
+        fleetListQuerySchema.parse(req.query),
+      );
       res.json({ success: true, data: vehicles });
     } catch (error) {
       next(error);
@@ -89,7 +93,10 @@ export class FleetController {
 
   listDrivers = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const drivers = await this.fleetService.listDrivers(req.auth!.userId);
+      const drivers = await this.fleetService.listDrivers(
+        req.auth!.userId,
+        fleetListQuerySchema.parse(req.query),
+      );
       res.json({ success: true, data: drivers });
     } catch (error) {
       next(error);

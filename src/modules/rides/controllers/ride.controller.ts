@@ -4,6 +4,7 @@ import {
   cancelRideSchema,
   listRidesSchema,
   rideIdSchema,
+  rideMapQuerySchema,
 } from '../schemas/ride.schemas.js';
 import type { RideService } from '../services/ride.service.js';
 
@@ -39,6 +40,30 @@ export class RideController {
       const { id } = rideIdSchema.parse(req.params);
       const ride = await this.service.getRide(req.auth!.userId, id);
       res.json({ success: true, data: ride, message: 'Ride retrieved' });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  map = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = rideIdSchema.parse(req.params);
+      const { includeRoute } = rideMapQuerySchema.parse(req.query);
+      res.json({
+        success: true,
+        data: await this.service.getUserMap(req.auth!.userId, id, includeRoute),
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+  location = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = rideIdSchema.parse(req.params);
+      res.json({
+        success: true,
+        data: await this.service.updateUserLocation(req.auth!.userId, id, req.body),
+      });
     } catch (error) {
       next(error);
     }

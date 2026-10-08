@@ -1,11 +1,7 @@
 import { DefaultStorageService } from './storage.js';
 import { CloudinaryStorageProvider } from './cloudinary.js';
 import { env } from '../../config/env.js';
-import type {
-  StorageAccessUrlInput,
-  StorageDeleteInput,
-  StorageUploadInput,
-} from './types.js';
+import type { StorageAccessUrlInput, StorageDeleteInput, StorageUploadInput } from './types.js';
 import type { StorageProviderAdapter } from './storage.js';
 
 const cloudinaryConfigured = Boolean(

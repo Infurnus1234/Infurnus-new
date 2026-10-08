@@ -19,6 +19,14 @@ class RideRepositoryImpl implements RideRepository {
     try {
       return await remoteDataSource.createRide(data);
     } on DioException catch (e) {
+      final body = e.response?.data;
+      final error = body is Map ? body['error'] : null;
+      if (error is Map &&
+          error['code'] is String &&
+          (error['code'] as String).startsWith('FARE_') &&
+          error['message'] is String) {
+        throw ServerFailure(error['message'] as String);
+      }
       throw _handleDioException(e);
     } catch (e) {
       throw ServerFailure(e.toString());
@@ -63,7 +71,22 @@ class RideRepositoryImpl implements RideRepository {
     try {
       return await remoteDataSource.estimateFare(data);
     } on DioException catch (e) {
+      final body = e.response?.data;
+      final error = body is Map ? body['error'] : null;
+      if (error is Map &&
+          error['code'] == 'FARE_CONFIGURATION_MISSING' &&
+          error['message'] is String &&
+          (error['message'] as String).isNotEmpty) {
+        return FareEstimateModel.unavailable(error['message'].toString());
+      }
+      if (error is Map && error['message'] is String) {
+        throw ServerFailure(error['message'] as String);
+      }
       throw _handleDioException(e);
+    } on FormatException {
+      throw ServerFailure('We could not load a valid fare. Please try again.');
+    } on TypeError {
+      throw ServerFailure('We could not load a valid fare. Please try again.');
     } catch (e) {
       throw ServerFailure(e.toString());
     }
