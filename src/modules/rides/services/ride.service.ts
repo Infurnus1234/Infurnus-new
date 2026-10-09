@@ -467,6 +467,19 @@ export class RideService {
     }
 
     const normalizedPin = inputPin.trim();
+    if (this.repository.verifyPinAttempt) {
+      const result = await this.repository.verifyPinAttempt(rideId, driverProfileId, normalizedPin);
+      if (result === 'verified') return { verified: true };
+      const errors = {
+        invalid: ['INVALID_PIN', 'Invalid ride verification PIN', 400],
+        locked: ['PIN_ATTEMPTS_EXCEEDED', 'Too many PIN attempts. Retry after 10 minutes.', 429],
+        not_found: ['RIDE_NOT_FOUND', 'Ride not found or PIN not generated', 404],
+        forbidden: ['FORBIDDEN', 'Not assigned to this ride', 403],
+        invalid_state: ['INVALID_RIDE_STATE', 'Cannot verify PIN in this ride state', 409],
+      } as const;
+      const [code, message, status] = errors[result];
+      throw new AppError(code, message, status);
+    }
 
     const isAssigned = await this.repository.isAssignedDriverProfile(rideId, driverProfileId);
 

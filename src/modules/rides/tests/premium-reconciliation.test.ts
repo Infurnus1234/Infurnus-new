@@ -531,6 +531,11 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
       );
 
       vehicleId = vehicleRes.rows[0]!.id;
+      await pool.query('UPDATE vehicles SET owner_id=$2 WHERE id=$1', [vehicleId, driverUserId]);
+      await pool.query('UPDATE driver_profiles SET active_vehicle_id=$2 WHERE id=$1', [
+        driverProfileId,
+        vehicleId,
+      ]);
 
       await pool.query(
         `UPDATE driver_profiles
@@ -570,6 +575,10 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
         [secondProfileId, `NEXT-${secondSuffix.replaceAll('-', '').slice(0, 10)}`],
       );
       const secondVehicleId = secondVehicleResult.rows[0]!.id;
+      await pool.query('UPDATE vehicles SET owner_id=$2 WHERE id=$1', [
+        secondVehicleId,
+        secondUserId,
+      ]);
       await pool.query(
         `UPDATE driver_profiles
          SET active_vehicle_id = $2,
@@ -624,6 +633,9 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
         ]);
         await pool.query('DELETE FROM vehicles WHERE driver_profile_id = $1', [secondProfileId]);
         await pool.query('DELETE FROM driver_profiles WHERE id = $1', [secondProfileId]);
+        await pool.query('DELETE FROM provider_approval_requests WHERE requester_id=$1', [
+          secondUserId,
+        ]);
         await pool.query('DELETE FROM users WHERE id = $1', [secondUserId]);
       }
     });
@@ -648,6 +660,10 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
       }
 
       if (customerId || driverUserId) {
+        await pool.query('DELETE FROM provider_approval_requests WHERE requester_id IN ($1,$2)', [
+          customerId,
+          driverUserId,
+        ]);
         await pool.query('DELETE FROM users WHERE id = $1 OR id = $2', [customerId, driverUserId]);
       }
     });
@@ -935,6 +951,14 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
       );
 
       const fallbackVehId = vehRes.rows[0]!.id;
+      await pool.query('UPDATE vehicles SET owner_id=$2 WHERE id=$1', [
+        fallbackVehId,
+        driverRes2.rows[0]!.id,
+      ]);
+      await pool.query('UPDATE driver_profiles SET active_vehicle_id=$2 WHERE id=$1', [
+        driverProfileId2,
+        fallbackVehId,
+      ]);
 
       await pool.query(
         `UPDATE driver_profiles
@@ -1000,6 +1024,9 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
 
       await pool.query('DELETE FROM driver_profiles WHERE id = $1', [driverProfileId2]);
 
+      await pool.query('DELETE FROM provider_approval_requests WHERE requester_id=$1', [
+        driverRes2.rows[0]!.id,
+      ]);
       await pool.query('DELETE FROM users WHERE id = $1', [driverRes2.rows[0]!.id]);
     });
   });

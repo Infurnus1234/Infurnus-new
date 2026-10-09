@@ -55,17 +55,17 @@ async function createFixture(rideCount = 1): Promise<Fixture> {
     [driver.rows[0]!.id, `LIC-${suffix}`],
   );
   const vehicle = await pool.query<{ id: string }>(
-    `INSERT INTO vehicles (driver_profile_id, make, model, plate_number, verification_status, is_active)
-     VALUES ($1, 'Test', 'Vehicle', $2, 'approved', TRUE) RETURNING id`,
-    [profile.rows[0]!.id, `P-${suffix.replaceAll('-', '').slice(0, 15)}`],
+    `INSERT INTO vehicles (driver_profile_id, make, model, plate_number, verification_status, is_active, owner_id)
+     VALUES ($1, 'Test', 'Vehicle', $2, 'approved', TRUE, $3) RETURNING id`,
+    [profile.rows[0]!.id, `P-${suffix.replaceAll('-', '').slice(0, 15)}`, driver.rows[0]!.id],
   );
   await pool.query(
     `UPDATE driver_profiles
-     SET availability_status = 'available',
+     SET active_vehicle_id=$3, availability_status = 'available',
          last_location = ST_SetSRID(ST_MakePoint(77.5946, 12.9716), 4326)::geography,
          last_location_at = $2
      WHERE id = $1`,
-    [profile.rows[0]!.id, new Date(Date.now() - 1000)],
+    [profile.rows[0]!.id, new Date(Date.now() - 1000), vehicle.rows[0]!.id],
   );
   const rides: string[] = [];
   for (let index = 0; index < rideCount; index += 1) {
@@ -95,6 +95,10 @@ async function cleanFixture(fixture: Fixture): Promise<void> {
   await pool.query('DELETE FROM rides WHERE id = ANY($1::uuid[])', [fixture.rideIds]);
   await pool.query('DELETE FROM vehicles WHERE id = $1', [fixture.vehicleId]);
   await pool.query('DELETE FROM driver_profiles WHERE id = $1', [fixture.driverProfileId]);
+  await pool.query('DELETE FROM provider_approval_requests WHERE requester_id IN ($1, $2)', [
+    fixture.customerId,
+    fixture.driverUserId,
+  ]);
   await pool.query('DELETE FROM users WHERE id IN ($1, $2)', [
     fixture.customerId,
     fixture.driverUserId,

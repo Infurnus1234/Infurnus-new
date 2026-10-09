@@ -337,7 +337,7 @@ function getRefreshTokenFromCookie(cookie: string): string {
 // AUTH INTEGRATION TESTS
 // ============================================================
 
-describe.sequential('Auth integration', () => {
+describe('Auth integration', () => {
   // IMPORTANT:
   // otpProvider is inside describe scope.
   // Cleanup is also inside describe scope.

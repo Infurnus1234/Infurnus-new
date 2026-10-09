@@ -87,7 +87,8 @@ export class DriverService {
 
       if (
         profile.licenseExpiry &&
-        new Date(profile.licenseExpiry).getTime() < this.clock().getTime()
+        new Date(profile.licenseExpiry).toISOString().slice(0, 10) <
+          this.clock().toISOString().slice(0, 10)
       ) {
         throw new AppError(
           'DOCUMENT_EXPIRED',

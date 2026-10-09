@@ -226,6 +226,23 @@ export class CommonMapService implements MapProvider {
         metric.misses++;
         if (effectiveTtl) {
           token = await this.cached(() => this.cache!.lock(`${key}:lock`, this.config.lockMs));
+          if (token) {
+            // Another owner can publish and unlock after our initial cache read.
+            const published = await this.cached(() => this.cache!.get(key));
+            if (published) {
+              try {
+                const value = JSON.parse(published) as T;
+                if (!this.valid(kind, value)) throw new Error('Invalid map cache');
+                metric.hits++;
+                metric.success++;
+                hit = true;
+                success = true;
+                return value;
+              } catch {
+                /* reload corrupt data */
+              }
+            }
+          }
           if (token === null) {
             metric.deduplicated++;
             const deadline = Date.now() + this.config.lockMs;

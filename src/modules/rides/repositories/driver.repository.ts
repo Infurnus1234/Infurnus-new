@@ -1,4 +1,4 @@
-import { driverEligibilitySql } from './driver-eligibility.js';
+import { driverEligibilitySql, driverOperationalEligibilitySql } from './driver-eligibility.js';
 import { AppError } from '../../../common/errors/app-error.js';
 import { env } from '../../../config/env.js';
 import { validateCoordinates } from '../../maps/geometry.js';
@@ -193,7 +193,7 @@ export class PostgresDriverRepository implements DriverRepository {
          $9,
          $10,
          $11,
-         $12,$13,$14
+         $12,$13
        )
        ON CONFLICT (user_id) DO UPDATE
        SET emergency_contact_relationship=COALESCE(EXCLUDED.emergency_contact_relationship,driver_profiles.emergency_contact_relationship),
@@ -305,7 +305,10 @@ export class PostgresDriverRepository implements DriverRepository {
        WHERE id = $1
          AND user_id IS NOT NULL
          AND EXISTS(SELECT 1 FROM users u WHERE u.id=user_id AND u.status='active' AND u.deleted_at IS NULL AND u.role IN ('driver','driver_fleet_owner'))
-         AND ($2::text<>'available' OR (verification_status='approved' AND license_expiry>=CURRENT_DATE AND EXISTS(SELECT 1 FROM vehicles v WHERE v.id=active_vehicle_id AND v.driver_profile_id=driver_profiles.id AND v.is_active AND v.verification_status='approved' AND (v.registration_expiry IS NULL OR v.registration_expiry>=CURRENT_DATE) AND (v.owner_id=user_id OR EXISTS(SELECT 1 FROM partners p JOIN partner_drivers pd ON pd.partner_id=p.id WHERE p.user_id=v.owner_id AND p.approval_status='approved' AND pd.driver_profile_id=driver_profiles.id AND pd.status='ACTIVE')) AND provider_compliance_satisfied(user_id,driver_profiles.id,NULL,v.id,v.category))))
+         AND ($2::text<>'available' OR EXISTS(
+           SELECT 1 FROM driver_profiles dp JOIN users u ON u.id=dp.user_id
+           JOIN vehicles v ON v.id=dp.active_vehicle_id
+           WHERE dp.id=driver_profiles.id AND ${driverOperationalEligibilitySql()}))
          AND NOT EXISTS (SELECT 1 FROM rides WHERE assigned_driver_id=driver_profiles.id AND status NOT IN ('completed','cancelled'))
        RETURNING id`,
       [profileId, status],
@@ -334,7 +337,11 @@ export class PostgresDriverRepository implements DriverRepository {
 
     const result = await executor.query(
       `UPDATE driver_profiles
-       SET availability_status = CASE WHEN availability_status='busy' THEN 'available'::driver_availability_status ELSE availability_status END
+       SET availability_status = CASE WHEN availability_status='busy' AND last_location_at>=NOW()-(${env.DRIVER_LOCATION_STALE_SECONDS}*INTERVAL '1 second')
+             AND EXISTS(SELECT 1 FROM driver_profiles dp JOIN users u ON u.id=dp.user_id JOIN vehicles v ON v.id=dp.active_vehicle_id
+               WHERE dp.id=driver_profiles.id AND ${driverOperationalEligibilitySql()})
+             THEN 'available'::driver_availability_status
+             WHEN availability_status='busy' THEN 'unavailable'::driver_availability_status ELSE availability_status END
        WHERE id = $1
          AND availability_status IN ('busy','stale')
          AND NOT EXISTS (SELECT 1 FROM rides WHERE assigned_driver_id=driver_profiles.id AND status NOT IN ('completed','cancelled'))
@@ -361,6 +368,8 @@ export class PostgresDriverRepository implements DriverRepository {
            location_accuracy = $7,
            availability_status = CASE
              WHEN availability_status = 'stale'
+                  AND EXISTS(SELECT 1 FROM driver_profiles dp JOIN users u ON u.id=dp.user_id JOIN vehicles v ON v.id=dp.active_vehicle_id
+                    WHERE dp.id=driver_profiles.id AND ${driverOperationalEligibilitySql()})
                   AND NOT EXISTS (
                     SELECT 1
                     FROM rides
@@ -847,30 +856,56 @@ export class PostgresDriverRepository implements DriverRepository {
   }
 
   async setActiveVehicle(driverProfileId: string, vehicleId: string): Promise<boolean> {
-    /*
-     * A driver can only select a vehicle that is:
-     * - actually assigned to this driver
-     * - active
-     * - approved
-     *
-     * This prevents a driver from pointing active_vehicle_id at an
-     * arbitrary vehicle UUID.
-     */
-    const result = await this.pool.query(
-      `UPDATE driver_profiles dp
-       SET active_vehicle_id = v.id,
-           updated_at = NOW()
-       FROM vehicles v
-       WHERE dp.id = $1
-         AND v.id = $2
-         AND v.driver_profile_id = dp.id
-         AND v.is_active = TRUE
-         AND v.verification_status = 'approved'
-       RETURNING dp.id`,
-      [driverProfileId, vehicleId],
-    );
-
-    return result.rowCount === 1;
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended('provider_vehicle:'||$1::text,0))",
+        [vehicleId],
+      );
+      const driver = (
+        await client.query(
+          "SELECT id,user_id FROM driver_profiles WHERE id=$1 AND availability_status<>'busy' FOR UPDATE",
+          [driverProfileId],
+        )
+      ).rows[0];
+      if (!driver) {
+        await client.query('COMMIT');
+        return false;
+      }
+      await client.query("SELECT set_config('infurnus.actor_id',$1,TRUE)", [driver.user_id]);
+      const eligible = await client.query(
+        `SELECT v.id FROM vehicles v JOIN driver_profiles dp ON dp.id=$1 JOIN users u ON u.id=dp.user_id
+        WHERE v.id=$2 AND ${driverOperationalEligibilitySql(true)}
+        AND NOT EXISTS(SELECT 1 FROM rides WHERE assigned_driver_id=dp.id AND status NOT IN('completed','cancelled')) FOR UPDATE OF v`,
+        [driverProfileId, vehicleId],
+      );
+      if (!eligible.rowCount) {
+        await client.query('COMMIT');
+        return false;
+      }
+      // Never claim another driver's vehicle. Only an already assigned vehicle,
+      // or an unassigned vehicle owned by this authenticated Driver, is eligible.
+      await client.query(
+        'UPDATE vehicles SET driver_profile_id=NULL,updated_at=NOW() WHERE driver_profile_id=$1 AND id<>$2',
+        [driverProfileId, vehicleId],
+      );
+      await client.query('UPDATE vehicles SET driver_profile_id=$1,updated_at=NOW() WHERE id=$2', [
+        driverProfileId,
+        vehicleId,
+      ]);
+      await client.query(
+        "UPDATE driver_profiles SET active_vehicle_id=$2,availability_status='unavailable',updated_at=NOW() WHERE id=$1",
+        [driverProfileId, vehicleId],
+      );
+      await client.query('COMMIT');
+      return true;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async getAssignedVehicle(driverProfileId: string): Promise<{

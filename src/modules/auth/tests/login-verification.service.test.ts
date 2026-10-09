@@ -20,7 +20,7 @@ function createProviderSession(
   return {
     id: 'challenge-id',
     userId: 'user-id',
-    otpProvider: 'sendmator',
+    otpProvider: 'configured',
     otpChannel: 'sms',
     providerSessionId: 'provider-session-id',
     encryptedProviderSessionToken: 'encrypted-provider-token',

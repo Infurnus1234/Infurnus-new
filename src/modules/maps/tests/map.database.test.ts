@@ -38,10 +38,14 @@ live('map PostGIS discovery and route locks', () => {
       );
       profileId = profile.rows[0]!.id;
       const vehicle = await client.query<{ id: string }>(
-        "INSERT INTO vehicles(driver_profile_id,make,model,plate_number,is_active,verification_status,sector,category) VALUES($1,'MapAudit','Fixture',$2,TRUE,'approved','passenger','sedan') RETURNING id",
-        [profileId, `M-${suffix.slice(0, 12)}`],
+        "INSERT INTO vehicles(driver_profile_id,owner_id,make,model,plate_number,is_active,verification_status,sector,category) VALUES($1,$3,'MapAudit','Fixture',$2,TRUE,'approved','passenger','sedan') RETURNING id",
+        [profileId, `M-${suffix.slice(0, 12)}`, userId],
       );
       vehicleId = vehicle.rows[0]!.id;
+      await client.query('UPDATE driver_profiles SET active_vehicle_id=$2 WHERE id=$1', [
+        profileId,
+        vehicleId,
+      ]);
     });
   });
   afterEach(async () => {
@@ -51,6 +55,7 @@ live('map PostGIS discovery and route locks', () => {
     ]);
     await pool.query('DELETE FROM vehicles WHERE id=$1', [vehicleId]);
     await pool.query('DELETE FROM driver_profiles WHERE id=$1', [profileId]);
+    await pool.query('DELETE FROM provider_approval_requests WHERE requester_id=$1', [userId]);
     await pool.query('DELETE FROM users WHERE id=$1', [userId]);
   });
   it('distinguishes 1km and 2km and returns aggregate count without personal data', async () => {

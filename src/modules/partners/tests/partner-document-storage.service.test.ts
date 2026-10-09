@@ -632,6 +632,47 @@ describe('PartnerDocumentStorageService', () => {
       2,
     );
   });
+  it('replacement stores the new complete page bundle rather than stale review pages', async () => {
+    const current = createDocument({
+      documentType: 'PAN',
+      version: 2,
+      status: 'REJECTED',
+      metadata: { pages: [{ storageKey: 'old-page' }] },
+    });
+    vi.mocked(partnerDocumentService.getDocument).mockResolvedValue(current);
+    vi.mocked(partnerDocumentService.updateDocumentMetadata).mockResolvedValue(
+      createSafeDocument(),
+    );
+    await service.replaceDocument({
+      partnerId,
+      documentId: current.id,
+      file,
+      files: [file, file],
+      actor,
+    });
+    const update = vi.mocked(partnerDocumentService.updateDocumentMetadata).mock.calls[0]![2];
+    expect(update.metadata?.pages).toHaveLength(2);
+    expect(update.metadata?.pages).not.toEqual(current.metadata?.pages);
+    expect(storageUploadMock).toHaveBeenCalledTimes(2);
+  });
+  it('failed replacement cleans up all newly uploaded pages', async () => {
+    vi.mocked(partnerDocumentService.getDocument).mockResolvedValue(
+      createDocument({ documentType: 'PAN' }),
+    );
+    vi.mocked(partnerDocumentService.updateDocumentMetadata).mockRejectedValue(
+      new Error('Version conflict'),
+    );
+    await expect(
+      service.replaceDocument({
+        partnerId,
+        documentId: createDocument().id,
+        file,
+        files: [file, file],
+        actor,
+      }),
+    ).rejects.toThrow('Version conflict');
+    expect(storageDeleteMock).toHaveBeenCalledTimes(2);
+  });
   it('allows an authorized owner access and rechecks the current storage version', async () => {
     const document = createDocument();
     vi.mocked(partnerDocumentService.getDocument).mockResolvedValue(document);

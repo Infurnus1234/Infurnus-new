@@ -228,7 +228,7 @@ const NEW_PASSWORD = 'NewStrongPassword456!';
 // PASSWORD RESET INTEGRATION TESTS
 // ============================================================
 
-describe.sequential('Password reset integration', () => {
+describe('Password reset integration', () => {
   const otpProvider = new TestOtpProvider();
 
   const app = createApp(new PostgresUserRepository(pool), otpProvider, {

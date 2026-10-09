@@ -247,16 +247,14 @@ export class PostgresLoginChallengeRepository implements LoginChallengeRepositor
         userId: string;
         verifiedAt: Date | null;
         consumedAt: Date | null;
-        providerExpiresAt: Date;
-        expiresAt: Date;
+        expired: boolean;
       }>(
         `
           SELECT
             user_id AS "userId",
             verified_at AS "verifiedAt",
             consumed_at AS "consumedAt",
-            provider_expires_at AS "providerExpiresAt",
-            expires_at AS "expiresAt"
+            (expires_at <= NOW() OR provider_expires_at <= NOW()) AS expired
           FROM login_challenges
           WHERE id = $1
           FOR UPDATE
@@ -276,8 +274,6 @@ export class PostgresLoginChallengeRepository implements LoginChallengeRepositor
         };
       }
 
-      const now = Date.now();
-
       // ------------------------------------------------------
       // Challenge expired
       // ------------------------------------------------------
@@ -288,7 +284,7 @@ export class PostgresLoginChallengeRepository implements LoginChallengeRepositor
        * If either the local challenge or the provider session
        * has expired, the challenge cannot be used anymore.
        */
-      if (challenge.expiresAt.getTime() <= now || challenge.providerExpiresAt.getTime() <= now) {
+      if (challenge.expired) {
         return {
           status: 'expired',
         };

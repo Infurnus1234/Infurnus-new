@@ -87,7 +87,7 @@ export class OtpResendService {
     // Decrypt provider session token
     //
     // The repository stores the provider session token
-    // encrypted. Never send the encrypted value to Sendmator.
+    // encrypted. Never send the encrypted value to the delivery adapter.
     // --------------------------------------------------------
 
     let providerSessionToken: string;

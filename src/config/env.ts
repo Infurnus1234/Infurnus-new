@@ -6,6 +6,11 @@ export const envSchema = z
     NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
 
     PORT: z.coerce.number().int().positive().default(3000),
+    // Explicit no-ownership preview: an idle serving revision must retain priority.
+    BACKEND_STANDBY: z
+      .union([z.boolean(), z.enum(['true', 'false'])])
+      .default(false)
+      .transform((value) => value === true || value === 'true'),
 
     DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
 
@@ -254,30 +259,13 @@ export const envSchema = z
     CLOUDINARY_API_SECRET: z.string().min(1).optional(),
 
     // ============================================================
-    // Sendmator
+    // Authentication delivery configuration
     // ============================================================
 
     GOOGLE_WEB_CLIENT_ID: z.string().trim().min(1).optional(),
     GOOGLE_ANDROID_CLIENT_ID: z.string().trim().min(1).optional(),
 
-    SENDMATOR_API_KEY: z.string().min(1, 'SENDMATOR_API_KEY must not be empty').optional(),
-    SENDMATOR_BASE_URL: z
-      .string()
-      .url()
-      .startsWith('https://')
-      .default('https://api.sendmator.com/api'),
-    SENDMATOR_TEAM_ID: z.string().trim().min(1).optional(),
-    SMS_PROVIDER: z.enum(['sendmator', 'message91']).default('sendmator'),
-    MSG91_AUTH_KEY: z.string().trim().min(1).optional(),
-    MSG91_TEMPLATE_ID: z.string().trim().min(1).optional(),
-    MSG91_SENDER_ID: z.string().trim().min(1).optional(),
-    MSG91_BASE_URL: z
-      .string()
-      .url()
-      .startsWith('https://')
-      .default('https://control.msg91.com/api/v5'),
-    MSG91_OTP_EXPIRY_MINUTES: z.coerce.number().int().min(1).max(10).default(10),
-    SMS_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().max(60000).default(10000),
+    OTP_PROVIDER_CONFIG: z.string().optional(),
 
     // ============================================================
     // Resend Email Provider

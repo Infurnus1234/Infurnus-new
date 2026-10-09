@@ -1,5 +1,5 @@
 import { env } from '../../../config/env.js';
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { AppError } from '../../../common/errors/app-error.js';
 import type {
   StorageAccessMode,
@@ -107,6 +107,9 @@ export class PostgresProviderOperationsRepository {
         )
       ).rows.map((row) => {
         const doc = row.data;
+        doc.pageCount = Array.isArray(doc.metadata?.pages)
+          ? Math.max(1, doc.metadata.pages.length)
+          : 1;
         delete doc.storage_key;
         if (doc.metadata) {
           delete doc.metadata.storage;
@@ -114,6 +117,21 @@ export class PostgresProviderOperationsRepository {
         }
         return doc;
       });
+      if (documentScope.table === 'driver_documents') {
+        for (const doc of documents) {
+          doc.pageCount = Math.max(
+            1,
+            Number(
+              (
+                await client.query(
+                  'SELECT count(*) AS total FROM driver_document_pages WHERE document_id=$1 AND version=$2',
+                  [doc.id, doc.version],
+                )
+              ).rows[0].total,
+            ),
+          );
+        }
+      }
       return { request: row, target, documents, history };
     } finally {
       client.release();
@@ -172,6 +190,96 @@ export class PostgresProviderOperationsRepository {
     };
   }
 
+  async reviewLegacyTarget(
+    actorId: string | undefined,
+    type: 'driver_profile' | 'vehicle' | 'partner_document',
+    id: string,
+    state: string,
+    reason?: string,
+  ) {
+    if (!actorId) throw new AppError('AUTHENTICATION_REQUIRED', 'Reviewer identity required', 401);
+    const status = state.toUpperCase();
+    if (!['APPROVED', 'VERIFIED', 'REJECTED', 'PENDING', 'UNDER_REVIEW'].includes(status))
+      throw new AppError('INVALID_VERIFICATION_STATUS', 'Unsupported verification status', 400);
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await this.authorizeReviewer(client, actorId);
+      await client.query("SELECT set_config('infurnus.actor_id',$1,TRUE)", [actorId]);
+      const queries = {
+        driver_profile:
+          'SELECT t.*,t.updated_at::text AS version_timestamp,u.id AS owner,u.role AS owner_role FROM driver_profiles t JOIN users u ON u.id=t.user_id WHERE t.id=$1 OR t.user_id=$1 FOR UPDATE OF t',
+        vehicle:
+          'SELECT t.*,t.updated_at::text AS version_timestamp,u.id AS owner,u.role AS owner_role FROM vehicles t JOIN users u ON u.id=t.owner_id WHERE t.id=$1 FOR UPDATE OF t',
+        partner_document:
+          'SELECT t.*,t.updated_at::text AS version_timestamp,u.id AS owner,u.role AS owner_role FROM partner_documents t JOIN partners p ON p.id=t.partner_id JOIN users u ON u.id=p.user_id WHERE t.id=$1 FOR UPDATE OF t',
+      };
+      const target = (await client.query(queries[type], [id])).rows[0];
+      if (!target) {
+        await client.query('COMMIT');
+        return false;
+      }
+      if (target.owner === actorId)
+        throw new AppError('SELF_REVIEW_FORBIDDEN', 'Cannot review your own resource', 403);
+      if (status === 'PENDING' || status === 'UNDER_REVIEW') {
+        if (type !== 'driver_profile')
+          throw new AppError(
+            'INVALID_VERIFICATION_STATUS',
+            'Use document replacement to request reverification',
+            409,
+          );
+        await client.query(
+          "UPDATE driver_profiles SET verification_status=$2,verified_by=NULL,verified_at=NULL,rejection_reason=NULL,availability_status='unavailable',updated_at=NOW() WHERE id=$1",
+          [target.id, status.toLowerCase()],
+        );
+      } else {
+        let request = (
+          await client.query(
+            "SELECT id FROM provider_approval_requests WHERE target_type=$1 AND target_id=$2 AND status='PENDING' ORDER BY submitted_at LIMIT 1 FOR UPDATE",
+            [type, target.id],
+          )
+        ).rows[0];
+        if (!request) {
+          request = (
+            await client.query(
+              `INSERT INTO provider_approval_requests(requester_id,requester_role,request_type,target_type,target_id,metadata)
+            VALUES($1,$2,$3,$4,$5,jsonb_build_object('legacyReviewerId',$6::text)) RETURNING id`,
+              [
+                target.owner,
+                target.owner_role,
+                type === 'driver_profile'
+                  ? 'driver_verification'
+                  : type === 'vehicle'
+                    ? 'vehicle_verification'
+                    : 'document_reverification',
+                type,
+                target.id,
+                actorId,
+              ],
+            )
+          ).rows[0];
+        }
+        await this.reviewApproval(
+          actorId,
+          request.id,
+          {
+            status: status === 'REJECTED' ? 'REJECTED' : 'APPROVED',
+            reason,
+            expectedUpdatedAt: target.version_timestamp,
+          },
+          client,
+        );
+      }
+      await client.query('COMMIT');
+      return true;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async reviewApproval(
     actorId: string,
     id: string,
@@ -180,10 +288,11 @@ export class PostgresProviderOperationsRepository {
       reason?: string | undefined;
       expectedUpdatedAt: string;
     },
+    existingClient?: PoolClient,
   ) {
-    const client = await this.pool.connect();
+    const client = existingClient ?? (await this.pool.connect());
     try {
-      await client.query('BEGIN');
+      if (!existingClient) await client.query('BEGIN');
       const reviewerRole = await this.authorizeReviewer(client, actorId);
       await client.query("SELECT set_config('infurnus.actor_id',$1,TRUE)", [actorId]);
       const request = (
@@ -245,6 +354,52 @@ export class PostgresProviderOperationsRepository {
         throw new AppError('SELF_REVIEW_FORBIDDEN', 'Cannot review your own resource', 403);
       const approved = input.status === 'APPROVED',
         state = approved ? 'approved' : 'rejected';
+      if (approved && ['driver_document', 'partner_document'].includes(request.target_type)) {
+        const isDriver = request.target_type === 'driver_document';
+        const code = isDriver
+          ? (target.document_metadata?.documentCode ?? target.document_type)
+          : (target.metadata?.documentCode ?? target.document_type.toLowerCase());
+        const category =
+          (
+            await client.query(
+              isDriver
+                ? 'SELECT v.category FROM driver_profiles dp LEFT JOIN vehicles v ON v.id=dp.active_vehicle_id WHERE dp.id=$1'
+                : 'SELECT category FROM vehicles WHERE id=$1',
+              [isDriver ? target.driver_profile_id : target.vehicle_id],
+            )
+          ).rows[0]?.category ?? '*';
+        const policy = (
+          await client.query(
+            `SELECT r.requires_expiry,r.minimum_pages FROM provider_document_requirements r JOIN users u ON u.role::text=r.provider_role
+          WHERE u.id=$1 AND r.active AND r.document_code=$2 AND r.vehicle_category IN('*',$3)`,
+            [owner, code, category],
+          )
+        ).rows;
+        const expiry = isDriver ? target.document_metadata?.expiresAt : target.expires_at;
+        const pages = isDriver
+          ? Number(
+              (
+                await client.query(
+                  'SELECT count(*) AS total FROM driver_document_pages WHERE document_id=$1 AND version=$2',
+                  [target.id, target.version],
+                )
+              ).rows[0].total,
+            )
+          : Array.isArray(target.metadata?.pages)
+            ? target.metadata.pages.length
+            : 1;
+        if (
+          policy.some(
+            (rule) => (rule.requires_expiry && !expiry) || Math.max(1, pages) < rule.minimum_pages,
+          )
+        )
+          throw new AppError(
+            'DOCUMENT_REQUIREMENTS_NOT_MET',
+            'Document expiry/pages do not satisfy configured policy',
+            409,
+          );
+      }
+
       if (
         approved &&
         ['driver_profile', 'partner', 'vehicle'].includes(request.target_type) &&
@@ -346,7 +501,7 @@ export class PostgresProviderOperationsRepository {
             target.id,
           ]);
         await client.query(
-          `UPDATE partner_documents SET status=$2,reviewed_by=$3,reviewed_at=NOW(),verified_at=CASE WHEN $2='VERIFIED' THEN NOW() ELSE NULL END,metadata=COALESCE(metadata,'{}'::jsonb)||jsonb_build_object('rejectionReason',$4::text),updated_at=NOW() WHERE id=$1`,
+          `UPDATE partner_documents SET status=$2,reviewed_by=$3,reviewed_at=NOW(),verified_at=CASE WHEN $2::partner_document_status='VERIFIED' THEN NOW() ELSE NULL END,metadata=COALESCE(metadata,'{}'::jsonb)||jsonb_build_object('rejectionReason',$4::text),updated_at=NOW() WHERE id=$1`,
           [target.id, approved ? 'VERIFIED' : 'REJECTED', actorId, approved ? null : input.reason],
         );
       }
@@ -354,13 +509,13 @@ export class PostgresProviderOperationsRepository {
         `UPDATE provider_approval_requests SET status=$2,reviewer_id=$3,reviewer_role=$4,reviewed_at=NOW(),rejection_reason=$5,updated_at=NOW() WHERE id=$1`,
         [id, input.status, actorId, reviewerRole, approved ? null : input.reason],
       );
-      await client.query('COMMIT');
+      if (!existingClient) await client.query('COMMIT');
       return { id, status: input.status };
     } catch (error) {
-      await client.query('ROLLBACK');
+      if (!existingClient) await client.query('ROLLBACK');
       throw error;
     } finally {
-      client.release();
+      if (!existingClient) client.release();
     }
   }
 

@@ -138,7 +138,7 @@ export function createProviderOperationsRouter(repository: PostgresProviderOpera
       next(error);
     }
   });
-  router.patch('/vehicles/:id/operation', requireFleetOwner(), async (req, res, next) => {
+  router.patch('/vehicles/:id/operation', requireProvider(), async (req, res, next) => {
     try {
       const id = z.string().uuid().parse(req.params.id);
       const input = z
