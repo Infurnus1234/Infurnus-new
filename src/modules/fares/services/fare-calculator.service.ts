@@ -322,7 +322,7 @@ export class FareCalculatorService {
     }
 
     const grossAmount = subtotal + (taxAmount ?? 0);
-    const commissionRate = 0.10;
+    const commissionRate = 0.1;
     const commissionAmount = Math.round(baseAmount * commissionRate);
     const driverEarnings = grossAmount - commissionAmount;
 
