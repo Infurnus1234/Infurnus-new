@@ -5,10 +5,14 @@ on:
     branches:
       - main
       - architecture
+      - 'integration/**'
   pull_request:
     branches:
       - main
       - architecture
+
+permissions:
+  contents: read
 
 jobs:
   quality:
@@ -22,7 +26,7 @@ jobs:
           POSTGRES_DB: infurnus
           POSTGRES_HOST_AUTH_METHOD: trust
         ports:
-          - 5432:5432
+          - 5434:5432
         options: >-
           --health-cmd="pg_isready -U infurnus -d infurnus"
           --health-interval=10s
@@ -40,10 +44,15 @@ jobs:
           --health-retries=5
 
     env:
-      DATABASE_URL: postgresql://infurnus@localhost:5432/infurnus
+      DATABASE_URL: postgresql://infurnus@localhost:5434/infurnus
       NODE_ENV: test
       RIDE_DB_TESTS: 'true'
       MAP_REDIS_TESTS: 'true'
+      DRIVER_IMPLEMENTATION_DB_TESTS: 'true'
+      PROVIDER_DB_TESTS: 'true'
+      COUPON_DB_TESTS: 'true'
+      RENTAL_DB_TESTS: 'true'
+      RIDE_LOAD_TESTS: 'true'
       REDIS_URL: redis://localhost:6379
       GOOGLE_MAPS_API_KEY: non-secret-ci-fixture-key
 
@@ -59,12 +68,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
@@ -74,6 +83,12 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Dependency security audit
+        run: npm audit --audit-level=moderate
+
+      - name: Secret and private-artifact scan
+        run: node scripts/check-source-secrets.js
 
       - name: Run database migrations
         run: npm run migrate
@@ -90,7 +105,7 @@ jobs:
       - name: Format check
         shell: bash
         run: |
-          set +o pipefail
+          set -euo pipefail
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             base="${{ github.event.pull_request.base.sha }}"
           else
@@ -98,17 +113,16 @@ jobs:
           fi
 
           if [[ "$base" == "0000000000000000000000000000000000000000" || -z "$base" ]]; then
-            echo "No previous commit available; checking all files."
-            npm run format:check
-          else
-            git diff --name-only --diff-filter=ACMRTUXB "$base" "${{ github.sha }}" \
-              | grep -Ev '\.sql$' \
-              | grep -E '\.(js|jsx|ts|tsx|json|jsonc|md|yml|yaml|css|scss|html)$' \
-              | xargs -r npx prettier --check
+            base="$(git merge-base HEAD origin/main)"
+          fi
+          git diff --name-only --diff-filter=ACMRTUXB "$base" "${{ github.sha }}" > /tmp/changed-files
+          mapfile -t files < <(grep -E '\.(js|jsx|ts|tsx|json|jsonc|md|yml|yaml|css|scss|html)$' /tmp/changed-files || true)
+          if ((${#files[@]})); then
+            npx prettier --check "${files[@]}"
           fi
 
       - name: Test
-        run: npm test
+        run: npm test -- --maxWorkers=4
 
       - name: Build
         run: npm run build

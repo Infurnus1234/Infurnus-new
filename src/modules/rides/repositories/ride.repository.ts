@@ -7,6 +7,7 @@ import {
 import type { RideMapSnapshot, LiveRideLocation } from '../types/ride-map.js';
 import { driverEligibilitySql } from './driver-eligibility.js';
 import { randomInt } from 'node:crypto';
+import { evaluatePinAttempt, type PinAttemptResult } from './ride-pin.js';
 import type { Pool, PoolClient } from 'pg';
 import { withTransaction } from '../../../infrastructure/database/postgres.js';
 
@@ -116,6 +117,7 @@ export interface RideRepository {
   ): Promise<boolean>;
 
   getRidePin(id: string): Promise<string | null>;
+  verifyPinAttempt?(id: string, driverProfileId: string, pin: string): Promise<PinAttemptResult>;
 
   markPinVerified(id: string): Promise<boolean>;
 
@@ -1294,7 +1296,7 @@ export class PostgresRideRepository implements RideRepository {
       `WITH current AS (SELECT id, ${applicable} AS applied FROM rides
        WHERE id=$1 AND status NOT IN ('completed','cancelled') FOR UPDATE)
        UPDATE rides SET route_metadata=COALESCE(route_metadata,'{}'::jsonb) ||
-       CASE WHEN current.applied THEN ($2::jsonb - 'userLocation' - 'bookingDistanceMeters' - 'bookingFareSnapshot') ELSE '{}'::jsonb END ||
+         CASE WHEN current.applied THEN ($2::jsonb - 'userLocation' - 'bookingDistanceMeters' - 'bookingFareSnapshot' - 'pin' - 'pinVerified' - 'pinFailedAttempts' - 'pinLockedUntil') ELSE '{}'::jsonb END ||
        jsonb_strip_nulls(jsonb_build_object('lastExternalRequestAt',GREATEST(
          (route_metadata->>'lastExternalRequestAt')::float8,
          ($2::jsonb->>'lastExternalRequestAt')::float8),
@@ -1319,6 +1321,54 @@ export class PostgresRideRepository implements RideRepository {
     );
 
     return (result.rows[0]?.pin as string) ?? null;
+  }
+
+  async verifyPinAttempt(
+    id: string,
+    driverProfileId: string,
+    pin: string,
+  ): Promise<PinAttemptResult> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const ride = (
+        await client.query(
+          `SELECT assigned_driver_id,status,COALESCE(pin,route_metadata->>'pin') AS pin,
+          COALESCE(route_metadata,'{}'::jsonb) AS metadata,
+          extract(epoch FROM clock_timestamp())*1000 AS now_ms
+          FROM rides WHERE id=$1 FOR UPDATE`,
+          [id],
+        )
+      ).rows[0];
+      let result: PinAttemptResult;
+      if (!ride) result = 'not_found';
+      else if (ride.assigned_driver_id !== driverProfileId) result = 'forbidden';
+      else if (
+        !['driver_assigned', 'driver_arriving', 'driver_arrived', 'in_progress'].includes(
+          ride.status,
+        )
+      )
+        result = 'invalid_state';
+      else if (!ride.pin) result = 'not_found';
+      else {
+        const attempt = evaluatePinAttempt(ride.pin, pin, ride.metadata, Number(ride.now_ms));
+        result = attempt.result;
+        if (result !== 'locked' || attempt.metadata !== ride.metadata) {
+          await client.query(
+            `UPDATE rides SET route_metadata=$2::jsonb,
+              pin_verified=CASE WHEN $3 THEN TRUE ELSE pin_verified END,updated_at=NOW() WHERE id=$1`,
+            [id, JSON.stringify(attempt.metadata), result === 'verified'],
+          );
+        }
+      }
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async markPinVerified(id: string): Promise<boolean> {

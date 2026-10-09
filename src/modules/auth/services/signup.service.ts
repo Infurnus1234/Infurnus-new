@@ -294,7 +294,7 @@ export class SignupService {
     // ========================================================
     // Request provider-managed OTP
     //
-    // Sendmator generates and delivers the OTP.
+    // The configured delivery adapter generates and delivers the OTP.
     // INFURNUS does not generate or hash the OTP.
     // ========================================================
 

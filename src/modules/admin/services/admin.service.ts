@@ -149,8 +149,10 @@ export class AdminService {
     return this.repository.dashboard();
   }
 
-  async verifyDriver(driverId: string, status: string, rejectionReason?: string) {
-    const success = await this.repository.verifyDriver(driverId, status, rejectionReason);
+  async verifyDriver(driverId: string, status: string, rejectionReason?: string, actorId?: string) {
+    const success = actorId
+      ? await this.repository.verifyDriver(driverId, status, rejectionReason, actorId)
+      : await this.repository.verifyDriver(driverId, status, rejectionReason);
 
     if (!success) {
       throw new AppError('DRIVER_NOT_FOUND', 'Driver profile not found', 404);
@@ -159,8 +161,15 @@ export class AdminService {
     return { success: true, driverId, status };
   }
 
-  async verifyVehicle(vehicleId: string, status: string, rejectionReason?: string) {
-    const success = await this.repository.verifyVehicle(vehicleId, status, rejectionReason);
+  async verifyVehicle(
+    vehicleId: string,
+    status: string,
+    rejectionReason?: string,
+    actorId?: string,
+  ) {
+    const success = actorId
+      ? await this.repository.verifyVehicle(vehicleId, status, rejectionReason, actorId)
+      : await this.repository.verifyVehicle(vehicleId, status, rejectionReason);
 
     if (!success) {
       throw new AppError('VEHICLE_NOT_FOUND', 'Vehicle not found', 404);
@@ -169,8 +178,10 @@ export class AdminService {
     return { success: true, vehicleId, status };
   }
 
-  async verifyDocument(documentId: string, status: string, comments?: string) {
-    const success = await this.repository.verifyDocument(documentId, status, comments);
+  async verifyDocument(documentId: string, status: string, comments?: string, actorId?: string) {
+    const success = actorId
+      ? await this.repository.verifyDocument(documentId, status, comments, actorId)
+      : await this.repository.verifyDocument(documentId, status, comments);
 
     if (!success) {
       throw new AppError('DOCUMENT_NOT_FOUND', 'Document not found', 404);

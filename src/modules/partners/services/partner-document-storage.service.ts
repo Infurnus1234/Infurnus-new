@@ -168,6 +168,10 @@ export class PartnerDocumentStorageService {
           metadata: {
             ...(existing.metadata ?? {}),
             ...input.documentMetadata,
+            pages: uploads.map((page, index) => ({
+              ...page,
+              side: index === 0 ? 'FRONT' : index === 1 ? 'BACK' : 'PAGE',
+            })),
             storage: {
               storageProvider: uploaded.storageProvider,
               storageKey: uploaded.storageKey,
@@ -194,7 +198,11 @@ export class PartnerDocumentStorageService {
 
       return updated;
     } catch (error) {
-      await cleanupUploadedFile(uploaded.storageKey, uploaded.resourceType, uploaded.accessMode);
+      await Promise.all(
+        uploads.map((page) =>
+          cleanupUploadedFile(page.storageKey, page.resourceType, page.accessMode),
+        ),
+      );
 
       throw error;
     }

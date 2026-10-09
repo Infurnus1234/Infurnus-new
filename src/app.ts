@@ -284,7 +284,16 @@ export function createApp(
   let fleetService: FleetService | undefined;
   if (providerOperationsRepository) {
     app.use(
-      ['/fleet', '/provider', '/partners', '/rides/driver', '/vehicles', '/driver-applications'],
+      [
+        '/fleet',
+        '/provider',
+        '/partners',
+        '/rides',
+        '/vehicles',
+        '/driver-applications',
+        '/admin',
+        '/provider-approvals',
+      ],
       requireAuth,
       async (req, _res, next) => {
         try {

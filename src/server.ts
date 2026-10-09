@@ -5,10 +5,15 @@ import { AppError } from './common/errors/app-error.js';
 import { CommonMapService } from './modules/maps/map.service.js';
 import { RedisMapCache } from './modules/maps/map.cache.js';
 import { createServer } from 'node:http';
+import {
+  respondWhileStandby,
+  waitForBackendInstance,
+} from './infrastructure/database/backend-standby.js';
 import { GoogleMapsProvider } from './modules/rides/providers/google.maps.provider.js';
 import { RouteRecalculationService } from './modules/rides/services/route-recalculation.service.js';
 import { createApp } from './app.js';
 import { env } from './config/env.js';
+import { createConfiguredOtpProvider } from './modules/auth/providers/otp-provider.factory.js';
 import {
   acquireBackendInstance,
   checkDatabaseConnection,
@@ -32,13 +37,7 @@ import { MatchingService } from './modules/rides/services/matching.service.js';
 
 import { PostgresRentalRepository } from './modules/rentals/repositories/rental.repository.js';
 
-import { SendmatorOtpProvider } from './modules/auth/providers/sendmator-otp.provider.js';
-import { DevOtpProvider } from './modules/auth/providers/dev-otp.provider.js';
-import { ResendOtpProvider } from './modules/auth/providers/resend-otp.provider.js';
-import { selectOtpProvider } from './modules/auth/providers/otp-provider-selection.js';
-import { Message91OtpProvider } from './modules/auth/providers/message91-otp.provider.js';
 import { serviceArea } from './modules/maps/service-area.js';
-import { PostgresResendOtpSessionRepository } from './modules/auth/repositories/resend-otp.repository.js';
 
 import { FareCalculatorService } from './modules/fares/services/fare-calculator.service.js';
 import { FareEstimateService } from './modules/fares/services/fare-estimate.service.js';
@@ -79,31 +78,7 @@ async function startServer() {
   // OTP provider
   // ==========================================================
 
-  const sendmatorProvider = env.SENDMATOR_API_KEY ? new SendmatorOtpProvider() : undefined;
-
-  const resendOtpProvider = env.RESEND_API_KEY
-    ? new ResendOtpProvider(new PostgresResendOtpSessionRepository(pool))
-    : undefined;
-
-  const otpProvider = selectOtpProvider(
-    sendmatorProvider,
-    resendOtpProvider,
-    () => new DevOtpProvider(),
-    env.NODE_ENV === 'production' || env.NODE_ENV === 'staging',
-    env.SMS_PROVIDER === 'message91'
-      ? {
-          name: 'message91',
-          adapter: new Message91OtpProvider({
-            apiKey: env.MSG91_AUTH_KEY ?? '',
-            templateId: env.MSG91_TEMPLATE_ID ?? '',
-            baseUrl: env.MSG91_BASE_URL,
-            ...(env.MSG91_SENDER_ID ? { senderId: env.MSG91_SENDER_ID } : {}),
-            expiryMinutes: env.MSG91_OTP_EXPIRY_MINUTES,
-            timeoutMs: env.SMS_REQUEST_TIMEOUT_MS,
-          }),
-        }
-      : undefined,
-  );
+  const otpProvider = createConfiguredOtpProvider(pool);
 
   // ==========================================================
   // Repositories
@@ -236,7 +211,28 @@ async function startServer() {
   // HTTP server
   // ==========================================================
 
-  const server = createServer(app);
+  let active = false;
+  const ownershipWait = new AbortController();
+  const server = createServer((req, res) => {
+    if (!active) return respondWhileStandby(req, res);
+    app(req, res);
+  });
+
+  // Cloud Run can probe liveness while the serving revision retains ownership.
+  // No application request or socket handler is enabled during this overlap.
+  const stopStandby = () => {
+    ownershipWait.abort();
+    server.close();
+  };
+  process.once('SIGINT', stopStandby);
+  process.once('SIGTERM', stopStandby);
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(env.PORT, '0.0.0.0', () => {
+      server.off('error', reject);
+      resolve();
+    });
+  });
 
   // ==========================================================
   // Ride services
@@ -265,10 +261,16 @@ async function startServer() {
   let onInstanceLost = () => process.exit(1);
 
   if (env.NODE_ENV === 'production' || env.NODE_ENV === 'staging') {
-    releaseInstance = await acquireBackendInstance(() => onInstanceLost());
+    releaseInstance = await waitForBackendInstance(
+      () => acquireBackendInstance(() => onInstanceLost()),
+      ownershipWait.signal,
+      env.BACKEND_STANDBY,
+    );
   }
 
   const io = createSocketServer(server, {
+    authorizeAccount: (userId, role) =>
+      new PostgresProviderOperationsRepository(pool).authorize(userId, role),
     driverService,
     rideRepository,
     rideService,
@@ -294,9 +296,10 @@ async function startServer() {
   // Start server
   // ==========================================================
 
-  server.listen(env.PORT, '0.0.0.0', () => {
-    console.log(`INFURNUS API listening on port ${env.PORT} (0.0.0.0)`);
-  });
+  active = true;
+  process.off('SIGINT', stopStandby);
+  process.off('SIGTERM', stopStandby);
+  console.log(`INFURNUS API active on port ${env.PORT} (0.0.0.0)`);
 
   // ==========================================================
   // Graceful shutdown

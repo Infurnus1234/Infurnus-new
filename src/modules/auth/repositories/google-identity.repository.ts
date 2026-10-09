@@ -5,7 +5,12 @@ import type { GoogleIdentity } from '../providers/google-identity.provider.js';
 import type { AuthUserIdentity } from '../types/auth-identity.js';
 
 export class PostgresGoogleIdentityRepository {
-  async resolve(identity: GoogleIdentity, linkUserId?: string): Promise<AuthUserIdentity> {
+  async resolve(
+    identity: GoogleIdentity,
+    linkUserId?: string,
+    driverFlow?: 'signup' | 'signin',
+    providerRole?: 'driver' | 'fleet_owner' | 'driver_fleet_owner',
+  ): Promise<AuthUserIdentity> {
     try {
       return await withTransaction(async (client) => {
         // Serialize concurrent creation/linking for the same subject and normalized email.
@@ -24,6 +29,24 @@ export class PostgresGoogleIdentityRepository {
         if (linked.rows[0]) {
           if (linkUserId && linked.rows[0].id !== linkUserId) this.conflict();
           if (linked.rows[0].deleted || linked.rows[0].status !== 'active') this.inactive();
+          if (
+            driverFlow &&
+            !['driver', 'fleet_owner', 'driver_fleet_owner'].includes(linked.rows[0].role)
+          ) {
+            throw new AppError(
+              'GOOGLE_DRIVER_ROLE_REQUIRED',
+              'This Google account is not linked to a Driver or Fleet account',
+              403,
+            );
+          }
+          // Signup is idempotent, but cannot convert an existing account's role.
+          if (driverFlow === 'signup' && providerRole && linked.rows[0].role !== providerRole) {
+            throw new AppError(
+              'GOOGLE_PROVIDER_ROLE_MISMATCH',
+              'This Google account already has a different provider role. Sign in to its existing account.',
+              409,
+            );
+          }
           return linked.rows[0];
         }
         let user: AuthUserIdentity | undefined;
@@ -41,9 +64,16 @@ export class PostgresGoogleIdentityRepository {
             [identity.email],
           );
           if (existing.rowCount) this.conflict();
+          if (driverFlow === 'signin') {
+            throw new AppError(
+              'GOOGLE_DRIVER_ACCOUNT_NOT_FOUND',
+              'No linked Driver or Fleet account found. Use provider signup, or sign in to your existing account and link Google.',
+              409,
+            );
+          }
           const firstName = signupSchema.shape.firstName.safeParse(identity.firstName);
           const lastName = signupSchema.shape.lastName.safeParse(identity.lastName);
-          if (!firstName.success || !lastName.success)
+          if ((!firstName.success || !lastName.success) && driverFlow !== 'signup')
             throw new AppError(
               'GOOGLE_PROFILE_INCOMPLETE',
               'Complete registration before linking Google',
@@ -51,8 +81,13 @@ export class PostgresGoogleIdentityRepository {
             );
           const created = await client.query<AuthUserIdentity>(
             `INSERT INTO users(first_name,last_name,email,email_verified,role)
-             VALUES($1,$2,$3,TRUE,'customer') RETURNING id,role,status`,
-            [firstName.data, lastName.data, identity.email],
+             VALUES($1,$2,$3,TRUE,$4) RETURNING id,role,status`,
+            [
+              firstName.success ? firstName.data : '',
+              lastName.success ? lastName.data : '',
+              identity.email,
+              driverFlow === 'signup' ? (providerRole ?? 'driver') : 'customer',
+            ],
           );
           user = created.rows[0];
         }

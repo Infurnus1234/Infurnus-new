@@ -1,0 +1,152 @@
+{
+  "email": {
+    "id": "configured_email",
+    "timeoutMs": 10000,
+    "variables": {
+      "sender": "APPLICATION",
+      "template": "email_verification"
+    },
+    "operations": {
+      "send": {
+        "url": "https://otp.example/send",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{env:OTP_API_KEY}}"
+        },
+        "body": {
+          "recipient": "{{recipient}}",
+          "channel": "{{channel}}",
+          "sender": "{{sender}}",
+          "template": "{{template}}"
+        },
+        "success": [
+          {
+            "path": "accepted",
+            "equals": true
+          }
+        ]
+      },
+      "verify": {
+        "url": "https://otp.example/verify",
+        "method": "POST",
+        "headers": {
+          "Authorization": "Bearer {{env:OTP_API_KEY}}"
+        },
+        "body": {
+          "session": "{{sessionToken}}",
+          "otp": "{{otp}}"
+        },
+        "success": [
+          {
+            "path": "verified",
+            "equals": true
+          }
+        ],
+        "invalid": [
+          {
+            "path": "verified",
+            "equals": false
+          }
+        ]
+      },
+      "resend": {
+        "url": "https://otp.example/resend",
+        "method": "POST",
+        "headers": {
+          "Authorization": "Bearer {{env:OTP_API_KEY}}"
+        },
+        "body": {
+          "session": "{{sessionToken}}"
+        },
+        "success": [
+          {
+            "path": "accepted",
+            "equals": true
+          }
+        ]
+      }
+    },
+    "response": {
+      "sessionIdPath": "id",
+      "sessionTokenPath": "session",
+      "expiresAtPath": "expiresAt",
+      "attemptsPath": "attemptsRemaining"
+    }
+  },
+  "sms": {
+    "id": "configured_sms",
+    "timeoutMs": 10000,
+    "variables": {
+      "sender": "APPLICATION",
+      "template": "sms_verification"
+    },
+    "operations": {
+      "send": {
+        "url": "https://otp.example/send",
+        "method": "POST",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{env:OTP_API_KEY}}"
+        },
+        "body": {
+          "recipient": "{{recipient}}",
+          "channel": "{{channel}}",
+          "sender": "{{sender}}",
+          "template": "{{template}}"
+        },
+        "success": [
+          {
+            "path": "accepted",
+            "equals": true
+          }
+        ]
+      },
+      "verify": {
+        "url": "https://otp.example/verify",
+        "method": "POST",
+        "headers": {
+          "Authorization": "Bearer {{env:OTP_API_KEY}}"
+        },
+        "body": {
+          "session": "{{sessionToken}}",
+          "otp": "{{otp}}"
+        },
+        "success": [
+          {
+            "path": "verified",
+            "equals": true
+          }
+        ],
+        "invalid": [
+          {
+            "path": "verified",
+            "equals": false
+          }
+        ]
+      },
+      "resend": {
+        "url": "https://otp.example/resend",
+        "method": "POST",
+        "headers": {
+          "Authorization": "Bearer {{env:OTP_API_KEY}}"
+        },
+        "body": {
+          "session": "{{sessionToken}}"
+        },
+        "success": [
+          {
+            "path": "accepted",
+            "equals": true
+          }
+        ]
+      }
+    },
+    "response": {
+      "sessionIdPath": "id",
+      "sessionTokenPath": "session",
+      "expiresAtPath": "expiresAt",
+      "attemptsPath": "attemptsRemaining"
+    }
+  }
+}

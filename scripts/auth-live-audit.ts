@@ -1,16 +1,14 @@
-import { readFileSync, writeFileSync } from 'node:fs';
-import { parse } from 'dotenv';
+import { writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { pool } from '../src/infrastructure/database/postgres.js';
 import { createApp } from '../src/app.js';
 import { PostgresUserRepository } from '../src/modules/users/repositories/user.repository.js';
-import { SendmatorOtpProvider } from '../src/modules/auth/providers/sendmator-otp.provider.js';
+import { createConfiguredOtpProvider } from '../src/modules/auth/providers/otp-provider.factory.js';
 import { hashPassword } from '../src/modules/auth/utils/password.js';
 const evidence = process.argv[2];
 if (!evidence || new URL(process.env.DATABASE_URL!).port !== '5434')
   throw new Error('Disposable database and evidence path required');
-const local = parse(readFileSync('.env'));
 const email = 'niranjankumarnb45@gmail.com';
 const id = randomUUID();
 const originalError = console.error,
@@ -34,7 +32,7 @@ try {
       );
   };
   console.info = () => {};
-  const provider = new SendmatorOtpProvider(local.SENDMATOR_API_KEY);
+  const provider = createConfiguredOtpProvider(pool);
   const app = createApp(new PostgresUserRepository(pool), provider, {
     enableAuthRateLimiting: false,
     enableAuthCsrfProtection: false,

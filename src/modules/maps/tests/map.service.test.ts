@@ -47,6 +47,14 @@ const config = { ...mapConfig, providerContentCaching: true, reversePrecision: 4
 const service = (p = provider(), c: MapCache = new Cache()) =>
   new CommonMapService(p, c, config, Date.now, () => {});
 describe('CommonMapService', () => {
+  it('reuses a result published between the initial cache miss and lock acquisition', async () => {
+    const p = provider(),
+      c = new Cache();
+    c.get = vi.fn().mockResolvedValueOnce(null).mockResolvedValue(JSON.stringify(a));
+    expect(await service(p, c).geocode('patna')).toEqual(a);
+    expect(p.geocode).not.toHaveBeenCalled();
+    expect(c.locks.size).toBe(0);
+  });
   it('keeps short partial queries distinct on cache miss and hit', async () => {
     const p = provider(),
       s = service(p);

@@ -41,3 +41,10 @@ temp/
 *.key
 *.crt
 *.hprof
+# Local signing and development credentials
+*.jks
+*.keystore
+*.p12
+**/key.properties
+**/local.properties
+frontend/android/debug-dependencies.txt

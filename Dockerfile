@@ -41,6 +41,7 @@ RUN npm ci --omit=dev --ignore-scripts && npm rebuild argon2
 
 COPY --from=builder /app/dist ./dist
 COPY migrations/ ./migrations/
+COPY config/service-area/bihar.geojson ./config/service-area/bihar.geojson
 
 EXPOSE 3000
 

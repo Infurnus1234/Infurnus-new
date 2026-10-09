@@ -120,10 +120,14 @@ live('admin catalog → existing fare/booking → MAP3 real PostgreSQL', () => {
     );
     profileId = p.rows[0].id;
     const v = await pool.query(
-      "INSERT INTO vehicles(driver_profile_id,make,model,plate_number,verification_status,category,is_active) VALUES($1,'XYZ','Test',$2,'approved','xyz',TRUE) RETURNING id",
-      [profileId, randomUUID().slice(0, 18)],
+      "INSERT INTO vehicles(driver_profile_id,owner_id,make,model,plate_number,verification_status,category,is_active) VALUES($1,$3,'XYZ','Test',$2,'approved','xyz',TRUE) RETURNING id",
+      [profileId, randomUUID().slice(0, 18), driverId],
     );
     vehicleId = v.rows[0].id;
+    await pool.query('UPDATE driver_profiles SET active_vehicle_id=$2 WHERE id=$1', [
+      profileId,
+      vehicleId,
+    ]);
     app = express();
     app.use(express.json());
     app.use('/admin', createAdminRouter(new AdminController(admin)));
@@ -136,6 +140,9 @@ live('admin catalog → existing fare/booking → MAP3 real PostgreSQL', () => {
     await pool.query('DELETE FROM vehicles WHERE id=$1', [vehicleId]);
     await pool.query('DELETE FROM driver_profiles WHERE id=$1', [profileId]);
     await pool.query('DELETE FROM vehicle_types WHERE id=ANY($1::uuid[])', [ids.splice(0)]);
+    await pool.query('DELETE FROM provider_approval_requests WHERE requester_id=ANY($1::uuid[])', [
+      [adminId, customerId, driverId],
+    ]);
     await pool.query('DELETE FROM users WHERE id=ANY($1::uuid[])', [
       [adminId, customerId, driverId],
     ]);

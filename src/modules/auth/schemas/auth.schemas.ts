@@ -377,7 +377,7 @@ export const changePasswordSchema = z
     }
   });
 
-export const googleAuthSchema = z
+export const googleLinkSchema = z
   .object({
     idToken: z
       .string()
@@ -386,3 +386,20 @@ export const googleAuthSchema = z
       .regex(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/),
   })
   .strict();
+
+// Driver enrollment is distinct from operational driver approval. Existing
+// customer callers omit this field and retain their current behavior.
+export const googleAuthSchema = googleLinkSchema
+  .extend({
+    driverFlow: z.enum(['signup', 'signin']).optional(),
+    providerRole: z.enum(['driver', 'fleet_owner', 'driver_fleet_owner']).optional(),
+  })
+  .superRefine((input, ctx) => {
+    if (input.providerRole && input.driverFlow !== 'signup') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['providerRole'],
+        message: 'Provider role is only accepted for provider signup',
+      });
+    }
+  });

@@ -6,7 +6,13 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    ignores: ['dist/**', 'scripts/**'],
+    ignores: [
+      'dist/**',
+      'scripts/**',
+      'coverage/**',
+      'frontend/build/**',
+      'frontend/.dart_tool/**',
+    ],
   },
   {
     languageOptions: {

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Pool } from 'pg';
 
 import { PostgresLoginChallengeRepository } from '../repositories/login-challenge.repository.js';
@@ -118,7 +118,7 @@ describe('PostgresLoginChallengeRepository', () => {
 
     return {
       userId,
-      otpProvider: 'sendmator',
+      otpProvider: 'configured',
       otpChannel: 'sms' as const,
       providerSessionId: `provider-session-${Date.now()}-${Math.random()}`,
       encryptedProviderSessionToken: 'v1.test-encrypted-session-token',
@@ -156,6 +156,20 @@ describe('PostgresLoginChallengeRepository', () => {
     );
   }
 
+  it('reports database expiry when the application clock is behind PostgreSQL', async () => {
+    const created = await repository.create(createChallengeData());
+    await pool.query(
+      "UPDATE login_challenges SET expires_at=NOW()-INTERVAL '1 second' WHERE id=$1",
+      [created.id],
+    );
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() - 60_000);
+    try {
+      expect(await repository.consume(created.id)).toEqual({ status: 'expired' });
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   it('creates a login challenge', async () => {
     const data = createChallengeData();
 
@@ -191,7 +205,7 @@ describe('PostgresLoginChallengeRepository', () => {
     expect(row.rows[0]).toMatchObject({
       id: result.id,
       userId,
-      otpProvider: 'sendmator',
+      otpProvider: 'configured',
       otpChannel: 'sms',
       providerSessionId: data.providerSessionId,
       encryptedProviderSessionToken: data.encryptedProviderSessionToken,
@@ -210,7 +224,7 @@ describe('PostgresLoginChallengeRepository', () => {
     expect(result).toMatchObject({
       id: created.id,
       userId,
-      otpProvider: 'sendmator',
+      otpProvider: 'configured',
       otpChannel: 'sms',
       providerSessionId: data.providerSessionId,
       encryptedProviderSessionToken: data.encryptedProviderSessionToken,
@@ -242,7 +256,7 @@ describe('PostgresLoginChallengeRepository', () => {
     expect(result).toMatchObject({
       id: created.id,
       userId,
-      otpProvider: 'sendmator',
+      otpProvider: 'configured',
       otpChannel: 'sms',
       providerSessionId: data.providerSessionId,
       encryptedProviderSessionToken: data.encryptedProviderSessionToken,
@@ -521,7 +535,7 @@ describe('PostgresLoginChallengeRepository', () => {
   });
 
   it('stores only the supplied encrypted provider session token', async () => {
-    const encryptedToken = 'v1.encrypted-sendmator-session-token';
+    const encryptedToken = 'v1.encrypted-configured-session-token';
 
     const created = await repository.create(
       createChallengeData({
