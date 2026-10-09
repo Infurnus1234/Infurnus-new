@@ -50,7 +50,11 @@ export interface FareBreakdown {
   weightAmount?: number;
   loadingAmount?: number;
   fuelAmount?: number;
+  taxRate?: number;
   taxAmount?: number;
+  commissionRate?: number;
+  commissionAmount?: number;
+  driverEarnings?: number;
   grossAmount: number;
 }
 

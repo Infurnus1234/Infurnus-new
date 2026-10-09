@@ -322,6 +322,9 @@ export class FareCalculatorService {
     }
 
     const grossAmount = subtotal + (taxAmount ?? 0);
+    const commissionRate = 0.10;
+    const commissionAmount = Math.round(baseAmount * commissionRate);
+    const driverEarnings = grossAmount - commissionAmount;
 
     this.assertSafeMoney(grossAmount, 'grossAmount');
 
@@ -332,6 +335,9 @@ export class FareCalculatorService {
       distanceAmount,
       timeAmount,
       grossAmount,
+      commissionRate,
+      commissionAmount,
+      driverEarnings,
       currency: this.pricing.currency,
       pricingVersion: vehicleRates ? VEHICLE_PRICING_VERSION : this.pricing.pricingVersion,
     };

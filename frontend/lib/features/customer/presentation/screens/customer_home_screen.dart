@@ -41,7 +41,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
   Timer? _debounceTimer;
   CancelToken? _searchCancelToken;
   List<PlaceSuggestion> _suggestions = [];
-  bool _isSearching = false;
 
   // Visual Rule: Light / White background palette
   static const Color mainBg = Color(0xFFF9FAFB);
@@ -114,48 +113,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     _searchFocusNode.dispose();
     _animController.dispose();
     super.dispose();
-  }
-
-  void _onSearchQueryChanged(String query) {
-    _debounceTimer?.cancel();
-    _searchCancelToken?.cancel();
-    if (query.trim().length < 2) {
-      setState(() {
-        _suggestions = [];
-        _isSearching = false;
-      });
-      return;
-    }
-
-    setState(() => _isSearching = true);
-
-    // Debounce: 200ms for instant autocomplete response
-    _debounceTimer = Timer(const Duration(milliseconds: 200), () async {
-      final service = ref.read(placesAutocompleteServiceProvider);
-      final cancelToken = CancelToken();
-      _searchCancelToken = cancelToken;
-      try {
-        final results = await service.getSuggestions(
-          query,
-          cancelToken: cancelToken,
-        );
-        if (mounted &&
-            !cancelToken.isCancelled &&
-            _searchController.text.trim() == query.trim()) {
-          setState(() {
-            _suggestions = results;
-            _isSearching = false;
-          });
-        }
-      } catch (_) {
-        if (mounted && !cancelToken.isCancelled) {
-          setState(() {
-            _suggestions = [];
-            _isSearching = false;
-          });
-        }
-      }
-    });
   }
 
   Future<void> _selectSuggestion(PlaceSuggestion suggestion) async {
@@ -710,19 +667,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (_isSearching)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: SizedBox(
-                height: 20,
-                width: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: buttonBlack,
-                ),
-              ),
-            )
-          else if (_suggestions.isEmpty)
+          if (_suggestions.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
