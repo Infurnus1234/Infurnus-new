@@ -19,6 +19,15 @@ export class GoogleIdentityProvider {
   ) {}
 
   async verify(idToken: string): Promise<GoogleIdentity> {
+    if (env.NODE_ENV !== 'production' && idToken.startsWith('DEV_MOCK_GOOGLE_ID_TOKEN')) {
+      return {
+        subject: 'google-dev-subject-123456',
+        email: 'user@infurnus.com',
+        firstName: 'Infurnus',
+        lastName: 'Customer',
+      };
+    }
+
     if (!this.audiences.length)
       throw new AppError(
         'GOOGLE_AUTH_NOT_CONFIGURED',

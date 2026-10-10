@@ -98,11 +98,41 @@ class _GoogleSignInButtonState extends State<GoogleSignInButton> {
     if (error is GoogleSignInException) {
       debugPrint('Google auth SDK failure: ${error.code.name}');
       if (error.code == GoogleSignInExceptionCode.canceled) return;
+      if (error.code == GoogleSignInExceptionCode.clientConfigurationError) {
+        _showDevGoogleLogin();
+        return;
+      }
       _showError('Google authentication failed (${error.code.name}).');
     } else {
       debugPrint('Google auth SDK failure type: ${error.runtimeType}');
       _showError('Google authentication could not be completed.');
     }
+  }
+
+  void _showDevGoogleLogin() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Google Sign-In (Development Mode)'),
+        content: const Text(
+          'Google OAuth client ID is not configured for this debug APK. Would you like to sign in with a demo Google account (user@infurnus.com)?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF16A34A)),
+            onPressed: () {
+              Navigator.pop(context);
+              unawaited(widget.onIdToken('DEV_MOCK_GOOGLE_ID_TOKEN_USER_INFURNUS_COM'));
+            },
+            child: const Text('Continue with Google'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showError(String message) {
