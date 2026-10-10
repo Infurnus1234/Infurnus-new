@@ -347,7 +347,7 @@ export function createProviderApprovalRouter(repository: PostgresProviderOperati
         .object({
           status: z.enum(['APPROVED', 'REJECTED']),
           reason: z.string().trim().min(1).max(1000).optional(),
-          expectedUpdatedAt: z.iso.datetime(),
+          expectedUpdatedAt: z.iso.datetime({ offset: true }),
         })
         .strict()
         .parse(req.body);
