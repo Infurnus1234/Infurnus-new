@@ -2,8 +2,9 @@ import java.util.Properties
 
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
+val hasKeystore = keystorePropertiesFile.exists()
 
-if (keystorePropertiesFile.exists()) {
+if (hasKeystore) {
     keystorePropertiesFile.inputStream().use {
         keystoreProperties.load(it)
     }
@@ -37,12 +38,14 @@ android {
     compileSdk = 37
     ndkVersion = "30.0.16248370"
 
-        signingConfigs {
-        create("release") {
-            keyAlias = keystoreProperties["keyAlias"] as String
-            keyPassword = keystoreProperties["keyPassword"] as String
-            storeFile = file(keystoreProperties["storeFile"] as String)
-            storePassword = keystoreProperties["storePassword"] as String
+    signingConfigs {
+        if (hasKeystore) {
+            create("release") {
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+                storeFile = file(keystoreProperties.getProperty("storeFile") ?: "")
+                storePassword = keystoreProperties.getProperty("storePassword")
+            }
         }
     }
 
