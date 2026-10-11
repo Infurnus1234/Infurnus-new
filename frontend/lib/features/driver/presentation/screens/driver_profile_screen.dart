@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../../core/storage/secure_storage.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_button.dart';
@@ -15,7 +16,8 @@ class DriverProfileScreen extends ConsumerStatefulWidget {
   const DriverProfileScreen({super.key});
 
   @override
-  ConsumerState<DriverProfileScreen> createState() => _DriverProfileScreenState();
+  ConsumerState<DriverProfileScreen> createState() =>
+      _DriverProfileScreenState();
 }
 
 class _DriverProfileScreenState extends ConsumerState<DriverProfileScreen> {
@@ -70,7 +72,9 @@ class _DriverProfileScreenState extends ConsumerState<DriverProfileScreen> {
         'businessDescription': _businessDescController.text.trim(),
       };
 
-      await ref.read(updatePartnerUseCaseProvider).execute(partner.id, updateData);
+      await ref
+          .read(updatePartnerUseCaseProvider)
+          .execute(partner.id, updateData);
       await ref.read(driverDashboardProvider.notifier).loadDashboard();
 
       if (mounted) {
@@ -111,93 +115,106 @@ class _DriverProfileScreenState extends ConsumerState<DriverProfileScreen> {
       body: dashboardState.isLoading
           ? const InfurnusLoader(message: 'Loading Partner Profile...')
           : partner == null
-              ? const Center(child: Text('No Partner Profile found.'))
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (_errorMessage != null) _buildErrorBanner(_errorMessage!),
+          ? const Center(child: Text('No Partner Profile found.'))
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_errorMessage != null) _buildErrorBanner(_errorMessage!),
 
-                      // Status Header
-                      _buildStatusHeader(partner),
-                      const SizedBox(height: 20),
+                  // Status Header
+                  _buildStatusHeader(partner),
+                  const SizedBox(height: 20),
 
-                      // Business Info
-                      InfurnusCard(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Business Information', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 16),
-                            InfurnusTextField(
-                              label: 'Business Name',
-                              controller: _businessNameController,
-                            ),
-                            const SizedBox(height: 12),
-                            InfurnusTextField(
-                              label: 'Business Description',
-                              controller: _businessDescController,
-                            ),
-                            if (_isEditing) ...[
-                              const SizedBox(height: 20),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: OutlinedButton(
-                                      onPressed: _isSaving ? null : () => setState(() => _isEditing = false),
-                                      child: const Text('Cancel'),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: InfurnusButton(
-                                      text: 'Save Changes',
-                                      isLoading: _isSaving,
-                                      onPressed: _saveProfile,
-                                    ),
-                                  ),
-                                ],
+                  // Business Info
+                  InfurnusCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Business Information',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        InfurnusTextField(
+                          label: 'Business Name',
+                          controller: _businessNameController,
+                        ),
+                        const SizedBox(height: 12),
+                        InfurnusTextField(
+                          label: 'Business Description',
+                          controller: _businessDescController,
+                        ),
+                        if (_isEditing) ...[
+                          const SizedBox(height: 20),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: _isSaving
+                                      ? null
+                                      : () =>
+                                            setState(() => _isEditing = false),
+                                  child: const Text('Cancel'),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: InfurnusButton(
+                                  text: 'Save Changes',
+                                  isLoading: _isSaving,
+                                  onPressed: _saveProfile,
+                                ),
                               ),
                             ],
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      // Provider Mode Switcher (if user is DRIVER_FLEET_OWNER)
-                      _buildProviderModeSwitcher(context),
-
-                      const SizedBox(height: 16),
-
-                      // Provider Actions
-                      const Text('Account & Services', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 12),
-
-                      _buildActionTile(
-                        icon: Icons.account_balance,
-                        title: 'Bank & Payout Account',
-                        subtitle: 'Manage settlement account and payout details',
-                        onTap: () => context.push('/provider-bank-account'),
-                      ),
-                      const SizedBox(height: 10),
-                      _buildActionTile(
-                        icon: Icons.folder_open,
-                        title: 'KYC & Verification Documents',
-                        subtitle: 'Upload and check status of driving license and RC',
-                        onTap: () => context.push('/driver-documents'),
-                      ),
-                      const SizedBox(height: 10),
-                      _buildActionTile(
-                        icon: Icons.support_agent,
-                        title: 'Support & Helpdesk',
-                        subtitle: 'Submit tickets and view resolution status',
-                        onTap: () => context.push('/support-tickets'),
-                      ),
-                    ],
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
-                ),
+
+                  const SizedBox(height: 16),
+
+                  // Provider Mode Switcher (if user is DRIVER_FLEET_OWNER)
+                  _buildProviderModeSwitcher(context),
+
+                  const SizedBox(height: 16),
+
+                  // Provider Actions
+                  const Text(
+                    'Account & Services',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+
+                  _buildActionTile(
+                    icon: Icons.account_balance,
+                    title: 'Bank & Payout Account',
+                    subtitle: 'Manage settlement account and payout details',
+                    onTap: () => context.push('/provider-bank-account'),
+                  ),
+                  const SizedBox(height: 10),
+                  _buildActionTile(
+                    icon: Icons.folder_open,
+                    title: 'KYC & Verification Documents',
+                    subtitle:
+                        'Upload and check status of driving license and RC',
+                    onTap: () => context.push('/driver-documents'),
+                  ),
+                  const SizedBox(height: 10),
+                  _buildActionTile(
+                    icon: Icons.support_agent,
+                    title: 'Support & Helpdesk',
+                    subtitle: 'Submit tickets and view resolution status',
+                    onTap: () => context.push('/support-tickets'),
+                  ),
+                ],
+              ),
+            ),
     );
   }
 
@@ -215,18 +232,31 @@ class _DriverProfileScreenState extends ConsumerState<DriverProfileScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: AppColors.primaryGreen.withOpacity(0.15),
+                  color: AppColors.primaryGreen.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.swap_horiz, color: AppColors.primaryGreen, size: 20),
+                child: const Icon(
+                  Icons.swap_horiz,
+                  color: AppColors.primaryGreen,
+                  size: 20,
+                ),
               ),
               const SizedBox(width: 12),
               const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Provider Mode Switcher', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                    Text('You are registered as a Driver + Fleet Owner', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                    Text(
+                      'Provider Mode Switcher',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                    Text(
+                      'You are registered as a Driver + Fleet Owner',
+                      style: TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
                   ],
                 ),
               ),
@@ -238,10 +268,14 @@ class _DriverProfileScreenState extends ConsumerState<DriverProfileScreen> {
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: () async {
-                    await ref.read(secureStorageProvider).write(key: 'provider_mode', value: 'driver');
+                    await ref
+                        .read(secureStorageProvider)
+                        .write(key: 'provider_mode', value: 'driver');
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Switched to Driver Mode')),
+                        const SnackBar(
+                          content: Text('Switched to Driver Mode'),
+                        ),
                       );
                       context.go('/driver-dashboard');
                     }
@@ -258,10 +292,14 @@ class _DriverProfileScreenState extends ConsumerState<DriverProfileScreen> {
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () async {
-                    await ref.read(secureStorageProvider).write(key: 'provider_mode', value: 'fleet_owner');
+                    await ref
+                        .read(secureStorageProvider)
+                        .write(key: 'provider_mode', value: 'fleet_owner');
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Switched to Fleet Owner Mode')),
+                        const SnackBar(
+                          content: Text('Switched to Fleet Owner Mode'),
+                        ),
                       );
                       context.push('/fleet-dashboard');
                     }
@@ -290,7 +328,7 @@ class _DriverProfileScreenState extends ConsumerState<DriverProfileScreen> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppColors.primaryGreen.withOpacity(0.12),
+              color: AppColors.primaryGreen.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: AppColors.primaryGreen, size: 20),
@@ -300,9 +338,18 @@ class _DriverProfileScreenState extends ConsumerState<DriverProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(subtitle, style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+                Text(
+                  subtitle,
+                  style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                ),
               ],
             ),
           ),
@@ -322,7 +369,10 @@ class _DriverProfileScreenState extends ConsumerState<DriverProfileScreen> {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.red[200]!),
       ),
-      child: Text(message, style: const TextStyle(color: Colors.red, fontSize: 13)),
+      child: Text(
+        message,
+        style: const TextStyle(color: Colors.red, fontSize: 13),
+      ),
     );
   }
 
@@ -339,15 +389,34 @@ class _DriverProfileScreenState extends ConsumerState<DriverProfileScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Approval Status', style: TextStyle(color: Colors.grey, fontSize: 12)),
-              Text(status.toUpperCase(), style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 16)),
+              const Text(
+                'Approval Status',
+                style: TextStyle(color: Colors.grey, fontSize: 12),
+              ),
+              Text(
+                status.toUpperCase(),
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
             ],
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              const Text('Availability', style: TextStyle(color: Colors.grey, fontSize: 12)),
-              Text(partner.availabilityStatus.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const Text(
+                'Availability',
+                style: TextStyle(color: Colors.grey, fontSize: 12),
+              ),
+              Text(
+                partner.availabilityStatus.toUpperCase(),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
             ],
           ),
         ],

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_button.dart';
 import '../../../../shared/widgets/infurnus_card.dart';
@@ -11,15 +12,16 @@ import '../providers/driver_providers.dart';
 
 final fleetVehiclesFutureProvider =
     FutureProvider.autoDispose<List<VehicleModel>>((ref) async {
-  final ds = ref.watch(driverRemoteDataSourceProvider);
-  return ds.listFleetVehicles();
-});
+      final ds = ref.watch(driverRemoteDataSourceProvider);
+      return ds.listFleetVehicles();
+    });
 
 class FleetVehiclesScreen extends ConsumerStatefulWidget {
   const FleetVehiclesScreen({super.key});
 
   @override
-  ConsumerState<FleetVehiclesScreen> createState() => _FleetVehiclesScreenState();
+  ConsumerState<FleetVehiclesScreen> createState() =>
+      _FleetVehiclesScreenState();
 }
 
 class _FleetVehiclesScreenState extends ConsumerState<FleetVehiclesScreen> {
@@ -58,8 +60,13 @@ class _FleetVehiclesScreenState extends ConsumerState<FleetVehiclesScreen> {
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: const Color(0xFF16221A),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('Driver Assignment Code', style: TextStyle(color: Colors.white, fontSize: 18)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Text(
+            'Driver Assignment Code',
+            style: TextStyle(color: Colors.white, fontSize: 18),
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -70,9 +77,12 @@ class _FleetVehiclesScreenState extends ConsumerState<FleetVehiclesScreen> {
               const SizedBox(height: 20),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 16,
+                  horizontal: 12,
+                ),
                 decoration: BoxDecoration(
-                  color: AppColors.primaryGreen.withOpacity(0.12),
+                  color: AppColors.primaryGreen.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: AppColors.primaryGreen),
                 ),
@@ -107,28 +117,39 @@ class _FleetVehiclesScreenState extends ConsumerState<FleetVehiclesScreen> {
               onPressed: () {
                 Clipboard.setData(ClipboardData(text: code));
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Assignment code copied to clipboard')),
+                  const SnackBar(
+                    content: Text('Assignment code copied to clipboard'),
+                  ),
                 );
                 Navigator.pop(ctx);
                 ref.invalidate(fleetVehiclesFutureProvider);
               },
-              child: const Text('Copy Code', style: TextStyle(color: AppColors.primaryGreen, fontWeight: FontWeight.bold)),
+              child: const Text(
+                'Copy Code',
+                style: TextStyle(
+                  color: AppColors.primaryGreen,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
             TextButton(
               onPressed: () {
                 Navigator.pop(ctx);
                 ref.invalidate(fleetVehiclesFutureProvider);
               },
-              child: const Text('Done', style: TextStyle(color: Colors.white70)),
+              child: const Text(
+                'Done',
+                style: TextStyle(color: Colors.white70),
+              ),
             ),
           ],
         ),
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to generate code: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to generate code: $e')));
       }
     }
   }
@@ -138,16 +159,25 @@ class _FleetVehiclesScreenState extends ConsumerState<FleetVehiclesScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E2621),
-        title: const Text('Unassign Driver?', style: TextStyle(color: Colors.white)),
+        title: const Text(
+          'Unassign Driver?',
+          style: TextStyle(color: Colors.white),
+        ),
         content: Text(
           'Are you sure you want to unassign driver from ${vehicle.make} ${vehicle.model}?',
           style: TextStyle(color: Colors.grey[300]),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Unassign', style: TextStyle(color: Colors.redAccent)),
+            child: const Text(
+              'Unassign',
+              style: TextStyle(color: Colors.redAccent),
+            ),
           ),
         ],
       ),
@@ -165,7 +195,8 @@ class _FleetVehiclesScreenState extends ConsumerState<FleetVehiclesScreen> {
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text('Failed: $e')));
         }
       }
     }
@@ -197,7 +228,11 @@ class _FleetVehiclesScreenState extends ConsumerState<FleetVehiclesScreen> {
                   children: [
                     const Text(
                       'Add Fleet Vehicle',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
                     ),
                     IconButton(
                       icon: const Icon(Icons.close, color: Colors.white70),
@@ -206,29 +241,60 @@ class _FleetVehiclesScreenState extends ConsumerState<FleetVehiclesScreen> {
                   ],
                 ),
                 const SizedBox(height: 14),
-                InfurnusTextField(label: 'Make', controller: _makeController, hintText: 'e.g. Maruti / Toyota'),
+                InfurnusTextField(
+                  label: 'Make',
+                  controller: _makeController,
+                  hintText: 'e.g. Maruti / Toyota',
+                ),
                 const SizedBox(height: 12),
-                InfurnusTextField(label: 'Model', controller: _modelController, hintText: 'e.g. Dzire / Innova'),
+                InfurnusTextField(
+                  label: 'Model',
+                  controller: _modelController,
+                  hintText: 'e.g. Dzire / Innova',
+                ),
                 const SizedBox(height: 12),
-                InfurnusTextField(label: 'Plate Number', controller: _plateController, hintText: 'e.g. KA-01-AB-1234'),
+                InfurnusTextField(
+                  label: 'Plate Number',
+                  controller: _plateController,
+                  hintText: 'e.g. KA-01-AB-1234',
+                ),
                 const SizedBox(height: 12),
-                InfurnusTextField(label: 'Color (Optional)', controller: _colorController, hintText: 'e.g. White'),
+                InfurnusTextField(
+                  label: 'Color (Optional)',
+                  controller: _colorController,
+                  hintText: 'e.g. White',
+                ),
                 const SizedBox(height: 12),
-                InfurnusTextField(label: 'Fuel Type (Optional)', controller: _fuelTypeController, hintText: 'e.g. CNG / Petrol / EV'),
+                InfurnusTextField(
+                  label: 'Fuel Type (Optional)',
+                  controller: _fuelTypeController,
+                  hintText: 'e.g. CNG / Petrol / EV',
+                ),
                 const SizedBox(height: 16),
-                const Text('Sector', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                const Text(
+                  'Sector',
+                  style: TextStyle(color: Colors.white70, fontSize: 13),
+                ),
                 const SizedBox(height: 6),
                 DropdownButtonFormField<String>(
-                  value: _selectedSector,
+                  initialValue: _selectedSector,
                   dropdownColor: const Color(0xFF1E2621),
                   decoration: InputDecoration(
                     filled: true,
                     fillColor: const Color(0xFF1E2621),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                   items: const [
-                    DropdownMenuItem(value: 'passenger', child: Text('Passenger')),
-                    DropdownMenuItem(value: 'logistics', child: Text('Logistics')),
+                    DropdownMenuItem(
+                      value: 'passenger',
+                      child: Text('Passenger'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'logistics',
+                      child: Text('Logistics'),
+                    ),
                     DropdownMenuItem(value: 'service', child: Text('Service')),
                     DropdownMenuItem(value: 'premium', child: Text('Premium')),
                   ],
@@ -247,7 +313,11 @@ class _FleetVehiclesScreenState extends ConsumerState<FleetVehiclesScreen> {
                               _modelController.text.trim().isEmpty ||
                               _plateController.text.trim().isEmpty) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Please fill Make, Model and Plate number')),
+                              const SnackBar(
+                                content: Text(
+                                  'Please fill Make, Model and Plate number',
+                                ),
+                              ),
                             );
                             return;
                           }
@@ -258,15 +328,22 @@ class _FleetVehiclesScreenState extends ConsumerState<FleetVehiclesScreen> {
                             await ds.createFleetVehicle({
                               'make': _makeController.text.trim(),
                               'model': _modelController.text.trim(),
-                              'plateNumber': _plateController.text.trim().toUpperCase(),
+                              'plateNumber': _plateController.text
+                                  .trim()
+                                  .toUpperCase(),
                               if (_colorController.text.trim().isNotEmpty)
                                 'color': _colorController.text.trim(),
                               if (_fuelTypeController.text.trim().isNotEmpty)
                                 'fuelType': _fuelTypeController.text.trim(),
                               'sector': _selectedSector,
                               'category': _selectedCategory,
-                              'seatingCapacity': int.tryParse(_seatingController.text) ?? 4,
-                              'loadCapacityKg': double.tryParse(_loadCapacityController.text) ?? 0.0,
+                              'seatingCapacity':
+                                  int.tryParse(_seatingController.text) ?? 4,
+                              'loadCapacityKg':
+                                  double.tryParse(
+                                    _loadCapacityController.text,
+                                  ) ??
+                                  0.0,
                               'isCommercial': true,
                             });
 
@@ -281,7 +358,9 @@ class _FleetVehiclesScreenState extends ConsumerState<FleetVehiclesScreen> {
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('Fleet vehicle added successfully'),
+                                  content: Text(
+                                    'Fleet vehicle added successfully',
+                                  ),
                                   backgroundColor: AppColors.primaryGreen,
                                 ),
                               );
@@ -289,7 +368,9 @@ class _FleetVehiclesScreenState extends ConsumerState<FleetVehiclesScreen> {
                           } catch (e) {
                             setSheetState(() => _isCreating = false);
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Failed: $e')),
+                              );
                             }
                           }
                         },
@@ -320,10 +401,14 @@ class _FleetVehiclesScreenState extends ConsumerState<FleetVehiclesScreen> {
         onPressed: _showAddVehicleSheet,
         backgroundColor: AppColors.primaryGreen,
         icon: const Icon(Icons.add, color: Colors.black),
-        label: const Text('Add Vehicle', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        label: const Text(
+          'Add Vehicle',
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+        ),
       ),
       body: vehiclesAsync.when(
-        loading: () => const InfurnusLoader(message: 'Loading fleet vehicles...'),
+        loading: () =>
+            const InfurnusLoader(message: 'Loading fleet vehicles...'),
         error: (err, _) => Center(child: Text('Error: $err')),
         data: (vehicles) {
           if (vehicles.isEmpty) {
@@ -331,11 +416,21 @@ class _FleetVehiclesScreenState extends ConsumerState<FleetVehiclesScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.directions_car_outlined, size: 64, color: Colors.grey[600]),
+                  Icon(
+                    Icons.directions_car_outlined,
+                    size: 64,
+                    color: Colors.grey[600],
+                  ),
                   const SizedBox(height: 16),
-                  const Text('No Fleet Vehicles', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const Text(
+                    'No Fleet Vehicles',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
                   const SizedBox(height: 8),
-                  Text('Register your fleet vehicles to assign drivers.', style: TextStyle(color: Colors.grey[400])),
+                  Text(
+                    'Register your fleet vehicles to assign drivers.',
+                    style: TextStyle(color: Colors.grey[400]),
+                  ),
                 ],
               ),
             );
@@ -358,20 +453,28 @@ class _FleetVehiclesScreenState extends ConsumerState<FleetVehiclesScreen> {
                       children: [
                         Text(
                           '${vehicle.make} ${vehicle.model}',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
                             color: vehicle.isActive
-                                ? AppColors.primaryGreen.withOpacity(0.15)
-                                : Colors.red.withOpacity(0.15),
+                                ? AppColors.primaryGreen.withValues(alpha: 0.15)
+                                : Colors.red.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
                             vehicle.isActive ? 'ACTIVE' : 'INACTIVE',
                             style: TextStyle(
-                              color: vehicle.isActive ? AppColors.primaryGreen : Colors.red,
+                              color: vehicle.isActive
+                                  ? AppColors.primaryGreen
+                                  : Colors.red,
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
                             ),
@@ -392,21 +495,30 @@ class _FleetVehiclesScreenState extends ConsumerState<FleetVehiclesScreen> {
                     Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.white10,
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
                             vehicle.sector.toUpperCase(),
-                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white60),
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white60,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
                         Text(
                           hasDriver ? 'Driver Assigned' : 'Unassigned',
                           style: TextStyle(
-                            color: hasDriver ? AppColors.primaryGreen : Colors.amber,
+                            color: hasDriver
+                                ? AppColors.primaryGreen
+                                : Colors.amber,
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
                           ),
@@ -415,7 +527,10 @@ class _FleetVehiclesScreenState extends ConsumerState<FleetVehiclesScreen> {
                           const SizedBox(width: 8),
                           Text(
                             'Code: ${vehicle.activeAssignmentCode}',
-                            style: const TextStyle(color: Colors.cyanAccent, fontSize: 11),
+                            style: const TextStyle(
+                              color: Colors.cyanAccent,
+                              fontSize: 11,
+                            ),
                           ),
                         ],
                       ],
@@ -429,21 +544,38 @@ class _FleetVehiclesScreenState extends ConsumerState<FleetVehiclesScreen> {
                         if (hasDriver)
                           TextButton.icon(
                             onPressed: () => _unassignDriver(vehicle),
-                            icon: const Icon(Icons.person_remove, size: 16, color: Colors.redAccent),
-                            label: const Text('Unassign', style: TextStyle(color: Colors.redAccent, fontSize: 12)),
+                            icon: const Icon(
+                              Icons.person_remove,
+                              size: 16,
+                              color: Colors.redAccent,
+                            ),
+                            label: const Text(
+                              'Unassign',
+                              style: TextStyle(
+                                color: Colors.redAccent,
+                                fontSize: 12,
+                              ),
+                            ),
                           ),
                         const SizedBox(width: 8),
                         ElevatedButton.icon(
                           onPressed: () => _showGenerateCodeDialog(vehicle),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primaryGreen.withOpacity(0.15),
+                            backgroundColor: AppColors.primaryGreen.withValues(
+                              alpha: 0.15,
+                            ),
                             foregroundColor: AppColors.primaryGreen,
                             elevation: 0,
                           ),
                           icon: const Icon(Icons.vpn_key, size: 16),
                           label: Text(
-                            vehicle.activeAssignmentCode != null ? 'View Code' : 'Assign Code',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                            vehicle.activeAssignmentCode != null
+                                ? 'View Code'
+                                : 'Assign Code',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ],

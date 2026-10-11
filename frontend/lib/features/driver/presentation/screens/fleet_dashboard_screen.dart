@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_card.dart';
 import '../../../../shared/widgets/infurnus_error_view.dart';
@@ -11,15 +12,15 @@ import '../providers/driver_providers.dart';
 
 final fleetDashboardFutureProvider =
     FutureProvider.autoDispose<FleetDashboardModel>((ref) async {
-  final ds = ref.watch(driverRemoteDataSourceProvider);
-  return ds.getFleetDashboard();
-});
+      final ds = ref.watch(driverRemoteDataSourceProvider);
+      return ds.getFleetDashboard();
+    });
 
 final fleetEarningsFutureProvider =
     FutureProvider.autoDispose<FleetEarningsModel>((ref) async {
-  final ds = ref.watch(driverRemoteDataSourceProvider);
-  return ds.getFleetEarnings();
-});
+      final ds = ref.watch(driverRemoteDataSourceProvider);
+      return ds.getFleetEarnings();
+    });
 
 class FleetDashboardScreen extends ConsumerWidget {
   const FleetDashboardScreen({super.key});
@@ -55,8 +56,11 @@ class FleetDashboardScreen extends ConsumerWidget {
             children: [
               // Hero Earnings & Revenue Summary
               earningsAsync.when(
-                loading: () => const InfurnusLoader(message: 'Loading fleet financials...'),
-                error: (err, _) => InfurnusCard(child: Text('Earnings error: $err')),
+                loading: () => const InfurnusLoader(
+                  message: 'Loading fleet financials...',
+                ),
+                error: (err, _) =>
+                    InfurnusCard(child: Text('Earnings error: $err')),
                 data: (earnings) => _buildEarningsHero(context, earnings),
               ),
 
@@ -64,7 +68,8 @@ class FleetDashboardScreen extends ConsumerWidget {
 
               // Fleet Vehicle & Driver KPI Grid
               dashboardAsync.when(
-                loading: () => const InfurnusLoader(message: 'Loading fleet status...'),
+                loading: () =>
+                    const InfurnusLoader(message: 'Loading fleet status...'),
                 error: (err, _) => InfurnusErrorView(
                   message: err.toString(),
                   onRetry: () => ref.refresh(fleetDashboardFutureProvider),
@@ -73,14 +78,18 @@ class FleetDashboardScreen extends ConsumerWidget {
               ),
 
               const SizedBox(height: 24),
-              const Text('Fleet Management', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+              const Text(
+                'Fleet Management',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 12),
 
               _buildNavCard(
                 context,
                 icon: Icons.directions_car,
                 title: 'Manage Fleet Vehicles',
-                subtitle: 'Add vehicles, assign drivers & generate assignment codes',
+                subtitle:
+                    'Add vehicles, assign drivers & generate assignment codes',
                 route: '/fleet-vehicles',
               ),
               const SizedBox(height: 12),
@@ -88,7 +97,8 @@ class FleetDashboardScreen extends ConsumerWidget {
                 context,
                 icon: Icons.people,
                 title: 'Fleet Drivers',
-                subtitle: 'Monitor assigned drivers, availability & performance',
+                subtitle:
+                    'Monitor assigned drivers, availability & performance',
                 route: '/fleet-drivers',
               ),
               const SizedBox(height: 12),
@@ -96,7 +106,8 @@ class FleetDashboardScreen extends ConsumerWidget {
                 context,
                 icon: Icons.account_balance,
                 title: 'Bank & Payout Details',
-                subtitle: 'Configure settlement bank account for weekly payouts',
+                subtitle:
+                    'Configure settlement bank account for weekly payouts',
                 route: '/provider-bank-account',
               ),
               const SizedBox(height: 12),
@@ -125,10 +136,12 @@ class FleetDashboardScreen extends ConsumerWidget {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.primaryGreen.withOpacity(0.35)),
+        border: Border.all(
+          color: AppColors.primaryGreen.withValues(alpha: 0.35),
+        ),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primaryGreen.withOpacity(0.12),
+            color: AppColors.primaryGreen.withValues(alpha: 0.12),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
@@ -142,17 +155,30 @@ class FleetDashboardScreen extends ConsumerWidget {
             children: [
               const Row(
                 children: [
-                  Icon(Icons.monetization_on, color: AppColors.primaryGreen, size: 22),
+                  Icon(
+                    Icons.monetization_on,
+                    color: AppColors.primaryGreen,
+                    size: 22,
+                  ),
                   SizedBox(width: 8),
                   Text(
                     'MONTHLY NET PAYOUT',
-                    style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1),
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1,
+                    ),
                   ),
                 ],
               ),
               Text(
                 '${earnings.totalTrips} Trips',
-                style: const TextStyle(color: AppColors.primaryGreen, fontSize: 12, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  color: AppColors.primaryGreen,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ],
           ),
@@ -172,9 +198,18 @@ class FleetDashboardScreen extends ConsumerWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildSubStat('Today Revenue', '₹${earnings.todayRevenue.toStringAsFixed(0)}'),
-              _buildSubStat('Week Revenue', '₹${earnings.thisWeekRevenue.toStringAsFixed(0)}'),
-              _buildSubStat('Commission', '₹${earnings.platformCommission.toStringAsFixed(0)}'),
+              _buildSubStat(
+                'Today Revenue',
+                '₹${earnings.todayRevenue.toStringAsFixed(0)}',
+              ),
+              _buildSubStat(
+                'Week Revenue',
+                '₹${earnings.thisWeekRevenue.toStringAsFixed(0)}',
+              ),
+              _buildSubStat(
+                'Commission',
+                '₹${earnings.platformCommission.toStringAsFixed(0)}',
+              ),
             ],
           ),
         ],
@@ -186,9 +221,19 @@ class FleetDashboardScreen extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white54, fontSize: 11),
+        ),
         const SizedBox(height: 3),
-        Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+          ),
+        ),
       ],
     );
   }
@@ -202,21 +247,46 @@ class FleetDashboardScreen extends ConsumerWidget {
       physics: const NeverScrollableScrollPhysics(),
       childAspectRatio: 1.55,
       children: [
-        _buildMetricTile('Total Vehicles', '${metrics.totalVehicles}', Icons.directions_car, Colors.blue),
-        _buildMetricTile('Active Vehicles', '${metrics.activeVehicles}', Icons.check_circle, AppColors.primaryGreen),
-        _buildMetricTile('Total Drivers', '${metrics.totalDrivers}', Icons.people, Colors.purple),
-        _buildMetricTile('Available Drivers', '${metrics.availableDrivers}', Icons.person_pin, Colors.teal),
+        _buildMetricTile(
+          'Total Vehicles',
+          '${metrics.totalVehicles}',
+          Icons.directions_car,
+          Colors.blue,
+        ),
+        _buildMetricTile(
+          'Active Vehicles',
+          '${metrics.activeVehicles}',
+          Icons.check_circle,
+          AppColors.primaryGreen,
+        ),
+        _buildMetricTile(
+          'Total Drivers',
+          '${metrics.totalDrivers}',
+          Icons.people,
+          Colors.purple,
+        ),
+        _buildMetricTile(
+          'Available Drivers',
+          '${metrics.availableDrivers}',
+          Icons.person_pin,
+          Colors.teal,
+        ),
       ],
     );
   }
 
-  Widget _buildMetricTile(String title, String count, IconData icon, Color color) {
+  Widget _buildMetricTile(
+    String title,
+    String count,
+    IconData icon,
+    Color color,
+  ) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: const Color(0xFF1A221E),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -225,13 +295,20 @@ class FleetDashboardScreen extends ConsumerWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(title, style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+              Text(
+                title,
+                style: TextStyle(color: Colors.grey[400], fontSize: 12),
+              ),
               Icon(icon, color: color, size: 18),
             ],
           ),
           Text(
             count,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+            style: const TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
           ),
         ],
       ),
@@ -252,7 +329,7 @@ class FleetDashboardScreen extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: AppColors.primaryGreen.withOpacity(0.12),
+              color: AppColors.primaryGreen.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: AppColors.primaryGreen, size: 24),
@@ -262,9 +339,18 @@ class FleetDashboardScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
                 const SizedBox(height: 3),
-                Text(subtitle, style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+                Text(
+                  subtitle,
+                  style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                ),
               ],
             ),
           ),

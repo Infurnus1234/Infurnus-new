@@ -27,6 +27,14 @@ describe('revision standby', () => {
     }
     await request(server).get('/health/ready').expect(503);
   });
+  it('exposes only a forwarding count for preview topology verification', async () => {
+    const response = await request(createServer(respondWhileStandby))
+      .get('/health')
+      .set('X-Forwarded-For', '203.0.113.1, 203.0.113.2')
+      .expect(200);
+    expect(response.headers['x-infurnus-forwarded-hops']).toBe('2');
+    expect(JSON.stringify(response.body)).not.toContain('203.0.113');
+  });
 
   it('waits for real ownership conflict and activates only after acquisition', async () => {
     vi.useFakeTimers();

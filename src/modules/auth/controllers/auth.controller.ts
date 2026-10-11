@@ -305,13 +305,22 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
     try {
       const input = loginSchema.parse(req.body);
 
-      const result = await loginService.authenticate({
+      const credentials = {
         ...(input.email !== undefined ? { email: input.email } : {}),
 
         ...(input.phone !== undefined ? { phone: input.phone } : {}),
 
         password: input.password,
-      });
+      };
+      const result =
+        req.path === '/admin/login'
+          ? await loginService.authenticate(credentials, true)
+          : await loginService.authenticate(credentials);
+
+      if ('userId' in result) {
+        await issueAuthentication(req, res, result.userId, result.role);
+        return;
+      }
 
       res.status(200).json({
         success: true,

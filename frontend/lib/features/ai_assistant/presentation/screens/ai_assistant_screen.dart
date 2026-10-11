@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../../core/theme/app_colors.dart';
 
 class AiAssistantScreen extends ConsumerStatefulWidget {
@@ -18,14 +19,15 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
   void initState() {
     super.initState();
     _messages.add({
-      'text': 'Hello! I am your INFURNUS AI. How can I help you with your ${widget.role} account today?',
+      'text':
+          'Hello! I am your INFURNUS AI. How can I help you with your ${widget.role} account today?',
       'isUser': false,
     });
   }
 
   void _sendMessage() {
     if (_messageController.text.isEmpty) return;
-    
+
     setState(() {
       _messages.add({'text': _messageController.text, 'isUser': true});
       _messageController.clear();
@@ -36,8 +38,9 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
       if (mounted) {
         setState(() {
           _messages.add({
-            'text': 'I am looking into that for you. As a ${widget.role}, I can assist with rides, payments, and account settings.',
-            'isUser': false
+            'text':
+                'I am looking into that for you. As a ${widget.role}, I can assist with rides, payments, and account settings.',
+            'isUser': false,
           });
         });
       }
@@ -79,13 +82,20 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
         decoration: BoxDecoration(
           color: isUser ? AppColors.primaryGreen : Colors.grey[200],
           borderRadius: BorderRadius.circular(16).copyWith(
-            bottomRight: isUser ? const Radius.circular(0) : const Radius.circular(16),
-            bottomLeft: isUser ? const Radius.circular(16) : const Radius.circular(0),
+            bottomRight: isUser
+                ? const Radius.circular(0)
+                : const Radius.circular(16),
+            bottomLeft: isUser
+                ? const Radius.circular(16)
+                : const Radius.circular(0),
           ),
         ),
         child: Text(
           text,
-          style: TextStyle(color: isUser ? Colors.white : Colors.black87, fontSize: 15),
+          style: TextStyle(
+            color: isUser ? Colors.white : Colors.black87,
+            fontSize: 15,
+          ),
         ),
       ),
     );
@@ -94,7 +104,15 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
   Widget _buildInputArea() {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+          ),
+        ],
+      ),
       child: Row(
         children: [
           Expanded(
@@ -102,7 +120,10 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
               controller: _messageController,
               decoration: InputDecoration(
                 hintText: 'Ask INFURNUS AI...',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: BorderSide.none,
+                ),
                 filled: true,
                 fillColor: Colors.grey[100],
                 contentPadding: const EdgeInsets.symmetric(horizontal: 20),

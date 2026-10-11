@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_card.dart';
 import '../../../../shared/widgets/infurnus_loader.dart';
@@ -8,9 +9,9 @@ import '../providers/driver_providers.dart';
 
 final fleetDriversFutureProvider =
     FutureProvider.autoDispose<List<FleetDriverModel>>((ref) async {
-  final ds = ref.watch(driverRemoteDataSourceProvider);
-  return ds.listFleetDrivers();
-});
+      final ds = ref.watch(driverRemoteDataSourceProvider);
+      return ds.listFleetDrivers();
+    });
 
 class FleetDriversScreen extends ConsumerWidget {
   const FleetDriversScreen({super.key});
@@ -30,7 +31,8 @@ class FleetDriversScreen extends ConsumerWidget {
         ],
       ),
       body: driversAsync.when(
-        loading: () => const InfurnusLoader(message: 'Loading fleet drivers...'),
+        loading: () =>
+            const InfurnusLoader(message: 'Loading fleet drivers...'),
         error: (err, _) => Center(child: Text('Error: $err')),
         data: (drivers) {
           if (drivers.isEmpty) {
@@ -40,7 +42,10 @@ class FleetDriversScreen extends ConsumerWidget {
                 children: [
                   Icon(Icons.people_outline, size: 64, color: Colors.grey[600]),
                   const SizedBox(height: 16),
-                  const Text('No Drivers Assigned', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const Text(
+                    'No Drivers Assigned',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
                   const SizedBox(height: 8),
                   Text(
                     'Generate an assignment code from "Fleet Vehicles" and share it with your driver.',
@@ -70,11 +75,17 @@ class FleetDriversScreen extends ConsumerWidget {
                         Row(
                           children: [
                             CircleAvatar(
-                              backgroundColor: AppColors.primaryGreen.withOpacity(0.15),
+                              backgroundColor: AppColors.primaryGreen
+                                  .withValues(alpha: 0.15),
                               radius: 20,
                               child: Text(
-                                driver.name.isNotEmpty ? driver.name[0].toUpperCase() : 'D',
-                                style: const TextStyle(color: AppColors.primaryGreen, fontWeight: FontWeight.bold),
+                                driver.name.isNotEmpty
+                                    ? driver.name[0].toUpperCase()
+                                    : 'D',
+                                style: const TextStyle(
+                                  color: AppColors.primaryGreen,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                             const SizedBox(width: 12),
@@ -83,29 +94,40 @@ class FleetDriversScreen extends ConsumerWidget {
                               children: [
                                 Text(
                                   driver.name,
-                                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
                                   driver.phone,
-                                  style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                                  style: TextStyle(
+                                    color: Colors.grey[400],
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ],
                             ),
                           ],
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
                             color: isOnline
-                                ? AppColors.primaryGreen.withOpacity(0.15)
-                                : Colors.grey.withOpacity(0.15),
+                                ? AppColors.primaryGreen.withValues(alpha: 0.15)
+                                : Colors.grey.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
                             isOnline ? 'ONLINE' : 'OFFLINE',
                             style: TextStyle(
-                              color: isOnline ? AppColors.primaryGreen : Colors.grey,
+                              color: isOnline
+                                  ? AppColors.primaryGreen
+                                  : Colors.grey,
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
                             ),
@@ -122,20 +144,35 @@ class FleetDriversScreen extends ConsumerWidget {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Assigned Vehicle', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                            const Text(
+                              'Assigned Vehicle',
+                              style: TextStyle(
+                                color: Colors.white54,
+                                fontSize: 11,
+                              ),
+                            ),
                             const SizedBox(height: 2),
                             Text(
                               driver.assignedVehicle != null
                                   ? '${driver.assignedVehicle!['make']} ${driver.assignedVehicle!['model']} (${driver.assignedVehicle!['plateNumber']})'
                                   : 'None',
-                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
                             ),
                           ],
                         ),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            const Text('Completed Trips', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                            const Text(
+                              'Completed Trips',
+                              style: TextStyle(
+                                color: Colors.white54,
+                                fontSize: 11,
+                              ),
+                            ),
                             const SizedBox(height: 2),
                             Text(
                               '${driver.completedTrips}',

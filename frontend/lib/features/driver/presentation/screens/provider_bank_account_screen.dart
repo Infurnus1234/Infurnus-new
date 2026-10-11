@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_button.dart';
 import '../../../../shared/widgets/infurnus_card.dart';
@@ -10,18 +11,20 @@ import '../providers/driver_providers.dart';
 
 final providerBankAccountFutureProvider =
     FutureProvider.autoDispose<ProviderBankAccountModel?>((ref) async {
-  final dataSource = ref.watch(driverRemoteDataSourceProvider);
-  return dataSource.getProviderBankAccount();
-});
+      final dataSource = ref.watch(driverRemoteDataSourceProvider);
+      return dataSource.getProviderBankAccount();
+    });
 
 class ProviderBankAccountScreen extends ConsumerStatefulWidget {
   const ProviderBankAccountScreen({super.key});
 
   @override
-  ConsumerState<ProviderBankAccountScreen> createState() => _ProviderBankAccountScreenState();
+  ConsumerState<ProviderBankAccountScreen> createState() =>
+      _ProviderBankAccountScreenState();
 }
 
-class _ProviderBankAccountScreenState extends ConsumerState<ProviderBankAccountScreen> {
+class _ProviderBankAccountScreenState
+    extends ConsumerState<ProviderBankAccountScreen> {
   final _holderNameController = TextEditingController();
   final _accountNumberController = TextEditingController();
   final _ifscController = TextEditingController();
@@ -56,7 +59,9 @@ class _ProviderBankAccountScreenState extends ConsumerState<ProviderBankAccountS
         _ifscController.text.trim().isEmpty ||
         _bankNameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill all required bank account fields')),
+        const SnackBar(
+          content: Text('Please fill all required bank account fields'),
+        ),
       );
       return;
     }
@@ -69,7 +74,8 @@ class _ProviderBankAccountScreenState extends ConsumerState<ProviderBankAccountS
         'accountNumber': _accountNumberController.text.trim(),
         'ifscCode': _ifscController.text.trim().toUpperCase(),
         'bankName': _bankNameController.text.trim(),
-        if (_upiController.text.trim().isNotEmpty) 'upiId': _upiController.text.trim(),
+        if (_upiController.text.trim().isNotEmpty)
+          'upiId': _upiController.text.trim(),
       });
 
       ref.invalidate(providerBankAccountFutureProvider);
@@ -124,7 +130,10 @@ class _ProviderBankAccountScreenState extends ConsumerState<ProviderBankAccountS
     );
   }
 
-  Widget _buildBankDisplay(BuildContext context, ProviderBankAccountModel bank) {
+  Widget _buildBankDisplay(
+    BuildContext context,
+    ProviderBankAccountModel bank,
+  ) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -140,10 +149,12 @@ class _ProviderBankAccountScreenState extends ConsumerState<ProviderBankAccountS
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: AppColors.primaryGreen.withOpacity(0.35)),
+              border: Border.all(
+                color: AppColors.primaryGreen.withValues(alpha: 0.35),
+              ),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primaryGreen.withOpacity(0.15),
+                  color: AppColors.primaryGreen.withValues(alpha: 0.15),
                   blurRadius: 16,
                   offset: const Offset(0, 6),
                 ),
@@ -165,20 +176,27 @@ class _ProviderBankAccountScreenState extends ConsumerState<ProviderBankAccountS
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: bank.isVerified
-                            ? AppColors.primaryGreen.withOpacity(0.2)
-                            : Colors.amber.withOpacity(0.2),
+                            ? AppColors.primaryGreen.withValues(alpha: 0.2)
+                            : Colors.amber.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: bank.isVerified ? AppColors.primaryGreen : Colors.amber,
+                          color: bank.isVerified
+                              ? AppColors.primaryGreen
+                              : Colors.amber,
                         ),
                       ),
                       child: Text(
                         bank.isVerified ? 'VERIFIED' : 'PENDING',
                         style: TextStyle(
-                          color: bank.isVerified ? AppColors.primaryGreen : Colors.amber,
+                          color: bank.isVerified
+                              ? AppColors.primaryGreen
+                              : Colors.amber,
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
                         ),
@@ -203,22 +221,36 @@ class _ProviderBankAccountScreenState extends ConsumerState<ProviderBankAccountS
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('ACCOUNT HOLDER', style: TextStyle(color: Colors.white54, fontSize: 10)),
+                        const Text(
+                          'ACCOUNT HOLDER',
+                          style: TextStyle(color: Colors.white54, fontSize: 10),
+                        ),
                         const SizedBox(height: 3),
                         Text(
                           bank.accountHolderName,
-                          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ],
                     ),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        const Text('IFSC CODE', style: TextStyle(color: Colors.white54, fontSize: 10)),
+                        const Text(
+                          'IFSC CODE',
+                          style: TextStyle(color: Colors.white54, fontSize: 10),
+                        ),
                         const SizedBox(height: 3),
                         Text(
                           bank.ifscCode,
-                          style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ],
                     ),
@@ -228,9 +260,19 @@ class _ProviderBankAccountScreenState extends ConsumerState<ProviderBankAccountS
                   const SizedBox(height: 14),
                   Row(
                     children: [
-                      const Icon(Icons.flash_on, color: AppColors.primaryGreen, size: 14),
+                      const Icon(
+                        Icons.flash_on,
+                        color: AppColors.primaryGreen,
+                        size: 14,
+                      ),
                       const SizedBox(width: 4),
-                      Text('UPI: ${bank.upiId}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                      Text(
+                        'UPI: ${bank.upiId}',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -244,15 +286,29 @@ class _ProviderBankAccountScreenState extends ConsumerState<ProviderBankAccountS
               children: [
                 const Row(
                   children: [
-                    Icon(Icons.shield_outlined, color: AppColors.primaryGreen, size: 20),
+                    Icon(
+                      Icons.shield_outlined,
+                      color: AppColors.primaryGreen,
+                      size: 20,
+                    ),
                     SizedBox(width: 8),
-                    Text('Payout Security', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    Text(
+                      'Payout Security',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),
                 Text(
                   'Your full bank account number is securely encrypted. All weekly payouts and settlements are automatically deposited into this verified account.',
-                  style: TextStyle(color: Colors.grey[400], fontSize: 13, height: 1.4),
+                  style: TextStyle(
+                    color: Colors.grey[400],
+                    fontSize: 13,
+                    height: 1.4,
+                  ),
                 ),
               ],
             ),
@@ -264,10 +320,15 @@ class _ProviderBankAccountScreenState extends ConsumerState<ProviderBankAccountS
               side: const BorderSide(color: AppColors.primaryGreen),
               padding: const EdgeInsets.symmetric(vertical: 16),
               minimumSize: const Size(double.infinity, 50),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             onPressed: () => setState(() => _isEditing = true),
-            child: const Text('Update Bank Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            child: const Text(
+              'Update Bank Details',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
           ),
         ],
       ),
@@ -333,7 +394,10 @@ class _ProviderBankAccountScreenState extends ConsumerState<ProviderBankAccountS
                 minimumSize: const Size(double.infinity, 48),
               ),
               onPressed: () => setState(() => _isEditing = false),
-              child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: Colors.white70),
+              ),
             ),
           ],
         ],

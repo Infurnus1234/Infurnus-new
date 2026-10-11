@@ -6,6 +6,7 @@ import type { LoginChallengeRepository } from '../repositories/login-challenge.r
 import type { OtpProvider } from '../providers/otp.provider.js';
 
 import { verifyPassword } from '../utils/password.js';
+import { isPasswordOnlyAdmin } from './admin-login-policy.js';
 
 import { normalizeEmail, normalizePhone } from '../utils/contact.js';
 
@@ -18,6 +19,11 @@ import type { LoginInput } from '../types/login.js';
 export interface LoginChallengeResult {
   challengeId: string;
   expiresAt: Date;
+}
+
+export interface PasswordLoginResult {
+  userId: string;
+  role: string;
 }
 
 // ============================================================
@@ -43,7 +49,10 @@ export class LoginService {
   // Authenticate
   // ==========================================================
 
-  async authenticate(input: LoginInput): Promise<LoginChallengeResult> {
+  async authenticate(
+    input: LoginInput,
+    adminOnly = false,
+  ): Promise<LoginChallengeResult | PasswordLoginResult> {
     // --------------------------------------------------------
     // Determine supplied identifiers
     //
@@ -147,6 +156,25 @@ export class LoginService {
 
     if (!validPassword) {
       throw new AppError('INVALID_CREDENTIALS', 'Invalid email/phone or password', 401);
+    }
+
+    if (
+      isPasswordOnlyAdmin(identity.role) &&
+      identity.lockedUntil &&
+      new Date(identity.lockedUntil).getTime() > Date.now()
+    ) {
+      throw new AppError('ACCOUNT_LOCKED', 'Account is temporarily locked', 401);
+    }
+
+    if (adminOnly && !isPasswordOnlyAdmin(identity.role)) {
+      throw new AppError(
+        'ADMIN_ACCESS_REQUIRED',
+        'An active administrative account is required',
+        403,
+      );
+    }
+    if (isPasswordOnlyAdmin(identity.role)) {
+      return { userId: identity.id, role: identity.role };
     }
 
     // ========================================================

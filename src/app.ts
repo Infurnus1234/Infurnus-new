@@ -178,7 +178,7 @@ export function createApp(
 ) {
   const app = express();
 
-  app.set('trust proxy', true);
+  app.set('trust proxy', env.TRUST_PROXY_HOPS || false);
 
   app.use(helmet());
 
