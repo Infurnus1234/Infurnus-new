@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'app_colors.dart';
 
 class AppTheme {
@@ -14,7 +15,6 @@ class AppTheme {
         secondary: AppColors.primaryDark,
         onSecondary: Colors.white,
         error: AppColors.error,
-        background: AppColors.background,
         surface: AppColors.surface,
       ),
       scaffoldBackgroundColor: AppColors.background,
@@ -31,9 +31,7 @@ class AppTheme {
       cardTheme: CardThemeData(
         elevation: 2,
         shadowColor: AppColors.cardShadow,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
     );
   }

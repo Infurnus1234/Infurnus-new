@@ -7,6 +7,12 @@ export function respondWhileStandby(req: IncomingMessage, res: ServerResponse): 
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Cache-Control', 'no-store');
   if (req.method === 'GET' && req.url?.split('?')[0] === '/health') {
+    // Preview-only topology check: reveal a count, never addresses or header contents.
+    const forwarded = req.headers['x-forwarded-for'];
+    res.setHeader(
+      'X-Infurnus-Forwarded-Hops',
+      typeof forwarded === 'string' ? forwarded.split(',').filter((part) => part.trim()).length : 0,
+    );
     res.writeHead(200).end(JSON.stringify({ status: 'alive', state: 'standby' }));
     return;
   }

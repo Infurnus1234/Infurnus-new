@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_card.dart';
 import '../../../../shared/widgets/infurnus_error_view.dart';
@@ -27,7 +28,8 @@ class DriverFinancialsScreen extends ConsumerWidget {
         ],
       ),
       body: historyAsync.when(
-        loading: () => const InfurnusLoader(message: 'Loading your earnings & history...'),
+        loading: () =>
+            const InfurnusLoader(message: 'Loading your earnings & history...'),
         error: (error, stack) => InfurnusErrorView(
           message: error.toString(),
           onRetry: () => ref.invalidate(driverHistoryFutureProvider),
@@ -35,7 +37,9 @@ class DriverFinancialsScreen extends ConsumerWidget {
         data: (history) {
           final totalEarnings = history.totalEarnings;
           final totalTrips = history.totalTrips;
-          final avgPerTrip = totalTrips > 0 ? (totalEarnings / totalTrips) : 0.0;
+          final avgPerTrip = totalTrips > 0
+              ? (totalEarnings / totalTrips)
+              : 0.0;
 
           return RefreshIndicator(
             onRefresh: () async {
@@ -60,7 +64,7 @@ class DriverFinancialsScreen extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.primaryGreen.withOpacity(0.2),
+                          color: AppColors.primaryGreen.withValues(alpha: 0.2),
                           blurRadius: 12,
                           offset: const Offset(0, 4),
                         ),
@@ -71,10 +75,16 @@ class DriverFinancialsScreen extends ConsumerWidget {
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.directions_car, color: AppColors.primaryGreen, size: 22),
+                            const Icon(
+                              Icons.directions_car,
+                              color: AppColors.primaryGreen,
+                              size: 22,
+                            ),
                             const SizedBox(width: 8),
                             Text(
-                              totalEarnings > 0 ? 'TOTAL EARNINGS' : 'OPERATIONAL PERFORMANCE',
+                              totalEarnings > 0
+                                  ? 'TOTAL EARNINGS'
+                                  : 'OPERATIONAL PERFORMANCE',
                               style: const TextStyle(
                                 color: Colors.white70,
                                 fontSize: 12,
@@ -86,7 +96,9 @@ class DriverFinancialsScreen extends ConsumerWidget {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          totalEarnings > 0 ? '₹${totalEarnings.toStringAsFixed(2)}' : '$totalTrips Trips Completed',
+                          totalEarnings > 0
+                              ? '₹${totalEarnings.toStringAsFixed(2)}'
+                              : '$totalTrips Trips Completed',
                           style: const TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.bold,
@@ -98,7 +110,10 @@ class DriverFinancialsScreen extends ConsumerWidget {
                           totalEarnings > 0
                               ? 'From $totalTrips completed rides'
                               : 'Pure operational tracking • Zero-fare isolation active',
-                          style: const TextStyle(color: Colors.white60, fontSize: 13),
+                          style: const TextStyle(
+                            color: Colors.white60,
+                            fontSize: 13,
+                          ),
                         ),
                       ],
                     ),
@@ -114,11 +129,20 @@ class DriverFinancialsScreen extends ConsumerWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Completed Trips', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                              Text(
+                                'Completed Trips',
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 12,
+                                ),
+                              ),
                               const SizedBox(height: 6),
                               Text(
                                 '$totalTrips',
-                                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                                style: const TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ],
                           ),
@@ -131,12 +155,19 @@ class DriverFinancialsScreen extends ConsumerWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                totalEarnings > 0 ? 'Avg / Trip' : 'Service Status',
-                                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                                totalEarnings > 0
+                                    ? 'Avg / Trip'
+                                    : 'Service Status',
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 12,
+                                ),
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                totalEarnings > 0 ? '₹${avgPerTrip.toStringAsFixed(0)}' : 'Verified Driver',
+                                totalEarnings > 0
+                                    ? '₹${avgPerTrip.toStringAsFixed(0)}'
+                                    : 'Verified Driver',
                                 style: const TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
@@ -158,7 +189,10 @@ class DriverFinancialsScreen extends ConsumerWidget {
                     children: [
                       const Text(
                         'Recent Trips',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       Text(
                         '${history.rides.length} rides',
@@ -172,21 +206,34 @@ class DriverFinancialsScreen extends ConsumerWidget {
                   if (history.rides.isEmpty) ...[
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 40,
+                        horizontal: 20,
+                      ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.directions_car_outlined, size: 56, color: Colors.grey[400]),
+                          Icon(
+                            Icons.directions_car_outlined,
+                            size: 56,
+                            color: Colors.grey[400],
+                          ),
                           const SizedBox(height: 16),
                           const Text(
                             'No completed trips yet',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                           const SizedBox(height: 6),
                           Text(
                             'Go online and complete trips to start earning.',
                             textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 13,
+                            ),
                           ),
                         ],
                       ),
@@ -198,7 +245,10 @@ class DriverFinancialsScreen extends ConsumerWidget {
                       itemCount: history.rides.length,
                       itemBuilder: (context, index) {
                         final ride = history.rides[index];
-                        return _buildRideHistoryItem(ride, showFare: totalEarnings > 0);
+                        return _buildRideHistoryItem(
+                          ride,
+                          showFare: totalEarnings > 0,
+                        );
                       },
                     ),
                   ],
@@ -224,7 +274,7 @@ class DriverFinancialsScreen extends ConsumerWidget {
         border: Border.all(color: Colors.grey[200]!),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -238,18 +288,24 @@ class DriverFinancialsScreen extends ConsumerWidget {
             children: [
               Text(
                 'Ride #${ride.id.substring(0, 8)}',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: (isCompleted ? AppColors.primaryGreen : Colors.grey).withOpacity(0.12),
+                  color: (isCompleted ? AppColors.primaryGreen : Colors.grey)
+                      .withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
                   ride.status.name.toUpperCase(),
                   style: TextStyle(
-                    color: isCompleted ? AppColors.primaryGreen : Colors.grey[700],
+                    color: isCompleted
+                        ? AppColors.primaryGreen
+                        : Colors.grey[700],
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
                   ),
@@ -266,11 +322,16 @@ class DriverFinancialsScreen extends ConsumerWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.my_location, size: 16, color: AppColors.primaryGreen),
+              const Icon(
+                Icons.my_location,
+                size: 16,
+                color: AppColors.primaryGreen,
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  ride.pickupAddress ?? '${ride.pickup.latitude.toStringAsFixed(4)}, ${ride.pickup.longitude.toStringAsFixed(4)}',
+                  ride.pickupAddress ??
+                      '${ride.pickup.latitude.toStringAsFixed(4)}, ${ride.pickup.longitude.toStringAsFixed(4)}',
                   style: const TextStyle(fontSize: 13, color: Colors.black87),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -286,7 +347,8 @@ class DriverFinancialsScreen extends ConsumerWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  ride.destinationAddress ?? '${ride.destination.latitude.toStringAsFixed(4)}, ${ride.destination.longitude.toStringAsFixed(4)}',
+                  ride.destinationAddress ??
+                      '${ride.destination.latitude.toStringAsFixed(4)}, ${ride.destination.longitude.toStringAsFixed(4)}',
                   style: const TextStyle(fontSize: 13, color: Colors.black87),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,

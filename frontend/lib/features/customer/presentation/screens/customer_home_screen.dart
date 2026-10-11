@@ -441,7 +441,10 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.close_rounded, color: textBlack),
+                          icon: const Icon(
+                            Icons.close_rounded,
+                            color: textBlack,
+                          ),
                           onPressed: () => Navigator.pop(context),
                         ),
                       ],
@@ -458,7 +461,11 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                         children: [
                           const Row(
                             children: [
-                              Icon(Icons.my_location_rounded, color: successGreen, size: 18),
+                              Icon(
+                                Icons.my_location_rounded,
+                                color: successGreen,
+                                size: 18,
+                              ),
                               SizedBox(width: 12),
                               Text(
                                 'Current Location (GPS Active)',
@@ -471,23 +478,37 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                             ],
                           ),
                           const Padding(
-                            padding: EdgeInsets.only(left: 8, top: 4, bottom: 4),
+                            padding: EdgeInsets.only(
+                              left: 8,
+                              top: 4,
+                              bottom: 4,
+                            ),
                             child: Align(
                               alignment: Alignment.centerLeft,
                               child: SizedBox(
                                 height: 16,
-                                child: VerticalDivider(color: textMuted, thickness: 2),
+                                child: VerticalDivider(
+                                  color: textMuted,
+                                  thickness: 2,
+                                ),
                               ),
                             ),
                           ),
                           Row(
                             children: [
-                              const Icon(Icons.location_on_rounded, color: serviceRed, size: 18),
+                              const Icon(
+                                Icons.location_on_rounded,
+                                color: serviceRed,
+                                size: 18,
+                              ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: TextField(
                                   autofocus: true,
-                                  style: const TextStyle(color: textBlack, fontWeight: FontWeight.w600),
+                                  style: const TextStyle(
+                                    color: textBlack,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                   decoration: const InputDecoration(
                                     hintText: 'Search destination (e.g. Airport, Mall...)',
                                     hintStyle: TextStyle(color: textMuted),
@@ -496,9 +517,12 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                                     contentPadding: EdgeInsets.zero,
                                   ),
                                   onChanged: (val) async {
-                                    if (val.trim().length >= 1) {
-                                      final service = ref.read(placesAutocompleteServiceProvider);
-                                      final results = await service.getSuggestions(val);
+                                    if (val.trim().isNotEmpty) {
+                                      final service = ref.read(
+                                        placesAutocompleteServiceProvider,
+                                      );
+                                      final results = await service
+                                          .getSuggestions(val);
                                       setModalState(() {
                                         modalSuggestions = results;
                                       });
@@ -511,7 +535,12 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                                   onSubmitted: (val) {
                                     if (val.trim().isNotEmpty) {
                                       Navigator.pop(context);
-                                      ref.read(rideProvider.notifier).setRoute('Current Location', val.trim());
+                                      ref
+                                          .read(rideProvider.notifier)
+                                          .setRoute(
+                                            'Current Location',
+                                            val.trim(),
+                                          );
                                       context.push('/ride-booking');
                                     }
                                   },
@@ -525,7 +554,11 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                     const SizedBox(height: 16),
                     const Text(
                       'Quick Destinations',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textSecondary),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: textSecondary,
+                      ),
                     ),
                     const SizedBox(height: 10),
                     SizedBox(
@@ -536,8 +569,18 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                           return Padding(
                             padding: const EdgeInsets.only(right: 8),
                             child: ActionChip(
-                              avatar: Icon(dest['icon'] as IconData, size: 16, color: successGreen),
-                              label: Text(dest['label'] as String, style: const TextStyle(fontSize: 12, color: textBlack)),
+                              avatar: Icon(
+                                dest['icon'] as IconData,
+                                size: 16,
+                                color: successGreen,
+                              ),
+                              label: Text(
+                                dest['label'] as String,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: textBlack,
+                                ),
+                              ),
                               backgroundColor: searchBg,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(18),
@@ -545,9 +588,16 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                               ),
                               onPressed: () {
                                 Navigator.pop(context);
-                                ref.read(rideProvider.notifier).setRoute('Current Location', dest['address'] as String);
+                                ref
+                                    .read(rideProvider.notifier)
+                                    .setRoute(
+                                      'Current Location',
+                                      dest['address'] as String,
+                                    );
                                 if (dest['coords'] != null) {
-                                  ref.read(rideProvider.notifier).setDestinationCoords(
+                                  ref
+                                      .read(rideProvider.notifier)
+                                      .setDestinationCoords(
                                         dest['coords'] as LatLng,
                                         address: dest['address'] as String,
                                       );
@@ -563,7 +613,11 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                       const SizedBox(height: 16),
                       const Text(
                         'Suggestions',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textSecondary),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: textSecondary,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       ...modalSuggestions.map((s) {
@@ -576,14 +630,34 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                             padding: const EdgeInsets.symmetric(vertical: 10),
                             child: Row(
                               children: [
-                                const Icon(Icons.location_on_outlined, size: 18, color: textBlack),
+                                const Icon(
+                                  Icons.location_on_outlined,
+                                  size: 18,
+                                  color: textBlack,
+                                ),
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Text(s.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textBlack)),
-                                      Text(s.subtitle, style: const TextStyle(fontSize: 12, color: textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                      Text(
+                                        s.title,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                          color: textBlack,
+                                        ),
+                                      ),
+                                      Text(
+                                        s.subtitle,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: textSecondary,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -640,7 +714,11 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                 color: searchBg,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.arrow_forward_rounded, size: 16, color: textBlack),
+              child: const Icon(
+                Icons.arrow_forward_rounded,
+                size: 16,
+                color: textBlack,
+              ),
             ),
           ],
         ),

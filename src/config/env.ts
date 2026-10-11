@@ -6,6 +6,8 @@ export const envSchema = z
     NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
 
     PORT: z.coerce.number().int().positive().default(3000),
+    // Fail closed. Operators must configure the verified proxy topology before deployment.
+    TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(10).default(0),
     // Explicit no-ownership preview: an idle serving revision must retain priority.
     BACKEND_STANDBY: z
       .union([z.boolean(), z.enum(['true', 'false'])])

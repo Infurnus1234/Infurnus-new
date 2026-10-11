@@ -442,10 +442,20 @@ describe('Password reset integration', () => {
           .post('/auth/login')
           .send({ email: user.email, password: ORIGINAL_PASSWORD })
           .expect(200);
-        await request(app)
-          .post('/auth/login/verify')
-          .send({ challengeId: login.body.data.challengeId, otp: '123456' })
-          .expect(200);
+        if (role === 'admin' || role === 'super_admin') {
+          expect(login.body.data.accessToken).toEqual(expect.any(String));
+          expect(login.body.data.challengeId).toBeUndefined();
+        } else {
+          if (role === 'admin' || role === 'super_admin') {
+            expect(login.body.data.accessToken).toEqual(expect.any(String));
+            expect(login.body.data.challengeId).toBeUndefined();
+          } else {
+            await request(app)
+              .post('/auth/login/verify')
+              .send({ challengeId: login.body.data.challengeId, otp: '123456' })
+              .expect(200);
+          }
+        }
         const session = await requestPasswordReset(user.email);
         await request(app)
           .post('/auth/forgot-password/verify')
@@ -468,10 +478,20 @@ describe('Password reset integration', () => {
           .post('/auth/login')
           .send({ email: user.email, password })
           .expect(200);
-        await request(app)
-          .post('/auth/login/verify')
-          .send({ challengeId: updated.body.data.challengeId, otp: '123456' })
-          .expect(200);
+        if (role === 'admin' || role === 'super_admin') {
+          expect(updated.body.data.accessToken).toEqual(expect.any(String));
+          expect(updated.body.data.challengeId).toBeUndefined();
+        } else {
+          if (role === 'admin' || role === 'super_admin') {
+            expect(updated.body.data.accessToken).toEqual(expect.any(String));
+            expect(updated.body.data.challengeId).toBeUndefined();
+          } else {
+            await request(app)
+              .post('/auth/login/verify')
+              .send({ challengeId: updated.body.data.challengeId, otp: '123456' })
+              .expect(200);
+          }
+        }
       } finally {
         await cleanupUser(user.userId);
       }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_card.dart';
 import '../../../../shared/widgets/infurnus_loader.dart';
@@ -11,10 +12,12 @@ class DriverNotificationsScreen extends ConsumerStatefulWidget {
   const DriverNotificationsScreen({super.key});
 
   @override
-  ConsumerState<DriverNotificationsScreen> createState() => _DriverNotificationsScreenState();
+  ConsumerState<DriverNotificationsScreen> createState() =>
+      _DriverNotificationsScreenState();
 }
 
-class _DriverNotificationsScreenState extends ConsumerState<DriverNotificationsScreen> {
+class _DriverNotificationsScreenState
+    extends ConsumerState<DriverNotificationsScreen> {
   UserPreferencesModel? _preferences;
   List<UserHistoryModel> _history = [];
   bool _isLoading = false;
@@ -39,8 +42,12 @@ class _DriverNotificationsScreenState extends ConsumerState<DriverNotificationsS
     });
 
     try {
-      final prefs = await ref.read(getUserPreferencesUseCaseProvider).execute(user.id);
-      final historyList = await ref.read(getUserHistoryUseCaseProvider).execute(user.id);
+      final prefs = await ref
+          .read(getUserPreferencesUseCaseProvider)
+          .execute(user.id);
+      final historyList = await ref
+          .read(getUserHistoryUseCaseProvider)
+          .execute(user.id);
 
       if (mounted) {
         setState(() {
@@ -67,12 +74,20 @@ class _DriverNotificationsScreenState extends ConsumerState<DriverNotificationsS
 
     try {
       final updateData = {
-        'pushNotificationsEnabled': key == 'push' ? value : _preferences!.pushNotificationsEnabled,
-        'emailNotificationsEnabled': key == 'email' ? value : _preferences!.emailNotificationsEnabled,
-        'smsNotificationsEnabled': key == 'sms' ? value : _preferences!.smsNotificationsEnabled,
+        'pushNotificationsEnabled': key == 'push'
+            ? value
+            : _preferences!.pushNotificationsEnabled,
+        'emailNotificationsEnabled': key == 'email'
+            ? value
+            : _preferences!.emailNotificationsEnabled,
+        'smsNotificationsEnabled': key == 'sms'
+            ? value
+            : _preferences!.smsNotificationsEnabled,
       };
 
-      final updated = await ref.read(updateUserPreferencesUseCaseProvider).execute(user.id, updateData);
+      final updated = await ref
+          .read(updateUserPreferencesUseCaseProvider)
+          .execute(user.id, updateData);
 
       if (mounted) {
         setState(() {
@@ -93,9 +108,7 @@ class _DriverNotificationsScreenState extends ConsumerState<DriverNotificationsS
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Notifications & Activity'),
-      ),
+      appBar: AppBar(title: const Text('Notifications & Activity')),
       body: _isLoading
           ? const InfurnusLoader(message: 'Loading Preferences & History...')
           : SingleChildScrollView(
@@ -106,7 +119,10 @@ class _DriverNotificationsScreenState extends ConsumerState<DriverNotificationsS
                   if (_errorMessage != null) _buildErrorBanner(_errorMessage!),
 
                   // Notification Preferences Section
-                  const Text('Notification Preferences', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const Text(
+                    'Notification Preferences',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
                   const SizedBox(height: 12),
                   if (_preferences != null)
                     InfurnusCard(
@@ -116,24 +132,34 @@ class _DriverNotificationsScreenState extends ConsumerState<DriverNotificationsS
                             title: const Text('Push Notifications'),
                             subtitle: const Text('In-app & real-time alerts'),
                             value: _preferences!.pushNotificationsEnabled,
-                            activeColor: AppColors.primaryGreen,
-                            onChanged: _isSavingPref ? null : (val) => _togglePreference('push', val),
+                            activeThumbColor: AppColors.primaryGreen,
+                            onChanged: _isSavingPref
+                                ? null
+                                : (val) => _togglePreference('push', val),
                           ),
                           const Divider(),
                           SwitchListTile(
                             title: const Text('Email Notifications'),
-                            subtitle: const Text('Account & compliance updates'),
+                            subtitle: const Text(
+                              'Account & compliance updates',
+                            ),
                             value: _preferences!.emailNotificationsEnabled,
-                            activeColor: AppColors.primaryGreen,
-                            onChanged: _isSavingPref ? null : (val) => _togglePreference('email', val),
+                            activeThumbColor: AppColors.primaryGreen,
+                            onChanged: _isSavingPref
+                                ? null
+                                : (val) => _togglePreference('email', val),
                           ),
                           const Divider(),
                           SwitchListTile(
                             title: const Text('SMS Notifications'),
-                            subtitle: const Text('Security & OTP notifications'),
+                            subtitle: const Text(
+                              'Security & OTP notifications',
+                            ),
                             value: _preferences!.smsNotificationsEnabled,
-                            activeColor: AppColors.primaryGreen,
-                            onChanged: _isSavingPref ? null : (val) => _togglePreference('sms', val),
+                            activeThumbColor: AppColors.primaryGreen,
+                            onChanged: _isSavingPref
+                                ? null
+                                : (val) => _togglePreference('sms', val),
                           ),
                         ],
                       ),
@@ -142,9 +168,15 @@ class _DriverNotificationsScreenState extends ConsumerState<DriverNotificationsS
                   const SizedBox(height: 28),
 
                   // Real-Time Activity Log Section
-                  const Text('Activity History', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const Text(
+                    'Activity History',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
                   const SizedBox(height: 4),
-                  const Text('Audit trail of account events from backend.', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                  const Text(
+                    'Audit trail of account events from backend.',
+                    style: TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
                   const SizedBox(height: 12),
 
                   if (_history.isEmpty)
@@ -161,9 +193,20 @@ class _DriverNotificationsScreenState extends ConsumerState<DriverNotificationsS
                           child: InfurnusCard(
                             child: ListTile(
                               contentPadding: EdgeInsets.zero,
-                              leading: const Icon(Icons.history, color: AppColors.primaryGreen),
-                              title: Text('${item.eventType} (${item.entityType})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                              subtitle: Text('ID: ${item.entityId ?? "N/A"}\nAt: ${item.createdAt.toLocal()}'),
+                              leading: const Icon(
+                                Icons.history,
+                                color: AppColors.primaryGreen,
+                              ),
+                              title: Text(
+                                '${item.eventType} (${item.entityType})',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              subtitle: Text(
+                                'ID: ${item.entityId ?? "N/A"}\nAt: ${item.createdAt.toLocal()}',
+                              ),
                             ),
                           ),
                         );
@@ -185,7 +228,10 @@ class _DriverNotificationsScreenState extends ConsumerState<DriverNotificationsS
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.red[200]!),
       ),
-      child: Text(message, style: const TextStyle(color: Colors.red, fontSize: 13)),
+      child: Text(
+        message,
+        style: const TextStyle(color: Colors.red, fontSize: 13),
+      ),
     );
   }
 }

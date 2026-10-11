@@ -121,6 +121,7 @@ void main() {
       await n.refreshRideMap();
       expect(c.read(rideProvider).pickupCoords, fixtures.first[0]);
       expect(c.read(rideProvider).mapError, isNotEmpty);
+      expect(c.read(rideProvider).currentRoute, isNull);
     },
   );
   test(

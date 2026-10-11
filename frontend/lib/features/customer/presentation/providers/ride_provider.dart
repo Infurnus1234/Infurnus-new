@@ -282,9 +282,7 @@ class RideNotifier extends StateNotifier<RideState> {
     } catch (_) {
       if (mounted && generation == _mapGeneration) {
         state = state.copyWith(
-          currentRoute: pickup != null && drop != null
-              ? const RouteModel(distanceMeters: 5000, durationSeconds: 600)
-              : null,
+          clearMapData: id == null,
           mapError: 'Map route unavailable. Please retry.',
         );
       }

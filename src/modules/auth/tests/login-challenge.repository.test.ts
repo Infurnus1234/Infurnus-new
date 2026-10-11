@@ -74,6 +74,7 @@ describe('PostgresLoginChallengeRepository', () => {
         UPDATE users
         SET
           status = 'active',
+          role = 'customer',
           deleted_at = NULL,
           updated_at = NOW()
         WHERE id = $1
@@ -445,10 +446,22 @@ describe('PostgresLoginChallengeRepository', () => {
 
     const challenge = await repository.getProviderSession(created.id);
 
-    expect(challenge).not.toBeNull();
-    expect(challenge!.verifiedAt).toBeNull();
-    expect(challenge!.consumedAt).toBeNull();
+    expect(challenge).toBeNull();
+    const stored = await pool.query(
+      'SELECT verified_at, consumed_at FROM login_challenges WHERE id=$1',
+      [created.id],
+    );
+    expect(stored.rows[0]).toEqual({ verified_at: null, consumed_at: null });
   });
+
+  it.each(['admin', 'super_admin'])(
+    'hides existing OTP challenges after promotion to %s',
+    async (role) => {
+      const challenge = await repository.create(createChallengeData());
+      await pool.query('UPDATE users SET role=$2 WHERE id=$1', [userId, role]);
+      expect(await repository.getProviderSession(challenge.id)).toBeNull();
+    },
+  );
 
   it('allows only one active challenge per user', async () => {
     const first = await repository.create(createChallengeData());

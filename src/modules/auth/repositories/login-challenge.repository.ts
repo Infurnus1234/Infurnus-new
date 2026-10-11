@@ -164,6 +164,11 @@ export class PostgresLoginChallengeRepository implements LoginChallengeRepositor
             consumed_at AS "consumedAt"
           FROM login_challenges
           WHERE id = $1
+            AND EXISTS (
+              SELECT 1 FROM users u WHERE u.id = login_challenges.user_id
+                AND u.role NOT IN ('admin', 'super_admin')
+                AND u.status = 'active' AND u.deleted_at IS NULL
+            )
           LIMIT 1
         `,
       [challengeId],

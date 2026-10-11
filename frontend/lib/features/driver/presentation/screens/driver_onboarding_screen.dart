@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_button.dart';
 import '../../../../shared/widgets/infurnus_card.dart';
@@ -13,19 +14,33 @@ class DriverOnboardingScreen extends ConsumerStatefulWidget {
   const DriverOnboardingScreen({super.key});
 
   @override
-  ConsumerState<DriverOnboardingScreen> createState() => _DriverOnboardingScreenState();
+  ConsumerState<DriverOnboardingScreen> createState() =>
+      _DriverOnboardingScreenState();
 }
 
-class _DriverOnboardingScreenState extends ConsumerState<DriverOnboardingScreen> {
+class _DriverOnboardingScreenState
+    extends ConsumerState<DriverOnboardingScreen> {
   // Partner Controllers
   final _businessNameController = TextEditingController();
   final _businessDescController = TextEditingController();
 
   String _selectedProviderType = 'DRIVER';
   final List<Map<String, String>> _providerTypes = [
-    {'id': 'DRIVER', 'label': 'Individual Driver', 'desc': 'Operates assigned or owned vehicle'},
-    {'id': 'FLEET_OWNER', 'label': 'Fleet Owner', 'desc': 'Owns and manages fleet of vehicles & drivers'},
-    {'id': 'DRIVER_FLEET_OWNER', 'label': 'Driver cum Fleet Owner', 'desc': 'Drives active vehicle & manages fleet'},
+    {
+      'id': 'DRIVER',
+      'label': 'Individual Driver',
+      'desc': 'Operates assigned or owned vehicle',
+    },
+    {
+      'id': 'FLEET_OWNER',
+      'label': 'Fleet Owner',
+      'desc': 'Owns and manages fleet of vehicles & drivers',
+    },
+    {
+      'id': 'DRIVER_FLEET_OWNER',
+      'label': 'Driver cum Fleet Owner',
+      'desc': 'Drives active vehicle & manages fleet',
+    },
   ];
 
   // Driver Profile Controllers
@@ -102,14 +117,18 @@ class _DriverOnboardingScreenState extends ConsumerState<DriverOnboardingScreen>
     // Prefill license and profile fields if profile already exists
     if (driverProfile != null && _licenseNumberController.text.isEmpty) {
       _licenseNumberController.text = driverProfile.licenseNumber;
-      _licenseExpiryController.text = driverProfile.licenseExpiry.split('T').first;
+      _licenseExpiryController.text = driverProfile.licenseExpiry
+          .split('T')
+          .first;
       if (driverProfile.dob != null && _dobController.text.isEmpty) {
         _dobController.text = driverProfile.dob!.split('T').first;
       }
-      if (driverProfile.emergencyContactName != null && _emergencyNameController.text.isEmpty) {
+      if (driverProfile.emergencyContactName != null &&
+          _emergencyNameController.text.isEmpty) {
         _emergencyNameController.text = driverProfile.emergencyContactName!;
       }
-      if (driverProfile.emergencyContactPhone != null && _emergencyPhoneController.text.isEmpty) {
+      if (driverProfile.emergencyContactPhone != null &&
+          _emergencyPhoneController.text.isEmpty) {
         _emergencyPhoneController.text = driverProfile.emergencyContactPhone!;
       }
     }
@@ -175,7 +194,10 @@ class _DriverOnboardingScreenState extends ConsumerState<DriverOnboardingScreen>
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.red[200]!),
       ),
-      child: Text(message, style: const TextStyle(color: Colors.red, fontSize: 13)),
+      child: Text(
+        message,
+        style: const TextStyle(color: Colors.red, fontSize: 13),
+      ),
     );
   }
 
@@ -189,7 +211,10 @@ class _DriverOnboardingScreenState extends ConsumerState<DriverOnboardingScreen>
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.green[200]!),
       ),
-      child: Text(message, style: const TextStyle(color: AppColors.primaryGreen, fontSize: 13)),
+      child: Text(
+        message,
+        style: const TextStyle(color: AppColors.primaryGreen, fontSize: 13),
+      ),
     );
   }
 
@@ -199,18 +224,25 @@ class _DriverOnboardingScreenState extends ConsumerState<DriverOnboardingScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Step 1: Apply as Partner',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text(
+            'Step 1: Apply as Partner',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 8),
-          const Text('Fill in your details to register as an INFURNUS partner.',
-              style: TextStyle(color: Colors.grey, fontSize: 13)),
+          const Text(
+            'Fill in your details to register as an INFURNUS partner.',
+            style: TextStyle(color: Colors.grey, fontSize: 13),
+          ),
           const SizedBox(height: 16),
           DropdownButtonFormField<String>(
-            value: _selectedProviderType,
+            initialValue: _selectedProviderType,
             decoration: const InputDecoration(
               labelText: 'Provider Category',
               border: OutlineInputBorder(),
-              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 12,
+              ),
             ),
             items: _providerTypes.map((type) {
               return DropdownMenuItem(
@@ -241,11 +273,15 @@ class _DriverOnboardingScreenState extends ConsumerState<DriverOnboardingScreen>
             onPressed: () async {
               if (_businessNameController.text.trim().isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please enter a business or partner name')),
+                  const SnackBar(
+                    content: Text('Please enter a business or partner name'),
+                  ),
                 );
                 return;
               }
-              final success = await ref.read(driverOnboardingProvider.notifier).createPartnerProfile(
+              final success = await ref
+                  .read(driverOnboardingProvider.notifier)
+                  .createPartnerProfile(
                     businessName: _businessNameController.text,
                     businessDescription: _businessDescController.text,
                   );
@@ -282,20 +318,30 @@ class _DriverOnboardingScreenState extends ConsumerState<DriverOnboardingScreen>
               Expanded(
                 child: Text(
                   partner.businessName,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.12),
+                  color: statusColor.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: statusColor.withOpacity(0.3)),
+                  border: Border.all(color: statusColor.withValues(alpha: 0.3)),
                 ),
                 child: Text(
                   status.toUpperCase(),
-                  style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12),
+                  style: TextStyle(
+                    color: statusColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
                 ),
               ),
             ],
@@ -309,11 +355,19 @@ class _DriverOnboardingScreenState extends ConsumerState<DriverOnboardingScreen>
             const SizedBox(height: 6),
             const Row(
               children: [
-                Icon(Icons.check_circle, color: AppColors.primaryGreen, size: 16),
+                Icon(
+                  Icons.check_circle,
+                  color: AppColors.primaryGreen,
+                  size: 16,
+                ),
                 SizedBox(width: 6),
                 Text(
                   'Partner Account Approved',
-                  style: TextStyle(color: AppColors.primaryGreen, fontSize: 12, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    color: AppColors.primaryGreen,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
             ),
@@ -335,19 +389,27 @@ class _DriverOnboardingScreenState extends ConsumerState<DriverOnboardingScreen>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Step 2: Driver Profile & License',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const Text(
+                'Step 2: Driver Profile & License',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
               if (profile != null)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
-                    color: (isVerified ? AppColors.primaryGreen : Colors.amber).withOpacity(0.12),
+                    color: (isVerified ? AppColors.primaryGreen : Colors.amber)
+                        .withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     profile.verificationStatus.toUpperCase(),
                     style: TextStyle(
-                      color: isVerified ? AppColors.primaryGreen : Colors.amber[800],
+                      color: isVerified
+                          ? AppColors.primaryGreen
+                          : Colors.amber[800],
                       fontWeight: FontWeight.bold,
                       fontSize: 11,
                     ),
@@ -400,24 +462,36 @@ class _DriverOnboardingScreenState extends ConsumerState<DriverOnboardingScreen>
           ),
           const SizedBox(height: 16),
           InfurnusButton(
-            text: profile != null ? 'Update Driver Profile' : 'Save Driver Profile',
+            text: profile != null
+                ? 'Update Driver Profile'
+                : 'Save Driver Profile',
             isLoading: state.isSubmitting,
             onPressed: () async {
               if (_licenseNumberController.text.trim().isEmpty ||
                   _licenseExpiryController.text.trim().isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please enter license number and expiry date')),
+                  const SnackBar(
+                    content: Text(
+                      'Please enter license number and expiry date',
+                    ),
+                  ),
                 );
                 return;
               }
-              await ref.read(driverOnboardingProvider.notifier).upsertDriverProfile(
+              await ref
+                  .read(driverOnboardingProvider.notifier)
+                  .upsertDriverProfile(
                     licenseNumber: _licenseNumberController.text.trim(),
                     licenseExpiry: _licenseExpiryController.text.trim(),
-                    dob: _dobController.text.trim().isNotEmpty ? _dobController.text.trim() : null,
-                    emergencyContactName: _emergencyNameController.text.trim().isNotEmpty
+                    dob: _dobController.text.trim().isNotEmpty
+                        ? _dobController.text.trim()
+                        : null,
+                    emergencyContactName:
+                        _emergencyNameController.text.trim().isNotEmpty
                         ? _emergencyNameController.text.trim()
                         : null,
-                    emergencyContactPhone: _emergencyPhoneController.text.trim().isNotEmpty
+                    emergencyContactPhone:
+                        _emergencyPhoneController.text.trim().isNotEmpty
                         ? _emergencyPhoneController.text.trim()
                         : null,
                   );
@@ -434,22 +508,32 @@ class _DriverOnboardingScreenState extends ConsumerState<DriverOnboardingScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Step 3: KYC Verification Documents',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const Text(
+            'Step 3: KYC Verification Documents',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 4),
-          const Text('Submit document verification records required by INFURNUS.',
-              style: TextStyle(color: Colors.grey, fontSize: 12)),
+          const Text(
+            'Submit document verification records required by INFURNUS.',
+            style: TextStyle(color: Colors.grey, fontSize: 12),
+          ),
           const SizedBox(height: 16),
 
           DropdownButtonFormField<String>(
-            value: _selectedDocType,
+            initialValue: _selectedDocType,
             decoration: const InputDecoration(
               labelText: 'Document Type',
               border: OutlineInputBorder(),
-              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 12,
+              ),
             ),
             items: _docTypes.map((type) {
-              return DropdownMenuItem(value: type, child: Text(type.replaceAll('_', ' ')));
+              return DropdownMenuItem(
+                value: type,
+                child: Text(type.replaceAll('_', ' ')),
+              );
             }).toList(),
             onChanged: (val) {
               if (val != null) setState(() => _selectedDocType = val);
@@ -480,7 +564,9 @@ class _DriverOnboardingScreenState extends ConsumerState<DriverOnboardingScreen>
             text: 'Add Document Record',
             isLoading: state.isSubmitting,
             onPressed: () {
-              ref.read(driverOnboardingProvider.notifier).addDocumentMetadata(
+              ref
+                  .read(driverOnboardingProvider.notifier)
+                  .addDocumentMetadata(
                     documentType: _selectedDocType,
                     issuedAt: _issuedAtController.text.trim(),
                     expiresAt: _expiresAtController.text.trim(),
@@ -490,8 +576,10 @@ class _DriverOnboardingScreenState extends ConsumerState<DriverOnboardingScreen>
 
           if (state.documents.isNotEmpty) ...[
             const SizedBox(height: 20),
-            const Text('Submitted Documents:',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+            const Text(
+              'Submitted Documents:',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
             const SizedBox(height: 8),
             ListView.builder(
               shrinkWrap: true,
@@ -499,7 +587,8 @@ class _DriverOnboardingScreenState extends ConsumerState<DriverOnboardingScreen>
               itemCount: state.documents.length,
               itemBuilder: (context, index) {
                 final doc = state.documents[index];
-                final isDocVerified = doc.status == 'verified' || doc.status == 'approved';
+                final isDocVerified =
+                    doc.status == 'verified' || doc.status == 'approved';
                 return Container(
                   margin: const EdgeInsets.only(bottom: 8),
                   padding: const EdgeInsets.all(10),
@@ -512,7 +601,9 @@ class _DriverOnboardingScreenState extends ConsumerState<DriverOnboardingScreen>
                     children: [
                       Icon(
                         isDocVerified ? Icons.verified : Icons.hourglass_top,
-                        color: isDocVerified ? AppColors.primaryGreen : Colors.amber,
+                        color: isDocVerified
+                            ? AppColors.primaryGreen
+                            : Colors.amber,
                         size: 20,
                       ),
                       const SizedBox(width: 10),
@@ -522,11 +613,17 @@ class _DriverOnboardingScreenState extends ConsumerState<DriverOnboardingScreen>
                           children: [
                             Text(
                               doc.type.replaceAll('_', ' '),
-                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
                             ),
                             Text(
                               'Status: ${doc.status}',
-                              style: TextStyle(color: Colors.grey[600], fontSize: 11),
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 11,
+                              ),
                             ),
                           ],
                         ),
@@ -550,28 +647,40 @@ class _DriverOnboardingScreenState extends ConsumerState<DriverOnboardingScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Step 4: Register Vehicle',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const Text(
+            'Step 4: Register Vehicle',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 4),
-          const Text('Register your vehicle under your driver profile.',
-              style: TextStyle(color: Colors.grey, fontSize: 12)),
+          const Text(
+            'Register your vehicle under your driver profile.',
+            style: TextStyle(color: Colors.grey, fontSize: 12),
+          ),
           const SizedBox(height: 14),
 
           // Auto-Linked Profile Indicator (Eliminates manual UUID typing!)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: driverProfile != null ? Colors.green[50] : Colors.amber[50],
+              color: driverProfile != null
+                  ? Colors.green[50]
+                  : Colors.amber[50],
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: driverProfile != null ? Colors.green[200]! : Colors.amber[200]!,
+                color: driverProfile != null
+                    ? Colors.green[200]!
+                    : Colors.amber[200]!,
               ),
             ),
             child: Row(
               children: [
                 Icon(
-                  driverProfile != null ? Icons.link : Icons.warning_amber_rounded,
-                  color: driverProfile != null ? AppColors.primaryGreen : Colors.amber[800],
+                  driverProfile != null
+                      ? Icons.link
+                      : Icons.warning_amber_rounded,
+                  color: driverProfile != null
+                      ? AppColors.primaryGreen
+                      : Colors.amber[800],
                   size: 18,
                 ),
                 const SizedBox(width: 8),
@@ -583,7 +692,9 @@ class _DriverOnboardingScreenState extends ConsumerState<DriverOnboardingScreen>
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
-                      color: driverProfile != null ? AppColors.primaryGreen : Colors.amber[900],
+                      color: driverProfile != null
+                          ? AppColors.primaryGreen
+                          : Colors.amber[900],
                     ),
                   ),
                 ),
@@ -594,11 +705,14 @@ class _DriverOnboardingScreenState extends ConsumerState<DriverOnboardingScreen>
 
           // Sector selection (Passenger, Logistics, Service, Premium)
           DropdownButtonFormField<String>(
-            value: _selectedSector,
+            initialValue: _selectedSector,
             decoration: const InputDecoration(
               labelText: 'Vehicle Sector / Category',
               border: OutlineInputBorder(),
-              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 12,
+              ),
             ),
             items: _sectors.map((sector) {
               return DropdownMenuItem(
@@ -658,7 +772,11 @@ class _DriverOnboardingScreenState extends ConsumerState<DriverOnboardingScreen>
             onPressed: () async {
               if (driverProfile == null) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please save your Driver Profile in Step 2 first')),
+                  const SnackBar(
+                    content: Text(
+                      'Please save your Driver Profile in Step 2 first',
+                    ),
+                  ),
                 );
                 return;
               }
@@ -666,12 +784,16 @@ class _DriverOnboardingScreenState extends ConsumerState<DriverOnboardingScreen>
                   _modelController.text.trim().isEmpty ||
                   _plateNumberController.text.trim().isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please fill all required vehicle fields')),
+                  const SnackBar(
+                    content: Text('Please fill all required vehicle fields'),
+                  ),
                 );
                 return;
               }
 
-              final success = await ref.read(driverOnboardingProvider.notifier).registerVehicle(
+              final success = await ref
+                  .read(driverOnboardingProvider.notifier)
+                  .registerVehicle(
                     driverProfileId: driverProfile.id,
                     make: _makeController.text.trim(),
                     model: _modelController.text.trim(),

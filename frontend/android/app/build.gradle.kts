@@ -2,12 +2,19 @@ import java.util.Properties
 
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
-val hasKeystore = keystorePropertiesFile.exists()
+// Explicit operator opt-in for test APKs only; normal releases still require approved signing.
+val testReleaseSigning = System.getenv("INFURNUS_TEST_RELEASE_SIGNING") == "true"
 
-if (hasKeystore) {
+if (keystorePropertiesFile.exists()) {
     keystorePropertiesFile.inputStream().use {
         keystoreProperties.load(it)
     }
+}
+
+if (!testReleaseSigning && gradle.startParameter.taskNames.any { it.contains("release", ignoreCase = true) }) {
+    require(listOf("keyAlias", "keyPassword", "storeFile", "storePassword").all {
+        !keystoreProperties.getProperty(it).isNullOrBlank()
+    }) { "Release signing requires a complete local android/key.properties file." }
 }
 
 plugins {
@@ -39,13 +46,11 @@ android {
     ndkVersion = "30.0.16248370"
 
     signingConfigs {
-        if (hasKeystore) {
-            create("release") {
-                keyAlias = keystoreProperties.getProperty("keyAlias")
-                keyPassword = keystoreProperties.getProperty("keyPassword")
-                storeFile = file(keystoreProperties.getProperty("storeFile") ?: "")
-                storePassword = keystoreProperties.getProperty("storePassword")
-            }
+        create("release") {
+            keyAlias = keystoreProperties.getProperty("keyAlias")
+            keyPassword = keystoreProperties.getProperty("keyPassword")
+            storeFile = keystoreProperties.getProperty("storeFile")?.let { file(it) }
+            storePassword = keystoreProperties.getProperty("storePassword")
         }
     }
 
@@ -79,9 +84,8 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = if (hasKeystore) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
+            // Release builds require operator-supplied signing credentials.
+            signingConfig = signingConfigs.getByName(if (testReleaseSigning) "debug" else "release")
         }
     }
 }

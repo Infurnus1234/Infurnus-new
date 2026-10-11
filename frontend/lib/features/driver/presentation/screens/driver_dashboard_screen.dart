@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_card.dart';
 import '../../../../shared/widgets/infurnus_error_view.dart';
@@ -18,7 +19,8 @@ class DriverDashboardScreen extends ConsumerStatefulWidget {
   const DriverDashboardScreen({super.key});
 
   @override
-  ConsumerState<DriverDashboardScreen> createState() => _DriverDashboardScreenState();
+  ConsumerState<DriverDashboardScreen> createState() =>
+      _DriverDashboardScreenState();
 }
 
 class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
@@ -44,8 +46,13 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
           backgroundColor: const Color(0xFF141A16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('Claim Fleet Vehicle', style: TextStyle(color: Colors.white, fontSize: 18)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Text(
+            'Claim Fleet Vehicle',
+            style: TextStyle(color: Colors.white, fontSize: 18),
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -58,39 +65,68 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
               TextField(
                 controller: codeController,
                 textCapitalization: TextCapitalization.characters,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 1.5),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.5,
+                ),
                 decoration: InputDecoration(
                   hintText: 'FLEET-XXXXX',
                   hintStyle: const TextStyle(color: Colors.grey),
                   filled: true,
                   fillColor: const Color(0xFF1E2621),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  prefixIcon: const Icon(Icons.vpn_key, color: AppColors.primaryGreen),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.vpn_key,
+                    color: AppColors.primaryGreen,
+                  ),
                 ),
               ),
               if (errorText != null) ...[
                 const SizedBox(height: 8),
-                Text(errorText!, style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+                Text(
+                  errorText!,
+                  style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                ),
               ],
               if (verifiedVehicle != null) ...[
                 const SizedBox(height: 14),
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AppColors.primaryGreen.withOpacity(0.12),
+                    color: AppColors.primaryGreen.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.primaryGreen.withOpacity(0.3)),
+                    border: Border.all(
+                      color: AppColors.primaryGreen.withValues(alpha: 0.3),
+                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         '${verifiedVehicle!['make']} ${verifiedVehicle!['model']}',
-                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
                       ),
-                      Text('Plate: ${verifiedVehicle!['plateNumber']}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                      Text(
+                        'Plate: ${verifiedVehicle!['plateNumber']}',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                        ),
+                      ),
                       if (verifiedVehicle!['fleetOwnerName'] != null)
-                        Text('Owner: ${verifiedVehicle!['fleetOwnerName']}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                        Text(
+                          'Owner: ${verifiedVehicle!['fleetOwnerName']}',
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -98,7 +134,10 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
             if (verifiedVehicle == null)
               ElevatedButton(
                 onPressed: isVerifying
@@ -124,7 +163,13 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
                           });
                         }
                       },
-                child: isVerifying ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Verify Code'),
+                child: isVerifying
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Verify Code'),
               )
             else
               ElevatedButton(
@@ -137,11 +182,15 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
                           final ds = ref.read(driverRemoteDataSourceProvider);
                           await ds.claimAssignmentCode(code);
                           if (ctx.mounted) Navigator.pop(ctx);
-                          ref.read(driverDashboardProvider.notifier).loadDashboard();
+                          ref
+                              .read(driverDashboardProvider.notifier)
+                              .loadDashboard();
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('Vehicle claimed & activated successfully!'),
+                                content: Text(
+                                  'Vehicle claimed & activated successfully!',
+                                ),
                                 backgroundColor: AppColors.primaryGreen,
                               ),
                             );
@@ -153,7 +202,13 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
                           });
                         }
                       },
-                child: isClaiming ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Claim & Activate'),
+                child: isClaiming
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Claim & Activate'),
               ),
           ],
         ),
@@ -174,7 +229,9 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
 
     if (_currentIndex == 1) {
       return Scaffold(
-        body: user?.role == 'fleet_owner' ? const FleetDashboardScreen() : const DriverFinancialsScreen(),
+        body: user?.role == 'fleet_owner'
+            ? const FleetDashboardScreen()
+            : const DriverFinancialsScreen(),
         bottomNavigationBar: _buildBottomBar(user),
       );
     }
@@ -223,7 +280,9 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
                       value: isOnline,
                       onChanged: (val) {
                         final newStatus = val ? 'available' : 'unavailable';
-                        ref.read(driverDashboardProvider.notifier).updateAvailability(newStatus);
+                        ref
+                            .read(driverDashboardProvider.notifier)
+                            .updateAvailability(newStatus);
                       },
                       activeTrackColor: AppColors.primaryGreen,
                     ),
@@ -252,7 +311,7 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
       selectedIndex: _currentIndex,
       onDestinationSelected: (idx) => setState(() => _currentIndex = idx),
       backgroundColor: const Color(0xFF141916),
-      indicatorColor: AppColors.primaryGreen.withOpacity(0.2),
+      indicatorColor: AppColors.primaryGreen.withValues(alpha: 0.2),
       destinations: [
         const NavigationDestination(
           icon: Icon(Icons.home_outlined),
@@ -260,13 +319,23 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
           label: 'Home',
         ),
         NavigationDestination(
-          icon: Icon(user?.role == 'fleet_owner' ? Icons.business_outlined : Icons.alt_route_outlined),
-          selectedIcon: Icon(user?.role == 'fleet_owner' ? Icons.business : Icons.alt_route, color: AppColors.primaryGreen),
+          icon: Icon(
+            user?.role == 'fleet_owner'
+                ? Icons.business_outlined
+                : Icons.alt_route_outlined,
+          ),
+          selectedIcon: Icon(
+            user?.role == 'fleet_owner' ? Icons.business : Icons.alt_route,
+            color: AppColors.primaryGreen,
+          ),
           label: user?.role == 'fleet_owner' ? 'Fleet' : 'Trips',
         ),
         const NavigationDestination(
           icon: Icon(Icons.notifications_none),
-          selectedIcon: Icon(Icons.notifications, color: AppColors.primaryGreen),
+          selectedIcon: Icon(
+            Icons.notifications,
+            color: AppColors.primaryGreen,
+          ),
           label: 'Alerts',
         ),
         const NavigationDestination(
@@ -295,12 +364,14 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
     if (state.errorMessage != null && partner == null) {
       return InfurnusErrorView(
         message: state.errorMessage!,
-        onRetry: () => ref.read(driverDashboardProvider.notifier).loadDashboard(),
+        onRetry: () =>
+            ref.read(driverDashboardProvider.notifier).loadDashboard(),
       );
     }
 
     return RefreshIndicator(
-      onRefresh: () => ref.read(driverDashboardProvider.notifier).loadDashboard(),
+      onRefresh: () =>
+          ref.read(driverDashboardProvider.notifier).loadDashboard(),
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(20),
@@ -316,27 +387,41 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
                   children: [
                     Text(
                       'Welcome, ${user?.firstName ?? "Driver"}',
-                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      partner != null ? partner.businessName : 'INFURNUS Mobility Driver',
+                      partner != null
+                          ? partner.businessName
+                          : 'INFURNUS Mobility Driver',
                       style: TextStyle(fontSize: 13, color: Colors.grey[600]),
                     ),
                   ],
                 ),
                 if (state.isBroadcastingLocation)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
                     decoration: BoxDecoration(
-                      color: AppColors.primaryGreen.withOpacity(0.12),
+                      color: AppColors.primaryGreen.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: AppColors.primaryGreen.withOpacity(0.3)),
+                      border: Border.all(
+                        color: AppColors.primaryGreen.withValues(alpha: 0.3),
+                      ),
                     ),
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.gps_fixed, size: 13, color: AppColors.primaryGreen),
+                        Icon(
+                          Icons.gps_fixed,
+                          size: 13,
+                          color: AppColors.primaryGreen,
+                        ),
                         SizedBox(width: 4),
                         Text(
                           'GPS Live',
@@ -353,7 +438,8 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
             ),
             const SizedBox(height: 16),
 
-            if (state.errorMessage != null) _buildErrorBanner(state.errorMessage!),
+            if (state.errorMessage != null)
+              _buildErrorBanner(state.errorMessage!),
 
             // ACTIVE BOOKING / RIDE BANNER (If assigned or in progress)
             if (rideState.currentRide != null) ...[
@@ -454,7 +540,7 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primaryGreen.withOpacity(0.2),
+            color: AppColors.primaryGreen.withValues(alpha: 0.2),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -468,7 +554,11 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
             children: [
               const Row(
                 children: [
-                  Icon(Icons.directions_car, color: AppColors.primaryGreen, size: 20),
+                  Icon(
+                    Icons.directions_car,
+                    color: AppColors.primaryGreen,
+                    size: 20,
+                  ),
                   SizedBox(width: 8),
                   Text(
                     'ACTIVE TRIP IN PROGRESS',
@@ -489,7 +579,11 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
                 ),
                 child: Text(
                   ride.status.name.toString().toUpperCase(),
-                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],
@@ -516,9 +610,14 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryGreen,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
-              child: const Text('Open Ride Control Panel', style: TextStyle(fontWeight: FontWeight.bold)),
+              child: const Text(
+                'Open Ride Control Panel',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
             ),
           ),
         ],
@@ -526,7 +625,10 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
     );
   }
 
-  Widget _buildEarningsSummaryCard(BuildContext context, DriverDashboardState state) {
+  Widget _buildEarningsSummaryCard(
+    BuildContext context,
+    DriverDashboardState state,
+  ) {
     final history = state.history;
     final totalEarnings = history?.totalEarnings ?? 0.0;
     final totalTrips = history?.totalTrips ?? 0;
@@ -539,7 +641,10 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Earnings Overview', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              const Text(
+                'Earnings Overview',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
               Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey[500]),
             ],
           ),
@@ -550,7 +655,10 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Total Completed', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                    Text(
+                      'Total Completed',
+                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       '₹${totalEarnings.toStringAsFixed(0)}',
@@ -569,11 +677,17 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Total Trips', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                    Text(
+                      'Total Trips',
+                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       '$totalTrips',
-                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ),
@@ -600,7 +714,10 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
           const Icon(Icons.error_outline, color: Colors.red),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(message, style: const TextStyle(color: Colors.red, fontSize: 14)),
+            child: Text(
+              message,
+              style: const TextStyle(color: Colors.red, fontSize: 14),
+            ),
           ),
         ],
       ),
@@ -616,7 +733,10 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
             children: [
               Icon(Icons.info_outline, color: Colors.orange, size: 28),
               SizedBox(width: 12),
-              Text('Partner Profile Required', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              Text(
+                'Partner Profile Required',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -630,7 +750,9 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryGreen,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             child: const Text('Complete Driver Onboarding'),
           ),
@@ -643,7 +765,8 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
     final String status = partner.approvalStatus;
     Color statusColor = Colors.orange;
     String statusTitle = 'Application Under Review';
-    String statusDesc = 'Your partner profile is currently being reviewed by admin.';
+    String statusDesc =
+        'Your partner profile is currently being reviewed by admin.';
 
     if (status == 'approved') {
       statusColor = AppColors.primaryGreen;
@@ -671,26 +794,46 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(partner.businessName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                    Text(statusTitle, style: TextStyle(color: statusColor, fontSize: 12, fontWeight: FontWeight.w600)),
+                    Text(
+                      partner.businessName,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      statusTitle,
+                      style: TextStyle(
+                        color: statusColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ],
                 ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.1),
+                  color: statusColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   status.toUpperCase(),
-                  style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12),
+                  style: TextStyle(
+                    color: statusColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 8),
-          Text(statusDesc, style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+          Text(
+            statusDesc,
+            style: TextStyle(color: Colors.grey[600], fontSize: 13),
+          ),
         ],
       ),
     );
@@ -704,14 +847,27 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
           children: [
             const Row(
               children: [
-                Icon(Icons.directions_car_outlined, color: Colors.grey, size: 28),
+                Icon(
+                  Icons.directions_car_outlined,
+                  color: Colors.grey,
+                  size: 28,
+                ),
                 SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('No Active Vehicle', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                      Text('Register or claim a vehicle to go online', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                      Text(
+                        'No Active Vehicle',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                      Text(
+                        'Register or claim a vehicle to go online',
+                        style: TextStyle(color: Colors.grey, fontSize: 12),
+                      ),
                     ],
                   ),
                 ),
@@ -735,7 +891,10 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () => context.push('/driver-onboarding'),
-                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryGreen, foregroundColor: Colors.white),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primaryGreen,
+                      foregroundColor: Colors.white,
+                    ),
                     child: const Text('Register'),
                   ),
                 ),
@@ -749,14 +908,27 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
     return InfurnusCard(
       child: Row(
         children: [
-          const Icon(Icons.directions_car, color: AppColors.primaryGreen, size: 32),
+          const Icon(
+            Icons.directions_car,
+            color: AppColors.primaryGreen,
+            size: 32,
+          ),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${vehicle.make} ${vehicle.model}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                Text('Plate: ${vehicle.plateNumber}', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+                Text(
+                  '${vehicle.make} ${vehicle.model}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                Text(
+                  'Plate: ${vehicle.plateNumber}',
+                  style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                ),
               ],
             ),
           ),
@@ -802,8 +974,14 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  subtitle,
+                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+                ),
               ],
             ),
           ),
@@ -816,7 +994,11 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
               ),
               child: Text(
                 badge,
-                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
             const SizedBox(width: 8),
@@ -832,8 +1014,14 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
       children: [
         Icon(Icons.cloud_off, size: 48, color: Colors.grey),
         SizedBox(height: 12),
-        Text('You are currently offline', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-        Text('Toggle the switch above to go online and receive requests', style: TextStyle(color: Colors.grey, fontSize: 12)),
+        Text(
+          'You are currently offline',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+        ),
+        Text(
+          'Toggle the switch above to go online and receive requests',
+          style: TextStyle(color: Colors.grey, fontSize: 12),
+        ),
       ],
     );
   }
@@ -843,7 +1031,10 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
       children: [
         CircularProgressIndicator(color: AppColors.primaryGreen),
         SizedBox(height: 12),
-        Text('Searching for nearby ride requests...', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+        Text(
+          'Searching for nearby ride requests...',
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+        ),
       ],
     );
   }

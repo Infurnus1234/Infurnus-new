@@ -41,6 +41,14 @@ describe('Google official-library verification', () => {
       message: 'Invalid or expired Google ID token',
     });
   });
+  it('never accepts the former development magic token', async () => {
+    await expect(
+      fixture.provider.verify('DEV_MOCK_GOOGLE_ID_TOKEN_USER_INFURNUS_COM'),
+    ).rejects.toMatchObject({
+      code: 'INVALID_GOOGLE_TOKEN',
+      statusCode: 401,
+    });
+  });
   it('rejects invalid signatures', async () => {
     const other = generateKeyPairSync('rsa', { modulusLength: 2048 });
     await expect(

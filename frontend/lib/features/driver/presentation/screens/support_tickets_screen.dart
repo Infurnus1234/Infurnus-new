@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_button.dart';
 import '../../../../shared/widgets/infurnus_card.dart';
@@ -10,15 +11,16 @@ import '../providers/driver_providers.dart';
 
 final supportTicketsFutureProvider =
     FutureProvider.autoDispose<List<SupportTicketModel>>((ref) async {
-  final dataSource = ref.watch(driverRemoteDataSourceProvider);
-  return dataSource.listSupportTickets();
-});
+      final dataSource = ref.watch(driverRemoteDataSourceProvider);
+      return dataSource.listSupportTickets();
+    });
 
 class SupportTicketsScreen extends ConsumerStatefulWidget {
   const SupportTicketsScreen({super.key});
 
   @override
-  ConsumerState<SupportTicketsScreen> createState() => _SupportTicketsScreenState();
+  ConsumerState<SupportTicketsScreen> createState() =>
+      _SupportTicketsScreenState();
 }
 
 class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen> {
@@ -68,7 +70,11 @@ class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen> {
                 children: [
                   const Text(
                     'Create Support Ticket',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.close, color: Colors.white70),
@@ -77,17 +83,24 @@ class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen> {
                 ],
               ),
               const SizedBox(height: 16),
-              const Text('Category', style: TextStyle(color: Colors.white70, fontSize: 13)),
+              const Text(
+                'Category',
+                style: TextStyle(color: Colors.white70, fontSize: 13),
+              ),
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
-                value: _selectedCategory,
+                initialValue: _selectedCategory,
                 dropdownColor: const Color(0xFF1E2621),
                 decoration: InputDecoration(
                   filled: true,
                   fillColor: const Color(0xFF1E2621),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
-                items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                items: _categories
+                    .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                    .toList(),
                 onChanged: (val) {
                   if (val != null) setSheetState(() => _selectedCategory = val);
                 },
@@ -115,7 +128,9 @@ class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen> {
                         if (_subjectController.text.trim().isEmpty ||
                             _messageController.text.trim().isEmpty) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Please fill subject and message')),
+                            const SnackBar(
+                              content: Text('Please fill subject and message'),
+                            ),
                           );
                           return;
                         }
@@ -137,7 +152,9 @@ class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen> {
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('Support ticket created successfully'),
+                                content: Text(
+                                  'Support ticket created successfully',
+                                ),
                                 backgroundColor: AppColors.primaryGreen,
                               ),
                             );
@@ -177,10 +194,14 @@ class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen> {
         onPressed: _showCreateTicketSheet,
         backgroundColor: AppColors.primaryGreen,
         icon: const Icon(Icons.add, color: Colors.black),
-        label: const Text('New Ticket', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        label: const Text(
+          'New Ticket',
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+        ),
       ),
       body: ticketsAsync.when(
-        loading: () => const InfurnusLoader(message: 'Loading support tickets...'),
+        loading: () =>
+            const InfurnusLoader(message: 'Loading support tickets...'),
         error: (err, _) => Center(child: Text('Error: $err')),
         data: (tickets) {
           if (tickets.isEmpty) {
@@ -210,7 +231,8 @@ class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen> {
             separatorBuilder: (_, __) => const SizedBox(height: 12),
             itemBuilder: (context, idx) {
               final ticket = tickets[idx];
-              final isResolved = ticket.status == 'RESOLVED' || ticket.status == 'CLOSED';
+              final isResolved =
+                  ticket.status == 'RESOLVED' || ticket.status == 'CLOSED';
 
               return InfurnusCard(
                 child: Column(
@@ -228,21 +250,28 @@ class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen> {
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
                             color: isResolved
-                                ? AppColors.primaryGreen.withOpacity(0.15)
-                                : Colors.amber.withOpacity(0.15),
+                                ? AppColors.primaryGreen.withValues(alpha: 0.15)
+                                : Colors.amber.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(
-                              color: isResolved ? AppColors.primaryGreen : Colors.amber,
+                              color: isResolved
+                                  ? AppColors.primaryGreen
+                                  : Colors.amber,
                               width: 0.8,
                             ),
                           ),
                           child: Text(
                             ticket.status,
                             style: TextStyle(
-                              color: isResolved ? AppColors.primaryGreen : Colors.amber,
+                              color: isResolved
+                                  ? AppColors.primaryGreen
+                                  : Colors.amber,
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
                             ),
@@ -253,12 +282,19 @@ class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen> {
                     const SizedBox(height: 8),
                     Text(
                       ticket.subject,
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       ticket.message,
-                      style: TextStyle(color: Colors.grey[400], fontSize: 13, height: 1.3),
+                      style: TextStyle(
+                        color: Colors.grey[400],
+                        fontSize: 13,
+                        height: 1.3,
+                      ),
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -267,20 +303,31 @@ class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.06),
+                            color: Colors.white.withValues(alpha: 0.06),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
                             ticket.category,
-                            style: TextStyle(color: Colors.grey[300], fontSize: 11),
+                            style: TextStyle(
+                              color: Colors.grey[300],
+                              fontSize: 11,
+                            ),
                           ),
                         ),
                         if (ticket.createdAt != null)
                           Text(
-                            ticket.createdAt!.toLocal().toString().split('.')[0],
-                            style: TextStyle(color: Colors.grey[500], fontSize: 11),
+                            ticket.createdAt!.toLocal().toString().split(
+                              '.',
+                            )[0],
+                            style: TextStyle(
+                              color: Colors.grey[500],
+                              fontSize: 11,
+                            ),
                           ),
                       ],
                     ),
