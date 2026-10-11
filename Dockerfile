@@ -15,7 +15,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json tsconfig.json ./
-RUN npm ci
+# Match the lockfile toolchain validated by CI in both image stages.
+RUN npm install --global npm@11.3.0 && npm ci
 
 COPY src/ ./src/
 COPY migrations/ ./migrations/
@@ -37,7 +38,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
-RUN npm ci --omit=dev --ignore-scripts && npm rebuild argon2
+RUN npm install --global npm@11.3.0 && npm ci --omit=dev --ignore-scripts && npm rebuild argon2
 
 COPY --from=builder /app/dist ./dist
 COPY migrations/ ./migrations/
