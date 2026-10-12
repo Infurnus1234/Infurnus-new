@@ -19,7 +19,9 @@ export const adminIdSchema = z.object({ id: z.string().uuid() }).strict();
 export const adminUsersQuerySchema = pagination
   .extend({
     search: z.string().trim().min(1).max(150).optional(),
-    role: z.enum(['customer', 'driver', 'admin', 'super_admin']).optional(),
+    role: z
+      .enum(['customer', 'driver', 'fleet_owner', 'driver_fleet_owner', 'admin', 'super_admin'])
+      .optional(),
     status: z.enum(['active', 'suspended', 'banned']).optional(),
     ...dateRange,
   })
@@ -45,7 +47,12 @@ export const adminPartnersQuerySchema = pagination
 export const adminVehiclesQuerySchema = pagination
   .extend({
     partnerId: z.string().uuid().optional(),
-    active: z.coerce.boolean().optional(),
+    active: z
+      .preprocess(
+        (value) => (value === 'true' ? true : value === 'false' ? false : value),
+        z.boolean(),
+      )
+      .optional(),
     plate: z.string().trim().min(1).max(20).optional(),
     make: z.string().trim().min(1).max(50).optional(),
     model: z.string().trim().min(1).max(50).optional(),

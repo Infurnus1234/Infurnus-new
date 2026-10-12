@@ -1,4 +1,5 @@
 import { PostgresProviderOperationsRepository } from '../../providers/repositories/provider-operations.repository.js';
+import { AppError } from '../../../common/errors/app-error.js';
 import type { Pool, QueryResultRow } from 'pg';
 
 import type {
@@ -21,7 +22,7 @@ import type {
 export interface AdminRepository {
   listUsers(filters: AdminFilters): Promise<Page<AdminUser>>;
   getUser(id: string): Promise<AdminUser | null>;
-  updateUserStatus(id: string, status: string): Promise<AdminUser | null>;
+  updateUserStatus(id: string, status: string, actorId?: string): Promise<AdminUser | null>;
 
   listDrivers(filters: AdminFilters): Promise<Page<AdminDriver>>;
   getDriver(id: string): Promise<AdminDriverDetails | null>;
@@ -74,6 +75,7 @@ const userProjection = `
 const driverProjection = `
   dp.id,
   u.id AS "userId",
+  u.role::text AS role,
   u.first_name AS "firstName",
   u.last_name AS "lastName",
   u.email,
@@ -110,6 +112,7 @@ const driverApplicationProjection = `
 
   da.driver_profile_id AS "driverProfileId",
   u.id AS "userId",
+  u.role::text AS "requesterRole",
   u.first_name AS "firstName",
   u.last_name AS "lastName",
   u.email,
@@ -143,16 +146,16 @@ const partnerProjection = `
   ${partnerDocumentStatusProjection('DRIVING_LICENCE', 'drivingLicenceStatus')},
   ${partnerDocumentStatusProjection('PROFILE_PHOTO', 'profilePhotoStatus')},
   ${partnerDocumentStatusProjection('ADDRESS_PROOF', 'addressProofStatus')},
-  (SELECT COUNT(*)::int FROM vehicles v JOIN driver_profiles d ON d.id = v.driver_profile_id
-   WHERE d.user_id = p.user_id) AS "vehicleCount",
+  (SELECT COUNT(*)::int FROM vehicles v LEFT JOIN driver_profiles d ON d.id = v.driver_profile_id
+   WHERE v.owner_id = p.user_id OR (v.owner_id IS NULL AND d.user_id = p.user_id)) AS "vehicleCount",
   COALESCE((SELECT jsonb_agg(jsonb_build_object(
     'id', v.id, 'plateNumber', v.plate_number, 'isActive', v.is_active,
     'insuranceStatus', (SELECT pd.status::text FROM partner_documents pd WHERE pd.vehicle_id = v.id AND pd.document_type = 'VEHICLE_INSURANCE' ORDER BY pd.updated_at DESC LIMIT 1),
     'permitStatus', (SELECT pd.status::text FROM partner_documents pd WHERE pd.vehicle_id = v.id AND pd.document_type = 'VEHICLE_PERMIT' ORDER BY pd.updated_at DESC LIMIT 1),
     'fitnessStatus', (SELECT pd.status::text FROM partner_documents pd WHERE pd.vehicle_id = v.id AND pd.document_type = 'VEHICLE_FITNESS' ORDER BY pd.updated_at DESC LIMIT 1)
   ) ORDER BY v.created_at DESC)
-  FROM vehicles v JOIN driver_profiles d ON d.id = v.driver_profile_id
-  WHERE d.user_id = p.user_id), '[]'::jsonb) AS "vehicles",
+  FROM vehicles v LEFT JOIN driver_profiles d ON d.id = v.driver_profile_id
+  WHERE v.owner_id = p.user_id OR (v.owner_id IS NULL AND d.user_id = p.user_id)), '[]'::jsonb) AS "vehicles",
   COALESCE((SELECT jsonb_agg(jsonb_build_object(
     'id', d.id,
     'userId', d.user_id,
@@ -161,6 +164,7 @@ const partnerProjection = `
     'email', u.email,
     'phone', u.phone,
     'userStatus', u.status,
+    'role', u.role::text,
     'verificationStatus', d.verification_status,
     'availabilityStatus', d.availability_status,
     'licenseNumber', d.license_number,
@@ -174,7 +178,7 @@ const partnerProjection = `
   INNER JOIN users u ON u.id = d.user_id
   WHERE pd.partner_id = p.id
     AND pd.status = 'ACTIVE'
-    AND u.role = 'driver'
+    AND u.role IN ('driver', 'driver_fleet_owner')
     AND u.deleted_at IS NULL), '[]'::jsonb) AS "drivers"`;
 
 const vehicleProjection = `
@@ -215,7 +219,48 @@ export class PostgresAdminRepository implements AdminRepository {
     return result.rows[0] ?? null;
   }
 
-  async updateUserStatus(id: string, status: string): Promise<AdminUser | null> {
+  async updateUserStatus(id: string, status: string, actorId?: string): Promise<AdminUser | null> {
+    if (actorId) {
+      const client = await this.pool.connect();
+      try {
+        await client.query('BEGIN');
+        const actor = await client.query(
+          "SELECT id FROM users WHERE id=$1 AND role IN ('admin','super_admin') AND status='active' AND deleted_at IS NULL FOR SHARE",
+          [actorId],
+        );
+        if (!actor.rowCount) throw new AppError('FORBIDDEN', 'Active administrator required', 403);
+        const previous = await client.query<AdminUser>(
+          `SELECT ${userProjection} FROM users WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`,
+          [id],
+        );
+        const target = previous.rows[0];
+        if (!target) {
+          await client.query('COMMIT');
+          return null;
+        }
+        if (target.id === actorId || ['admin', 'super_admin'].includes(target.role))
+          throw new AppError(
+            'FORBIDDEN',
+            'Administrator accounts require a dedicated governance workflow',
+            403,
+          );
+        const updated = await client.query<AdminUser>(
+          `UPDATE users SET status=$1,updated_at=NOW() WHERE id=$2 RETURNING ${userProjection}`,
+          [status, id],
+        );
+        await client.query(
+          "INSERT INTO user_history(user_id,event_type,entity_type,entity_id,metadata) VALUES($1,'user_status_updated','user',$2,$3::jsonb)",
+          [actorId, id, JSON.stringify({ previousStatus: target.status, status })],
+        );
+        await client.query('COMMIT');
+        return updated.rows[0] ?? null;
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    }
     const result = await this.pool.query<AdminUser>(
       `UPDATE users
        SET status = $1,
@@ -444,7 +489,7 @@ export class PostgresAdminRepository implements AdminRepository {
 
       WHERE (dp.id = $1 OR dp.user_id = $1)
         AND u.deleted_at IS NULL
-        AND u.role = 'driver'
+        AND u.role IN ('driver', 'driver_fleet_owner')
 
       LIMIT 1
     `;
@@ -523,11 +568,11 @@ export class PostgresAdminRepository implements AdminRepository {
     return this.paginate<AdminVehicle>(
       `SELECT ${vehicleProjection} FROM vehicles v
        LEFT JOIN driver_profiles d ON d.id = v.driver_profile_id
-       LEFT JOIN partners p ON p.user_id = d.user_id${where}
+       LEFT JOIN partners p ON p.user_id = COALESCE(v.owner_id, d.user_id)${where}
        ORDER BY v.created_at DESC`,
       `SELECT COUNT(*)::int AS count FROM vehicles v
        LEFT JOIN driver_profiles d ON d.id = v.driver_profile_id
-       LEFT JOIN partners p ON p.user_id = d.user_id${where}`,
+       LEFT JOIN partners p ON p.user_id = COALESCE(v.owner_id, d.user_id)${where}`,
       values,
       filters.page,
       filters.pageSize,
@@ -538,7 +583,7 @@ export class PostgresAdminRepository implements AdminRepository {
     const result = await this.pool.query<AdminVehicle>(
       `SELECT ${vehicleProjection} FROM vehicles v
        LEFT JOIN driver_profiles d ON d.id = v.driver_profile_id
-       LEFT JOIN partners p ON p.user_id = d.user_id
+       LEFT JOIN partners p ON p.user_id = COALESCE(v.owner_id, d.user_id)
        WHERE v.id = $1`,
       [id],
     );
@@ -565,7 +610,7 @@ export class PostgresAdminRepository implements AdminRepository {
          FROM driver_profiles dp
          INNER JOIN users u ON u.id = dp.user_id
          WHERE u.deleted_at IS NULL
-           AND u.role = 'driver'`,
+           AND u.role IN ('driver', 'driver_fleet_owner')`,
         ),
 
         this.pool.query<{
@@ -589,7 +634,7 @@ export class PostgresAdminRepository implements AdminRepository {
          INNER JOIN users u
            ON u.id = dp.user_id
          WHERE u.deleted_at IS NULL
-           AND u.role = 'driver'
+           AND u.role IN ('driver', 'driver_fleet_owner')
            AND da.status IN ('PENDING', 'UNDER_REVIEW', 'CHANGES_REQUESTED')`,
         ),
 
@@ -732,7 +777,7 @@ export class PostgresAdminRepository implements AdminRepository {
       FROM vehicles v
       LEFT JOIN driver_profiles dp ON dp.id = v.driver_profile_id
       LEFT JOIN users u ON u.id = dp.user_id
-      LEFT JOIN partners pt ON pt.user_id = v.owner_id OR pt.user_id = u.id
+      LEFT JOIN partners pt ON pt.user_id = COALESCE(v.owner_id, u.id)
 
       LEFT JOIN LATERAL (
         SELECT r.id
@@ -784,7 +829,7 @@ export class PostgresAdminRepository implements AdminRepository {
 
     const sql = `
       SELECT
-        COALESCE(dp.state, pt.state, 'Bihar') AS state,
+        COALESCE(dp.state, pt.state, 'Unknown') AS state,
         COUNT(*)::int AS total,
 
         COUNT(*) FILTER (
@@ -810,7 +855,7 @@ export class PostgresAdminRepository implements AdminRepository {
       FROM vehicles v
       LEFT JOIN driver_profiles dp ON dp.id = v.driver_profile_id
       LEFT JOIN users u ON u.id = dp.user_id
-      LEFT JOIN partners pt ON pt.user_id = v.owner_id OR pt.user_id = u.id
+      LEFT JOIN partners pt ON pt.user_id = COALESCE(v.owner_id, u.id)
 
       LEFT JOIN LATERAL (
         SELECT r.id
@@ -828,7 +873,7 @@ export class PostgresAdminRepository implements AdminRepository {
 
       ${where}
 
-      GROUP BY COALESCE(dp.state, pt.state, 'Bihar')
+      GROUP BY COALESCE(dp.state, pt.state, 'Unknown')
       ORDER BY total DESC, state ASC
     `;
 
@@ -848,7 +893,7 @@ export class PostgresAdminRepository implements AdminRepository {
     const sql = `
       SELECT
         COALESCE(dp.state, pt.state, $1) AS state,
-        COALESCE(dp.city, pt.city, 'Patna') AS city,
+        COALESCE(dp.city, pt.city, 'Unknown') AS city,
         COUNT(*)::int AS total,
 
         COUNT(*) FILTER (
@@ -874,7 +919,7 @@ export class PostgresAdminRepository implements AdminRepository {
       FROM vehicles v
       LEFT JOIN driver_profiles dp ON dp.id = v.driver_profile_id
       LEFT JOIN users u ON u.id = dp.user_id
-      LEFT JOIN partners pt ON pt.user_id = v.owner_id OR pt.user_id = u.id
+      LEFT JOIN partners pt ON pt.user_id = COALESCE(v.owner_id, u.id)
 
       LEFT JOIN LATERAL (
         SELECT r.id
@@ -894,7 +939,7 @@ export class PostgresAdminRepository implements AdminRepository {
 
       GROUP BY
         COALESCE(dp.state, pt.state, $1),
-        COALESCE(dp.city, pt.city, 'Patna')
+        COALESCE(dp.city, pt.city, 'Unknown')
 
       ORDER BY total DESC, city ASC
     `;
@@ -936,8 +981,8 @@ export class PostgresAdminRepository implements AdminRepository {
 
         u.phone AS "driverPhone",
 
-        COALESCE(dp.state, pt.state, 'Bihar') AS state,
-        COALESCE(dp.city, pt.city, 'Patna') AS city,
+        COALESCE(dp.state, pt.state, 'Unknown') AS state,
+        COALESCE(dp.city, pt.city, 'Unknown') AS city,
 
         ST_Y(dp.last_location::geometry) AS latitude,
         ST_X(dp.last_location::geometry) AS longitude,
@@ -950,7 +995,7 @@ export class PostgresAdminRepository implements AdminRepository {
       FROM vehicles v
       LEFT JOIN driver_profiles dp ON dp.id = v.driver_profile_id
       LEFT JOIN users u ON u.id = dp.user_id
-      LEFT JOIN partners pt ON pt.user_id = v.owner_id OR pt.user_id = u.id
+      LEFT JOIN partners pt ON pt.user_id = COALESCE(v.owner_id, u.id)
 
       LEFT JOIN LATERAL (
         SELECT r.id
@@ -976,7 +1021,7 @@ export class PostgresAdminRepository implements AdminRepository {
       FROM vehicles v
       LEFT JOIN driver_profiles dp ON dp.id = v.driver_profile_id
       LEFT JOIN users u ON u.id = dp.user_id
-      LEFT JOIN partners pt ON pt.user_id = v.owner_id OR pt.user_id = u.id
+      LEFT JOIN partners pt ON pt.user_id = COALESCE(v.owner_id, u.id)
 
       LEFT JOIN LATERAL (
         SELECT r.id
@@ -1031,8 +1076,8 @@ export class PostgresAdminRepository implements AdminRepository {
 
         u.phone AS "driverPhone",
 
-        COALESCE(dp.state, pt.state, 'Bihar') AS state,
-        COALESCE(dp.city, pt.city, 'Patna') AS city,
+        COALESCE(dp.state, pt.state, 'Unknown') AS state,
+        COALESCE(dp.city, pt.city, 'Unknown') AS city,
 
         ST_Y(dp.last_location::geometry) AS latitude,
         ST_X(dp.last_location::geometry) AS longitude,
@@ -1045,7 +1090,7 @@ export class PostgresAdminRepository implements AdminRepository {
       FROM vehicles v
       LEFT JOIN driver_profiles dp ON dp.id = v.driver_profile_id
       LEFT JOIN users u ON u.id = dp.user_id
-      LEFT JOIN partners pt ON pt.user_id = v.owner_id OR pt.user_id = u.id
+      LEFT JOIN partners pt ON pt.user_id = COALESCE(v.owner_id, u.id)
 
       LEFT JOIN LATERAL (
         SELECT r.id
@@ -1146,7 +1191,10 @@ function userWhere(filters: AdminFilters) {
 }
 
 function driverWhere(filters: AdminFilters) {
-  const conditions: string[] = [`u.deleted_at IS NULL`, `u.role = 'driver'`];
+  const conditions: string[] = [
+    `u.deleted_at IS NULL`,
+    `u.role IN ('driver', 'driver_fleet_owner')`,
+  ];
 
   const values: unknown[] = [];
 
@@ -1197,7 +1245,10 @@ function driverWhere(filters: AdminFilters) {
 }
 
 function driverApplicationWhere(filters: AdminFilters) {
-  const conditions: string[] = [`u.deleted_at IS NULL`, `u.role = 'driver'`];
+  const conditions: string[] = [
+    `u.deleted_at IS NULL`,
+    `u.role IN ('driver', 'driver_fleet_owner')`,
+  ];
 
   const values: unknown[] = [];
 
@@ -1357,13 +1408,13 @@ function fleetWhere(filters: FleetFilters) {
   if (filters.state) {
     values.push(filters.state);
 
-    conditions.push(`COALESCE(dp.state, pt.state, 'Bihar') ILIKE $${values.length}`);
+    conditions.push(`COALESCE(dp.state, pt.state, 'Unknown') ILIKE $${values.length}`);
   }
 
   if (filters.city) {
     values.push(filters.city);
 
-    conditions.push(`COALESCE(dp.city, pt.city, 'Patna') ILIKE $${values.length}`);
+    conditions.push(`COALESCE(dp.city, pt.city, 'Unknown') ILIKE $${values.length}`);
   }
 
   if (filters.sector) {

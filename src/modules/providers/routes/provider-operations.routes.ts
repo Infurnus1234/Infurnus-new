@@ -297,7 +297,18 @@ export function createProviderApprovalRouter(repository: PostgresProviderOperati
   });
   router.get('/', async (req, res, next) => {
     try {
-      res.json({ success: true, data: await repository.pendingApprovals(req.auth!.userId) });
+      const query = z
+        .object({
+          status: z
+            .enum(['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED', 'EXPIRED', 'ALL'])
+            .default('PENDING'),
+        })
+        .strict()
+        .parse(req.query);
+      res.json({
+        success: true,
+        data: await repository.pendingApprovals(req.auth!.userId, query.status),
+      });
     } catch (error) {
       next(error);
     }

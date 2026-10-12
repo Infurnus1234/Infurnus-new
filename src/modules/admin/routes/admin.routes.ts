@@ -8,7 +8,7 @@ import type { AdminController } from '../controllers/admin.controller.js';
 export function createAdminRouter(controller: AdminController) {
   const router = Router();
 
-  router.use(requireAuth, requireRoles('admin', 'super_admin'));
+  router.use(requireAuth, requireRoles('admin', 'super_admin'), controller.authorize);
 
   // Physical /vehicles inventory endpoints retain their existing meaning.
   router.post('/vehicle-types', controller.createVehicleType);
