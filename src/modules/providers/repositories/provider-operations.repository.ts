@@ -65,7 +65,10 @@ export class PostgresProviderOperationsRepository {
       await this.authorizeReviewer(client, actorId);
       const row = (
         await client.query(
-          `SELECT r.*,${approvalIdentityFields},${approvalReviewPermission('$2')} FROM provider_approval_requests r ${approvalIdentityJoins}
+          `SELECT r.*,${approvalIdentityFields},${approvalReviewPermission('$2')},
+           CASE WHEN u.deleted_at IS NULL THEN u.email END AS requester_email,
+           CASE WHEN u.deleted_at IS NULL THEN u.phone END AS requester_phone
+           FROM provider_approval_requests r ${approvalIdentityJoins}
            WHERE r.id=$1 AND r.target_type<>'bank_account'`,
           [id, actorId],
         )
@@ -93,8 +96,10 @@ export class PostgresProviderOperationsRepository {
       const history = (
         await client.query(
           `SELECT r.id,r.status,r.reviewer_id,r.reviewed_at,r.rejection_reason,r.submitted_at,
-           r.requester_id,r.requester_role,r.request_type,r.target_type,r.target_id,${approvalIdentityFields},${approvalReviewPermission('$3')}
-           FROM provider_approval_requests r ${approvalIdentityJoins}
+           r.requester_id,r.requester_role,r.request_type,r.target_type,r.target_id,${approvalIdentityFields},${approvalReviewPermission('$3')},
+           CASE WHEN reviewer.deleted_at IS NULL THEN NULLIF(btrim(concat_ws(' ',reviewer.first_name,reviewer.last_name)),'') END AS reviewer_display_name,
+           COALESCE(reviewer.role::text,r.reviewer_role) AS reviewer_account_role
+           FROM provider_approval_requests r ${approvalIdentityJoins} LEFT JOIN users reviewer ON reviewer.id=r.reviewer_id
            WHERE r.target_type=$1 AND r.target_id=$2 ORDER BY r.submitted_at DESC,r.id DESC LIMIT 100`,
           [row.target_type, row.target_id, actorId],
         )
@@ -127,6 +132,21 @@ export class PostgresProviderOperationsRepository {
         doc.pageCount = Array.isArray(doc.metadata?.pages)
           ? Math.max(1, doc.metadata.pages.length)
           : 1;
+        doc.pages = Array.isArray(doc.metadata?.pages)
+          ? doc.metadata.pages
+              .slice(0, 5)
+              .map(
+                (
+                  page: { side?: string; mimeType?: string; createdAt?: string },
+                  index: number,
+                ) => ({
+                  pageNumber: index + 1,
+                  side: page.side || 'PAGE',
+                  mimeType: page.mimeType,
+                  createdAt: page.createdAt,
+                }),
+              )
+          : [];
         delete doc.storage_key;
         if (doc.metadata) {
           delete doc.metadata.storage;
@@ -135,15 +155,24 @@ export class PostgresProviderOperationsRepository {
         return doc;
       });
       if (documentScope.table === 'driver_documents' && documents.length) {
-        const pages = await client.query<{ document_id: string; total: number }>(
-          `SELECT requested.document_id,count(p.page_number)::int AS total
+        const pages = await client.query<{
+          document_id: string;
+          total: number;
+          pages: { pageNumber: number; side: string; mimeType: string; createdAt: string }[];
+        }>(
+          `SELECT requested.document_id,count(p.page_number)::int AS total,
+           COALESCE(jsonb_agg(jsonb_build_object('pageNumber',p.page_number,'side',p.side,'mimeType',p.mime_type,'createdAt',p.created_at) ORDER BY p.page_number) FILTER(WHERE p.id IS NOT NULL),'[]'::jsonb) AS pages
            FROM unnest($1::uuid[],$2::integer[]) AS requested(document_id,version)
            LEFT JOIN driver_document_pages p ON p.document_id=requested.document_id AND p.version=requested.version
            GROUP BY requested.document_id`,
           [documents.map((doc) => doc.id), documents.map((doc) => doc.version)],
         );
         const counts = new Map(pages.rows.map((row) => [row.document_id, row.total]));
-        for (const doc of documents) doc.pageCount = Math.max(1, counts.get(doc.id) ?? 0);
+        const pageMetadata = new Map(pages.rows.map((row) => [row.document_id, row.pages]));
+        for (const doc of documents) {
+          doc.pageCount = Math.max(1, counts.get(doc.id) ?? 0);
+          doc.pages = pageMetadata.get(doc.id) || [];
+        }
       }
       return { request: row, target, documents, history };
     } finally {

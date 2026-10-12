@@ -1,6 +1,7 @@
 import { PostgresProviderOperationsRepository } from '../../providers/repositories/provider-operations.repository.js';
 import { AppError } from '../../../common/errors/app-error.js';
 import type { Pool, QueryResultRow } from 'pg';
+import type { StorageAccessUrlInput } from '../../../infrastructure/storage/types.js';
 
 import type {
   AdminDashboard,
@@ -20,6 +21,12 @@ import type {
 } from '../types/admin.js';
 
 export interface AdminRepository {
+  driverDocumentAccess?(
+    actorId: string,
+    driverId: string,
+    documentId: string,
+    page?: number,
+  ): Promise<StorageAccessUrlInput & { mimeType: string }>;
   listUsers(filters: AdminFilters): Promise<Page<AdminUser>>;
   getUser(id: string): Promise<AdminUser | null>;
   updateUserStatus(id: string, status: string, actorId?: string): Promise<AdminUser | null>;
@@ -193,6 +200,34 @@ const vehicleProjection = `
    AND pd.document_type = 'VEHICLE_FITNESS' ORDER BY pd.updated_at DESC LIMIT 1) AS "fitnessStatus"`;
 
 export class PostgresAdminRepository implements AdminRepository {
+  async driverDocumentAccess(actorId: string, driverId: string, documentId: string, page?: number) {
+    const result = await this.pool.query<{
+      storageKey: string;
+      resourceType: 'image' | 'raw' | 'auto';
+      accessMode: 'public' | 'authenticated';
+      mimeType: string;
+    }>(
+      `SELECT COALESCE(p.storage_key,d.storage_key) AS "storageKey",
+      COALESCE(p.resource_type,d.resource_type) AS "resourceType",d.access_mode AS "accessMode",
+      COALESCE(p.mime_type,d.mime_type) AS "mimeType"
+      FROM driver_documents d JOIN driver_profiles dp ON dp.id=d.driver_profile_id
+      JOIN users owner ON owner.id=dp.user_id
+      LEFT JOIN driver_document_pages p ON p.document_id=d.id AND p.version=d.version AND p.page_number=$4
+      WHERE d.id=$3 AND (dp.id=$2 OR dp.user_id=$2) AND owner.deleted_at IS NULL
+        AND owner.role IN ('driver','driver_fleet_owner')
+        AND EXISTS(SELECT 1 FROM users actor WHERE actor.id=$1 AND actor.role IN ('admin','super_admin') AND actor.status='active' AND actor.deleted_at IS NULL)
+        AND ($4::integer IS NULL OR p.id IS NOT NULL OR ($4=1 AND NOT EXISTS(SELECT 1 FROM driver_document_pages other WHERE other.document_id=d.id AND other.version=d.version)))`,
+      [actorId, driverId, documentId, page ?? null],
+    );
+    const row = result.rows[0];
+    if (!row)
+      throw new AppError(
+        'DOCUMENT_NOT_FOUND',
+        'Document or page is unavailable for this driver',
+        404,
+      );
+    return { ...row, options: { expiresIn: 300 } };
+  }
   constructor(private readonly pool: Pool) {}
 
   async listUsers(filters: AdminFilters): Promise<Page<AdminUser>> {
@@ -432,6 +467,11 @@ export class PostgresAdminRepository implements AdminRepository {
               jsonb_build_object(
                 'id', dd.id,
                 'documentType', dd.document_type,
+                'documentCode', COALESCE(dd.document_metadata->>'documentCode',dd.document_type::text),
+                'documentNumber', dd.document_metadata->>'documentNumber',
+                'expiresAt', dd.document_metadata->>'expiresAt',
+                'version', dd.version,
+                'pages', COALESCE((SELECT jsonb_agg(jsonb_build_object('pageNumber',pg.page_number,'side',pg.side,'mimeType',pg.mime_type,'createdAt',pg.created_at) ORDER BY pg.page_number) FROM driver_document_pages pg WHERE pg.document_id=dd.id AND pg.version=dd.version),'[]'::jsonb),
                 'storageProvider', dd.storage_provider,
                 'resourceType', dd.resource_type,
                 'accessMode', dd.access_mode,
@@ -1166,7 +1206,8 @@ function userWhere(filters: AdminFilters) {
       `(first_name ILIKE $${values.length}
         OR last_name ILIKE $${values.length}
         OR email ILIKE $${values.length}
-        OR phone ILIKE $${values.length})`,
+        OR phone ILIKE $${values.length}
+        OR id::text ILIKE $${values.length})`,
     );
   }
 

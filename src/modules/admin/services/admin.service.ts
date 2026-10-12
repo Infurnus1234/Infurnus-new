@@ -26,6 +26,11 @@ export class AdminService {
       throw new AppError('FORBIDDEN', 'Active administrator access required', 403);
     }
   }
+  async driverDocumentAccess(actorId: string, driverId: string, documentId: string, page?: number) {
+    if (!this.repository.driverDocumentAccess)
+      throw new AppError('DOCUMENT_ACCESS_UNAVAILABLE', 'Document access is unavailable', 503);
+    return this.repository.driverDocumentAccess(actorId, driverId, documentId, page);
+  }
   private catalog() {
     if (
       !this.vehicles?.createType ||
