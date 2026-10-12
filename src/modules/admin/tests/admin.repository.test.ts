@@ -66,7 +66,7 @@ describe('PostgresAdminRepository', () => {
     expect(driverQuery).toContain('FROM driver_profiles dp');
     expect(driverQuery).toContain('INNER JOIN users u ON u.id = dp.user_id');
     expect(driverQuery).toContain('u.deleted_at IS NULL');
-    expect(driverQuery).toContain("u.role = 'driver'");
+    expect(driverQuery).toContain("u.role IN ('driver', 'driver_fleet_owner')");
 
     const pendingApprovalQuery = query.mock.calls[3]![0] as string;
 
@@ -77,7 +77,7 @@ describe('PostgresAdminRepository', () => {
       "da.status IN ('PENDING', 'UNDER_REVIEW', 'CHANGES_REQUESTED')",
     );
     expect(pendingApprovalQuery).toContain('u.deleted_at IS NULL');
-    expect(pendingApprovalQuery).toContain("u.role = 'driver'");
+    expect(pendingApprovalQuery).toContain("u.role IN ('driver', 'driver_fleet_owner')");
 
     expect(query.mock.calls.every(([sql]) => !String(sql).includes('SELECT *'))).toBe(true);
   });
@@ -151,7 +151,7 @@ describe('PostgresAdminRepository', () => {
     expect(sql).toContain('INNER JOIN users u ON u.id = d.user_id');
     expect(sql).toContain('pd.partner_id = p.id');
     expect(sql).toContain("pd.status = 'ACTIVE'");
-    expect(sql).toContain("u.role = 'driver'");
+    expect(sql).toContain("u.role IN ('driver', 'driver_fleet_owner')");
     expect(sql).toContain('u.deleted_at IS NULL');
 
     expect(sql).toContain("'id', d.id");
@@ -209,7 +209,7 @@ describe('PostgresAdminRepository', () => {
     const sql = query.mock.calls[0]![0] as string;
     const values = query.mock.calls[0]![1] as unknown[];
 
-    expect(sql).toContain('LEFT JOIN partners p ON p.user_id = d.user_id');
+    expect(sql).toContain('LEFT JOIN partners p ON p.user_id = COALESCE(v.owner_id, d.user_id)');
     expect(sql).toContain('p.id = $1');
 
     expect(values).toEqual([partnerId, 25, 0]);

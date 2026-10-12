@@ -20,6 +20,12 @@ export class AdminService {
     private readonly repository: AdminRepository,
     private readonly vehicles?: VehicleRepository,
   ) {}
+  async authorize(actorId: string) {
+    const actor = await this.repository.getUser(actorId);
+    if (!actor || actor.status !== 'active' || !['admin', 'super_admin'].includes(actor.role)) {
+      throw new AppError('FORBIDDEN', 'Active administrator access required', 403);
+    }
+  }
   private catalog() {
     if (
       !this.vehicles?.createType ||
@@ -107,8 +113,10 @@ export class AdminService {
     return user;
   }
 
-  async updateUserStatus(id: string, status: string) {
-    const user = await this.repository.updateUserStatus(id, status);
+  async updateUserStatus(id: string, status: string, actorId?: string) {
+    const user = actorId
+      ? await this.repository.updateUserStatus(id, status, actorId)
+      : await this.repository.updateUserStatus(id, status);
 
     if (!user) {
       throw new AppError('USER_NOT_FOUND', 'User not found', 404);

@@ -26,6 +26,15 @@ export class AdminController {
     private readonly driverApplicationService?: DriverApplicationService,
   ) {}
 
+  authorize = async (req: Request, _res: Response, next: NextFunction) => {
+    try {
+      await this.service.authorize(req.auth!.userId);
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
+
   createVehicleType = async (req: Request, res: Response, next: NextFunction) => {
     try {
       res.status(201).json({
@@ -116,7 +125,7 @@ export class AdminController {
       const { id } = adminIdSchema.parse(req.params);
       const { status } = updateUserStatusSchema.parse(req.body);
 
-      const data = await this.service.updateUserStatus(id, status);
+      const data = await this.service.updateUserStatus(id, status, req.auth!.userId);
 
       res.json({
         success: true,

@@ -1,4 +1,6 @@
 import type { Pool, PoolClient } from 'pg';
+import { AppError } from '../../../common/errors/app-error.js';
+import type { AdminCouponInput } from '../schemas/admin-coupon.schema.js';
 
 import type { Coupon, CouponDiscountType, CouponRedemption } from '../types/coupon.js';
 
@@ -103,6 +105,84 @@ function normalizeCouponCode(code: string): string {
 
 export class PostgresCouponRepository implements CouponRepository {
   constructor(private readonly pool: Pool) {}
+  async manageByAdmin(
+    actorId: string,
+    input: AdminCouponInput | { isActive: boolean; expectedUpdatedAt: string },
+    id?: string,
+  ) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const actor = await client.query(
+        "SELECT id FROM users WHERE id=$1 AND role IN ('admin','super_admin') AND status='active' AND deleted_at IS NULL FOR SHARE",
+        [actorId],
+      );
+      if (!actor.rowCount) throw new AppError('FORBIDDEN', 'Active administrator required', 403);
+      let result;
+      let before: Record<string, unknown> | null = null;
+      if (id) {
+        before =
+          (
+            await client.query(
+              'SELECT *,updated_at::text AS version_timestamp FROM coupons WHERE id=$1 FOR UPDATE',
+              [id],
+            )
+          ).rows[0] ?? null;
+        if (!before) throw new AppError('COUPON_NOT_FOUND', 'Promo code not found', 404);
+        const update = input as { isActive: boolean; expectedUpdatedAt: string };
+        const matches = await client.query('SELECT $1::timestamptz = $2::timestamptz AS matches', [
+          before.version_timestamp,
+          update.expectedUpdatedAt,
+        ]);
+        if (!matches.rows[0]?.matches)
+          throw new AppError(
+            'COUPON_VERSION_CONFLICT',
+            'Promo code changed; reload before saving',
+            409,
+          );
+        result = await client.query(
+          `UPDATE coupons SET is_active=$2,updated_at=NOW() WHERE id=$1 RETURNING ${couponProjection}`,
+          [id, update.isActive],
+        );
+      } else {
+        const create = input as AdminCouponInput;
+        result = await client.query(
+          `INSERT INTO coupons(code,discount_type,discount_value,max_discount_amount,min_fare_amount,usage_limit,per_user_limit,starts_at,expires_at,is_active) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING ${couponProjection}`,
+          [
+            create.code,
+            create.discountType,
+            create.discountValue,
+            create.maxDiscountAmount,
+            create.minFareAmount,
+            create.usageLimit,
+            create.perUserLimit,
+            create.startsAt,
+            create.expiresAt,
+            create.isActive,
+          ],
+        );
+      }
+      const coupon = mapCoupon(result.rows[0]);
+      await client.query(
+        "INSERT INTO user_history(user_id,event_type,entity_type,entity_id,metadata) VALUES($1,$2,'coupon',$3,$4::jsonb)",
+        [
+          actorId,
+          id ? 'coupon_activation_updated' : 'coupon_created',
+          coupon.id,
+          JSON.stringify({ previousActive: before?.is_active ?? null, coupon }),
+        ],
+      );
+      await client.query('COMMIT');
+      return coupon;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      if ((error as { code?: string }).code === '23505')
+        throw new AppError('COUPON_DUPLICATE', 'Promo code already exists', 409);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
 
   async findByCode(code: string): Promise<Coupon | null> {
     const normalizedCode = normalizeCouponCode(code);

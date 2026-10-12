@@ -26,6 +26,8 @@ import { LogoutService } from './modules/auth/services/logout.service.js';
 import { AdminController } from './modules/admin/controllers/admin.controller.js';
 import type { AdminRepository } from './modules/admin/repositories/admin.repository.js';
 import { createAdminRouter } from './modules/admin/routes/admin.routes.js';
+import { AdminOperationsRepository } from './modules/admin/repositories/operations.repository.js';
+import { createAdminOperationsRouter } from './modules/admin/routes/operations.routes.js';
 import { AdminService } from './modules/admin/services/admin.service.js';
 
 import { createDriverApplicationRouter } from './modules/driver-applications/driver-application.routes.js';
@@ -421,6 +423,7 @@ export function createApp(
   // ==========================================================
 
   if (adminRepository) {
+    app.use('/admin/operations', createAdminOperationsRouter(new AdminOperationsRepository(pool)));
     app.use(
       '/admin',
       createAdminRouter(

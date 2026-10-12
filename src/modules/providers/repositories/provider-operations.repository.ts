@@ -1,6 +1,11 @@
 import { env } from '../../../config/env.js';
 import type { Pool, PoolClient } from 'pg';
 import { AppError } from '../../../common/errors/app-error.js';
+import {
+  approvalIdentityFields,
+  approvalIdentityJoins,
+  approvalReviewPermission,
+} from './approval-identity.js';
 import type {
   StorageAccessMode,
   StorageResourceType,
@@ -34,13 +39,19 @@ export class PostgresProviderOperationsRepository {
     }
   }
 
-  async pendingApprovals(actorId: string) {
+  async pendingApprovals(actorId: string, status: string = 'PENDING') {
     const client = await this.pool.connect();
     try {
       await this.authorizeReviewer(client, actorId);
       return (
         await client.query(
-          "SELECT id,requester_id,requester_role,fleet_id,request_type,target_type,target_id,status,submitted_at FROM provider_approval_requests WHERE status='PENDING' AND target_type<>'bank_account' ORDER BY submitted_at,id LIMIT 100",
+          `SELECT r.id,r.requester_id,r.requester_role,r.fleet_id,r.request_type,r.target_type,r.target_id,r.status,r.submitted_at,
+           ${approvalIdentityFields},${approvalReviewPermission('$2')}
+           FROM provider_approval_requests r ${approvalIdentityJoins}
+           WHERE ($1::text='ALL' OR r.status=$1) AND r.target_type<>'bank_account'
+           ORDER BY CASE WHEN $1='PENDING' THEN r.submitted_at END ASC,
+             CASE WHEN $1='PENDING' THEN r.id END ASC,r.submitted_at DESC,r.id DESC LIMIT 100`,
+          [status, actorId],
         )
       ).rows;
     } finally {
@@ -54,8 +65,9 @@ export class PostgresProviderOperationsRepository {
       await this.authorizeReviewer(client, actorId);
       const row = (
         await client.query(
-          "SELECT * FROM provider_approval_requests WHERE id=$1 AND target_type<>'bank_account'",
-          [id],
+          `SELECT r.*,${approvalIdentityFields},${approvalReviewPermission('$2')} FROM provider_approval_requests r ${approvalIdentityJoins}
+           WHERE r.id=$1 AND r.target_type<>'bank_account'`,
+          [id, actorId],
         )
       ).rows[0];
       if (!row) throw new AppError('APPROVAL_NOT_FOUND', 'Approval not found', 404);
@@ -80,8 +92,11 @@ export class PostgresProviderOperationsRepository {
       }
       const history = (
         await client.query(
-          `SELECT id,status,reviewer_id,reviewed_at,rejection_reason,submitted_at FROM provider_approval_requests WHERE target_type=$1 AND target_id=$2 ORDER BY submitted_at DESC LIMIT 100`,
-          [row.target_type, row.target_id],
+          `SELECT r.id,r.status,r.reviewer_id,r.reviewed_at,r.rejection_reason,r.submitted_at,
+           r.requester_id,r.requester_role,r.request_type,r.target_type,r.target_id,${approvalIdentityFields},${approvalReviewPermission('$3')}
+           FROM provider_approval_requests r ${approvalIdentityJoins}
+           WHERE r.target_type=$1 AND r.target_id=$2 ORDER BY r.submitted_at DESC,r.id DESC LIMIT 100`,
+          [row.target_type, row.target_id, actorId],
         )
       ).rows;
       const documentScope =
@@ -107,6 +122,8 @@ export class PostgresProviderOperationsRepository {
         )
       ).rows.map((row) => {
         const doc = row.data;
+        doc.document_code =
+          doc.document_metadata?.documentCode || doc.metadata?.documentCode || doc.document_type;
         doc.pageCount = Array.isArray(doc.metadata?.pages)
           ? Math.max(1, doc.metadata.pages.length)
           : 1;
@@ -117,20 +134,16 @@ export class PostgresProviderOperationsRepository {
         }
         return doc;
       });
-      if (documentScope.table === 'driver_documents') {
-        for (const doc of documents) {
-          doc.pageCount = Math.max(
-            1,
-            Number(
-              (
-                await client.query(
-                  'SELECT count(*) AS total FROM driver_document_pages WHERE document_id=$1 AND version=$2',
-                  [doc.id, doc.version],
-                )
-              ).rows[0].total,
-            ),
-          );
-        }
+      if (documentScope.table === 'driver_documents' && documents.length) {
+        const pages = await client.query<{ document_id: string; total: number }>(
+          `SELECT requested.document_id,count(p.page_number)::int AS total
+           FROM unnest($1::uuid[],$2::integer[]) AS requested(document_id,version)
+           LEFT JOIN driver_document_pages p ON p.document_id=requested.document_id AND p.version=requested.version
+           GROUP BY requested.document_id`,
+          [documents.map((doc) => doc.id), documents.map((doc) => doc.version)],
+        );
+        const counts = new Map(pages.rows.map((row) => [row.document_id, row.total]));
+        for (const doc of documents) doc.pageCount = Math.max(1, counts.get(doc.id) ?? 0);
       }
       return { request: row, target, documents, history };
     } finally {

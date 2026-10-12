@@ -66,6 +66,18 @@ class Repository implements AdminRepository {
   });
 
   getUser = vi.fn().mockImplementation(async (id: string) => {
+    if (id === adminId) {
+      return {
+        id,
+        firstName: 'Test',
+        lastName: 'Admin',
+        email: 'admin@example.invalid',
+        phone: '',
+        role: 'admin',
+        status: 'active',
+        createdAt: new Date(),
+      } satisfies AdminUser;
+    }
     if (id === userId) {
       return {
         id,
@@ -266,6 +278,31 @@ const createTestApp = (
   );
 
 describe('Admin API route matrix', () => {
+  it.each(['missing', 'suspended', 'demoted'])(
+    'rejects a stale admin token for a %s account',
+    async (state) => {
+      const revoked = new Repository();
+      revoked.getUser.mockResolvedValue(
+        state === 'missing'
+          ? null
+          : {
+              id: adminId,
+              firstName: 'Test',
+              lastName: 'Former admin',
+              email: null,
+              phone: '',
+              role: state === 'demoted' ? 'customer' : 'admin',
+              status: state === 'suspended' ? 'suspended' : 'active',
+              createdAt: new Date(),
+            },
+      );
+      const result = await request(createTestApp(revoked))
+        .get('/admin/users')
+        .set('Authorization', `Bearer ${await tokenFor('admin')}`);
+      expect(result.status).toBe(403);
+      expect(revoked.listUsers).not.toHaveBeenCalled();
+    },
+  );
   const repository = new Repository();
   const driverApplicationService = createDriverApplicationService();
 

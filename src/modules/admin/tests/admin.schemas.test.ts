@@ -1,7 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { adminPartnersQuerySchema, adminVehiclesQuerySchema } from '../schemas/admin.schemas.js';
+import {
+  adminPartnersQuerySchema,
+  adminVehiclesQuerySchema,
+  adminUsersQuerySchema,
+} from '../schemas/admin.schemas.js';
 
 describe('Admin query schemas', () => {
+  it.each(['driver', 'fleet_owner', 'driver_fleet_owner'])(
+    'supports authoritative provider account filtering for %s',
+    (role) => {
+      expect(adminUsersQuerySchema.parse({ role }).role).toBe(role);
+    },
+  );
+  it('parses explicit false vehicle filters and rejects ambiguous boolean strings', () => {
+    expect(adminVehiclesQuerySchema.parse({ active: 'false' }).active).toBe(false);
+    expect(adminVehiclesQuerySchema.parse({ active: 'true' }).active).toBe(true);
+    expect(adminVehiclesQuerySchema.safeParse({ active: 'no' }).success).toBe(false);
+  });
   it('applies bounded pagination and accepts report compliance filters', () => {
     expect(
       adminPartnersQuerySchema.parse({

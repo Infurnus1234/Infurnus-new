@@ -54,8 +54,21 @@ class InMemoryAdminRepository implements AdminRepository {
     return Promise.resolve(null as AdminDriverDetails | null);
   }
 
-  getUser() {
-    return Promise.resolve(null);
+  getUser(id: string) {
+    return Promise.resolve(
+      id === adminId
+        ? {
+            id,
+            firstName: 'Test',
+            lastName: 'Admin',
+            email: 'admin@example.invalid',
+            phone: '',
+            role: 'admin',
+            status: 'active',
+            createdAt: new Date(),
+          }
+        : null,
+    );
   }
 
   updateUserStatus(_id: string, status: string) {

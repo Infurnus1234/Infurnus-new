@@ -91,6 +91,7 @@ export interface AdminVehicle {
  */
 export interface AdminDriver {
   id: string;
+  role?: string;
   userId: string;
   firstName: string;
   lastName: string;
@@ -245,6 +246,7 @@ export interface AdminDriverDetails {
  */
 export interface AdminDriverApplication {
   id: string;
+  requesterRole?: string;
   partnerId: string;
   partnerBusinessName: string;
 
