@@ -158,6 +158,7 @@ export const operationQuerySchema = z
     page: z.coerce.number().int().min(1).max(4000).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(25),
     search: z.string().trim().min(1).max(150).optional(),
+    recordId: z.string().uuid().optional(),
     status: z.string().max(40).optional(),
     from: z.string().date().optional(),
     to: z.string().date().optional(),
@@ -186,6 +187,8 @@ export class AdminOperationsRepository {
       values.push(value);
       return '$' + values.length;
     };
+    if (query.recordId)
+      predicates.push(`${module === 'wallets' ? 'user_id' : 'id'} = ${add(query.recordId)}::uuid`);
     if (query.search)
       predicates.push(
         `${source.search} ILIKE ${add('%' + query.search.replace(/[\\%_]/g, '\\$&') + '%')}`,
@@ -232,7 +235,7 @@ export class AdminOperationsRepository {
       filters.push(`created_at < $${values.length}::date + interval '1 day'`);
     }
     const where = filters.length ? ' WHERE ' + filters.join(' AND ') : '';
-    const [rides, deliveries, payments] = await Promise.all([
+    const [rides, deliveries, payments, rentals, categories, receiptSeries] = await Promise.all([
       this.pool.query(
         `SELECT status, COUNT(*)::int AS count FROM rides${where} GROUP BY status ORDER BY status`,
         values,
@@ -247,12 +250,29 @@ export class AdminOperationsRepository {
             values,
           )
         : Promise.resolve(null),
+      this.pool.query(
+        `SELECT status,COUNT(*)::int AS count FROM rentals${where} GROUP BY status ORDER BY status`,
+        values,
+      ),
+      this.pool.query(
+        `SELECT COALESCE(vehicle_category,'Unspecified') AS category,COUNT(*)::int AS count,(SUM(COUNT(*)) OVER())::int AS total FROM rides${where} GROUP BY vehicle_category ORDER BY count DESC,category LIMIT 10`,
+        values,
+      ),
+      includeFinance
+        ? this.pool.query(
+            `SELECT to_char(created_at,'YYYY-MM') AS month,currency,SUM(amount)::text AS amount FROM payments${where}${where ? ' AND' : ' WHERE'} status='CAPTURED' GROUP BY month,currency ORDER BY month,currency`,
+            values,
+          )
+        : Promise.resolve(null),
     ]);
     return {
       rides: rides.rows,
       deliveries: deliveries.rows,
       capturedPayments: payments?.rows ?? null,
       financeAvailable: includeFinance,
+      rentals: rentals.rows,
+      vehicleCategories: categories.rows,
+      receiptSeries: receiptSeries?.rows ?? null,
     };
   }
 }

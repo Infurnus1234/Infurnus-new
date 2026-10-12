@@ -28,6 +28,7 @@ export function createAdminRouter(controller: AdminController) {
   router.post('/drivers/applications/:id/review', controller.reviewDriverApplication);
 
   router.get('/drivers', controller.listDrivers);
+  router.get('/drivers/:id/documents/:documentId/access-url', controller.driverDocumentAccess);
   router.get('/drivers/:id', controller.getDriver);
 
   router.get('/partners', controller.listPartners);

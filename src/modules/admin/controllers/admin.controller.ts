@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { storageService } from '../../../infrastructure/storage/index.js';
 import { vehicleTypeStatusSchema } from '../../vehicles/schemas/vehicle.schemas.js';
 import type { NextFunction, Request, Response } from 'express';
 
@@ -21,6 +22,30 @@ import type { DriverApplicationService } from '../../driver-applications/driver-
 import type { AdminService } from '../services/admin.service.js';
 
 export class AdminController {
+  driverDocumentAccess = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id, documentId } = z
+        .object({ id: z.string().uuid(), documentId: z.string().uuid() })
+        .parse(req.params);
+      const { page } = z
+        .object({ page: z.coerce.number().int().min(1).max(5).optional() })
+        .strict()
+        .parse(req.query);
+      const { mimeType, ...reference } = await this.service.driverDocumentAccess(
+        req.auth!.userId,
+        id,
+        documentId,
+        page,
+      );
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.json({
+        success: true,
+        data: { accessUrl: await storageService.getAccessUrl(reference), mimeType, expiresIn: 300 },
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
   constructor(
     private readonly service: AdminService,
     private readonly driverApplicationService?: DriverApplicationService,
