@@ -26,16 +26,16 @@ class RideBookingScreen extends ConsumerStatefulWidget {
 }
 
 class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
-  static const Color mainBg = Color(0xFF000000);
-  static const Color cardBg = Color(0xFF111111);
-  static const Color cardElevated = Color(0xFF151515);
-  static const Color borderCard = Color(0xFF262626);
-  static const Color textWhite = Color(0xFFFFFFFF);
-  static const Color textGray = Color(0xFFA1A1AA);
-  static const Color brandGreen = Color(0xFF22C55E);
-  static const Color serviceRed = Color(0xFFEF4444);
-  static const Color premiumBlue = Color(0xFF3B82F6);
-  static const Color goldAccent = Color(0xFFFACC15);
+  static const Color mainBg = Color(0xFFF9FAFB);
+  static const Color cardBg = Color(0xFFFFFFFF);
+  static const Color cardElevated = Color(0xFFFFFFFF);
+  static const Color borderCard = Color(0xFFE5E7EB);
+  static const Color textWhite = Color(0xFF111827);
+  static const Color textGray = Color(0xFF4B5563);
+  static const Color brandGreen = Color(0xFF16A34A);
+  static const Color serviceRed = Color(0xFFDC2626);
+  static const Color premiumBlue = Color(0xFF2563EB);
+  static const Color goldAccent = Color(0xFFCA8A04);
 
   final _pickupController = TextEditingController();
   final _destinationController = TextEditingController();
