@@ -1,5 +1,8 @@
+import '../../../../core/permissions/permission_service.dart';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_brand_mark.dart';
 
@@ -24,11 +27,7 @@ class LocationPermissionScreen extends StatelessWidget {
           child: Column(
             children: [
               // Logo
-              const InfurnusBrandMark(
-                iconSize: 32,
-                fontSize: 14,
-                spacing: 8,
-              ),
+              const InfurnusBrandMark(iconSize: 32, fontSize: 14, spacing: 8),
               const SizedBox(height: 32),
               const Text(
                 'Enable Location Access',
@@ -42,13 +41,10 @@ class LocationPermissionScreen extends StatelessWidget {
               const Text(
                 'We need your location to show nearby\nrides, rentals and delivery partners.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey,
-                ),
+                style: TextStyle(fontSize: 16, color: Colors.grey),
               ),
               const SizedBox(height: 48),
-              
+
               // Map Illustration Placeholder
               Expanded(
                 child: Center(
@@ -63,26 +59,47 @@ class LocationPermissionScreen extends StatelessWidget {
                           shape: BoxShape.circle,
                         ),
                       ),
-                      const Icon(Icons.location_on, size: 60, color: AppColors.primaryGreen),
+                      const Icon(
+                        Icons.location_on,
+                        size: 60,
+                        color: AppColors.primaryGreen,
+                      ),
                     ],
                   ),
                 ),
               ),
-              
+
               const SizedBox(height: 48),
-              
+
               // Benefits
               _buildBenefit(Icons.local_taxi, 'Find nearby vehicles'),
               const SizedBox(height: 12),
-              _buildBenefit(Icons.payments_outlined, 'Get accurate fare estimates'),
+              _buildBenefit(
+                Icons.payments_outlined,
+                'Get accurate fare estimates',
+              ),
               const SizedBox(height: 12),
               _buildBenefit(Icons.near_me, 'Faster pickups'),
-              
+
               const SizedBox(height: 48),
-              
+
               // Button
               ElevatedButton(
-                onPressed: () => context.push('/notifications-permission'),
+                onPressed: () async {
+                  final granted = await PermissionService()
+                      .requestLocationPermission();
+                  if (!context.mounted) return;
+                  if (!granted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Location is unavailable. You can choose addresses manually or enable location in Settings.',
+                        ),
+                      ),
+                    );
+                  }
+                  context.push('/notifications-permission');
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.black,
                   foregroundColor: Colors.white,
@@ -91,9 +108,12 @@ class LocationPermissionScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text('Allow Location', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                child: const Text(
+                  'Allow Location',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
               ),
-              
+
               TextButton(
                 onPressed: () => context.push('/notifications-permission'),
                 child: const Text(
@@ -116,10 +136,7 @@ class LocationPermissionScreen extends StatelessWidget {
         const SizedBox(width: 16),
         Text(
           text,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-          ),
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
         ),
       ],
     );

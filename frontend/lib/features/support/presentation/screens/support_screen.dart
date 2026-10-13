@@ -41,6 +41,12 @@ class SupportScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           _buildContactOptions(context),
+          const SizedBox(height: 16),
+          _contactCard(
+            Icons.confirmation_number_outlined,
+            'Support tickets',
+            () => context.push('/support-tickets'),
+          ),
         ],
       ),
     );

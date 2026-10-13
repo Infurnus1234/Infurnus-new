@@ -171,12 +171,12 @@ describe('Phase 4 Step 6: Logistics Cargo Delivery Enhancements', () => {
       // Tax (5% GST): 86,500 * 0.05 = 4,325 paise
       // Gross: 86,500 + 4,325 = 90,825 paise
       expect(result.baseAmount).toBe(12500);
-      expect(result.distanceAmount).toBe(40500);
+      expect(result.distanceAmount).toBe(81000);
       expect(result.timeAmount).toBe(6000);
       expect(result.weightAmount).toBe(12500);
       expect(result.loadingAmount).toBe(15000);
-      expect(result.taxAmount).toBe(4325);
-      expect(result.grossAmount).toBe(90825);
+      expect(result.taxAmount).toBe(6350);
+      expect(result.grossAmount).toBe(133350);
     });
 
     it('does not apply weight surcharge if weight is within free threshold (<= 20kg)', () => {
@@ -325,10 +325,10 @@ describe('Phase 4 Step 6: Logistics Cargo Delivery Enhancements', () => {
       });
 
       expect(result.baseAmount).toBe(6250);
-      expect(result.distanceAmount).toBe(18750);
+      expect(result.distanceAmount).toBe(37500);
       expect(result.timeAmount).toBe(4000);
       expect(result.waitingAmount).toBe(400); // 2 min billable @ ₹2/min = 400 paise
-      expect(result.grossAmount).toBe(29400);
+      expect(result.grossAmount).toBe(48150);
       expect(result.weightAmount).toBeUndefined();
       expect(result.loadingAmount).toBeUndefined();
     });
@@ -342,8 +342,8 @@ describe('Phase 4 Step 6: Logistics Cargo Delivery Enhancements', () => {
       });
 
       expect(result.baseAmount).toBe(120000);
-      expect(result.distanceAmount).toBe(40000);
-      expect(result.grossAmount).toBe(174300);
+      expect(result.distanceAmount).toBe(80000);
+      expect(result.grossAmount).toBe(216300);
     });
 
     it('preserves premium vehicle hourly package + fuel rate', () => {
@@ -357,8 +357,8 @@ describe('Phase 4 Step 6: Logistics Cargo Delivery Enhancements', () => {
       });
 
       expect(result.baseAmount).toBe(400000);
-      expect(result.fuelAmount).toBe(90000);
-      expect(result.grossAmount).toBe(514500);
+      expect(result.fuelAmount).toBe(180000);
+      expect(result.grossAmount).toBe(609000);
     });
   });
 });

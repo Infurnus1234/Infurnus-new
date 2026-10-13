@@ -118,8 +118,9 @@ export interface VehicleType {
   name: string;
   code: string;
   sector: 'passenger' | 'logistics' | 'service' | 'premium';
-  baseFare: number;
-  perKmRate: number;
+  baseFare: number | null;
+  perKmRate: number | null;
+  pricingReference?: import('../../fares/types/fare.js').VehiclePricing | null;
   currency: 'INR';
   active: boolean;
   version: number;

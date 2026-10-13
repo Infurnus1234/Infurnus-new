@@ -51,7 +51,10 @@ export class AdminService {
     const input = createVehicleTypeSchema.parse(body);
     // Canonical pricing aliases cannot acquire a conflicting second tariff.
     if (
-      input.code === 'ftl' ||
+      (input.code === 'ftl' &&
+        (input.pricingReference?.routeBased !== true ||
+          input.baseFare !== null ||
+          input.perKmRate !== null)) ||
       Object.values(VEHICLE_PRICING_ALIASES).some((a) => Object.hasOwn(a, input.code))
     )
       throw new AppError(

@@ -163,13 +163,34 @@ const exactFare = z
   .nonnegative()
   .max(99_999_999.99)
   .refine((v) => /^\d+(?:\.\d{1,2})?$/.test(String(v)), 'Use at most two decimal places');
+const referenceAmount = z.number().int().nonnegative().max(9999999999);
+export const vehiclePricingReferenceSchema = z
+  .object({
+    displayName: vehicleText,
+    baseFare: z
+      .object({ minimum: referenceAmount, maximum: referenceAmount.nullable() })
+      .strict()
+      .nullable(),
+    perKmRate: z.object({ minimum: referenceAmount, maximum: referenceAmount }).strict(),
+    routeBased: z.boolean().optional(),
+  })
+  .strict()
+  .refine(
+    (v) =>
+      v.perKmRate.maximum >= v.perKmRate.minimum &&
+      (v.baseFare
+        ? v.baseFare.maximum === null || v.baseFare.maximum >= v.baseFare.minimum
+        : v.routeBased === true),
+    'Invalid pricing range',
+  );
 export const createVehicleTypeSchema = z
   .object({
     name: vehicleText,
     code: z.string().regex(/^[a-z][a-z0-9_]{0,49}$/),
     sector: z.enum(['passenger', 'logistics', 'service', 'premium']),
-    baseFare: exactFare,
-    perKmRate: exactFare,
+    baseFare: exactFare.nullable(),
+    perKmRate: exactFare.nullable(),
+    pricingReference: vehiclePricingReferenceSchema.nullable().optional(),
     currency: z.literal('INR').default('INR'),
     active: z.boolean().default(false),
   })
@@ -177,9 +198,10 @@ export const createVehicleTypeSchema = z
 export const updateVehicleTypeSchema = z
   .object({
     name: vehicleText.optional(),
-    baseFare: exactFare.optional(),
-    perKmRate: exactFare.optional(),
+    baseFare: exactFare.nullable().optional(),
+    perKmRate: exactFare.nullable().optional(),
     active: z.boolean().optional(),
+    pricingReference: vehiclePricingReferenceSchema.nullable().optional(),
     expectedVersion: z.number().int().positive(),
   })
   .strict()

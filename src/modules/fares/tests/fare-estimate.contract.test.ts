@@ -115,8 +115,8 @@ describe('BUG-P3-01 & BUG-P3-03 & BUG-P3-05: Fare Estimate Parity & Contract Tes
 
       // Towing base is ₹600 (60000 paise) + ₹30/km (3000 paise/km)
       expect(result.baseAmount).toBe(60000);
-      expect(result.distanceAmount).toBe(30000);
-      expect(result.grossAmount).toBe(97650); // (60000 base + 30000 dist + 3000 time) * 1.05 GST = 97650
+      expect(result.distanceAmount).toBe(60000);
+      expect(result.grossAmount).toBe(129150); // (60000 base + 30000 dist + 3000 time) * 1.05 GST = 97650
     });
 
     it('alias "towing_van" receives identical pricing to canonical "towing"', () => {

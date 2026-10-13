@@ -82,7 +82,7 @@ abstract class DriverRemoteDataSource {
 
   // Support Tickets
   Future<SupportTicketModel> createSupportTicket(Map<String, dynamic> data);
-  Future<List<SupportTicketModel>> listSupportTickets();
+  Future<List<SupportTicketModel>> listSupportTickets({int page = 1});
   Future<SupportTicketModel> getSupportTicket(String id);
 }
 
@@ -457,8 +457,11 @@ class DriverRemoteDataSourceImpl implements DriverRemoteDataSource {
   }
 
   @override
-  Future<List<SupportTicketModel>> listSupportTickets() async {
-    final response = await _dio.get('/support/tickets');
+  Future<List<SupportTicketModel>> listSupportTickets({int page = 1}) async {
+    final response = await _dio.get(
+      '/support/tickets',
+      queryParameters: {'page': page, 'pageSize': 25},
+    );
     final List list = response.data['data'] ?? [];
     return list
         .map((e) => SupportTicketModel.fromJson(e as Map<String, dynamic>))

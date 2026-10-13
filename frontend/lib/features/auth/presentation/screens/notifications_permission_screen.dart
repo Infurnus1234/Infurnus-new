@@ -1,5 +1,8 @@
+import '../../../../core/permissions/permission_service.dart';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_brand_mark.dart';
 
@@ -24,11 +27,7 @@ class NotificationsPermissionScreen extends StatelessWidget {
           child: Column(
             children: [
               // Logo
-              const InfurnusBrandMark(
-                iconSize: 32,
-                fontSize: 14,
-                spacing: 8,
-              ),
+              const InfurnusBrandMark(iconSize: 32, fontSize: 14, spacing: 8),
               const SizedBox(height: 32),
               const Text(
                 'Stay Updated',
@@ -42,13 +41,10 @@ class NotificationsPermissionScreen extends StatelessWidget {
               const Text(
                 'Get real-time updates about your rides,\nbookings, offers and more.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey,
-                ),
+                style: TextStyle(fontSize: 16, color: Colors.grey),
               ),
               const SizedBox(height: 48),
-              
+
               // Notification Illustration Placeholder
               Expanded(
                 child: Center(
@@ -63,7 +59,11 @@ class NotificationsPermissionScreen extends StatelessWidget {
                           shape: BoxShape.circle,
                         ),
                       ),
-                      const Icon(Icons.notifications, size: 80, color: AppColors.primaryGreen),
+                      const Icon(
+                        Icons.notifications,
+                        size: 80,
+                        color: AppColors.primaryGreen,
+                      ),
                       Positioned(
                         top: 40,
                         right: 40,
@@ -78,7 +78,11 @@ class NotificationsPermissionScreen extends StatelessWidget {
                           child: const Center(
                             child: Text(
                               '1',
-                              style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ),
@@ -87,9 +91,9 @@ class NotificationsPermissionScreen extends StatelessWidget {
                   ),
                 ),
               ),
-              
+
               const SizedBox(height: 48),
-              
+
               // Benefits
               _buildBenefit('Ride status updates'),
               const SizedBox(height: 12),
@@ -98,12 +102,15 @@ class NotificationsPermissionScreen extends StatelessWidget {
               _buildBenefit('Exclusive offers & discounts'),
               const SizedBox(height: 12),
               _buildBenefit('Important account alerts'),
-              
+
               const SizedBox(height: 48),
-              
+
               // Button
               ElevatedButton(
-                onPressed: () => context.push('/setup-complete'),
+                onPressed: () async {
+                  await PermissionService().requestNotificationPermission();
+                  if (context.mounted) context.push('/setup-complete');
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.black,
                   foregroundColor: Colors.white,
@@ -112,9 +119,12 @@ class NotificationsPermissionScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text('Enable Notifications', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                child: const Text(
+                  'Enable Notifications',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
               ),
-              
+
               TextButton(
                 onPressed: () => context.push('/setup-complete'),
                 child: const Text(
@@ -144,10 +154,7 @@ class NotificationsPermissionScreen extends StatelessWidget {
         const SizedBox(width: 16),
         Text(
           text,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-          ),
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
         ),
       ],
     );

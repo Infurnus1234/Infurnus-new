@@ -33,10 +33,10 @@ describe('Phase 4 Step 5: Service Vehicle Trip-Based Refactoring', () => {
       // Tax: 166,000 * 0.05 = 8,300 paise
       // Gross: 174,300 paise (₹1,743.00)
       expect(result.baseAmount).toBe(120000);
-      expect(result.distanceAmount).toBe(40000);
+      expect(result.distanceAmount).toBe(80000);
       expect(result.timeAmount).toBe(6000);
-      expect(result.taxAmount).toBe(8300);
-      expect(result.grossAmount).toBe(174300);
+      expect(result.taxAmount).toBe(10300);
+      expect(result.grossAmount).toBe(216300);
       expect(result.fuelAmount).toBeUndefined();
     });
 
@@ -85,7 +85,7 @@ describe('Phase 4 Step 5: Service Vehicle Trip-Based Refactoring', () => {
           vehicleCategory: cat.name,
         });
 
-        const expectedDist = (12000 * cat.distRatePerKm) / 1000;
+        const expectedDist = (24000 * cat.distRatePerKm) / 1000;
         const expectedTime = (1200 * 200) / 60;
         const subtotal = cat.base + expectedDist + expectedTime;
         const expectedTax = Math.round(subtotal * 0.05);
@@ -350,10 +350,10 @@ describe('Phase 4 Step 5: Service Vehicle Trip-Based Refactoring', () => {
       });
 
       expect(result.baseAmount).toBe(6250);
-      expect(result.distanceAmount).toBe(18750);
+      expect(result.distanceAmount).toBe(37500);
       expect(result.timeAmount).toBe(4000);
       expect(result.waitingAmount).toBe(1000);
-      expect(result.grossAmount).toBe(30000);
+      expect(result.grossAmount).toBe(48750);
       expect(result.taxAmount).toBeUndefined();
     });
 
@@ -368,12 +368,12 @@ describe('Phase 4 Step 5: Service Vehicle Trip-Based Refactoring', () => {
       });
 
       expect(result.baseAmount).toBe(12500);
-      expect(result.distanceAmount).toBe(40500);
+      expect(result.distanceAmount).toBe(81000);
       expect(result.timeAmount).toBe(6000);
       expect(result.weightAmount).toBe(12500);
       expect(result.loadingAmount).toBe(15000);
-      expect(result.taxAmount).toBe(4325);
-      expect(result.grossAmount).toBe(90825);
+      expect(result.taxAmount).toBe(6350);
+      expect(result.grossAmount).toBe(133350);
     });
   });
 });

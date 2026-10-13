@@ -324,16 +324,21 @@ try {
     }
 
     const catalog = await testPool.query(
-      "SELECT to_regclass('public.vehicle_types') AS catalog, to_regclass('public.vehicle_types_code_key') AS unique_code, to_regclass('public.vehicle_types_sector_active_idx') AS active_index, (SELECT count(*) FROM vehicle_types) AS seeded",
+      "SELECT to_regclass('public.vehicle_types') AS catalog, to_regclass('public.vehicle_types_code_key') AS unique_code, to_regclass('public.vehicle_types_sector_active_idx') AS active_index, (SELECT count(*) FROM vehicle_types) AS seeded, (SELECT count(*) FROM vehicle_types WHERE active OR (code <> 'ftl' AND (base_fare_paise IS NULL OR per_km_rate_paise IS NULL)) OR (code = 'ftl' AND (base_fare_paise IS NOT NULL OR per_km_rate_paise IS NOT NULL OR pricing_reference IS NULL))) AS unsafe_seeded",
     );
     if (
       !catalog.rows[0].catalog ||
       !catalog.rows[0].unique_code ||
       !catalog.rows[0].active_index ||
-      Number(catalog.rows[0].seeded) !== 0
+      Number(catalog.rows[0].seeded) !== 10 ||
+      Number(catalog.rows[0].unsafe_seeded) !== 0
     )
-      throw new Error('Vehicle pricing migration must create a constrained, empty catalog');
-    console.log('Vehicle type catalog constraints/indexes present; no invented seed prices');
+      throw new Error(
+        'Vehicle pricing migration must create nine inactive approved fixed prices and one route-based FTL reference',
+      );
+    console.log(
+      'Vehicle type catalog constraints/indexes present; approved inactive fixed prices and route-based FTL',
+    );
     console.log(`Clean migration verification passed for ${databaseName}`);
 
     console.log(JSON.stringify(checksRow));

@@ -34,6 +34,11 @@ val mapsApiKey: String = localProperties.getProperty("MAPS_API_KEY")
     ?: System.getenv("MAPS_API_KEY")
     ?: ""
 
+// Fail before packaging a blank Maps credential into an APK. Configure the
+// Android SDK key through ignored local.properties or the build environment.
+if (gradle.startParameter.taskNames.any { it.contains("assemble", ignoreCase = true) || it.contains("bundle", ignoreCase = true) }) {
+    require(mapsApiKey.isNotBlank()) { "Android Maps SDK configuration is required: set MAPS_API_KEY in ignored android/local.properties or the build environment." }
+}
 // Public OAuth audience only; never package backend environment files or secrets.
 val googleWebClientId: String = localProperties.getProperty("GOOGLE_WEB_CLIENT_ID")
     ?: (project.findProperty("GOOGLE_WEB_CLIENT_ID") as? String)

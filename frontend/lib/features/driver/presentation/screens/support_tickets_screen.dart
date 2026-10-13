@@ -9,10 +9,13 @@ import '../../../../shared/widgets/infurnus_text_field.dart';
 import '../../data/models/support_ticket_model.dart';
 import '../providers/driver_providers.dart';
 
+final supportTicketsPageProvider = StateProvider.autoDispose<int>((ref) => 1);
 final supportTicketsFutureProvider =
     FutureProvider.autoDispose<List<SupportTicketModel>>((ref) async {
       final dataSource = ref.watch(driverRemoteDataSourceProvider);
-      return dataSource.listSupportTickets();
+      return dataSource.listSupportTickets(
+        page: ref.watch(supportTicketsPageProvider),
+      );
     });
 
 class SupportTicketsScreen extends ConsumerStatefulWidget {
@@ -61,115 +64,132 @@ class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen> {
             top: 24,
             bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Create Support Ticket',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Create Support Ticket',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white70),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Category',
+                  style: TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<String>(
+                  style: const TextStyle(color: Colors.white),
+                  initialValue: _selectedCategory,
+                  dropdownColor: const Color(0xFF1E2621),
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: const Color(0xFF1E2621),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white70),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Category',
-                style: TextStyle(color: Colors.white70, fontSize: 13),
-              ),
-              const SizedBox(height: 6),
-              DropdownButtonFormField<String>(
-                initialValue: _selectedCategory,
-                dropdownColor: const Color(0xFF1E2621),
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: const Color(0xFF1E2621),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  items: _categories
+                      .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                      .toList(),
+                  onChanged: (val) {
+                    if (val != null) {
+                      setSheetState(() => _selectedCategory = val);
+                    }
+                  },
                 ),
-                items: _categories
-                    .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                    .toList(),
-                onChanged: (val) {
-                  if (val != null) setSheetState(() => _selectedCategory = val);
-                },
-              ),
-              const SizedBox(height: 14),
-              InfurnusTextField(
-                label: 'Subject',
-                controller: _subjectController,
-                hintText: 'Brief issue summary',
-              ),
-              const SizedBox(height: 14),
-              InfurnusTextField(
-                label: 'Message',
-                controller: _messageController,
-                hintText: 'Provide complete details of the issue...',
-                maxLines: 4,
-              ),
-              const SizedBox(height: 22),
-              InfurnusButton(
-                text: _isCreating ? 'Submitting...' : 'Submit Ticket',
-                isLoading: _isCreating,
-                onPressed: _isCreating
-                    ? null
-                    : () async {
-                        if (_subjectController.text.trim().isEmpty ||
-                            _messageController.text.trim().isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Please fill subject and message'),
-                            ),
-                          );
-                          return;
-                        }
-
-                        setSheetState(() => _isCreating = true);
-                        try {
-                          final ds = ref.read(driverRemoteDataSourceProvider);
-                          await ds.createSupportTicket({
-                            'category': _selectedCategory,
-                            'subject': _subjectController.text.trim(),
-                            'message': _messageController.text.trim(),
-                          });
-
-                          _subjectController.clear();
-                          _messageController.clear();
-                          if (ctx.mounted) Navigator.pop(ctx);
-                          ref.invalidate(supportTicketsFutureProvider);
-
-                          if (mounted) {
+                const SizedBox(height: 14),
+                InfurnusTextField(
+                  label: 'Subject',
+                  labelColor: Colors.white70,
+                  controller: _subjectController,
+                  hintText: 'Brief issue summary',
+                ),
+                const SizedBox(height: 14),
+                InfurnusTextField(
+                  label: 'Message',
+                  labelColor: Colors.white70,
+                  controller: _messageController,
+                  hintText: 'Provide complete details of the issue...',
+                  maxLines: 4,
+                ),
+                const SizedBox(height: 22),
+                InfurnusButton(
+                  text: _isCreating ? 'Submitting...' : 'Submit Ticket',
+                  isLoading: _isCreating,
+                  onPressed: _isCreating
+                      ? null
+                      : () async {
+                          if (_subjectController.text.trim().isEmpty ||
+                              _messageController.text.trim().isEmpty) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text(
-                                  'Support ticket created successfully',
+                                  'Please fill subject and message',
                                 ),
-                                backgroundColor: AppColors.primaryGreen,
                               ),
                             );
+                            return;
                           }
-                        } catch (e) {
-                          setSheetState(() => _isCreating = false);
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Failed: $e')),
-                            );
+
+                          setState(() => _isCreating = true);
+                          setSheetState(() {});
+                          try {
+                            final ds = ref.read(driverRemoteDataSourceProvider);
+                            await ds.createSupportTicket({
+                              'category': _selectedCategory,
+                              'subject': _subjectController.text.trim(),
+                              'message': _messageController.text.trim(),
+                            });
+                            if (!mounted) return;
+
+                            _subjectController.clear();
+                            _messageController.clear();
+                            if (ctx.mounted) Navigator.pop(ctx);
+                            ref
+                                    .read(supportTicketsPageProvider.notifier)
+                                    .state =
+                                1;
+                            ref.invalidate(supportTicketsFutureProvider);
+
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Support ticket created successfully',
+                                  ),
+                                  backgroundColor: AppColors.primaryGreen,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Failed: $e')),
+                              );
+                            }
+                          } finally {
+                            if (mounted) setState(() => _isCreating = false);
+                            if (ctx.mounted) setSheetState(() {});
                           }
-                        }
-                      },
-              ),
-            ],
+                        },
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -179,6 +199,7 @@ class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen> {
   @override
   Widget build(BuildContext context) {
     final ticketsAsync = ref.watch(supportTicketsFutureProvider);
+    final page = ref.watch(supportTicketsPageProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -191,7 +212,7 @@ class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showCreateTicketSheet,
+        onPressed: _isCreating ? null : _showCreateTicketSheet,
         backgroundColor: AppColors.primaryGreen,
         icon: const Icon(Icons.add, color: Colors.black),
         label: const Text(
@@ -337,6 +358,28 @@ class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen> {
             },
           );
         },
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            TextButton(
+              onPressed: ticketsAsync.isLoading || page == 1
+                  ? null
+                  : () => ref.read(supportTicketsPageProvider.notifier).state--,
+              child: const Text('Previous'),
+            ),
+            Text('Page $page'),
+            TextButton(
+              onPressed:
+                  ticketsAsync.isLoading ||
+                      (ticketsAsync.valueOrNull?.length ?? 0) < 25
+                  ? null
+                  : () => ref.read(supportTicketsPageProvider.notifier).state++,
+              child: const Text('Next'),
+            ),
+          ],
+        ),
       ),
     );
   }

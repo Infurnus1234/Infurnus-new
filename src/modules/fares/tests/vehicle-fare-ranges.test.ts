@@ -55,14 +55,14 @@ describe('Vehicle fare ranges', () => {
       if (!('estimatedFare' in result) || !result.estimatedFare) throw new Error('Missing range');
       expect(result.estimatedFare.minimum.baseAmount).toBe(lowBase);
       expect(result.estimatedFare.maximum?.baseAmount).toBe(highBase);
-      expect(result.estimatedFare.minimum.distanceAmount).toBe(lowRate * 10);
-      expect(result.estimatedFare.maximum?.distanceAmount).toBe(highRate * 10);
+      expect(result.estimatedFare.minimum.distanceAmount).toBe(lowRate * 20);
+      expect(result.estimatedFare.maximum?.distanceAmount).toBe(highRate * 20);
       const taxFactor = sector === 'logistics' ? 1.05 : 1;
       expect(result.estimatedFare.minimum.grossAmount).toBe(
-        Math.round((lowBase + lowRate * 10 + 2000) * taxFactor),
+        Math.round((lowBase + lowRate * 20 + 2000) * taxFactor),
       );
       expect(result.estimatedFare.maximum?.grossAmount).toBe(
-        Math.round((highBase + highRate * 10 + 2000) * taxFactor),
+        Math.round((highBase + highRate * 20 + 2000) * taxFactor),
       );
       expect(result.bookable).toBe(false);
       expect(result).not.toHaveProperty('grossAmount');
@@ -75,7 +75,7 @@ describe('Vehicle fare ranges', () => {
       vehicleCategory: 'tata_407',
     });
     expect(result).toMatchObject({
-      estimatedFare: { minimum: { baseAmount: 77500, distanceAmount: 25000 }, maximum: null },
+      estimatedFare: { minimum: { baseAmount: 77500, distanceAmount: 50000 }, maximum: null },
       bookable: false,
     });
   });
@@ -125,12 +125,12 @@ describe('Vehicle fare ranges', () => {
       estimatedFare: {
         minimum: {
           baseAmount: 23500,
-          distanceAmount: 18000,
+          distanceAmount: 36000,
           timeAmount: 2000,
           waitingAmount: 400,
           weightAmount: 5000,
           loadingAmount: 15000,
-          grossAmount: 67095,
+          grossAmount: 85995,
         },
       },
     });
@@ -279,7 +279,7 @@ describe('Estimate API and booking integration', () => {
       vehicleCategory: 'bike',
       fareEstimate: 1,
     });
-    expect(create).toHaveBeenCalledWith('customer', expect.objectContaining({ fareEstimate: 98 }));
+    expect(create).toHaveBeenCalledWith('customer', expect.objectContaining({ fareEstimate: 158 }));
   });
   it('retains labelled route fallback for ranges', async () => {
     const { estimator, calculateRoute } = createEstimator();
@@ -365,7 +365,7 @@ describe('Follow-up calculator isolation', () => {
         vehicleCategory: 'bike',
       }),
     ).toMatchObject({
-      estimatedFare: { minimum: { grossAmount: 2500 }, maximum: { grossAmount: 3600 } },
+      estimatedFare: { minimum: { grossAmount: 3500 }, maximum: { grossAmount: 5200 } },
     });
   });
 });
@@ -438,7 +438,7 @@ describe('Final end-to-end fare validation', () => {
     expect(fare).toMatchObject({
       estimateType: 'range',
       bookable: true,
-      bookingFare: { grossAmount: fixedRates.baseFare + 10 * fixedRates.distanceRatePerKm + 2000 },
+      bookingFare: { grossAmount: fixedRates.baseFare + 20 * fixedRates.distanceRatePerKm + 2000 },
     });
   });
   it('uses identical approved pricing and waiting input for estimate and booking', async () => {
@@ -464,14 +464,14 @@ describe('Final end-to-end fare validation', () => {
     };
     const response = await request(app).post('/fares/estimate').send(input);
     expect(response.status).toBe(200);
-    expect(response.body.data.bookingFare.grossAmount).toBe(10200);
+    expect(response.body.data.bookingFare.grossAmount).toBe(16200);
     await new RideService(
       { create } as unknown as RideRepository,
       undefined,
       undefined,
       estimator,
     ).createRide('customer', { ...input, fareEstimate: 1 });
-    expect(create).toHaveBeenCalledWith('customer', expect.objectContaining({ fareEstimate: 102 }));
+    expect(create).toHaveBeenCalledWith('customer', expect.objectContaining({ fareEstimate: 162 }));
   });
   it('FTL remains unavailable with valid route metadata and cannot accept invented truck-size fields', async () => {
     const { estimator } = createEstimator();
@@ -546,7 +546,7 @@ describe('Existing rental input compatibility', () => {
     };
     const response = await request(app).post('/fares/estimate').send(input);
     expect(response.status).toBe(200);
-    expect(response.body.data.grossAmount).toBe(330750);
+    expect(response.body.data.grossAmount).toBe(346500);
     const create = vi.fn().mockResolvedValue({ id: 'ride', driverDetails: null });
     await new RideService(
       { create } as unknown as RideRepository,
@@ -556,7 +556,7 @@ describe('Existing rental input compatibility', () => {
     ).createRide('customer', { ...input, fareEstimate: 1 });
     expect(create).toHaveBeenCalledWith(
       'customer',
-      expect.objectContaining({ fareEstimate: 3307.5 }),
+      expect.objectContaining({ fareEstimate: 3465 }),
     );
   });
 });

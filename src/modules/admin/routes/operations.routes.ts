@@ -19,6 +19,14 @@ export function createAdminOperationsRouter(repository: AdminOperationsRepositor
       next(error);
     }
   });
+  router.patch('/support/:id/status', async (req, res, next) => {
+    try {
+      const id = z.string().uuid().parse(req.params.id);
+      res.json({ success: true, data: await repository.updateSupportStatus(id, req.body) });
+    } catch (error) {
+      next(error);
+    }
+  });
   router.post('/coupons', async (req, res, next) => {
     try {
       res

@@ -5,6 +5,7 @@ import type { Pool } from 'pg';
 import type { CreateVehicleData, UpdateVehicleData, Vehicle } from '../types/vehicle.js';
 
 export interface CustomerFleetVehicle {
+  name?: string | null;
   id: string;
   make: string;
   model: string;
@@ -147,31 +148,65 @@ export class PostgresVehicleRepository implements VehicleRepository {
             409,
           );
         result = await client.query(
-          'UPDATE vehicle_types SET name=$2,base_fare_paise=$3,per_km_rate_paise=$4,active=$5,version=version+1 WHERE id=$1 RETURNING *',
+          'UPDATE vehicle_types SET name=$2,base_fare_paise=$3,per_km_rate_paise=$4,active=$5,pricing_reference=$6::jsonb,version=version+1 WHERE id=$1 RETURNING *',
           [
             id,
             update.name ?? old.name,
-            Math.round((update.baseFare ?? old.baseFare) * 100),
-            Math.round((update.perKmRate ?? old.perKmRate) * 100),
+            (update.baseFare === undefined ? old.baseFare : update.baseFare) === null
+              ? null
+              : Math.round(
+                  (update.baseFare === undefined ? old.baseFare! : update.baseFare!) * 100,
+                ),
+            (update.perKmRate === undefined ? old.perKmRate : update.perKmRate) === null
+              ? null
+              : Math.round(
+                  (update.perKmRate === undefined ? old.perKmRate! : update.perKmRate!) * 100,
+                ),
             update.active ?? old.active,
+            JSON.stringify(
+              update.pricingReference === undefined
+                ? (old.pricingReference ?? null)
+                : update.pricingReference,
+            ),
           ],
         );
       } else {
         const create = input as CreateVehicleTypeInput;
         result = await client.query(
-          'INSERT INTO vehicle_types(name,code,sector,base_fare_paise,per_km_rate_paise,currency,active) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *',
+          'INSERT INTO vehicle_types(name,code,sector,base_fare_paise,per_km_rate_paise,currency,active,pricing_reference) VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb) RETURNING *',
           [
             create.name,
             create.code,
             create.sector,
-            Math.round(create.baseFare * 100),
-            Math.round(create.perKmRate * 100),
+            create.baseFare === null ? null : Math.round(create.baseFare * 100),
+            create.perKmRate === null ? null : Math.round(create.perKmRate * 100),
             create.currency,
             create.active,
+            JSON.stringify(create.pricingReference ?? null),
           ],
         );
       }
       const vehicle = mapType(result.rows[0]);
+      if (
+        (vehicle.baseFare === null || vehicle.perKmRate === null) &&
+        (!vehicle.pricingReference || vehicle.baseFare !== null || vehicle.perKmRate !== null)
+      )
+        throw new AppError(
+          'VEHICLE_TYPE_INVALID',
+          'Configure both fixed rates or an approximate pricing reference.',
+          422,
+        );
+      if (
+        vehicle.code === 'ftl' &&
+        (vehicle.baseFare !== null ||
+          vehicle.perKmRate !== null ||
+          vehicle.pricingReference?.routeBased !== true)
+      )
+        throw new AppError(
+          'VEHICLE_TYPE_INVALID',
+          'FTL requires route-based pricing, not an arbitrary fixed quote.',
+          422,
+        );
       await client.query(
         "INSERT INTO user_history(user_id,event_type,entity_type,entity_id,metadata) VALUES($1,$2,'vehicle_type',$3,$4::jsonb)",
         [
@@ -397,6 +432,7 @@ export class PostgresVehicleRepository implements VehicleRepository {
       `
         SELECT
           id,
+          (SELECT t.name FROM vehicle_types t WHERE t.code=vehicles.category AND t.sector=vehicles.sector) AS name,
           make,
           model,
           color,
@@ -413,6 +449,7 @@ export class PostgresVehicleRepository implements VehicleRepository {
 
     return result.rows.map((row) => ({
       id: row.id,
+      ...(row.name ? { name: row.name } : {}),
       make: row.make,
       model: row.model,
       color: row.color,
@@ -430,8 +467,9 @@ function mapType(row: Record<string, unknown>): VehicleType {
     name: String(row.name),
     code: String(row.code),
     sector: row.sector as VehicleType['sector'],
-    baseFare: Number(row.base_fare_paise) / 100,
-    perKmRate: Number(row.per_km_rate_paise) / 100,
+    baseFare: row.base_fare_paise === null ? null : Number(row.base_fare_paise) / 100,
+    pricingReference: (row.pricing_reference as VehicleType['pricingReference']) ?? null,
+    perKmRate: row.per_km_rate_paise === null ? null : Number(row.per_km_rate_paise) / 100,
     currency: 'INR',
     active: row.active as boolean,
     version: Number(row.version),

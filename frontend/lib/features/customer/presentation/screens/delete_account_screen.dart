@@ -6,11 +6,18 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_button.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 
-class DeleteAccountScreen extends ConsumerWidget {
+class DeleteAccountScreen extends ConsumerStatefulWidget {
   const DeleteAccountScreen({super.key});
+  @override
+  ConsumerState<DeleteAccountScreen> createState() =>
+      _DeleteAccountScreenState();
+}
+
+class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
+  bool _busy = false;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Delete Account')),
       body: Padding(
@@ -36,10 +43,27 @@ class DeleteAccountScreen extends ConsumerWidget {
             const Spacer(),
             InfurnusButton(
               text: 'Confirm Deletion',
+              isLoading: _busy,
               onPressed: () async {
-                // Mock backend deletion call
-                await ref.read(authProvider.notifier).logout();
-                if (context.mounted) context.go('/login');
+                if (_busy) return;
+                setState(() => _busy = true);
+                final deleted = await ref
+                    .read(authProvider.notifier)
+                    .deleteAccount();
+                if (!context.mounted) return;
+                setState(() => _busy = false);
+                if (deleted) {
+                  context.go('/login');
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        ref.read(authProvider).errorMessage ??
+                            'Unable to delete account. Please retry.',
+                      ),
+                    ),
+                  );
+                }
               },
             ),
             const SizedBox(height: 12),

@@ -68,11 +68,34 @@ export class FareCalculatorService {
     return tariff;
   }
 
-  calculateEstimate(input: FareCalculationInput, configured?: VehicleType): FareEstimateResult {
+  calculateEstimate(
+    input: FareCalculationInput,
+    configured?: VehicleType,
+    explicitReference?: VehiclePricing,
+  ): FareEstimateResult {
     if (configured) {
       this.validateInput(input);
-      if (!configured.active || configured.sector !== input.sector || configured.code === 'ftl')
+      if (!configured.active || configured.sector !== input.sector)
         throw new AppError('FARE_CONFIGURATION_MISSING', VEHICLE_UNAVAILABLE_MESSAGE, 422);
+      if (configured.baseFare === null || configured.perKmRate === null) {
+        if (!configured.pricingReference)
+          throw new AppError('FARE_CONFIGURATION_MISSING', VEHICLE_UNAVAILABLE_MESSAGE, 422);
+        const referenceCalculator = new FareCalculatorService(this.pricing, {
+          ...this.vehiclePricing,
+          [configured.sector]: {
+            ...this.vehiclePricing[configured.sector],
+            [canonicalVehicleCode(configured.sector, input.vehicleCategory!)]:
+              configured.pricingReference,
+          },
+        });
+        const result = referenceCalculator.calculateEstimate(
+          input,
+          undefined,
+          configured.pricingReference,
+        );
+        result.pricingVersion = 'vehicle-type:' + configured.id + ':v' + configured.version;
+        return result;
+      }
       const baseFare = Math.round(configured.baseFare * 100),
         distanceRatePerKm = Math.round(configured.perKmRate * 100);
       if (
@@ -95,26 +118,22 @@ export class FareCalculatorService {
         baseFarePaise: baseFare,
         perKmRatePaise: distanceRatePerKm,
       };
-      const canonical = canonicalVehicleCode(configured.sector, input.vehicleCategory ?? '');
-      const tariffs = this.vehiclePricing[configured.sector];
-      const original =
-        tariffs && Object.hasOwn(tariffs, canonical) ? tariffs[canonical] : undefined;
-      const pricing = original ?? {
+      const pricing = {
         displayName: configured.name,
         baseFare: { minimum: baseFare, maximum: baseFare },
         perKmRate: { minimum: distanceRatePerKm, maximum: distanceRatePerKm },
       };
-      const estimatedFare =
-        original && original.baseFare && !original.routeBased
-          ? (this.calculateEstimate(input) as import('../types/fare.js').VehicleFareEstimate)
-              .estimatedFare
-          : { minimum: bookingFare, maximum: bookingFare };
+      // Configured rates are authoritative for both display and booking.
+      const estimatedFare = { minimum: bookingFare, maximum: bookingFare };
       return {
         estimateType: 'range',
         vehicleCategory: input.vehicleCategory!,
         pricing,
         currency: 'INR',
         pricingVersion,
+        oneWayDistanceMeters: input.distanceMeters,
+        billableDistanceMeters: input.distanceMeters * 2,
+        distanceMultiplier: 2,
         distanceMeters: input.distanceMeters,
         durationSeconds: input.durationSeconds,
         ...(estimatedFare ? { estimatedFare } : {}),
@@ -125,9 +144,13 @@ export class FareCalculatorService {
     }
     this.validateInput(input);
     this.validatePricing();
-    const tariff = this.validateEstimateCategory(input);
+    const tariff = explicitReference ?? this.validateEstimateCategory(input);
+    if (explicitReference) this.validateVehiclePricing(explicitReference);
     if (!tariff) return this.calculate(input);
     const common = {
+      oneWayDistanceMeters: input.distanceMeters,
+      billableDistanceMeters: input.distanceMeters * 2,
+      distanceMultiplier: 2 as const,
       vehicleCategory: input.vehicleCategory!,
       pricing: tariff,
       currency: this.pricing.currency,
@@ -143,17 +166,27 @@ export class FareCalculatorService {
         message: VEHICLE_UNAVAILABLE_MESSAGE,
       };
     }
-    const minimum = this.calculateResolved(input, {
-      baseFare: tariff.baseFare.minimum,
-      distanceRatePerKm: tariff.perKmRate.minimum,
-    });
+    const minimum = this.calculateResolved(
+      input,
+      {
+        baseFare: tariff.baseFare.minimum,
+        distanceRatePerKm: tariff.perKmRate.minimum,
+      },
+      Boolean(explicitReference && input.sector !== 'passenger' && input.sector !== 'logistics'),
+    );
     const maximum =
       tariff.baseFare.maximum === null
         ? null
-        : this.calculateResolved(input, {
-            baseFare: tariff.baseFare.maximum,
-            distanceRatePerKm: tariff.perKmRate.maximum,
-          });
+        : this.calculateResolved(
+            input,
+            {
+              baseFare: tariff.baseFare.maximum,
+              distanceRatePerKm: tariff.perKmRate.maximum,
+            },
+            Boolean(
+              explicitReference && input.sector !== 'passenger' && input.sector !== 'logistics',
+            ),
+          );
     const bookingFare = tariff.fixedRates
       ? this.calculateResolved(input, tariff.fixedRates)
       : undefined;
@@ -223,13 +256,17 @@ export class FareCalculatorService {
     this.validatePricing();
     if (!vehicleRates) this.validateVehicleFareConfiguration(input);
 
+    // Inputs and stored route distances stay one-way. Only billable components use this value.
+    const billableDistanceMeters = input.distanceMeters * 2;
+    if (!Number.isFinite(billableDistanceMeters))
+      throw new AppError('FARE_INPUT_INVALID', 'Round-trip distance exceeds supported range', 400);
     let baseAmount = vehicleRates?.baseFare ?? this.pricing.baseFare;
     let distanceAmount = vehicleRates
       ? this.roundMoney(
-          (input.distanceMeters * vehicleRates.distanceRatePerKm) / 1000,
+          (billableDistanceMeters * vehicleRates.distanceRatePerKm) / 1000,
           'distanceAmount',
         )
-      : this.calculateDistanceAmount(input.distanceMeters);
+      : this.calculateDistanceAmount(billableDistanceMeters);
     let timeAmount = exactConfiguration ? 0 : this.calculateTimeAmount(input.durationSeconds);
     let waitingAmount: number | undefined;
     let weightAmount: number | undefined;
@@ -257,7 +294,7 @@ export class FareCalculatorService {
     } else if (!exactConfiguration && input.sector === 'service') {
       if (input.vehicleCategory === 'ambulance') {
         baseAmount = 50000;
-        distanceAmount = this.roundMoney((input.distanceMeters * 2500) / 1000, 'distanceAmount');
+        distanceAmount = this.roundMoney((billableDistanceMeters * 2500) / 1000, 'distanceAmount');
       } else if (
         input.vehicleCategory === 'towing' ||
         input.vehicleCategory === 'towing_van' ||
@@ -265,7 +302,7 @@ export class FareCalculatorService {
         input.vehicleCategory === 'recovery_vehicle'
       ) {
         baseAmount = 60000;
-        distanceAmount = this.roundMoney((input.distanceMeters * 3000) / 1000, 'distanceAmount');
+        distanceAmount = this.roundMoney((billableDistanceMeters * 3000) / 1000, 'distanceAmount');
       } else if (
         input.vehicleCategory === 'roadside_service' ||
         input.vehicleCategory === 'roadside_service_vehicle' ||
@@ -273,14 +310,14 @@ export class FareCalculatorService {
         input.vehicleCategory === 'roadside'
       ) {
         baseAmount = 60000;
-        distanceAmount = this.roundMoney((input.distanceMeters * 3000) / 1000, 'distanceAmount');
+        distanceAmount = this.roundMoney((billableDistanceMeters * 3000) / 1000, 'distanceAmount');
       } else if (input.vehicleCategory === 'jcb') {
         // JCB trip-based pricing: Flat mobilization/base charge (120,000 paise / ₹1,200) + distance charge (4,000 paise/km / ₹40/km)
         baseAmount = 120000;
-        distanceAmount = this.roundMoney((input.distanceMeters * 4000) / 1000, 'distanceAmount');
+        distanceAmount = this.roundMoney((billableDistanceMeters * 4000) / 1000, 'distanceAmount');
       } else {
         baseAmount = 60000;
-        distanceAmount = this.roundMoney((input.distanceMeters * 3000) / 1000, 'distanceAmount');
+        distanceAmount = this.roundMoney((billableDistanceMeters * 3000) / 1000, 'distanceAmount');
       }
     } else if (!exactConfiguration && input.sector === 'premium') {
       const hours = Math.max(1, input.rentalHours || 1);
@@ -289,7 +326,7 @@ export class FareCalculatorService {
 
       const fuelRate =
         input.fuelRatePerKm !== undefined && input.fuelRatePerKm > 0 ? input.fuelRatePerKm : 1500;
-      fuelAmount = this.roundMoney((input.distanceMeters * fuelRate) / 1000, 'fuelAmount');
+      fuelAmount = this.roundMoney((billableDistanceMeters * fuelRate) / 1000, 'fuelAmount');
       distanceAmount = 0;
     } else if (input.sector === 'passenger' && !vehicleRates) {
       if (input.vehicleCategory === 'auto') {
@@ -329,6 +366,9 @@ export class FareCalculatorService {
     this.assertSafeMoney(grossAmount, 'grossAmount');
 
     const result: FareCalculationResult = {
+      oneWayDistanceMeters: input.distanceMeters,
+      billableDistanceMeters,
+      distanceMultiplier: 2,
       distanceMeters: input.distanceMeters,
       durationSeconds: input.durationSeconds,
       baseAmount,

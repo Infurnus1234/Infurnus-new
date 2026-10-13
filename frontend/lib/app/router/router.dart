@@ -27,6 +27,7 @@ import '../../features/customer/presentation/screens/legal_document_screen.dart'
 import '../../features/customer/presentation/screens/delete_account_screen.dart';
 import '../../features/customer/presentation/screens/booking_history_screen.dart';
 import '../../features/support/presentation/screens/support_screen.dart';
+import '../../features/driver/presentation/screens/support_tickets_screen.dart';
 
 class RouterNotifier extends ChangeNotifier {
   final Ref _ref;
@@ -55,6 +56,10 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: '/splash',
     refreshListenable: notifier,
     routes: [
+      GoRoute(
+        path: '/support-tickets',
+        builder: (context, state) => const SupportTicketsScreen(),
+      ),
       GoRoute(
         path: '/splash',
         builder: (context, state) => const SplashScreen(),

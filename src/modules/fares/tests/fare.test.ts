@@ -33,15 +33,18 @@ describe('INFURNUS Fare Module', () => {
       });
 
       expect(result).toEqual({
+        oneWayDistanceMeters: 5000,
+        billableDistanceMeters: 10000,
+        distanceMultiplier: 2,
         distanceMeters: 5000,
         durationSeconds: 900,
         baseAmount: 500,
-        distanceAmount: 6000,
+        distanceAmount: 12000,
         timeAmount: 3000,
-        grossAmount: 9500,
+        grossAmount: 15500,
         commissionRate: 0.1,
         commissionAmount: 50,
-        driverEarnings: 9450,
+        driverEarnings: 15450,
         currency: 'INR',
         pricingVersion: 'test-v1',
       });
@@ -54,7 +57,7 @@ describe('INFURNUS Fare Module', () => {
       });
 
       expect(result.currency).toBe('INR');
-      expect(result.grossAmount).toBe(1900);
+      expect(result.grossAmount).toBe(3100);
     });
 
     it('supports zero distance and duration', () => {
@@ -75,8 +78,8 @@ describe('INFURNUS Fare Module', () => {
         durationSeconds: 0,
       });
 
-      expect(result.distanceAmount).toBe(1);
-      expect(result.grossAmount).toBe(501);
+      expect(result.distanceAmount).toBe(2);
+      expect(result.grossAmount).toBe(502);
     });
 
     it('rounds fractional time fare to the nearest paise', () => {
@@ -229,9 +232,9 @@ describe('INFURNUS Fare Module', () => {
 
       expect(result).toMatchObject({
         baseAmount: DEFAULT_FARE_PRICING.baseFare,
-        distanceAmount: 6000,
+        distanceAmount: 12000,
         timeAmount: 3000,
-        grossAmount: 9500,
+        grossAmount: 15500,
         currency: 'INR',
         pricingVersion: 'v1',
       });
@@ -293,15 +296,18 @@ describe('INFURNUS Fare Module', () => {
       expect(calculateRoute).toHaveBeenCalledWith(origin, destination);
 
       expect(result).toEqual({
+        oneWayDistanceMeters: 5000,
+        billableDistanceMeters: 10000,
+        distanceMultiplier: 2,
         distanceMeters: 5000,
         durationSeconds: 900,
         baseAmount: 500,
-        distanceAmount: 6000,
+        distanceAmount: 12000,
         timeAmount: 3000,
-        grossAmount: 9500,
+        grossAmount: 15500,
         commissionRate: 0.1,
         commissionAmount: 50,
-        driverEarnings: 9450,
+        driverEarnings: 15450,
         currency: 'INR',
         pricingVersion: 'test-v1',
         routeSource: 'google_maps_road',
@@ -360,7 +366,7 @@ describe('INFURNUS Fare Module', () => {
 
       const result = await service.estimate(origin, destination);
 
-      expect(result.grossAmount).toBe(1900);
+      expect(result.grossAmount).toBe(3100);
     });
   });
 
@@ -369,9 +375,9 @@ describe('INFURNUS Fare Module', () => {
       distanceMeters: 5000,
       durationSeconds: 900,
       baseAmount: 500,
-      distanceAmount: 6000,
+      distanceAmount: 12000,
       timeAmount: 3000,
-      grossAmount: 9500,
+      grossAmount: 15500,
       currency: 'INR' as const,
       pricingVersion: 'v1',
     };

@@ -122,7 +122,7 @@ export const operationSources = {
   support: {
     table: 'support_tickets',
     columns:
-      'id, ticket_number, user_id, role, category, subject, message, status, created_at, updated_at',
+      'id, ticket_number, user_id, role, category, subject, message, status, version, created_at, updated_at',
     status: 'status',
     search: 'subject',
     statuses: ['OPEN', 'UNDER_REVIEW', 'RESOLVED', 'CLOSED'],
@@ -178,6 +178,26 @@ export class AdminOperationsRepository {
       id ? couponActivationSchema.parse(input) : adminCouponSchema.parse(input),
       id,
     );
+  }
+  async updateSupportStatus(id: string, input: unknown) {
+    const update = z
+      .object({
+        status: z.enum(['OPEN', 'UNDER_REVIEW', 'RESOLVED', 'CLOSED']),
+        expectedVersion: z.number().int().positive(),
+      })
+      .strict()
+      .parse(input);
+    const result = await this.pool.query(
+      'UPDATE support_tickets SET status=$2,version=version+1,updated_at=NOW() WHERE id=$1 AND version=$3 RETURNING id,ticket_number,user_id,role,category,subject,message,status,version,created_at,updated_at',
+      [id, update.status, update.expectedVersion],
+    );
+    if (!result.rows[0])
+      throw new AppError(
+        'TICKET_UPDATE_CONFLICT',
+        'Ticket is unavailable or has changed; refresh before updating',
+        409,
+      );
+    return result.rows[0];
   }
   async list(module: OperationModule, query: OperationQuery) {
     const source = operationSources[module];
