@@ -39,7 +39,7 @@ class InfurnusBrandMark extends StatelessWidget {
           ),
           clipBehavior: Clip.antiAlias,
           child: Image.asset(
-            'assets/images/logo.jpg',
+            'assets/images/infurnus_logo.png',
             fit: BoxFit.contain,
             errorBuilder: (context, error, stackTrace) => Container(
               color: AppColors.primaryGreen,

@@ -61,7 +61,7 @@ class WelcomeScreen extends StatelessWidget {
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(18),
                             child: Image.asset(
-                              'assets/images/logo.jpg',
+                              'assets/images/infurnus_logo.png',
                               fit: BoxFit.contain,
                               errorBuilder: (context, error, stackTrace) =>
                                   const Icon(Icons.flash_on,
