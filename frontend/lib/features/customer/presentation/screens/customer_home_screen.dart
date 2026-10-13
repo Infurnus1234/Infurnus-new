@@ -1034,6 +1034,80 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     );
   }
 
+  void _showSeeAllVehiclesModal(BuildContext context, String title, List<_VehicleCategoryItem> vehicles) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: surfaceWhite,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: textBlack),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: textBlack),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Complete available vehicle list:',
+                style: TextStyle(fontSize: 13, color: textSecondary),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 380,
+                child: ListView.separated(
+                  itemCount: vehicles.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (context, index) {
+                    final item = vehicles[index];
+                    return ListTile(
+                      tileColor: searchBg,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: const BorderSide(color: cardBorder),
+                      ),
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: const BoxDecoration(
+                          color: surfaceWhite,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(item.icon, color: buttonBlack),
+                      ),
+                      title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold, color: textBlack)),
+                      subtitle: Text('${item.capacity} • ${item.eta}', style: const TextStyle(color: textSecondary, fontSize: 12)),
+                      trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: textBlack),
+                      onTap: () {
+                        Navigator.pop(context);
+                        ref.read(rideProvider.notifier).selectSector('passenger');
+                        context.push('/ride-booking');
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildPassengerSection(BuildContext context) {
     const items = [
       _VehicleCategoryItem(
@@ -1053,6 +1127,30 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         category: VehicleCategoryType.auto,
       ),
       _VehicleCategoryItem(
+        title: 'E-Rickshaw',
+        capacity: '4 seater',
+        rate: 'Route Estimate',
+        eta: 'Instant',
+        icon: Icons.electric_rickshaw_outlined,
+        category: VehicleCategoryType.auto,
+      ),
+      _VehicleCategoryItem(
+        title: 'Force Traveller',
+        capacity: '12 seater',
+        rate: 'Route Estimate',
+        eta: 'Scheduled',
+        icon: Icons.airport_shuttle_rounded,
+        category: VehicleCategoryType.rides,
+      ),
+      _VehicleCategoryItem(
+        title: 'Winger',
+        capacity: '9 seater',
+        rate: 'Route Estimate',
+        eta: 'Scheduled',
+        icon: Icons.directions_bus_rounded,
+        category: VehicleCategoryType.rides,
+      ),
+      _VehicleCategoryItem(
         title: 'Mini / Compact',
         capacity: '4 seater',
         rate: 'Route Estimate',
@@ -1069,8 +1167,8 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         category: VehicleCategoryType.rides,
       ),
       _VehicleCategoryItem(
-        title: 'SUV',
-        capacity: '6 seater',
+        title: 'SUV / Scorpio N',
+        capacity: '6-7 seater',
         rate: 'Route Estimate',
         eta: 'Instant',
         icon: Icons.directions_car_filled_rounded,
@@ -1084,10 +1182,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         _buildSectionHeader(
           title: 'Passenger Rides',
           subtitle: 'Everyday rides across the city',
-          onSeeAll: () {
-            ref.read(rideProvider.notifier).selectSector('passenger');
-            context.push('/ride-booking');
-          },
+          onSeeAll: () => _showSeeAllVehiclesModal(context, 'Passenger Rides', items),
         ),
         const SizedBox(height: 12),
         SizedBox(
@@ -1131,19 +1226,43 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         category: VehicleCategoryType.auto,
       ),
       _VehicleCategoryItem(
-        title: 'Mini Truck 1T',
-        capacity: 'Up to 1000 kg',
+        title: 'Piaggio Ape',
+        capacity: 'Up to 500 kg',
+        rate: 'Server Rate',
+        eta: 'On-demand',
+        icon: Icons.local_shipping_outlined,
+        category: VehicleCategoryType.logistics,
+      ),
+      _VehicleCategoryItem(
+        title: 'Tata Magic',
+        capacity: 'Up to 750 kg',
         rate: 'Server Rate',
         eta: 'On-demand',
         icon: Icons.local_shipping_rounded,
         category: VehicleCategoryType.logistics,
       ),
       _VehicleCategoryItem(
-        title: 'Tata 407',
+        title: '207 Cargo',
+        capacity: 'Up to 1200 kg',
+        rate: 'Server Rate',
+        eta: 'On-demand',
+        icon: Icons.local_shipping_rounded,
+        category: VehicleCategoryType.logistics,
+      ),
+      _VehicleCategoryItem(
+        title: '407 Cargo',
         capacity: 'Up to 2500 kg',
         rate: 'Server Rate',
         eta: 'On-demand',
         icon: Icons.directions_bus_outlined,
+        category: VehicleCategoryType.logistics,
+      ),
+      _VehicleCategoryItem(
+        title: 'Mini Truck 1T',
+        capacity: 'Up to 1000 kg',
+        rate: 'Server Rate',
+        eta: 'On-demand',
+        icon: Icons.local_shipping_rounded,
         category: VehicleCategoryType.logistics,
       ),
     ];
@@ -1154,7 +1273,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         _buildSectionHeader(
           title: 'Logistics',
           subtitle: 'Move goods with muscle',
-          onSeeAll: () => context.push('/logistics'),
+          onSeeAll: () => _showSeeAllVehiclesModal(context, 'Logistics & Cargo', items),
         ),
         const SizedBox(height: 12),
         SizedBox(
@@ -1248,6 +1367,13 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
 
   Widget _buildConciergeFleetSection(BuildContext context) {
     const luxuryVehicles = [
+      _LuxuryVehicleItem(
+        title: 'Scorpio N',
+        badge: 'Rugged SUV',
+        subtitle: 'The Big Daddy of SUVs',
+        price: 'Chauffeur + Fuel',
+        assetImagePath: 'assets/images/passenger_car_visual.jpg',
+      ),
       _LuxuryVehicleItem(
         title: 'Mahindra Thar',
         badge: 'Off-road',
