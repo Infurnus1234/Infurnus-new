@@ -153,7 +153,13 @@ live('admin catalog → existing fare/booking → MAP3 real PostgreSQL', () => {
       new URL('../../../../migrations/063_vehicle_pricing_reference_ranges.sql', import.meta.url),
       'utf8',
     );
-    await pool.query(referenceSql.slice(referenceSql.indexOf('INSERT INTO vehicle_types')));
+    // CI has already applied both migrations. Fill missing reference rows without
+    // reapplying the older range update to already-approved fixed prices.
+    const insert = referenceSql.slice(
+      referenceSql.indexOf('INSERT INTO vehicle_types'),
+      referenceSql.indexOf('ON CONFLICT(code)'),
+    );
+    await pool.query(`${insert} ON CONFLICT(code) DO NOTHING`);
     await pool.query(
       readFileSync(
         new URL('../../../../migrations/064_initial_vehicle_fixed_prices.sql', import.meta.url),
