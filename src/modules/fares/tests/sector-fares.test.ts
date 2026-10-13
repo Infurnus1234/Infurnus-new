@@ -30,10 +30,10 @@ describe('INFURNUS 4-Sector Fare Calculations', () => {
       // subtotal: 6250 + 18750 + 4000 + 1000 = 30000 (₹300.00)
       // tax: 0 (passenger uses subtotal directly unless separate tax specified)
       expect(result.baseAmount).toBe(6250);
-      expect(result.distanceAmount).toBe(18750);
+      expect(result.distanceAmount).toBe(37500);
       expect(result.timeAmount).toBe(4000);
       expect(result.waitingAmount).toBe(1000);
-      expect(result.grossAmount).toBe(30000);
+      expect(result.grossAmount).toBe(48750);
     });
 
     it('scales fare for Auto (0.7x) and SUV (1.6x)', () => {
@@ -93,11 +93,11 @@ describe('INFURNUS 4-Sector Fare Calculations', () => {
       // tax: 86500 * 0.05 = 4325
       // gross: 86500 + 4325 = 90825
       expect(result.baseAmount).toBe(12500);
-      expect(result.distanceAmount).toBe(40500);
+      expect(result.distanceAmount).toBe(81000);
       expect(result.weightAmount).toBe(12500);
       expect(result.loadingAmount).toBe(15000);
-      expect(result.taxAmount).toBe(4325);
-      expect(result.grossAmount).toBe(90825);
+      expect(result.taxAmount).toBe(6350);
+      expect(result.grossAmount).toBe(133350);
     });
   });
 
@@ -117,8 +117,8 @@ describe('INFURNUS 4-Sector Fare Calculations', () => {
       // tax: 78000 * 0.05 = 3900
       // gross: 81900
       expect(result.baseAmount).toBe(50000);
-      expect(result.distanceAmount).toBe(25000);
-      expect(result.grossAmount).toBe(81900);
+      expect(result.distanceAmount).toBe(50000);
+      expect(result.grossAmount).toBe(108150);
     });
 
     it('calculates Towing Hookup + per-km rate', () => {
@@ -136,8 +136,8 @@ describe('INFURNUS 4-Sector Fare Calculations', () => {
       // tax: 126000 * 0.05 = 6300
       // gross: 132300
       expect(result.baseAmount).toBe(60000);
-      expect(result.distanceAmount).toBe(60000);
-      expect(result.grossAmount).toBe(132300);
+      expect(result.distanceAmount).toBe(120000);
+      expect(result.grossAmount).toBe(195300);
     });
 
     it('calculates JCB trip-based mobilization + distance fare', () => {
@@ -155,10 +155,10 @@ describe('INFURNUS 4-Sector Fare Calculations', () => {
       // tax: 164000 * 0.05 = 8200 (5% GST)
       // gross: 164000 + 8200 = 172200 (₹1,722)
       expect(result.baseAmount).toBe(120000);
-      expect(result.distanceAmount).toBe(20000);
+      expect(result.distanceAmount).toBe(40000);
       expect(result.timeAmount).toBe(24000);
-      expect(result.taxAmount).toBe(8200);
-      expect(result.grossAmount).toBe(172200);
+      expect(result.taxAmount).toBe(9200);
+      expect(result.grossAmount).toBe(193200);
     });
 
     it('proves rentalHours cannot manipulate JCB fare (immunity from hourly tampering)', () => {
@@ -178,8 +178,8 @@ describe('INFURNUS 4-Sector Fare Calculations', () => {
       });
 
       expect(tamperedWithHours.baseAmount).toBe(120000);
-      expect(tamperedWithHours.distanceAmount).toBe(20000);
-      expect(tamperedWithHours.grossAmount).toBe(172200);
+      expect(tamperedWithHours.distanceAmount).toBe(40000);
+      expect(tamperedWithHours.grossAmount).toBe(193200);
       expect(tamperedWithHours.grossAmount).toBe(tripBasedStandard.grossAmount);
     });
 
@@ -198,10 +198,10 @@ describe('INFURNUS 4-Sector Fare Calculations', () => {
       // tax: 94000 * 0.05 = 4700
       // gross: 98700
       expect(result.baseAmount).toBe(60000);
-      expect(result.distanceAmount).toBe(30000);
+      expect(result.distanceAmount).toBe(60000);
       expect(result.timeAmount).toBe(4000);
-      expect(result.taxAmount).toBe(4700);
-      expect(result.grossAmount).toBe(98700);
+      expect(result.taxAmount).toBe(6200);
+      expect(result.grossAmount).toBe(130200);
 
       const aliasResult = calculator.calculate({
         distanceMeters: 10000,
@@ -227,10 +227,10 @@ describe('INFURNUS 4-Sector Fare Calculations', () => {
       // tax: 87000 * 0.05 = 4350
       // gross: 91350
       expect(result.baseAmount).toBe(60000);
-      expect(result.distanceAmount).toBe(24000);
+      expect(result.distanceAmount).toBe(48000);
       expect(result.timeAmount).toBe(3000);
-      expect(result.taxAmount).toBe(4350);
-      expect(result.grossAmount).toBe(91350);
+      expect(result.taxAmount).toBe(5550);
+      expect(result.grossAmount).toBe(116550);
 
       const aliasResult = calculator.calculate({
         distanceMeters: 8000,
@@ -287,9 +287,9 @@ describe('INFURNUS 4-Sector Fare Calculations', () => {
       // gross: 514500
       expect(result.baseAmount).toBe(400000);
       expect(result.distanceAmount).toBe(0);
-      expect(result.fuelAmount).toBe(90000);
-      expect(result.taxAmount).toBe(24500);
-      expect(result.grossAmount).toBe(514500);
+      expect(result.fuelAmount).toBe(180000);
+      expect(result.taxAmount).toBe(29000);
+      expect(result.grossAmount).toBe(609000);
     });
 
     it('proves Premium rental hours scale base price proportionally', () => {
@@ -308,7 +308,7 @@ describe('INFURNUS 4-Sector Fare Calculations', () => {
       // tax: 14500
       // gross: 304500
       expect(twoHour.baseAmount).toBe(200000);
-      expect(twoHour.grossAmount).toBe(304500);
+      expect(twoHour.grossAmount).toBe(399000);
     });
   });
 });

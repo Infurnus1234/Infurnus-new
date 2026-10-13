@@ -21,6 +21,7 @@ export type FareCurrency = typeof FARE_CURRENCY;
  * already-calculated route.
  */
 export interface FareCalculationInput {
+  /** One-way road distance. Never pass billable distance back as route input. */
   distanceMeters: number;
   durationSeconds: number;
   currency?: FareCurrency;
@@ -65,6 +66,9 @@ export interface FareBreakdown {
  * future pricing-model changes without ambiguity.
  */
 export interface FareCalculationResult extends FareBreakdown {
+  oneWayDistanceMeters?: number;
+  billableDistanceMeters?: number;
+  distanceMultiplier?: 2;
   vehicleConfiguration?: VehicleFareSnapshot;
   distanceMeters: number;
   durationSeconds: number;
@@ -104,6 +108,9 @@ export interface VehiclePricing {
 }
 
 export interface VehicleFareEstimate {
+  oneWayDistanceMeters?: number;
+  billableDistanceMeters?: number;
+  distanceMultiplier?: 2;
   estimateType: 'range' | 'quote_required';
   vehicleCategory: string;
   pricing: VehiclePricing;

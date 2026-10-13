@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import express from 'express';
 import request from 'supertest';
@@ -147,6 +148,166 @@ live('admin catalog → existing fare/booking → MAP3 real PostgreSQL', () => {
       [adminId, customerId, driverId],
     ]);
   });
+  it('initial approved fixed seed bills all nine types and keeps FTL quote-required', async () => {
+    const referenceSql = readFileSync(
+      new URL('../../../../migrations/063_vehicle_pricing_reference_ranges.sql', import.meta.url),
+      'utf8',
+    );
+    // CI has already applied both migrations. Fill missing reference rows without
+    // reapplying the older range update to already-approved fixed prices.
+    const insert = referenceSql.slice(
+      referenceSql.indexOf('INSERT INTO vehicle_types'),
+      referenceSql.indexOf('ON CONFLICT(code)'),
+    );
+    await pool.query(`${insert} ON CONFLICT(code) DO NOTHING`);
+    await pool.query(
+      readFileSync(
+        new URL('../../../../migrations/064_initial_vehicle_fixed_prices.sql', import.meta.url),
+        'utf8',
+      ),
+    );
+    const rows = await pool.query('SELECT id,code FROM vehicle_types');
+    ids.push(...rows.rows.map((row) => row.id));
+    for (const [code, base, rate] of [
+      ['bike', 15, 5],
+      ['auto', 20, 8],
+      ['mini', 40, 9],
+      ['sedan', 65, 12],
+      ['suv', 90, 16],
+      ['three_wheeler', 200, 15],
+      ['mini_truck', 235, 18],
+      ['pickup_8ft', 325, 20],
+      ['tata_407', 775, 25],
+    ] as const) {
+      const type = await vehicles.findTypeByCode(code);
+      expect(type).toMatchObject({
+        baseFare: base,
+        perKmRate: rate,
+        active: false,
+        pricingReference: null,
+      });
+      const fare = new FareCalculatorService().calculateEstimate(
+        {
+          distanceMeters: 10000,
+          durationSeconds: 600,
+          sector: type!.sector,
+          vehicleCategory: code,
+        },
+        { ...type!, active: true },
+      );
+      if (!('bookingFare' in fare)) throw Error('Expected fixed quote');
+      expect(fare.bookingFare).toMatchObject({
+        baseAmount: base * 100,
+        distanceAmount: 20 * rate * 100,
+        grossAmount: (base + 20 * rate) * 100,
+      });
+    }
+    const ftl = await vehicles.findTypeByCode('ftl');
+    expect(ftl).toMatchObject({
+      baseFare: null,
+      perKmRate: null,
+      active: false,
+      pricingReference: { routeBased: true, perKmRate: { minimum: 2600, maximum: 2600 } },
+    });
+  });
+  it('reference seed preserves existing exact rates/status and safely renames the legacy label', async () => {
+    const type = await create({
+      ...payload,
+      name: 'Mini Truck (Tata Ace)',
+      code: 'mini_truck',
+      sector: 'logistics',
+      baseFare: 111,
+      perKmRate: 17,
+      active: true,
+    });
+    const sql = readFileSync(
+      new URL('../../../../migrations/063_vehicle_pricing_reference_ranges.sql', import.meta.url),
+      'utf8',
+    );
+    await pool.query(sql.slice(sql.indexOf('INSERT INTO vehicle_types')));
+    const seeded = await pool.query(
+      'SELECT id FROM vehicle_types WHERE base_fare_paise IS NULL AND pricing_reference IS NOT NULL',
+    );
+    ids.push(...seeded.rows.map((row) => row.id));
+    expect(await vehicles.getType(type.id)).toMatchObject({
+      name: 'Magic',
+      baseFare: 111,
+      perKmRate: 17,
+      active: true,
+      version: 2,
+      pricingReference: {
+        baseFare: { minimum: 23500, maximum: 32500 },
+        perKmRate: { minimum: 1800, maximum: 2200 },
+      },
+    });
+  });
+  it('returns a persisted dynamic catalog name in the existing customer fleet API', async () => {
+    const type = await create();
+    expect(
+      (await vehicles.listFleet('passenger', 'xyz')).find((v) => v.id === vehicleId)?.name,
+    ).toBe(type.name);
+    await admin.updateVehicleType(adminId, type.id, {
+      name: 'Updated dynamic label',
+      expectedVersion: type.version,
+    });
+    expect(
+      (await vehicles.listFleet('passenger', 'xyz')).find((v) => v.id === vehicleId)?.name,
+    ).toBe('Updated dynamic label');
+  });
+  it('persists editable approximate ranges without selecting a fixed quote', async () => {
+    const reference = {
+      displayName: 'Local range',
+      baseFare: { minimum: 1500, maximum: 2000 },
+      perKmRate: { minimum: 500, maximum: 800 },
+    };
+    const response = await request(app)
+      .post('/admin/vehicle-types')
+      .set('Authorization', 'Bearer ' + (await token()))
+      .send({
+        ...payload,
+        code: 'range_test',
+        name: 'Local range',
+        baseFare: null,
+        perKmRate: null,
+        pricingReference: reference,
+        active: true,
+      });
+    expect(response.status).toBe(201);
+    const type = response.body.data;
+    ids.push(type.id);
+    expect(await vehicles.getType(type.id)).toMatchObject({
+      baseFare: null,
+      perKmRate: null,
+      pricingReference: reference,
+    });
+    const estimate = await estimator.estimate(booking.pickup, booking.destination, {
+      sector: 'passenger',
+      vehicleCategory: 'range_test',
+      pricingMode: 'vehicle_range',
+    });
+    expect(estimate).toMatchObject({
+      bookable: false,
+      billableDistanceMeters: 20000,
+      estimatedFare: { minimum: { distanceAmount: 10000 }, maximum: { distanceAmount: 16000 } },
+    });
+    const changed = { ...reference, perKmRate: { minimum: 600, maximum: 900 } };
+    await admin.updateVehicleType(adminId, type.id, {
+      pricingReference: changed,
+      expectedVersion: type.version,
+    });
+    const updated = await estimator.estimate(booking.pickup, booking.destination, {
+      sector: 'passenger',
+      vehicleCategory: 'range_test',
+      pricingMode: 'vehicle_range',
+    });
+    expect(updated).toMatchObject({
+      bookable: false,
+      estimatedFare: { minimum: { distanceAmount: 12000 } },
+    });
+    await expect(
+      service.createRide(customerId, { ...booking, vehicleCategory: 'range_test' }),
+    ).rejects.toMatchObject({ code: 'FARE_FIXED_QUOTE_REQUIRED' });
+  });
   it('real HTTP create, activate, estimate, book, update; historical fare reaches both MAP3 views', async () => {
     const auth = await token();
     const created = await request(app)
@@ -191,29 +352,29 @@ live('admin catalog → existing fare/booking → MAP3 real PostgreSQL', () => {
       .set('authorization', 'Bearer ' + customerAuth)
       .send(estimateInput);
     expect(valid.status).toBe(200);
-    expect(valid.body.data.bookingFare.grossAmount).toBe(25000);
+    expect(valid.body.data.bookingFare.grossAmount).toBe(40000);
     const booked = await request(app)
       .post('/rides')
       .set('authorization', 'Bearer ' + customerAuth)
       .send(booking);
     expect(booked.status).toBe(201);
-    expect(booked.body.data.fareEstimate).toBe(250);
+    expect(booked.body.data.fareEstimate).toBe(400);
     const first = booked.body.data.id;
     expect(await rides.offerDispatch(first, profileId, 60000)).toBe(true);
     await service.acceptRide(profileId, first);
-    expect((await service.getUserMap(customerId, first)).fare.bookedAmount).toBe(250);
-    expect((await service.getDriverMap(driverId, first)).fare.bookedAmount).toBe(250);
+    expect((await service.getUserMap(customerId, first)).fare.bookedAmount).toBe(400);
+    expect((await service.getDriverMap(driverId, first)).fare.bookedAmount).toBe(400);
     const sanitized = sanitizeRideForDriver((await rides.findById(first))!);
-    expect(sanitized.rideInformation.fare.bookedAmount).toBe(250);
+    expect(sanitized.rideInformation.fare.bookedAmount).toBe(400);
     const changed = await request(app)
       .patch('/admin/vehicle-types/' + type.id)
       .set('authorization', 'Bearer ' + auth)
       .send({ baseFare: 120, perKmRate: 18, expectedVersion: 2 });
     expect(changed.status).toBe(200);
     const second = await service.createRide(customerId, booking);
-    expect(second.fareEstimate).toBe(300);
-    expect((await service.getUserMap(customerId, first)).fare.bookedAmount).toBe(250);
-    expect((await service.getDriverMap(driverId, first)).fare.bookedAmount).toBe(250);
+    expect(second.fareEstimate).toBe(480);
+    expect((await service.getUserMap(customerId, first)).fare.bookedAmount).toBe(400);
+    expect((await service.getDriverMap(driverId, first)).fare.bookedAmount).toBe(400);
     const persisted = await pool.query('SELECT route_metadata FROM rides WHERE id=$1', [first]);
     expect(persisted.rows[0].route_metadata.bookingFareSnapshot.vehicleConfiguration).toMatchObject(
       { version: 2, baseFarePaise: 10000, perKmRatePaise: 1500 },
@@ -316,18 +477,18 @@ live('admin catalog → existing fare/booking → MAP3 real PostgreSQL', () => {
         goods: { weightKg: 100, hasLoadingAssistance: true },
         rentalDetails: { hours: 4, fuelRatePerKm: 999 },
       });
-      expect(ride.fareEstimate).toBe(250);
+      expect(ride.fareEstimate).toBe(400);
       expect(await rides.offerDispatch(ride.id, profileId, 60000)).toBe(true);
       await service.acceptRide(profileId, ride.id);
-      expect((await service.getDriverMap(driverId, ride.id)).fare.bookedAmount).toBe(250);
+      expect((await service.getDriverMap(driverId, ride.id)).fare.bookedAmount).toBe(400);
       await rides.transition(ride.id, 'driver_arriving', profileId);
       await rides.transition(ride.id, 'driver_arrived', profileId);
       await rides.markPinVerified(ride.id);
       await rides.transition(ride.id, 'in_progress', profileId);
       await admin.updateVehicleType(adminId, type.id, { baseFare: 120, expectedVersion: 1 });
       const complete = await service.completeRide(ride.id, profileId);
-      expect(complete.finalFare).toBe(250);
-      expect(complete.billing).toEqual({ currency: 'INR', finalFare: 250 });
+      expect(complete.finalFare).toBe(400);
+      expect(complete.billing).toEqual({ currency: 'INR', finalFare: 400 });
     },
   );
   it('deactivation blocks new rides; stale quote and changed rate reject atomically', async () => {
@@ -376,7 +537,7 @@ live('admin catalog → existing fare/booking → MAP3 real PostgreSQL', () => {
       customerId,
       booking,
     );
-    expect(first.fareEstimate).toBe(300);
+    expect(first.fareEstimate).toBe(480);
     const disabling = new FareEstimateService(
       {
         ...routes,
@@ -412,10 +573,14 @@ live('admin catalog → existing fare/booking → MAP3 real PostgreSQL', () => {
     });
     expect(fare).toMatchObject({
       bookable: true,
-      pricing: VEHICLE_FARE_PRICING.passenger!.mini,
-      bookingFare: { grossAmount: 16000 },
+      pricing: {
+        displayName: 'Mini Cab',
+        baseFare: { minimum: 6000, maximum: 6000 },
+        perKmRate: { minimum: 1000, maximum: 1000 },
+      },
+      bookingFare: { grossAmount: 26000 },
     });
-    expect('estimatedFare' in fare && fare.estimatedFare!.minimum.grossAmount).not.toBe(16000);
+    expect('estimatedFare' in fare && fare.estimatedFare!.minimum.grossAmount).toBe(26000);
     await admin.updateVehicleType(adminId, type.id, { active: false, expectedVersion: 1 });
     await expect(
       estimator.estimate(booking.pickup, booking.destination, {
@@ -438,7 +603,7 @@ live('admin catalog → existing fare/booking → MAP3 real PostgreSQL', () => {
       ...booking,
       vehicleCategory: 'constructor',
     });
-    expect(ride.fareEstimate).toBe(250);
+    expect(ride.fareEstimate).toBe(400);
   });
   it('legacy quote cannot bypass newly created configuration', async () => {
     const input = { ...booking, sector: 'premium' as const, vehicleCategory: 'fortuner' };
@@ -520,7 +685,7 @@ live('admin catalog → existing fare/booking → MAP3 real PostgreSQL', () => {
       pool.query(
         "INSERT INTO vehicle_types(name,code,sector,base_fare_paise,per_km_rate_paise) VALUES('Bad','bad','passenger',NULL,1500)",
       ),
-    ).rejects.toMatchObject({ code: '23502' });
+    ).rejects.toMatchObject({ code: '23514' });
     await expect(
       pool.query(
         "INSERT INTO vehicle_types(name,code,sector,base_fare_paise,per_km_rate_paise) VALUES('FTL','ftl','logistics',10000,1500)",

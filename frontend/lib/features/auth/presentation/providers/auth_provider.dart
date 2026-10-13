@@ -372,17 +372,35 @@ class AuthNotifier extends StateNotifier<AuthState> {
       logoutError =
           'Signed out locally; the server session could not be revoked.';
     } finally {
-      await ref.read(secureStorageProvider).delete(key: 'auth_token');
-      await ref.read(secureStorageProvider).delete(key: 'user_id');
-      await ref.read(secureStorageProvider).delete(key: 'user_role');
-      await ref.read(secureStorageProvider).delete(key: 'auth_csrf_token');
-      ref.read(socketServiceProvider).disconnect();
-      ref.read(userProvider.notifier).logout();
-      state = AuthState(
-        status: AuthStatus.unauthenticated,
-        errorMessage: logoutError,
-      );
+      await _clearSession(logoutError);
     }
+  }
+
+  Future<bool> deleteAccount() async {
+    try {
+      final response = await ref.read(dioProvider).delete('/auth/account');
+      if (response.statusCode != 204 && response.data['success'] != true) {
+        throw StateError('Account deletion was not confirmed by the backend.');
+      }
+      await _clearSession(null);
+      return true;
+    } catch (error) {
+      state = state.copyWith(errorMessage: _parseError(error));
+      return false;
+    }
+  }
+
+  Future<void> _clearSession(String? logoutError) async {
+    await ref.read(secureStorageProvider).delete(key: 'auth_token');
+    await ref.read(secureStorageProvider).delete(key: 'user_id');
+    await ref.read(secureStorageProvider).delete(key: 'user_role');
+    await ref.read(secureStorageProvider).delete(key: 'auth_csrf_token');
+    ref.read(socketServiceProvider).disconnect();
+    ref.read(userProvider.notifier).logout();
+    state = AuthState(
+      status: AuthStatus.unauthenticated,
+      errorMessage: logoutError,
+    );
   }
 }
 

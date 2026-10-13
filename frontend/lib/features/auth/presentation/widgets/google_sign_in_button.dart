@@ -57,7 +57,10 @@ class _GoogleSignInButtonState extends State<GoogleSignInButton> {
       }, onError: _sdkError);
       setState(() => _ready = true);
     } catch (error) {
-      _sdkError(error);
+      // Initialization failure must not cover unrelated signup/password forms.
+      debugPrint(
+        'Google auth initialization failure type: ${error.runtimeType}',
+      );
       _showError('Google sign-in could not be initialized.');
     }
   }
@@ -95,34 +98,18 @@ class _GoogleSignInButtonState extends State<GoogleSignInButton> {
   }
 
   void _sdkError(Object error) {
-    debugPrint('Google auth error: $error');
-    _showDevGoogleLogin();
-  }
-
-  void _showDevGoogleLogin() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Google Sign-In (Development Mode)'),
-        content: const Text(
-          'Google OAuth client ID is not configured for this debug APK. Would you like to sign in with a demo Google account (user@infurnus.com)?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF16A34A)),
-            onPressed: () {
-              Navigator.pop(context);
-              unawaited(widget.onIdToken('DEV_MOCK_GOOGLE_ID_TOKEN_USER_INFURNUS_COM'));
-            },
-            child: const Text('Continue with Google'),
-          ),
-        ],
-      ),
+    if (error is GoogleSignInException) {
+      debugPrint(
+        'Google account reauthentication required: ${error.description?.contains("Account reauth failed") == true}',
+      );
+    }
+    debugPrint(
+      error is GoogleSignInException
+          ? 'Google SDK error code: ${error.code.name}'
+          : 'Google auth failure type: ${error.runtimeType}',
     );
+    if (!mounted) return;
+    _showError('Google sign-in could not be completed.');
   }
 
   void _showError(String message) {
@@ -146,7 +133,7 @@ class _GoogleSignInButtonState extends State<GoogleSignInButton> {
         )
       else
         OutlinedButton(
-          onPressed: _ready && !_busy && widget.enabled ? _authenticate : null,
+          onPressed: !_busy && widget.enabled && _ready ? _authenticate : null,
           child: Text(
             widget.signUp ? 'Sign up with Google' : 'Sign in with Google',
           ),

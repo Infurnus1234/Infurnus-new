@@ -1037,7 +1037,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
           ),
         InfurnusButton(
           text: state.fare != null
-              ? 'Confirm Booking • ₹${state.fare!.toStringAsFixed(0)}'
+              ? 'Confirm Booking • ₹${state.fare!.toStringAsFixed(2)}'
               : 'Confirm Booking',
           isLoading: state.isEstimatingFare,
           onPressed: state.fareEstimate?.bookingAmount == null
@@ -1230,17 +1230,36 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        selectedVehicle.displayName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                          color: textWhite,
+                      Expanded(
+                        flex: 2,
+                        child: Tooltip(
+                          message: selectedVehicle.displayName,
+                          child: Text(
+                            selectedVehicle.displayName,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                              color: Colors.white,
+                            ),
+                          ),
                         ),
                       ),
-                      Text(
-                        selectedVehicle.category,
-                        style: const TextStyle(fontSize: 11, color: textGray),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Tooltip(
+                          message: selectedVehicle.category,
+                          child: Text(
+                            selectedVehicle.category,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Colors.white70,
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -1461,7 +1480,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
         ),
         const SizedBox(height: 6),
         Text(
-          'Matching in ${state.selectedSector.toUpperCase()} sector • Fare ₹${state.fare?.toStringAsFixed(0) ?? "---"}',
+          'Matching in ${state.selectedSector.toUpperCase()} sector • Fare ₹${state.fare?.toStringAsFixed(2) ?? "---"}',
           style: const TextStyle(color: textGray, fontSize: 13),
         ),
         const SizedBox(height: 24),

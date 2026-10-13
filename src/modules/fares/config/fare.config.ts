@@ -65,17 +65,17 @@ export const VEHICLE_FARE_PRICING: Readonly<
   },
   logistics: {
     three_wheeler: {
-      displayName: '3-Wheeler (Goods)',
+      displayName: 'Piaggio Ape',
       baseFare: { minimum: 20000, maximum: 20000 },
       perKmRate: { minimum: 1500, maximum: 2000 },
     },
     mini_truck: {
-      displayName: 'Mini Truck (Tata Ace)',
+      displayName: 'Magic',
       baseFare: { minimum: 23500, maximum: 32500 },
       perKmRate: { minimum: 1800, maximum: 2200 },
     },
     pickup_8ft: {
-      displayName: 'Pickup 8ft',
+      displayName: 'Pickup',
       baseFare: { minimum: 32500, maximum: 37500 },
       perKmRate: { minimum: 2000, maximum: 2500 },
     },

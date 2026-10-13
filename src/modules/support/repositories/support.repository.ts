@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
-import type { CreateSupportTicketInput } from '../schemas/support.schemas.js';
+import { randomUUID } from 'node:crypto';
+import type { CreateSupportTicketInput, SupportListQuery } from '../schemas/support.schemas.js';
 import type { SupportTicket } from '../types/support.js';
 
 export interface SupportRepository {
@@ -8,7 +9,7 @@ export interface SupportRepository {
     role: string,
     input: CreateSupportTicketInput,
   ): Promise<SupportTicket>;
-  listTickets(userId: string): Promise<SupportTicket[]>;
+  listTickets(userId: string, query?: SupportListQuery): Promise<SupportTicket[]>;
   getTicketById(userId: string, ticketId: string): Promise<SupportTicket | null>;
 }
 
@@ -20,8 +21,7 @@ export class PostgresSupportRepository implements SupportRepository {
     role: string,
     input: CreateSupportTicketInput,
   ): Promise<SupportTicket> {
-    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    const ticketNumber = `TCK-${Date.now().toString().slice(-4)}${randomSuffix}`;
+    const ticketNumber = `TCK-${randomUUID().replaceAll('-', '').slice(0, 24)}`;
 
     const result = await this.pool.query<{
       id: string;
@@ -61,7 +61,10 @@ export class PostgresSupportRepository implements SupportRepository {
     };
   }
 
-  async listTickets(userId: string): Promise<SupportTicket[]> {
+  async listTickets(
+    userId: string,
+    query: SupportListQuery = { page: 1, pageSize: 25 },
+  ): Promise<SupportTicket[]> {
     const result = await this.pool.query<{
       id: string;
       ticket_number: string;
@@ -78,8 +81,8 @@ export class PostgresSupportRepository implements SupportRepository {
               status, created_at, updated_at
        FROM support_tickets
        WHERE user_id = $1
-       ORDER BY created_at DESC`,
-      [userId],
+       ORDER BY created_at DESC,id DESC LIMIT $2 OFFSET $3`,
+      [userId, query.pageSize, (query.page - 1) * query.pageSize],
     );
 
     return result.rows.map((row) => ({

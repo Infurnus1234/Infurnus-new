@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:dio/dio.dart';
+
+import '../../../../core/network/dio_client.dart';
+import '../../../auth/data/models/auth_models.dart';
 
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../auth/presentation/providers/user_provider.dart';
@@ -17,13 +22,21 @@ class ProfileScreen extends ConsumerWidget {
   static const Color brandGreen = Color(0xFF22C55E);
   static const Color serviceRed = Color(0xFFEF4444);
 
-  void _showPersonalInfoModal(BuildContext context, User? user) {
-    final firstNameController = TextEditingController(text: user?.firstName ?? '');
-    final lastNameController = TextEditingController(text: user?.lastName ?? '');
-    final emailController = TextEditingController(text: user?.email ?? '');
-    final phoneController = TextEditingController(text: user?.phone ?? '');
+  Future<void> _showPersonalInfoModal(
+    BuildContext context,
+    User? user,
+    WidgetRef ref,
+  ) async {
+    if (user == null) return;
+    var saving = false;
+    String? saveError;
+    ModalRoute<dynamic>? sheetRoute;
+    final firstNameController = TextEditingController(text: user.firstName);
+    final lastNameController = TextEditingController(text: user.lastName);
+    final emailController = TextEditingController(text: user.email ?? '');
+    final phoneController = TextEditingController(text: user.phone ?? '');
 
-    showModalBottomSheet(
+    await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: cardBg,
@@ -31,6 +44,7 @@ class ProfileScreen extends ConsumerWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) {
+        sheetRoute = ModalRoute.of(context);
         return Padding(
           padding: EdgeInsets.only(
             left: 24,
@@ -38,105 +52,203 @@ class ProfileScreen extends ConsumerWidget {
             top: 24,
             bottom: MediaQuery.of(context).viewInsets.bottom + 24,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: StatefulBuilder(
+            builder: (dialogContext, updateDialog) => SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Personal Information',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: textWhite,
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Personal Information',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: textWhite,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, color: textWhite),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded, color: textWhite),
-                    onPressed: () => Navigator.pop(context),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: firstNameController,
+                          style: const TextStyle(color: textWhite),
+                          decoration: const InputDecoration(
+                            labelText: 'First Name',
+                            labelStyle: TextStyle(color: textGray),
+                            enabledBorder: OutlineInputBorder(
+                              borderSide: BorderSide(color: borderCard),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderSide: BorderSide(color: brandGreen),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: lastNameController,
+                          style: const TextStyle(color: textWhite),
+                          decoration: const InputDecoration(
+                            labelText: 'Last Name',
+                            labelStyle: TextStyle(color: textGray),
+                            enabledBorder: OutlineInputBorder(
+                              borderSide: BorderSide(color: borderCard),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderSide: BorderSide(color: brandGreen),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: firstNameController,
-                      style: const TextStyle(color: textWhite),
-                      decoration: const InputDecoration(
-                        labelText: 'First Name',
-                        labelStyle: TextStyle(color: textGray),
-                        enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: borderCard)),
-                        focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: brandGreen)),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: emailController,
+                    style: const TextStyle(color: textWhite),
+                    decoration: const InputDecoration(
+                      labelText: 'Email Address',
+                      labelStyle: TextStyle(color: textGray),
+                      enabledBorder: OutlineInputBorder(
+                        borderSide: BorderSide(color: borderCard),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderSide: BorderSide(color: brandGreen),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
-                      controller: lastNameController,
-                      style: const TextStyle(color: textWhite),
-                      decoration: const InputDecoration(
-                        labelText: 'Last Name',
-                        labelStyle: TextStyle(color: textGray),
-                        enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: borderCard)),
-                        focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: brandGreen)),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: phoneController,
+                    style: const TextStyle(color: textWhite),
+                    decoration: const InputDecoration(
+                      labelText: 'Phone Number',
+                      labelStyle: TextStyle(color: textGray),
+                      enabledBorder: OutlineInputBorder(
+                        borderSide: BorderSide(color: borderCard),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderSide: BorderSide(color: brandGreen),
                       ),
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: emailController,
-                style: const TextStyle(color: textWhite),
-                decoration: const InputDecoration(
-                  labelText: 'Email Address',
-                  labelStyle: TextStyle(color: textGray),
-                  enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: borderCard)),
-                  focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: brandGreen)),
-                ),
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: phoneController,
-                style: const TextStyle(color: textWhite),
-                decoration: const InputDecoration(
-                  labelText: 'Phone Number',
-                  labelStyle: TextStyle(color: textGray),
-                  enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: borderCard)),
-                  focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: brandGreen)),
-                ),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: brandGreen,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Personal information updated successfully.'),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
                         backgroundColor: brandGreen,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                    );
-                  },
-                  child: const Text('Save Details', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                ),
+                      onPressed: saving
+                          ? null
+                          : () async {
+                              final firstName = firstNameController.text.trim();
+                              final lastName = lastNameController.text.trim();
+                              if (firstName.isEmpty || lastName.isEmpty) {
+                                updateDialog(
+                                  () => saveError =
+                                      'First and last names are required.',
+                                );
+                                return;
+                              }
+                              updateDialog(() {
+                                saving = true;
+                                saveError = null;
+                              });
+                              try {
+                                final response = await ref
+                                    .read(dioProvider)
+                                    .patch(
+                                      '/users/${user.id}',
+                                      data: {
+                                        'firstName': firstName,
+                                        'lastName': lastName,
+                                        if (emailController.text.trim() !=
+                                            (user.email ?? ''))
+                                          'email': emailController.text.trim(),
+                                        if (phoneController.text.trim() !=
+                                            (user.phone ?? ''))
+                                          'phone': phoneController.text.trim(),
+                                      },
+                                    );
+                                final updated = PublicUser.fromJson(
+                                  Map<String, dynamic>.from(
+                                    response.data['data'] as Map,
+                                  ),
+                                );
+                                ref
+                                    .read(userProvider.notifier)
+                                    .setUser(updated.toEntity(user.role));
+                                if (!dialogContext.mounted) return;
+                                Navigator.pop(dialogContext);
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Personal information updated successfully.',
+                                    ),
+                                    backgroundColor: brandGreen,
+                                  ),
+                                );
+                              } catch (error) {
+                                if (!dialogContext.mounted) return;
+                                var message =
+                                    'Personal information could not be saved. Please retry.';
+                                if (error is DioException &&
+                                    error.response?.data is Map) {
+                                  final serverError =
+                                      error.response?.data['error'];
+                                  if (serverError is Map &&
+                                      serverError['message'] is String) {
+                                    message = serverError['message'] as String;
+                                  }
+                                }
+                                updateDialog(() => saveError = message);
+                              } finally {
+                                if (dialogContext.mounted) {
+                                  updateDialog(() => saving = false);
+                                }
+                              }
+                            },
+                      child: const Text(
+                        'Save Details',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (saving) const LinearProgressIndicator(),
+                  if (saveError != null)
+                    Text(saveError!, style: const TextStyle(color: serviceRed)),
+                ],
               ),
-            ],
+            ),
           ),
         );
       },
     );
+    await sheetRoute?.completed;
+    firstNameController.dispose();
+    lastNameController.dispose();
+    emailController.dispose();
+    phoneController.dispose();
   }
 
   @override
@@ -207,18 +319,18 @@ class ProfileScreen extends ConsumerWidget {
           const SizedBox(height: 28),
 
           // User Information Section
-          Container(
-            decoration: BoxDecoration(
-              color: cardBg,
+          Material(
+            color: cardBg,
+            shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: borderCard),
+              side: const BorderSide(color: borderCard),
             ),
             child: Column(
               children: [
                 _buildListTile(
                   Icons.person_outline_rounded,
                   'Personal Information',
-                  onTap: () => _showPersonalInfoModal(context, user),
+                  onTap: () => _showPersonalInfoModal(context, user, ref),
                 ),
                 const Divider(height: 1, color: borderCard),
                 _buildListTile(
@@ -244,18 +356,31 @@ class ProfileScreen extends ConsumerWidget {
           const SizedBox(height: 20),
 
           // User Settings Section
-          Container(
-            decoration: BoxDecoration(
-              color: cardBg,
+          Material(
+            color: cardBg,
+            shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: borderCard),
+              side: const BorderSide(color: borderCard),
             ),
             child: Column(
               children: [
                 _buildListTile(
                   Icons.security_rounded,
                   'Privacy Settings',
-                  onTap: () => context.push('/legal/Privacy Policy'),
+                  onTap: () async {
+                    try {
+                      if (await openAppSettings()) return;
+                    } catch (_) {}
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Open your device settings to manage INFURNUS permissions.',
+                          ),
+                        ),
+                      );
+                    }
+                  },
                 ),
                 const Divider(height: 1, color: borderCard),
                 _buildListTile(
@@ -281,11 +406,11 @@ class ProfileScreen extends ConsumerWidget {
           const SizedBox(height: 20),
 
           // Account Actions Section
-          Container(
-            decoration: BoxDecoration(
-              color: cardBg,
+          Material(
+            color: cardBg,
+            shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: borderCard),
+              side: const BorderSide(color: borderCard),
             ),
             child: Column(
               children: [

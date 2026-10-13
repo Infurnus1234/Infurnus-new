@@ -19,6 +19,9 @@ class FareEstimateModel {
   String get displayFare {
     if (isUnavailable) return 'Fare unavailable';
     if (isRange && minimum != null) {
+      if (maximum?.grossAmount == minimum!.grossAmount) {
+        return '₹${minimum!.grossAmount.toStringAsFixed(2)}';
+      }
       return maximum == null
           ? '₹${minimum!.grossAmount.toStringAsFixed(2)}+'
           : '₹${minimum!.grossAmount.toStringAsFixed(2)}–₹${maximum!.grossAmount.toStringAsFixed(2)}';
@@ -31,6 +34,7 @@ class FareEstimateModel {
   final double distanceAmount;
   final double timeAmount;
   final double distanceKm;
+  final double? billableDistanceKm;
   final int durationMinutes;
   final String currency;
 
@@ -58,6 +62,7 @@ class FareEstimateModel {
     this.fuelAmount,
     this.taxAmount,
     required this.distanceKm,
+    this.billableDistanceKm,
     required this.durationMinutes,
     required this.currency,
   });
@@ -167,6 +172,10 @@ class FareEstimateModel {
         baseAmount: 0,
         distanceAmount: 0,
         timeAmount: 0,
+        billableDistanceKm: json['billableDistanceMeters'] == null
+            ? null
+            : number(json['billableDistanceMeters'], 'billableDistanceMeters') /
+                  1000,
         distanceKm: (json['distanceMeters'] as num).toDouble() / 1000,
         durationMinutes: ((json['durationSeconds'] as num).toDouble() / 60)
             .round(),
@@ -216,6 +225,10 @@ class FareEstimateModel {
       loadingAmount: loadingPaise != null ? (loadingPaise / 100.0) : null,
       fuelAmount: fuelPaise != null ? (fuelPaise / 100.0) : null,
       taxAmount: taxPaise != null ? (taxPaise / 100.0) : null,
+      billableDistanceKm: json['billableDistanceMeters'] == null
+          ? null
+          : number(json['billableDistanceMeters'], 'billableDistanceMeters') /
+                1000,
       distanceKm: distMeters > 0 ? (distMeters / 1000.0) : 0.0,
       durationMinutes: (durSecs / 60.0).round(),
       currency: json['currency'] as String,
