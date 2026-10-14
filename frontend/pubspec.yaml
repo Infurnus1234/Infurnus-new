@@ -67,18 +67,18 @@ dev_dependencies:
   flutter_native_splash: ^2.4.1
 
 flutter_launcher_icons:
-  image_path: "assets/images/infurnus_logo.png"
+  image_path: "assets/images/infurnus_logo_square.png"
   android: true
   ios: true
-  adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "assets/images/infurnus_logo.png"
+  adaptive_icon_background: "#000000"
+  adaptive_icon_foreground: "assets/images/infurnus_logo_square.png"
 
 flutter_native_splash:
-  color: "#FFFFFF"
-  image: "assets/images/infurnus_logo.png"
+  color: "#000000"
+  image: "assets/images/infurnus_logo_square.png"
   android_12:
-    color: "#FFFFFF"
-    image: "assets/images/infurnus_logo.png"
+    color: "#000000"
+    image: "assets/images/infurnus_logo_square.png"
   web: false
 
 # For information on the generic Dart part of this file, see the
