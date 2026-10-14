@@ -1210,14 +1210,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
   Widget _buildLogisticsSection(BuildContext context) {
     const items = [
       _VehicleCategoryItem(
-        title: 'Bike Express',
-        capacity: 'Up to 20 kg',
-        rate: 'Server Rate',
-        eta: 'On-demand',
-        icon: Icons.two_wheeler_rounded,
-        category: VehicleCategoryType.bike,
-      ),
-      _VehicleCategoryItem(
         title: '3-Wheeler',
         capacity: 'Up to 300 kg',
         rate: 'Server Rate',

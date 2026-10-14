@@ -24,13 +24,13 @@ class LogisticsScreen extends ConsumerStatefulWidget {
 }
 
 class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
-  static const Color mainBg = Color(0xFF000000);
-  static const Color cardBg = Color(0xFF111111);
-  static const Color borderCard = Color(0xFF262626);
-  static const Color textWhite = Color(0xFFFFFFFF);
-  static const Color textGray = Color(0xFFA1A1AA);
-  static const Color brandGreen = Color(0xFF22C55E);
-  static const Color logisticsOrange = Color(0xFFF59E0B);
+  static const Color mainBg = Color(0xFFF9FAFB);
+  static const Color cardBg = Color(0xFFFFFFFF);
+  static const Color borderCard = Color(0xFFE5E7EB);
+  static const Color textWhite = Color(0xFF111827);
+  static const Color textGray = Color(0xFF4B5563);
+  static const Color brandGreen = Color(0xFF16A34A);
+  static const Color logisticsOrange = Color(0xFFD97706);
 
   final _pickupController = TextEditingController();
   final _dropController = TextEditingController();
