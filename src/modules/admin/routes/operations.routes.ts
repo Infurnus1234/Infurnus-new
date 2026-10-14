@@ -76,7 +76,8 @@ export function createAdminOperationsRouter(repository: AdminOperationsRepositor
           'settlements',
           'activity',
         ].includes(module) &&
-        req.auth!.role !== 'super_admin'
+        req.auth!.role !== 'super_admin' &&
+        !res.locals.adminPermissions?.includes(`${module}.read`)
       ) {
         res.status(403).json({ success: false, error: { message: 'Super Admin access required' } });
         return;

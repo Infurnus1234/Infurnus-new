@@ -683,6 +683,26 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
         }),
       ).rejects.toMatchObject({ statusCode: 403 });
     });
+    it('approves a newly registered driver-owned business through normal review', async () => {
+      const created = await pool.query<{ id: string }>(
+        "INSERT INTO partners(user_id,business_name) VALUES($1,'TEST_SAMPLE driver business') RETURNING id",
+        [users[0]],
+      );
+      const partnerId = created.rows[0]!.id;
+      fleets.push(partnerId);
+      const request = await repository.requestApproval(users[0]!, 'driver', {
+        targetType: 'partner',
+        targetId: partnerId,
+        requestType: 'fleet_verification',
+      });
+      const detail = await repository.approvalDetails(admin, request.id);
+      await expect(
+        repository.reviewApproval(admin, request.id, {
+          status: 'APPROVED',
+          expectedUpdatedAt: detail.target.updated_at,
+        }),
+      ).resolves.toMatchObject({ status: 'APPROVED' });
+    });
     it('concurrent review applies one decision and rejects replay', async () => {
       const req = await repository.requestApproval(users[0]!, 'driver', {
         targetType: 'driver_profile',

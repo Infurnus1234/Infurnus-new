@@ -396,6 +396,7 @@ export interface LiveFleetVehicle {
   latitude: number | null;
   longitude: number | null;
   lastLocationAt: string | null;
+  locationFresh?: boolean;
   currentRideId: string | null;
   verificationStatus: string;
   createdAt: string;

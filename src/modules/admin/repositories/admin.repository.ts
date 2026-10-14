@@ -642,7 +642,7 @@ export class PostgresAdminRepository implements AdminRepository {
           `SELECT COUNT(*)::int AS total,
                 COUNT(*) FILTER (WHERE status = 'active')::int AS active,
                 COUNT(*) FILTER (WHERE status = 'suspended')::int AS suspended
-         FROM users`,
+         FROM users WHERE deleted_at IS NULL`,
         ),
 
         this.pool.query<{ total: number }>(
@@ -1028,6 +1028,7 @@ export class PostgresAdminRepository implements AdminRepository {
         ST_X(dp.last_location::geometry) AS longitude,
 
         dp.last_location_at::text AS "lastLocationAt",
+        COALESCE(dp.last_location_at >= (NOW() - INTERVAL '30 seconds'), FALSE) AS "locationFresh",
         active_ride.id AS "currentRideId",
         COALESCE(v.verification_status, 'approved') AS "verificationStatus",
         v.created_at::text AS "createdAt"
@@ -1123,6 +1124,7 @@ export class PostgresAdminRepository implements AdminRepository {
         ST_X(dp.last_location::geometry) AS longitude,
 
         dp.last_location_at::text AS "lastLocationAt",
+        COALESCE(dp.last_location_at >= (NOW() - INTERVAL '30 seconds'), FALSE) AS "locationFresh",
         active_ride.id AS "currentRideId",
         COALESCE(v.verification_status, 'approved') AS "verificationStatus",
         v.created_at::text AS "createdAt"
