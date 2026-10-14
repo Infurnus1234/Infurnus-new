@@ -382,7 +382,7 @@ export class PostgresVehicleRepository implements VehicleRepository {
           ${assignments.join(', ')},
           updated_at = NOW()
         WHERE id = $${values.length + 1}
-          AND is_active = TRUE
+          AND retired_at IS NULL
         RETURNING ${vehicleProjection}
       `,
       [...values, id],

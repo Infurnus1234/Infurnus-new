@@ -9,6 +9,9 @@ import { createProviderFinanceRouter } from './modules/providers/routes/provider
 import type { CommonMapService } from './modules/maps/map.service.js';
 import { createMapRouter } from './modules/maps/map.routes.js';
 import cookieParser from 'cookie-parser';
+import { AdminManagementService } from './modules/admin/services/admin-management.service.js';
+import { createAdminManagementRouter } from './modules/admin/routes/management.routes.js';
+import { administrativePermissionGate } from './modules/admin/middleware/permission.middleware.js';
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
@@ -210,6 +213,9 @@ export function createApp(
   );
 
   app.use(cookieParser());
+  const administrativeAccess = new AdminManagementService(pool);
+  app.use(administrativePermissionGate(administrativeAccess));
+  app.use('/admin/access', createAdminManagementRouter(administrativeAccess));
 
   // ==========================================================
   // Health

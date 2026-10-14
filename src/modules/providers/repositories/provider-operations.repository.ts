@@ -515,7 +515,7 @@ export class PostgresProviderOperationsRepository {
         );
       } else if (request.target_type === 'partner') {
         await client.query(
-          `UPDATE partners SET approval_status=$2,reviewed_by=$3,reviewed_at=NOW(),approved_by=CASE WHEN $2='approved' THEN $3::uuid ELSE NULL END,approved_at=CASE WHEN $2='approved' THEN NOW() ELSE NULL END,rejection_reason=$4,updated_at=NOW() WHERE id=$1`,
+          `UPDATE partners SET approval_status=$2::text::partner_approval_status,reviewed_by=$3,reviewed_at=NOW(),approved_by=CASE WHEN $2::text='approved' THEN $3::uuid ELSE NULL END,approved_at=CASE WHEN $2::text='approved' THEN NOW() ELSE NULL END,rejection_reason=$4,updated_at=NOW() WHERE id=$1`,
           [target.id, state, actorId, approved ? null : input.reason],
         );
       } else if (request.target_type === 'vehicle') {

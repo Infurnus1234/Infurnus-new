@@ -1,3 +1,4 @@
+import '../../admin/tests/administrative-route-fixture.js';
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 
