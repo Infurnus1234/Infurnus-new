@@ -1,3 +1,4 @@
+import { adminDashboardQuerySchema } from '../schemas/admin.schemas.js';
 import { z } from 'zod';
 import { storageService } from '../../../infrastructure/storage/index.js';
 import { vehicleTypeStatusSchema } from '../../vehicles/schemas/vehicle.schemas.js';
@@ -283,11 +284,11 @@ export class AdminController {
     }
   };
 
-  dashboard = async (_req: Request, res: Response, next: NextFunction) => {
+  dashboard = async (req: Request, res: Response, next: NextFunction) => {
     try {
       res.json({
         success: true,
-        data: await this.service.dashboard(),
+        data: await this.service.dashboard(adminDashboardQuerySchema.parse(req.query)),
       });
     } catch (error) {
       next(error);

@@ -1,3 +1,4 @@
+import { reportingDatePredicates } from './reporting-dates.js';
 import type { Pool } from 'pg';
 import { z } from 'zod';
 import { AppError } from '../../../common/errors/app-error.js';
@@ -219,8 +220,7 @@ export class AdminOperationsRepository {
       predicates.push(`${source.status}::text = ${add(query.status)}`);
     }
     const time = module === 'wallets' ? 'updated_at' : 'created_at';
-    if (query.from) predicates.push(`${time} >= ${add(query.from)}::date`);
-    if (query.to) predicates.push(`${time} < ${add(query.to)}::date + interval '1 day'`);
+    predicates.push(...reportingDatePredicates(time, query.from, query.to, values));
     const where = predicates.length ? ' WHERE ' + predicates.join(' AND ') : '';
     const account = operationAccounts[module];
     // Resolve only the bounded page, not every row counted by the filter.
@@ -245,15 +245,12 @@ export class AdminOperationsRepository {
   }
   async summary(from?: string, to?: string, includeFinance = false) {
     const values: string[] = [];
-    const filters: string[] = [];
-    if (from) {
-      values.push(from);
-      filters.push(`created_at >= $${values.length}::date`);
-    }
-    if (to) {
-      values.push(to);
-      filters.push(`created_at < $${values.length}::date + interval '1 day'`);
-    }
+    const filters = reportingDatePredicates('created_at', from, to, values);
+    const capturedWhere =
+      (filters.length ? ' WHERE ' + filters.join(' AND ') + ' AND ' : ' WHERE ').replaceAll(
+        'created_at',
+        'captured_at',
+      ) + "status='CAPTURED' AND captured_at IS NOT NULL";
     const where = filters.length ? ' WHERE ' + filters.join(' AND ') : '';
     const [rides, deliveries, payments, rentals, categories, receiptSeries] = await Promise.all([
       this.pool.query(
@@ -266,7 +263,7 @@ export class AdminOperationsRepository {
       ),
       includeFinance
         ? this.pool.query(
-            `SELECT currency, SUM(amount)::text AS amount, COUNT(*)::int AS count FROM payments${where}${where ? ' AND' : ' WHERE'} status = 'CAPTURED' GROUP BY currency ORDER BY currency`,
+            `SELECT currency, SUM(amount)::text AS amount, COUNT(*)::int AS count FROM payments${capturedWhere} GROUP BY currency ORDER BY currency`,
             values,
           )
         : Promise.resolve(null),
@@ -280,7 +277,7 @@ export class AdminOperationsRepository {
       ),
       includeFinance
         ? this.pool.query(
-            `SELECT to_char(created_at,'YYYY-MM') AS month,currency,SUM(amount)::text AS amount FROM payments${where}${where ? ' AND' : ' WHERE'} status='CAPTURED' GROUP BY month,currency ORDER BY month,currency`,
+            `SELECT to_char(captured_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM') AS month,currency,SUM(amount)::text AS amount FROM payments${capturedWhere} GROUP BY month,currency ORDER BY month,currency`,
             values,
           )
         : Promise.resolve(null),

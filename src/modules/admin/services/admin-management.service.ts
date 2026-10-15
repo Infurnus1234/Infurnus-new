@@ -24,6 +24,60 @@ export const updatePermissionsSchema = z
 
 export class AdminManagementService {
   constructor(private database: Pool) {}
+  async setStatus(actorId: string, id: string, raw: unknown) {
+    const input = z
+      .object({
+        status: z.enum(['active', 'suspended']),
+        expectedUpdatedAt: z.string().min(1).max(100),
+      })
+      .strict()
+      .parse(raw);
+    const client = await this.database.connect();
+    try {
+      await client.query('BEGIN');
+      await this.superActor(client, actorId);
+      const target = await client.query(
+        `SELECT role,status,updated_at::text AS "updatedAt" FROM users WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`,
+        [id],
+      );
+      const user = target.rows[0];
+      if (!user) throw new AppError('NOT_FOUND', 'Admin not found', 404);
+      if (user.role !== 'admin' || id === actorId)
+        throw new AppError('FORBIDDEN', 'Only Admin account status can be changed', 403);
+      if (user.updatedAt !== input.expectedUpdatedAt)
+        throw new AppError(
+          'VERSION_CONFLICT',
+          'This admin was changed. Reload before saving.',
+          409,
+        );
+      if (!['active', 'suspended'].includes(user.status))
+        throw new AppError(
+          'INVALID_STATUS',
+          'This account requires a separate account review',
+          409,
+        );
+      await client.query('UPDATE users SET status=$2,updated_at=clock_timestamp() WHERE id=$1', [
+        id,
+        input.status,
+      ]);
+      if (input.status === 'suspended')
+        await client.query(
+          'UPDATE refresh_tokens SET revoked_at=COALESCE(revoked_at,NOW()) WHERE user_id=$1 AND revoked_at IS NULL',
+          [id],
+        );
+      await client.query(
+        `INSERT INTO user_history(user_id,event_type,entity_type,entity_id,metadata) VALUES($1,'ADMIN_STATUS_UPDATED','USER',$1,$2::jsonb)`,
+        [id, JSON.stringify({ actorId, previousStatus: user.status, status: input.status })],
+      );
+      await client.query('COMMIT');
+      return { id, status: input.status };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
   async identity(id: string, expectedRole?: string) {
     const result = await this.database.query(
       `SELECT id,first_name AS "firstName",last_name AS "lastName",email,role,status,updated_at::text AS "updatedAt" FROM users WHERE id=$1 AND deleted_at IS NULL`,

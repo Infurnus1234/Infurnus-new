@@ -45,8 +45,10 @@ describe('Admin repository filter matrix', () => {
     expect(result.sql).toContain('ILIKE');
     expect(result.sql).toContain('role = $2');
     expect(result.sql).toContain('status = $3');
-    expect(result.sql).toContain('created_at >= $4::date');
-    expect(result.sql).toContain('created_at < ($5::date');
+    expect(result.sql).toContain("created_at >= ($4::date::timestamp AT TIME ZONE 'Asia/Kolkata')");
+    expect(result.sql).toContain(
+      "created_at < (($5::date + INTERVAL '1 day') AT TIME ZONE 'Asia/Kolkata')",
+    );
     expect(result.values).toEqual([
       '%Ada%',
       'driver',

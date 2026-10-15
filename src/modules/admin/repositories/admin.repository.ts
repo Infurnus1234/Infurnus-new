@@ -1,4 +1,5 @@
 import { PostgresProviderOperationsRepository } from '../../providers/repositories/provider-operations.repository.js';
+import { reportingDatePredicates } from './reporting-dates.js';
 import { AppError } from '../../../common/errors/app-error.js';
 import type { Pool, QueryResultRow } from 'pg';
 import type { StorageAccessUrlInput } from '../../../infrastructure/storage/types.js';
@@ -40,7 +41,10 @@ export interface AdminRepository {
   getPartner(id: string): Promise<AdminPartner | null>;
   listVehicles(filters: AdminFilters): Promise<Page<AdminVehicle>>;
   getVehicle(id: string): Promise<AdminVehicle | null>;
-  dashboard(): Promise<AdminDashboard>;
+  dashboard(filters?: {
+    from?: string | undefined;
+    to?: string | undefined;
+  }): Promise<AdminDashboard>;
 
   verifyDriver(
     driverId: string,
@@ -631,7 +635,14 @@ export class PostgresAdminRepository implements AdminRepository {
     return result.rows[0] ?? null;
   }
 
-  async dashboard(): Promise<AdminDashboard> {
+  async dashboard(
+    filters: { from?: string | undefined; to?: string | undefined } = {},
+  ): Promise<AdminDashboard> {
+    const values: unknown[] = [];
+    const dates = reportingDatePredicates('created_at', filters.from, filters.to, values);
+    const cohort = dates.length ? ' AND ' + dates.join(' AND ') : '';
+    const driverCohort = cohort.replaceAll('created_at', 'dp.created_at');
+    const inventory = dates.length ? ' WHERE ' + dates.join(' AND ') : '';
     const [users, drivers, partners, pendingApprovals, vehicles, kyc, insurance, permits, fitness] =
       await Promise.all([
         this.pool.query<{
@@ -642,7 +653,8 @@ export class PostgresAdminRepository implements AdminRepository {
           `SELECT COUNT(*)::int AS total,
                 COUNT(*) FILTER (WHERE status = 'active')::int AS active,
                 COUNT(*) FILTER (WHERE status = 'suspended')::int AS suspended
-         FROM users WHERE deleted_at IS NULL`,
+         FROM users WHERE deleted_at IS NULL${cohort}`,
+          values,
         ),
 
         this.pool.query<{ total: number }>(
@@ -650,7 +662,8 @@ export class PostgresAdminRepository implements AdminRepository {
          FROM driver_profiles dp
          INNER JOIN users u ON u.id = dp.user_id
          WHERE u.deleted_at IS NULL
-           AND u.role IN ('driver', 'driver_fleet_owner')`,
+           AND u.role IN ('driver', 'driver_fleet_owner')${driverCohort}`,
+          values,
         ),
 
         this.pool.query<{
@@ -681,7 +694,8 @@ export class PostgresAdminRepository implements AdminRepository {
         this.pool.query<{ total: number; active: number }>(
           `SELECT COUNT(*)::int AS total,
                 COUNT(*) FILTER (WHERE is_active)::int AS active
-         FROM vehicles`,
+         FROM vehicles${inventory}`,
+          values,
         ),
 
         this.pool.query<{
@@ -1599,13 +1613,5 @@ function partnerCompliancePredicate(status: NonNullable<AdminFilters['compliance
 }
 
 function addDates(conditions: string[], values: unknown[], column: string, filters: AdminFilters) {
-  if (filters.from) {
-    values.push(filters.from);
-    conditions.push(`${column} >= $${values.length}::date`);
-  }
-
-  if (filters.to) {
-    values.push(filters.to);
-    conditions.push(`${column} < ($${values.length}::date + INTERVAL '1 day')`);
-  }
+  conditions.push(...reportingDatePredicates(column, filters.from, filters.to, values));
 }

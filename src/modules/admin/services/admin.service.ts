@@ -161,8 +161,8 @@ export class AdminService {
     return vehicle;
   }
 
-  dashboard() {
-    return this.repository.dashboard();
+  dashboard(filters: { from?: string | undefined; to?: string | undefined } = {}) {
+    return this.repository.dashboard(filters);
   }
 
   async verifyDriver(driverId: string, status: string, rejectionReason?: string, actorId?: string) {
