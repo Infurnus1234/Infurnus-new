@@ -14,6 +14,13 @@ const documentStatus = z.enum(['PENDING', 'SUBMITTED', 'VERIFIED', 'REJECTED', '
 
 const complianceStatus = z.enum(['compliant', 'non_compliant', 'expiring', 'expired']);
 
+export const adminDashboardQuerySchema = z
+  .object(dateRange)
+  .strict()
+  .refine((value) => !value.from || !value.to || value.from <= value.to, {
+    message: 'from must be on or before to',
+  });
+
 export const adminIdSchema = z.object({ id: z.string().uuid() }).strict();
 
 export const adminUsersQuerySchema = pagination
@@ -78,8 +85,12 @@ export const adminDriversQuerySchema = pagination
     city: z.string().trim().min(1).max(100).optional(),
 
     state: z.string().trim().min(1).max(100).optional(),
+    ...dateRange,
   })
-  .strict();
+  .strict()
+  .refine((value) => !value.from || !value.to || value.from <= value.to, {
+    message: 'from must be on or before to',
+  });
 
 export const adminDriverApplicationsQuerySchema = pagination
   .extend({

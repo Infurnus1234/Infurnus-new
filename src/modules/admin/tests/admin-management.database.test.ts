@@ -169,6 +169,97 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
       expect(response.body.data.items[0].email).toBeUndefined();
       expect(response.body.data.items[0].documents).toEqual([]);
     });
+    it('persists Super Admin-only disable/enable and revokes refresh sessions', async () => {
+      const before = await service.identity(adminId);
+      const endpoint = `/admin/access/admins/${adminId}/status`;
+      const input = { status: 'suspended', expectedUpdatedAt: before.updatedAt };
+      expect((await request(app).patch(endpoint).send(input)).status).toBe(401);
+      expect(
+        (
+          await request(app)
+            .patch(endpoint)
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send(input)
+        ).status,
+      ).toBe(403);
+      await pool.query(
+        `INSERT INTO refresh_tokens(user_id,token_hash,family_id,expires_at) VALUES($1,$2,$3,NOW()+interval '1 day')`,
+        [adminId, randomUUID(), randomUUID()],
+      );
+      expect(
+        (
+          await request(app)
+            .patch(endpoint)
+            .set('Authorization', `Bearer ${superToken}`)
+            .send({ ...input, status: 'banned' })
+        ).status,
+      ).toBe(400);
+      expect(
+        (
+          await request(app)
+            .patch(endpoint)
+            .set('Authorization', `Bearer ${superToken}`)
+            .send(input)
+        ).status,
+      ).toBe(200);
+      expect(
+        (await new AdminManagementService(pool).list(superId, 1, adminId)).items[0].status,
+      ).toBe('suspended');
+      expect(
+        (
+          await pool.query(
+            'SELECT id FROM refresh_tokens WHERE user_id=$1 AND revoked_at IS NULL',
+            [adminId],
+          )
+        ).rowCount,
+      ).toBe(0);
+      expect(
+        (await request(app).get('/partners').set('Authorization', `Bearer ${adminToken}`)).status,
+      ).toBe(403);
+      expect(
+        (
+          await request(app)
+            .patch(endpoint)
+            .set('Authorization', `Bearer ${superToken}`)
+            .send({ ...input, status: 'active' })
+        ).status,
+      ).toBe(409);
+      const suspended = (await service.list(superId, 1, adminId)).items[0];
+      expect(
+        (
+          await request(app)
+            .patch(endpoint)
+            .set('Authorization', `Bearer ${superToken}`)
+            .send({ status: 'active', expectedUpdatedAt: suspended.updatedAt })
+        ).status,
+      ).toBe(200);
+      expect(
+        (await request(app).get('/partners').set('Authorization', `Bearer ${adminToken}`)).status,
+      ).toBe(200);
+      expect(
+        (
+          await pool.query(
+            'SELECT id FROM refresh_tokens WHERE user_id=$1 AND revoked_at IS NULL',
+            [adminId],
+          )
+        ).rowCount,
+      ).toBe(0);
+      const owner = await service.identity(superId);
+      await expect(
+        service.setStatus(superId, superId, {
+          status: 'suspended',
+          expectedUpdatedAt: owner.updatedAt,
+        }),
+      ).rejects.toMatchObject({ statusCode: 403 });
+      expect(
+        (
+          await pool.query(
+            "SELECT metadata FROM user_history WHERE user_id=$1 AND event_type='ADMIN_STATUS_UPDATED'",
+            [adminId],
+          )
+        ).rowCount,
+      ).toBe(2);
+    });
     it('revokes existing and freshly signed sessions immediately and protects Super Admin', async () => {
       const current = await service.identity(adminId);
       await service.update(superId, adminId, {

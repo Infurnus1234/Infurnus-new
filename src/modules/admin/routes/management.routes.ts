@@ -50,6 +50,20 @@ export function createAdminManagementRouter(service: AdminManagementService) {
       next(error);
     }
   });
+  router.patch('/admins/:id/status', async (req, res, next) => {
+    try {
+      res.json({
+        success: true,
+        data: await service.setStatus(
+          req.auth!.userId,
+          z.string().uuid().parse(req.params.id),
+          req.body,
+        ),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
   router.patch('/admins/:id/permissions', async (req, res, next) => {
     try {
       res.json({
