@@ -24,6 +24,8 @@ export interface DriverCandidate {
   locationRecordedAt: Date;
   sector?: string;
   vehicleCategory?: string;
+  dispatchBoundaryGeoJson?: string;
+  dispatchCityId?: string;
 }
 
 export interface DriverProfile {

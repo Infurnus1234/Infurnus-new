@@ -1,0 +1,20 @@
+{
+  "cities": [
+    {
+      "id": "patna",
+      "name": "Patna",
+      "referenceId": "patna",
+      "radiusMeters": 25000,
+      "verified": true,
+      "approvalReference": "Project owner: 25 km city-reference service-area rule, 2026-10-16; Government of India Positional Astronomy Centre city coordinates"
+    },
+    {
+      "id": "muzaffarpur",
+      "name": "Muzaffarpur",
+      "referenceId": "muzaffarpur",
+      "radiusMeters": 25000,
+      "verified": true,
+      "approvalReference": "Project owner: 25 km city-reference service-area rule, 2026-10-16; Government of India Positional Astronomy Centre city coordinates"
+    }
+  ]
+}

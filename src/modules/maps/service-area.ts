@@ -6,6 +6,7 @@ import { validateCoordinates } from './geometry.js';
 import type { Coordinates } from '../rides/providers/map.provider.js';
 
 export interface ServiceAreaGate {
+  readonly boundaryGeoJson?: string | undefined;
   readonly configured: boolean;
   readonly required: boolean;
   assertSupported(points: Coordinates[]): Promise<void>;
@@ -16,6 +17,9 @@ export interface ServiceAreaGate {
 export class ServiceAreaPolicy implements ServiceAreaGate {
   readonly configured: boolean;
   private readonly geometry?: string;
+  get boundaryGeoJson(): string | undefined {
+    return this.geometry;
+  }
   constructor(
     boundary: unknown,
     readonly required = true,

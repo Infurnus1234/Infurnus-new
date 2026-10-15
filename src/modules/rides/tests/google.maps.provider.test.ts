@@ -18,6 +18,45 @@ function response(body: unknown, ok = true, status = 200): Response {
 }
 
 describe('GoogleMapsProvider', () => {
+  it('accepts a genuine zero-length route with a single-point Google polyline', async () => {
+    const point = { latitude: 38.5, longitude: -120.2 };
+    const provider = new GoogleMapsProvider(
+      'test-only',
+      vi.fn().mockResolvedValue(
+        response({
+          status: 'OK',
+          routes: [
+            {
+              legs: [{ distance: { value: 0 }, duration: { value: 0 } }],
+              overview_polyline: { points: '_p~iF~ps|U' },
+            },
+          ],
+        }),
+      ),
+    );
+    await expect(provider.calculateRoute(point, point)).resolves.toEqual({
+      distanceMeters: 0,
+      durationSeconds: 0,
+    });
+  });
+  it('never logs untrusted provider error messages containing credentials or private data', async () => {
+    const logger = vi.fn();
+    const provider = new GoogleMapsProvider(
+      'fixture-secret',
+      vi
+        .fn()
+        .mockResolvedValue(
+          response({ status: 'REQUEST_DENIED', error_message: 'fixture-secret private-address' }),
+        ),
+      Date.now,
+      logger,
+    );
+    await expect(provider.places('Patna')).rejects.toMatchObject({
+      code: 'MAP_PROVIDER_AUTHORIZATION',
+    });
+    expect(JSON.stringify(logger.mock.calls)).not.toContain('fixture-secret');
+    expect(JSON.stringify(logger.mock.calls)).not.toContain('private-address');
+  });
   it('identifies REQUEST_DENIED without exposing provider error text or credentials', async () => {
     const fetcher = vi
       .fn()

@@ -2,6 +2,98 @@ import { describe, expect, it, vi } from 'vitest';
 import { MatchingService } from '../services/matching.service.js';
 import type { DriverRepository } from '../repositories/driver.repository.js';
 import type { MapProvider } from '../providers/map.provider.js';
+import type { Ride } from '../types/ride.js';
+
+describe('policy-aware dispatch matching', () => {
+  const ride = {
+    id: 'test-ride',
+    pickup: { latitude: 12, longitude: 77 },
+    sector: 'service',
+    vehicleCategory: 'ambulance',
+  } as Ride;
+  it('orders ambulances by road distance rather than travel time', async () => {
+    const repo = driverRepository();
+    const maps = {
+      calculateMatrix: vi.fn().mockResolvedValue(
+        candidates.map((c, i) => ({
+          origin: { latitude: c.latitude, longitude: c.longitude },
+          route: { distanceMeters: i ? 1000 : 5000, durationSeconds: i ? 500 : 10 },
+        })),
+      ),
+    } as unknown as MapProvider;
+    const result = await new MatchingService(repo, maps).findDispatchDrivers(ride, null);
+    expect(result.map((c) => c.driverProfileId)).toEqual(['a-driver', 'b-driver']);
+    expect(repo.findNearbyEligible).toHaveBeenLastCalledWith(
+      12,
+      77,
+      20000,
+      expect.any(Number),
+      expect.any(Date),
+      'service',
+      'ambulance',
+      { rideId: 'test-ride', radiusMeters: null },
+    );
+  });
+  it('uses geographic ordering for a partial or failed road matrix', async () => {
+    for (const calculateMatrix of [
+      vi.fn().mockResolvedValue([
+        {
+          origin: { latitude: 12.1, longitude: 77.1 },
+          route: { distanceMeters: 1, durationSeconds: 1 },
+        },
+      ]),
+      vi.fn().mockRejectedValue(new Error('unavailable')),
+      ...[Number.NaN, -1, Number.POSITIVE_INFINITY].map((distanceMeters) =>
+        vi.fn().mockResolvedValue(
+          candidates.map((c) => ({
+            origin: { latitude: c.latitude, longitude: c.longitude },
+            route: { distanceMeters, durationSeconds: 1 },
+          })),
+        ),
+      ),
+    ]) {
+      const result = await new MatchingService(driverRepository(), {
+        calculateMatrix,
+      } as unknown as MapProvider).findDispatchDrivers(ride, null);
+      expect(result.map((c) => c.driverProfileId)).toEqual(['a-driver', 'b-driver']);
+    }
+  });
+  it('resolves premium coverage before querying and attaches the selected city', async () => {
+    const repo = driverRepository(),
+      resolve = vi
+        .fn()
+        .mockResolvedValue({ cityId: 'TEST_CITY', boundaryGeoJson: 'test-geometry' });
+    const result = await new MatchingService(repo, undefined, undefined, {
+      resolve,
+    }).findDispatchDrivers({ ...ride, sector: 'premium', vehicleCategory: 'sedan' }, null);
+    expect(resolve).toHaveBeenCalledWith(ride.pickup);
+    expect(result[0]).toMatchObject({
+      dispatchCityId: 'TEST_CITY',
+      dispatchBoundaryGeoJson: 'test-geometry',
+    });
+    expect(repo.findNearbyEligible).toHaveBeenLastCalledWith(
+      12,
+      77,
+      20000,
+      expect.any(Number),
+      expect.any(Date),
+      'premium',
+      'sedan',
+      { rideId: 'test-ride', radiusMeters: null, boundaryGeoJson: 'test-geometry' },
+    );
+  });
+  it('does not query drivers when premium city coverage is missing', async () => {
+    const repo = driverRepository(),
+      resolve = vi.fn().mockRejectedValue(new Error('city missing'));
+    await expect(
+      new MatchingService(repo, undefined, undefined, { resolve }).findDispatchDrivers(
+        { ...ride, sector: 'premium' },
+        null,
+      ),
+    ).rejects.toThrow('city missing');
+    expect(repo.findNearbyEligible).not.toHaveBeenCalled();
+  });
+});
 
 const candidates = [
   {

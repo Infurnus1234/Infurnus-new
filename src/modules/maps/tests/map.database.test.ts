@@ -264,11 +264,11 @@ live('map PostGIS discovery and route locks', () => {
         'UPDATE driver_profiles SET last_location=ST_Project(ST_SetSRID(ST_MakePoint($2,$3),4326)::geography,$4::double precision,pi()/2),last_location_at=NOW() WHERE id=$1',
         [profileId, origin.longitude, origin.latitude, metres],
       );
-    await move(3000);
+    await move(11000);
     expect(await rides.offerDispatch(ride.id, profileId, 10000)).toBe(false);
     await move(1500);
     expect(await rides.offerDispatch(ride.id, profileId, 10000)).toBe(true);
-    await move(3000);
+    await move(11000);
     expect(await rides.accept(ride.id, profileId)).toBeNull();
     await move(1500);
     expect((await rides.accept(ride.id, profileId))?.assignedDriverId).toBe(profileId);

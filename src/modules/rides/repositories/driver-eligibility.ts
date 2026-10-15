@@ -19,7 +19,14 @@ export function driverEligibilitySql(freshAfter: string, pendingRideException?: 
   return `${driverOperationalEligibilitySql()}
     AND dp.availability_status = 'available'
     AND dp.last_location IS NOT NULL
+    AND NOT ST_IsEmpty(dp.last_location::geometry)
+    AND ST_IsValid(dp.last_location::geometry)
     AND dp.last_location_at >= ${freshAfter}
+    AND NOT EXISTS (SELECT 1 FROM rentals active_rental
+      WHERE active_rental.vehicle_id=v.id
+        AND (active_rental.status='ACTIVE' OR
+          (active_rental.status IN ('PENDING','CONFIRMED')
+           AND active_rental.start_at<=NOW() AND active_rental.end_at>NOW())))
     AND NOT EXISTS (SELECT 1 FROM rides active_ride
       WHERE active_ride.assigned_driver_id = dp.id
         AND active_ride.status NOT IN ('completed','cancelled'))

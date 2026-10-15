@@ -167,6 +167,7 @@ export const envSchema = z
 
     // Common maps: cache TTLs are seconds; intervals are milliseconds.
     MAP_SERVICE_AREA_BOUNDARY_FILE: z.string().min(1).optional(),
+    PREMIUM_CITY_SERVICE_AREAS_FILE: z.string().min(1).optional(),
 
     MAP_REGION: z.string().trim().min(1).default('Bihar'),
     MAP_COUNTRY: z

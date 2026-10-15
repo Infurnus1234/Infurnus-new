@@ -1,3 +1,4 @@
+import { syntheticDispatchCity, syntheticDispatchAreas } from './dispatch-test-city.js';
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -463,7 +464,7 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
     let rideService: RideService;
 
     beforeAll(async () => {
-      repo = new PostgresRideRepository(pool);
+      repo = new PostgresRideRepository(pool, syntheticDispatchAreas);
       driverRepo = new PostgresDriverRepository(pool);
       rideService = new RideService(repo, driverRepo);
 
@@ -596,12 +597,16 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
           vehicleCategory: 'fortuner',
           fareEstimate: 4000,
         });
-        expect(await repo.offerDispatch(rejectedRide.id, driverProfileId, 1000)).toBe(true);
+        expect(
+          await repo.offerDispatch(rejectedRide.id, driverProfileId, 1000, syntheticDispatchCity),
+        ).toBe(true);
         expect(await repo.finishDispatchAttempt(rejectedRide.id, driverProfileId, 'rejected')).toBe(
           true,
         );
         expect(await repo.listAvailableForDriver(driverProfileId)).toHaveLength(0);
-        expect(await repo.offerDispatch(rejectedRide.id, secondProfileId, 1000)).toBe(true);
+        expect(
+          await repo.offerDispatch(rejectedRide.id, secondProfileId, 1000, syntheticDispatchCity),
+        ).toBe(true);
         expect(await repo.listAvailableForDriver(secondProfileId)).toHaveLength(1);
         expect(await repo.finishDispatchAttempt(rejectedRide.id, secondProfileId, 'rejected')).toBe(
           true,
@@ -614,13 +619,24 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
           vehicleCategory: 'fortuner',
           fareEstimate: 4000,
         });
-        expect(await repo.offerDispatch(timeoutRide.id, driverProfileId, 1)).toBe(true);
-        await new Promise((resolve) => setTimeout(resolve, 5));
+        expect(
+          await repo.offerDispatch(timeoutRide.id, driverProfileId, 1, syntheticDispatchCity),
+        ).toBe(true);
+        await pool.query(
+          "UPDATE rides SET dispatch_expires_at=NOW()-INTERVAL '1 second' WHERE id=$1",
+          [timeoutRide.id],
+        );
+        await pool.query(
+          "UPDATE ride_dispatch_attempts SET expires_at=NOW()-INTERVAL '1 second' WHERE ride_id=$1",
+          [timeoutRide.id],
+        );
         expect(await repo.finishDispatchAttempt(timeoutRide.id, driverProfileId, 'timed_out')).toBe(
           true,
         );
         expect(await repo.listAvailableForDriver(driverProfileId)).toHaveLength(0);
-        expect(await repo.offerDispatch(timeoutRide.id, secondProfileId, 1000)).toBe(true);
+        expect(
+          await repo.offerDispatch(timeoutRide.id, secondProfileId, 1000, syntheticDispatchCity),
+        ).toBe(true);
       } finally {
         await pool.query(
           `UPDATE rides
@@ -705,8 +721,12 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
       expect(check1?.actualDistanceMeters).toBe(0);
 
       // 3. Driver accepts ride
-      expect(await repo.offerDispatch(ride.id, driverProfileId, 15000)).toBe(true);
-      expect(await repo.offerDispatch(ride.id, driverProfileId, 15000)).toBe(false);
+      expect(await repo.offerDispatch(ride.id, driverProfileId, 15000, syntheticDispatchCity)).toBe(
+        true,
+      );
+      expect(await repo.offerDispatch(ride.id, driverProfileId, 15000, syntheticDispatchCity)).toBe(
+        false,
+      );
       expect(await repo.listAvailableForDriver(driverProfileId)).toHaveLength(1);
       expect(
         await repo.listAvailableForDriver('00000000-0000-0000-0000-000000000001'),
@@ -991,7 +1011,9 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
         fareEstimate: 2000,
       });
 
-      expect(await repo.offerDispatch(ride.id, driverProfileId2, 15000)).toBe(true);
+      expect(
+        await repo.offerDispatch(ride.id, driverProfileId2, 15000, syntheticDispatchCity),
+      ).toBe(true);
       await rideService.acceptRide(driverProfileId2, ride.id);
 
       await repo.transition(ride.id, 'driver_arriving', driverProfileId2);
