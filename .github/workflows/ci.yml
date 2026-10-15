@@ -141,5 +141,11 @@ jobs:
       - name: Test
         run: npm test -- --maxWorkers=4
 
+      - name: Test optional storage without credentials
+        shell: bash
+        run: |
+          unset CLOUDINARY_CLOUD_NAME CLOUDINARY_API_KEY CLOUDINARY_API_SECRET
+          npm test -- src/infrastructure/storage/storage.configuration.test.ts --maxWorkers=1
+
       - name: Build
         run: npm run build
