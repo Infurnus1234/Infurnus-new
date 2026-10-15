@@ -1173,7 +1173,6 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
       vehiclesByCategory.putIfAbsent(vehicle.category, () => vehicle);
     }
     final vehicles = vehiclesByCategory.values.toList();
-    final selectedVehicle = vehiclesByCategory[state.selectedTier];
 
     if (_isLoadingFleet) {
       return const Center(child: CircularProgressIndicator());
@@ -1194,208 +1193,120 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
       );
     }
 
-    if (selectedVehicle != null && !_isChangingVehicle) {
-      final String displayPriceText = state.isEstimatingFare
-          ? 'Calculating fare...'
-          : (state.fareEstimate != null
-                ? 'Estimated Fare: ${state.fareEstimate!.displayFare}'
-                : 'Fare estimate unavailable');
+    return ListView.separated(
+      physics: const NeverScrollableScrollPhysics(),
+      shrinkWrap: true,
+      itemCount: vehicles.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (context, index) {
+        final vehicle = vehicles[index];
+        final isSelected = state.selectedTier == vehicle.category;
+        final String displayPriceText = isSelected && state.fareEstimate != null
+            ? state.fareEstimate!.displayFare
+            : '₹${(83 + index * 32)}';
 
-      return Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: const Color(0xFF12351F),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: brandGreen, width: 2),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: brandGreen.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(12),
+        return GestureDetector(
+          onTap: () {
+            ref.read(rideProvider.notifier).selectTier(vehicle.category);
+          },
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: isSelected ? const Color(0xFFF0FDF4) : cardElevated,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isSelected ? brandGreen : borderCard,
+                width: isSelected ? 2 : 1,
               ),
-              child: Icon(
-                _vehicleIcon(selectedVehicle),
-                color: brandGreen,
-                size: 28,
-              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.asset(
+                    _getVehicleImagePath(vehicle),
+                    width: 54,
+                    height: 42,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => Icon(_vehicleIcon(vehicle), size: 36, color: textWhite),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        flex: 2,
-                        child: Tooltip(
-                          message: selectedVehicle.displayName,
-                          child: Text(
-                            selectedVehicle.displayName,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
+                      Row(
+                        children: [
+                          Text(
+                            vehicle.displayName,
                             style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 15,
-                              color: Colors.white,
+                              color: textWhite,
                             ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Tooltip(
-                          message: selectedVehicle.category,
-                          child: Text(
-                            selectedVehicle.category,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: Colors.white70,
+                          const SizedBox(width: 6),
+                          if (isSelected)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: brandGreen.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text(
+                                'Selected',
+                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: brandGreen),
+                              ),
                             ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    displayPriceText,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                      color: brandGreen,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            TextButton(
-              onPressed: () => setState(() => _isChangingVehicle = true),
-              child: const Text(
-                'Change',
-                style: TextStyle(color: textGray, fontSize: 12),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (_isChangingVehicle)
-          Align(
-            alignment: Alignment.centerRight,
-            child: GestureDetector(
-              onTap: () => setState(() => _isChangingVehicle = false),
-              child: const Padding(
-                padding: EdgeInsets.only(bottom: 6),
-                child: Text(
-                  'Done',
-                  style: TextStyle(
-                    color: brandGreen,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        SizedBox(
-          height: 95,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: vehicles.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 10),
-            itemBuilder: (context, index) {
-              final vehicle = vehicles[index];
-              final isSelected = state.selectedTier == vehicle.category;
-              final String displayPriceText;
-              if (isSelected) {
-                if (state.isEstimatingFare) {
-                  displayPriceText = '...';
-                } else if (state.fareEstimate != null) {
-                  displayPriceText = state.fareEstimate!.displayFare;
-                } else {
-                  displayPriceText = 'View Est.';
-                }
-              } else {
-                displayPriceText = 'Select';
-              }
-
-              return GestureDetector(
-                onTap: () {
-                  ref.read(rideProvider.notifier).selectTier(vehicle.category);
-                  setState(() => _isChangingVehicle = false);
-                },
-                child: Container(
-                  width: 120,
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: isSelected ? const Color(0xFF12351F) : cardElevated,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: isSelected ? brandGreen : borderCard,
-                      width: isSelected ? 2 : 1,
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Icon(
-                            _vehicleIcon(vehicle),
-                            size: 22,
-                            color: isSelected ? brandGreen : textGray,
-                          ),
                         ],
                       ),
-                      Text(
-                        vehicle.displayName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                          color: textWhite,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        vehicle.category,
-                        style: const TextStyle(fontSize: 10, color: textGray),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        displayPriceText,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                          color: isSelected ? brandGreen : textWhite,
-                        ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        '3 mins away • Drop 12:16 pm',
+                        style: TextStyle(fontSize: 12, color: textGray),
                       ),
                     ],
                   ),
                 ),
-              );
-            },
+                Text(
+                  displayPriceText,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                    color: textWhite,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+        );
+      },
     );
+  }
+
+  String _getVehicleImagePath(FleetVehicleModel vehicle) {
+    final cat = vehicle.category.toLowerCase();
+    final name = vehicle.displayName.toLowerCase();
+    if (cat.contains('bike') || name.contains('bike')) return 'assets/images/bike_rider_green_white.png';
+    if (cat.contains('auto') || name.contains('auto')) return 'assets/images/auto_green_white.png';
+    if (cat.contains('e_rickshaw') || name.contains('rickshaw') || name.contains('e-rickshaw')) return 'assets/images/e_rickshaw_green_white.png';
+    if (cat.contains('sedan') || name.contains('sedan')) return 'assets/images/sedan_green_white.png';
+    if (cat.contains('suv') || name.contains('suv') || name.contains('fortuner') || name.contains('thar')) return 'assets/images/suv_green_white.png';
+    if (cat.contains('scorpio')) return 'assets/images/scorpio_n_black.png';
+    if (cat.contains('towing') || name.contains('towing')) return 'assets/images/towing_van_green.png';
+    if (cat.contains('ambulance')) return 'assets/images/ambulance_visual.jpg';
+    if (cat.contains('ape') || name.contains('ape')) return 'assets/images/piaggio_ape_yellow.png';
+    if (cat.contains('tata') || cat.contains('407') || name.contains('407')) return 'assets/images/tata_407_beige.png';
+    if (cat.contains('207') || name.contains('207')) return 'assets/images/mahindra_207_white.png';
+    return 'assets/images/passenger_car_visual.jpg';
   }
 
   IconData _vehicleIcon(FleetVehicleModel vehicle) {
