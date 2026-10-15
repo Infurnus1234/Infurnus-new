@@ -23,6 +23,7 @@ import type { Ride } from '../../modules/rides/types/ride.js';
 import { sanitizeRideForDriver } from '../../modules/rides/utils/ride-sanitizer.js';
 import type { MatchingService } from '../../modules/rides/services/matching.service.js';
 import { RideDispatchService } from '../../modules/rides/services/ride-dispatch.service.js';
+import { startRideDispatchQueue } from '../queue/ride-dispatch.queue.js';
 
 export interface RideSocketDependencies {
   driverService: DriverService;
@@ -135,6 +136,11 @@ export function createSocketServer(
         )
       : null;
 
+    const dispatchQueue =
+      dispatchService && env.REDIS_URL && env.NODE_ENV !== 'test'
+        ? startRideDispatchQueue(env.REDIS_URL, rideDependencies.rideRepository, dispatchService)
+        : null;
+    if (dispatchQueue) dispatchService!.setDeadlineScheduler(dispatchQueue.schedule);
     dispatchService?.startRecovery();
 
     const onRideCreated = (ride: unknown) => {
@@ -388,6 +394,9 @@ export function createSocketServer(
     httpServer.once('close', () => {
       rideEvents.off('ride:user_location_updated', onUserLocation);
       dispatchService?.dispose();
+      void dispatchQueue
+        ?.close()
+        .catch(() => console.warn(JSON.stringify({ event: 'ride_dispatch_queue_close_failed' })));
       rideEvents.off('driver:location_updated', onDriverLocation);
       rideEvents.off('ride:created', onRideCreated);
       rideEvents.off('ride:accepted', onRideAccepted);

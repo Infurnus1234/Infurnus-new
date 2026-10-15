@@ -1,3 +1,4 @@
+import { cityCoverageSql } from '../../maps/city-radius.js';
 import { driverEligibilitySql, driverOperationalEligibilitySql } from './driver-eligibility.js';
 import { AppError } from '../../../common/errors/app-error.js';
 import { env } from '../../../config/env.js';
@@ -70,6 +71,11 @@ export interface DriverRepository {
     staleBefore: Date,
     sector?: string,
     vehicleCategory?: string,
+    dispatch?: {
+      rideId: string;
+      radiusMeters: number | null;
+      boundaryGeoJson?: string | undefined;
+    },
   ): Promise<DriverCandidate[]>;
 
   countNearbyEligible?(
@@ -462,6 +468,11 @@ export class PostgresDriverRepository implements DriverRepository {
     staleBefore: Date,
     sector?: string,
     vehicleCategory?: string,
+    dispatch?: {
+      rideId: string;
+      radiusMeters: number | null;
+      boundaryGeoJson?: string | undefined;
+    },
   ): Promise<DriverCandidate[]> {
     return this.queryNearby(
       latitude,
@@ -471,6 +482,8 @@ export class PostgresDriverRepository implements DriverRepository {
       staleBefore,
       sector,
       vehicleCategory,
+      false,
+      dispatch,
     );
   }
   async countNearbyEligible(
@@ -505,12 +518,17 @@ export class PostgresDriverRepository implements DriverRepository {
     sector?: string,
     vehicleCategory?: string,
     countOnly = false,
+    dispatch?: {
+      rideId: string;
+      radiusMeters: number | null;
+      boundaryGeoJson?: string | undefined;
+    },
   ): Promise<(DriverCandidate & { count?: number })[]> {
     validateCoordinates({ latitude, longitude });
     if (
       !Number.isFinite(radiusMeters) ||
       radiusMeters <= 0 ||
-      radiusMeters > env.MAP_DRIVER_RADII_METERS.at(-1)!
+      radiusMeters > (dispatch ? 20000 : env.MAP_DRIVER_RADII_METERS.at(-1)!)
     )
       throw new AppError('MAP_INPUT_INVALID', 'Driver radius exceeds the configured maximum', 400);
     if (!Number.isInteger(limit) || limit < 1 || limit > env.MAX_DRIVER_MATCH_CANDIDATES)
@@ -522,6 +540,17 @@ export class PostgresDriverRepository implements DriverRepository {
     const values: unknown[] = [longitude, latitude, radiusMeters, staleBefore, limit];
 
     const conditions: string[] = [driverEligibilitySql('$4')];
+    conditions.push('$3::float8 > 0');
+    if (dispatch) {
+      values.push(dispatch.rideId);
+      conditions.push(
+        `NOT EXISTS (SELECT 1 FROM ride_dispatch_attempts previous WHERE previous.ride_id=$${values.length} AND previous.driver_profile_id=dp.id)`,
+      );
+      if (dispatch.boundaryGeoJson) {
+        values.push(dispatch.boundaryGeoJson);
+        conditions.push(cityCoverageSql(`$${values.length}`, 'dp.last_location::geometry'));
+      }
+    }
 
     if (sector) {
       values.push(sector);
@@ -592,14 +621,19 @@ export class PostgresDriverRepository implements DriverRepository {
          ) active_rides ON TRUE
          WHERE ${conditions.join('\nAND ')}
            AND COALESCE(active_rides.count, 0) = 0
-           AND ST_DWithin(
+           ${dispatch?.radiusMeters === null ? '' : 'AND ST_DWithin('}
+           ${
+             dispatch?.radiusMeters === null
+               ? ''
+               : `
              dp.last_location,
              ST_SetSRID(
                ST_MakePoint($1, $2),
                4326
              )::geography,
-             $3
-           )
+             $3 + 0.000001
+           )`
+           }
          ${countOnly ? '' : 'ORDER BY "distanceMeters" ASC, dp.id ASC'}
          LIMIT $5`,
       values,

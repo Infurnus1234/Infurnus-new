@@ -1,4 +1,5 @@
 import { rideEvents } from '../events/ride.events.js';
+import { syntheticDispatchCity, syntheticDispatchAreas } from './dispatch-test-city.js';
 import { createServer } from 'node:http';
 import express from 'express';
 import request from 'supertest';
@@ -24,7 +25,7 @@ import { RideService } from '../services/ride.service.js';
 
 const databaseEnabled = process.env.RIDE_DB_TESTS === 'true';
 const describeDatabase = databaseEnabled ? describe : describe.skip;
-const repository = new PostgresRideRepository(pool);
+const repository = new PostgresRideRepository(pool, syntheticDispatchAreas);
 const driverRepository = new PostgresDriverRepository(pool);
 const service = new RideService(repository, driverRepository);
 
@@ -116,6 +117,90 @@ describeDatabase('ride PostgreSQL integration', () => {
     if (fixture) await cleanFixture(fixture);
   });
 
+  it('persists the exact normal response window regardless of the caller timeout', async () => {
+    const result = await pool.query(
+      `SELECT EXTRACT(EPOCH FROM(expires_at-offered_at))*1000 AS ms FROM ride_dispatch_attempts WHERE ride_id=$1`,
+      [fixture.rideIds[0]],
+    );
+    expect(Number(result.rows[0].ms)).toBe(25000);
+  });
+  it('does not let an early queue callback expire a valid request', async () => {
+    expect(
+      await repository.finishDispatchAttempt(
+        fixture.rideIds[0]!,
+        fixture.driverProfileId,
+        'timed_out',
+      ),
+    ).toBe(false);
+    expect(await repository.pendingDispatch(fixture.rideIds[0]!)).not.toBeNull();
+  });
+  it('refuses acceptance when the vehicle has incompatible active rental work', async () => {
+    const inserted = await pool.query(
+      `INSERT INTO rentals(user_id,vehicle_id,start_at,end_at,status,total_amount) VALUES($1,$2,NOW()-INTERVAL '1 minute',NOW()+INTERVAL '1 hour','ACTIVE',100) RETURNING id`,
+      [fixture.customerId, fixture.vehicleId],
+    );
+    try {
+      expect(await repository.accept(fixture.rideIds[0]!, fixture.driverProfileId)).toBeNull();
+    } finally {
+      await pool.query('DELETE FROM rentals WHERE id=$1', [inserted.rows[0].id]);
+    }
+  });
+  it('cancels outstanding history when a ride terminates', async () => {
+    await pool.query(
+      `UPDATE rides SET status='cancelled',cancelled_at=NOW(),cancellation_reason='TEST ONLY cancellation' WHERE id=$1`,
+      [fixture.rideIds[0]],
+    );
+    const result = await pool.query(`SELECT status FROM ride_dispatch_attempts WHERE ride_id=$1`, [
+      fixture.rideIds[0],
+    ]);
+    expect(result.rows[0].status).toBe('cancelled');
+    expect(await repository.accept(fixture.rideIds[0]!, fixture.driverProfileId)).toBeNull();
+  });
+  it.each([
+    ['logistics', 'mini_truck', 120000],
+    ['service', 'towing', 600000],
+    ['service', 'towing_van', 600000],
+    ['service', 'ambulance', 30000],
+    ['premium', 'sedan', 3600000],
+  ])('enforces the persisted %s/%s deadline', async (sector, category, milliseconds) => {
+    const id = fixture.rideIds[0]!;
+    await pool.query('DELETE FROM ride_dispatch_attempts WHERE ride_id=$1', [id]);
+    await pool.query(
+      'UPDATE rides SET dispatch_driver_id=NULL,dispatch_expires_at=NULL,sector=$2,vehicle_category=$3 WHERE id=$1',
+      [id, sector, category],
+    );
+    await pool.query('UPDATE vehicles SET sector=$2,category=$3 WHERE id=$1', [
+      fixture.vehicleId,
+      sector,
+      category,
+    ]);
+    // Isolated fixture: vehicle identity changes correctly invalidate approval.
+    await pool.query(
+      "UPDATE vehicles SET verification_status='approved',is_active=TRUE WHERE id=$1",
+      [fixture.vehicleId],
+    );
+    expect(
+      await repository.offerDispatch(
+        id,
+        fixture.driverProfileId,
+        1,
+        sector === 'premium' ? syntheticDispatchCity : undefined,
+      ),
+    ).toBe(true);
+    const result = await pool.query(
+      'SELECT EXTRACT(EPOCH FROM(expires_at-offered_at))*1000 AS ms FROM ride_dispatch_attempts WHERE ride_id=$1',
+      [id],
+    );
+    expect(Number(result.rows[0].ms)).toBe(milliseconds);
+    if (sector === 'premium') {
+      await pool.query(
+        'UPDATE driver_profiles SET last_location=ST_SetSRID(ST_MakePoint(80,15),4326)::geography WHERE id=$1',
+        [fixture.driverProfileId],
+      );
+      expect(await repository.accept(id, fixture.driverProfileId)).toBeNull();
+    }
+  });
+
   function mapService() {
     const calls: { origin: unknown; target: unknown }[] = [];
     const provider = {
@@ -171,6 +256,11 @@ describeDatabase('ride PostgreSQL integration', () => {
       fixture.driverProfileId,
       new Date(Date.now() - 1000),
     ]);
+    if (sector === 'premium')
+      await pool.query(
+        'UPDATE ride_dispatch_attempts SET city_id=$2,boundary_geojson=$3::jsonb WHERE ride_id=$1',
+        [fixture.rideIds[0], syntheticDispatchCity.cityId, syntheticDispatchCity.boundaryGeoJson],
+      );
     await service.acceptRide(fixture.driverProfileId, fixture.rideIds[0]!);
   }
   it.each([
@@ -685,7 +775,7 @@ describeDatabase('ride PostgreSQL integration', () => {
         [fixture.rideIds[0], profiles.slice(1)],
       );
       const second = new RideService(
-        new PostgresRideRepository(pool),
+        new PostgresRideRepository(pool, syntheticDispatchAreas),
         new PostgresDriverRepository(pool),
       );
       const outcomes = await Promise.allSettled(
@@ -731,7 +821,7 @@ describeDatabase('ride PostgreSQL integration', () => {
         [[fixture.rideIds[0], otherFixture.rideIds[0]]],
       );
       let notified = 0;
-      const otherRepository = new PostgresRideRepository(pool);
+      const otherRepository = new PostgresRideRepository(pool, syntheticDispatchAreas);
       const otherService = new RideService(otherRepository, new PostgresDriverRepository(pool));
       for (const [index, profile] of [
         fixture.driverProfileId,
@@ -793,11 +883,13 @@ describeDatabase('ride PostgreSQL integration', () => {
     expect((await repository.findById(fixture.rideIds[0]!))?.assignedDriverId).toBeNull();
   });
 
-  it('consumes exactly one valid offer when the same driver has expired offered history', async () => {
-    await pool.query(
-      "INSERT INTO ride_dispatch_attempts(ride_id,attempt,driver_profile_id,status,expires_at) VALUES($1,2,$2,'offered',NOW()-INTERVAL '1 second')",
-      [fixture.rideIds[0], fixture.driverProfileId],
-    );
+  it('prevents a second ride-driver request at the database boundary and consumes the original once', async () => {
+    await expect(
+      pool.query(
+        "INSERT INTO ride_dispatch_attempts(ride_id,attempt,driver_profile_id,status,expires_at) VALUES($1,2,$2,'offered',NOW()-INTERVAL '1 second')",
+        [fixture.rideIds[0], fixture.driverProfileId],
+      ),
+    ).rejects.toMatchObject({ code: '23505' });
     await service.acceptRide(fixture.driverProfileId, fixture.rideIds[0]!);
     const result = await pool.query(
       "SELECT count(*)::int AS count FROM ride_dispatch_attempts WHERE ride_id=$1 AND status='accepted'",

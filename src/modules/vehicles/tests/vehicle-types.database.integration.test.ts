@@ -84,7 +84,7 @@ describe('strict admin vehicle pricing input', () => {
 const live = process.env.RIDE_DB_TESTS === 'true' ? describe : describe.skip;
 live('admin catalog → existing fare/booking → MAP3 real PostgreSQL', () => {
   const vehicles = new PostgresVehicleRepository(pool),
-    rides = new PostgresRideRepository(pool),
+    rides = new PostgresRideRepository(pool, syntheticDispatchAreas),
     drivers = new PostgresDriverRepository(pool);
   const admin = new AdminService(new PostgresAdminRepository(pool), vehicles);
   const estimator = new FareEstimateService(
@@ -478,7 +478,14 @@ live('admin catalog → existing fare/booking → MAP3 real PostgreSQL', () => {
         rentalDetails: { hours: 4, fuelRatePerKm: 999 },
       });
       expect(ride.fareEstimate).toBe(400);
-      expect(await rides.offerDispatch(ride.id, profileId, 60000)).toBe(true);
+      expect(
+        await rides.offerDispatch(
+          ride.id,
+          profileId,
+          60000,
+          sector === 'premium' ? syntheticDispatchCity : undefined,
+        ),
+      ).toBe(true);
       await service.acceptRide(profileId, ride.id);
       expect((await service.getDriverMap(driverId, ride.id)).fare.bookedAmount).toBe(400);
       await rides.transition(ride.id, 'driver_arriving', profileId);
@@ -728,3 +735,7 @@ live('admin catalog → existing fare/booking → MAP3 real PostgreSQL', () => {
     ).rejects.toMatchObject({ code: 'FARE_CONFIGURATION_MISSING' });
   });
 });
+import {
+  syntheticDispatchCity,
+  syntheticDispatchAreas,
+} from '../../rides/tests/dispatch-test-city.js';

@@ -108,7 +108,7 @@ export class GoogleMapsProvider implements MapProvider {
 
     const encodedPolyline = response?.routes?.[0]?.overview_polyline?.points;
 
-    if (encodedPolyline) {
+    if (encodedPolyline && decodePolyline(encodedPolyline).length >= 2) {
       route.encodedPolyline = encodedPolyline;
     }
 
@@ -287,7 +287,12 @@ export class GoogleMapsProvider implements MapProvider {
 
         if (
           route.overview_polyline !== undefined &&
-          (typeof line !== 'string' || decodePolyline(line).length < 2)
+          (typeof line !== 'string' ||
+            (decodePolyline(line).length < 2 &&
+              !(
+                decodePolyline(line).length === 1 &&
+                route.legs.every((leg) => leg.distance?.value === 0 && leg.duration?.value === 0)
+              )))
         ) {
           throw invalid();
         }
@@ -413,7 +418,6 @@ export class GoogleMapsProvider implements MapProvider {
           if (googleBody?.status && googleBody.status !== 'OK') {
             this.logger('google_maps_provider_response', {
               status: googleBody.status,
-              errorMessage: googleBody.error_message ?? null,
               apiType: url.includes('directions')
                 ? 'route'
                 : url.includes('distancematrix')

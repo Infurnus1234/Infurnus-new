@@ -42,7 +42,7 @@ RUN npm install --global npm@11.3.0 && npm ci --omit=dev --ignore-scripts && npm
 
 COPY --from=builder /app/dist ./dist
 COPY migrations/ ./migrations/
-COPY config/service-area/bihar.geojson ./config/service-area/bihar.geojson
+COPY config/service-area/ ./config/service-area/
 
 EXPOSE 3000
 

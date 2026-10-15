@@ -76,6 +76,83 @@ afterEach(() => {
 });
 
 describe('RideDispatchService', () => {
+  it.each([
+    ['passenger', 'sedan', [2000, 5000, 10000]],
+    ['logistics', 'mini_truck', [7000, 15000, 20000]],
+    ['service', 'towing', [10000, 15000, 20000]],
+  ])(
+    'exhausts each %s wave without re-offering a rejected driver',
+    async (sector, vehicleCategory, radii) => {
+      const repo = fakeRideRepository(),
+        offered: string[] = [];
+      const findDispatchDrivers = vi.fn(async (_ride: Ride, radius: number) => [
+        candidate(`driver-${radius}`),
+      ]);
+      const dispatcher = new RideDispatchService(
+        repo as never,
+        { findDispatchDrivers } as never,
+        async (driver) => {
+          offered.push(driver.driverProfileId);
+          await repo.finishDispatchAttempt(ride.id, driver.driverProfileId, 'rejected');
+          rideEvents.emit('ride:dispatch_rejected', {
+            rideId: ride.id,
+            driverProfileId: driver.driverProfileId,
+          });
+        },
+        100,
+      );
+      await dispatcher.dispatch({ ...ride, sector, vehicleCategory });
+      expect(offered).toEqual(radii.map((radius) => `driver-${radius}`));
+      expect(repo.failDispatch).toHaveBeenCalledTimes(1);
+      dispatcher.dispose();
+    },
+  );
+  it('recovers a pending deadline without notifying again or expanding waves', async () => {
+    const deadline = new Date(Date.now() + 60000),
+      notify = vi.fn(),
+      findDispatchDrivers = vi.fn();
+    const repo = {
+      ...fakeRideRepository(),
+      pendingDispatch: vi.fn(async () => ({ driverProfileId: 'existing', expiresAt: deadline })),
+    };
+    const dispatcher = new RideDispatchService(
+      repo as never,
+      { findDispatchDrivers } as never,
+      notify,
+      1,
+    );
+    const schedule = vi.fn(async () => {});
+    dispatcher.setDeadlineScheduler(schedule);
+    const work = dispatcher.dispatch(ride);
+    await vi.waitFor(() => expect(schedule).toHaveBeenCalledWith(ride.id, 'existing', deadline));
+    expect(notify).not.toHaveBeenCalled();
+    expect(findDispatchDrivers).not.toHaveBeenCalled();
+    dispatcher.dispose();
+    await work;
+    expect(repo.finishDispatchAttempt).not.toHaveBeenCalled();
+  });
+  it('continues database-backed dispatch when scheduling Redis work fails', async () => {
+    const repo = fakeRideRepository(),
+      warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const dispatcher = new RideDispatchService(
+      repo as never,
+      matching(candidate('d')) as never,
+      () => {
+        rideEvents.emit('ride:accepted', { ...ride, assignedDriverId: 'd' });
+      },
+      100,
+    );
+    dispatcher.setDeadlineScheduler(
+      vi.fn(async () => {
+        throw new Error('synthetic Redis outage');
+      }),
+    );
+    await dispatcher.dispatch(ride);
+    expect(repo.offerDispatch).toHaveBeenCalledTimes(1);
+    expect(repo.failDispatch).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalled();
+    dispatcher.dispose();
+  });
   it('stops dispatch when the offered driver accepts', async () => {
     const repo = fakeRideRepository();
     const first = candidate('driver-1');
@@ -221,6 +298,7 @@ describe('RideDispatchService', () => {
       100,
     );
     await dispatcher.recover();
+    await vi.waitFor(() => expect(notify).toHaveBeenCalledTimes(1));
     expect(repo.reconcileDispatch).toHaveBeenCalledWith(ride.id);
     expect(notify.mock.calls[0]?.[0].driverProfileId).toBe('next-driver');
     expect(notify).toHaveBeenCalledTimes(1);
@@ -269,7 +347,7 @@ describe('RideDispatchService', () => {
     await dispatcher.dispatch(ride);
     expect(repo.finishDispatchAttempt).toHaveBeenCalledWith(ride.id, 'a', 'rejected');
     expect(rideEvents.listenerCount('ride:accepted')).toBe(0);
-    expect(rideEvents.listenerCount('ride:dispatch_rejected')).toBe(0);
     dispatcher.dispose();
+    expect(rideEvents.listenerCount('ride:dispatch_rejected')).toBe(0);
   });
 });

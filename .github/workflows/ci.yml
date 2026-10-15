@@ -48,6 +48,8 @@ jobs:
       NODE_ENV: test
       RIDE_DB_TESTS: 'true'
       MAP_REDIS_TESTS: 'true'
+      REDIS_DISPATCH_TESTS: 'true'
+      DISPATCH_QA_REDIS_URL: redis://127.0.0.1:6379
       DRIVER_IMPLEMENTATION_DB_TESTS: 'true'
       PROVIDER_DB_TESTS: 'true'
       COUPON_DB_TESTS: 'true'
@@ -90,6 +92,21 @@ jobs:
       - name: Secret and private-artifact scan
         run: node scripts/check-source-secrets.js
 
+      - name: Create owned disposable integration database
+        run: |
+          node --input-type=module <<'NODE'
+          import { randomUUID } from 'node:crypto';
+          import { appendFileSync } from 'node:fs';
+          import { Pool } from 'pg';
+          const name = 'admin_master_test_' + randomUUID().replaceAll('-', '');
+          const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+          await pool.query('CREATE DATABASE "' + name + '"');
+          await pool.end();
+          const url = new URL(process.env.DATABASE_URL);
+          url.pathname = '/' + name;
+          appendFileSync(process.env.GITHUB_ENV, 'DATABASE_URL=' + url.toString() + '\n');
+          NODE
+
       - name: Run database migrations
         run: npm run migrate
 
@@ -123,6 +140,12 @@ jobs:
 
       - name: Test
         run: npm test -- --maxWorkers=4
+
+      - name: Test optional storage without credentials
+        shell: bash
+        run: |
+          unset CLOUDINARY_CLOUD_NAME CLOUDINARY_API_KEY CLOUDINARY_API_SECRET
+          npm test -- src/infrastructure/storage/storage.configuration.test.ts --maxWorkers=1
 
       - name: Build
         run: npm run build

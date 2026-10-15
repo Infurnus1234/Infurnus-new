@@ -1,3 +1,4 @@
+import { cityCoverageSql } from '../../maps/city-radius.js';
 import { AppError } from '../../../common/errors/app-error.js';
 import type { FareCalculationResult } from '../../fares/types/fare.js';
 import {
@@ -71,6 +72,7 @@ export interface RideRepository {
     rideId: string,
     driverProfileId: string,
     responseTimeoutMs: number,
+    city?: { cityId: string; boundaryGeoJson: string },
   ): Promise<boolean>;
 
   finishDispatchAttempt(
@@ -98,7 +100,8 @@ export interface RideRepository {
 
   isAssignedDriverProfile(id: string, driverProfileId: string): Promise<boolean>;
 
-  listRecoverableDispatch?(limit?: number): Promise<Ride[]>;
+  listRecoverableDispatch?(limit?: number, excludeRideIds?: string[]): Promise<Ride[]>;
+  pendingDispatch?(id: string): Promise<{ driverProfileId: string; expiresAt: Date } | null>;
   reconcileDispatch?(id: string): Promise<Ride | null>;
   withDispatchLock?<T>(id: string, work: () => Promise<T>): Promise<T | null>;
   withRouteLock?<T>(id: string, work: () => Promise<T>): Promise<T | null>;
@@ -340,7 +343,18 @@ function mapRide(row: Record<string, unknown>, forCustomer = false): Ride {
 }
 
 export class PostgresRideRepository implements RideRepository {
-  constructor(private readonly pool: Pool) {}
+  constructor(
+    private readonly pool: Pool,
+    private readonly cities: Pick<PremiumCityAreas, 'cities'> = premiumCityAreas,
+  ) {}
+  private approvedCitiesJson(): string {
+    return JSON.stringify(
+      this.cities.cities.map((city) => ({
+        cityId: city.id,
+        boundary: JSON.parse(city.area.boundaryGeoJson!),
+      })),
+    );
+  }
 
   async create(
     customerId: string,
@@ -605,7 +619,15 @@ export class PostgresRideRepository implements RideRepository {
     client: PoolClient | Pool = this.pool,
   ): Promise<Ride | null> {
     const result = await client.query(
-      `WITH updated AS (
+      `WITH locked AS MATERIALIZED (
+         SELECT id,status,dispatch_driver_id,dispatch_expires_at FROM rides WHERE id=$1 FOR UPDATE
+       ), eligible AS MATERIALIZED (
+         SELECT locked.id FROM locked WHERE locked.status='searching'
+           AND locked.dispatch_driver_id=$2 AND locked.dispatch_expires_at>clock_timestamp()
+           AND EXISTS(SELECT 1 FROM ride_dispatch_attempts live_offer
+             WHERE live_offer.ride_id=locked.id AND live_offer.driver_profile_id=$2
+               AND live_offer.status='offered' AND live_offer.expires_at>clock_timestamp())
+       ), updated AS (
          UPDATE rides r
          SET
            assigned_driver_id = $2,
@@ -636,6 +658,7 @@ export class PostgresRideRepository implements RideRepository {
            dispatch_driver_id = NULL,
            dispatch_expires_at = NULL
          WHERE r.id = $1
+           AND r.id IN(SELECT id FROM eligible)
            AND r.status = 'searching'
               AND EXISTS (
                 SELECT 1
@@ -643,13 +666,15 @@ export class PostgresRideRepository implements RideRepository {
                 WHERE offered.ride_id = r.id
                   AND offered.driver_profile_id = $2
                   AND offered.status = 'offered'
-                  AND offered.expires_at > NOW()
+                  AND offered.expires_at > clock_timestamp()
               )
            AND EXISTS (
              SELECT 1 FROM driver_profiles dp JOIN users u ON u.id=dp.user_id
              JOIN vehicles v ON v.driver_profile_id=dp.id
              WHERE dp.id=$2 AND ${driverEligibilitySql("NOW() - ($3::int * INTERVAL '1 second')", 'r.id')}
-               AND ST_DWithin(dp.last_location,r.pickup_location,$4)
+               AND (CASE WHEN r.sector='premium' THEN EXISTS(SELECT 1 FROM ride_dispatch_attempts area_offer CROSS JOIN jsonb_array_elements($5::jsonb) approved WHERE area_offer.ride_id=r.id AND area_offer.driver_profile_id=$2 AND area_offer.status='offered' AND area_offer.city_id=approved->>'cityId' AND area_offer.boundary_geojson=approved->'boundary' AND ${cityCoverageSql('area_offer.boundary_geojson', 'r.pickup_location::geometry')} AND ${cityCoverageSql('area_offer.boundary_geojson', 'dp.last_location::geometry')})
+                 WHEN r.sector='service' AND r.vehicle_category='ambulance' THEN TRUE
+                 ELSE ST_DWithin(dp.last_location,r.pickup_location,(CASE WHEN r.sector='passenger' THEN 10000 WHEN r.sector='logistics' OR (r.sector='service' AND r.vehicle_category IN ('towing','towing_van')) THEN 20000 ELSE $4 END)+0.000001) END)
                AND v.sector=r.sector AND v.category=r.vehicle_category
            )
          RETURNING *
@@ -662,7 +687,7 @@ export class PostgresRideRepository implements RideRepository {
            AND attempt.status = 'offered'
            AND attempt.attempt = (SELECT MAX(offered.attempt) FROM ride_dispatch_attempts offered
              WHERE offered.ride_id=updated.id AND offered.driver_profile_id=$2
-               AND offered.status='offered' AND offered.expires_at>NOW())
+               AND offered.status='offered' AND offered.expires_at>clock_timestamp())
          RETURNING attempt.ride_id AS id
        ), accepted AS (
          SELECT updated.*
@@ -672,7 +697,13 @@ export class PostgresRideRepository implements RideRepository {
        SELECT ${detailedRideColumns('u_r')}
        FROM accepted u_r
        ${detailedRideJoins('u_r')}`,
-      [id, driverProfileId, env.DRIVER_LOCATION_STALE_SECONDS, env.MAP_DRIVER_RADII_METERS.at(-1)!],
+      [
+        id,
+        driverProfileId,
+        env.DRIVER_LOCATION_STALE_SECONDS,
+        env.MAP_DRIVER_RADII_METERS.at(-1)!,
+        this.approvedCitiesJson(),
+      ],
     );
 
     return result.rows[0] ? mapRide(result.rows[0], false) : null;
@@ -682,6 +713,7 @@ export class PostgresRideRepository implements RideRepository {
     rideId: string,
     driverProfileId: string,
     responseTimeoutMs: number,
+    city?: { cityId: string; boundaryGeoJson: string },
   ): Promise<boolean> {
     return withTransaction(async (client) => {
       const lockedDriver = await client.query(
@@ -711,7 +743,7 @@ export class PostgresRideRepository implements RideRepository {
       const leased = await client.query<{ attempt: number }>(
         `UPDATE rides r
          SET dispatch_driver_id = $2,
-             dispatch_expires_at = NOW() + ($3::int * INTERVAL '1 millisecond'),
+             dispatch_expires_at = NOW() + ((CASE WHEN r.sector='premium' THEN 3600000 WHEN r.sector='logistics' THEN 120000 WHEN r.sector='passenger' THEN 25000 WHEN r.sector='service' AND r.vehicle_category IN ('towing','towing_van') THEN 600000 WHEN r.sector='service' AND r.vehicle_category='ambulance' THEN 30000 ELSE $3::int END) * INTERVAL '1 millisecond'),
              dispatch_attempt = dispatch_attempt + 1
          WHERE r.id = $1
            AND r.status = 'searching'
@@ -730,7 +762,9 @@ export class PostgresRideRepository implements RideRepository {
              WHERE dp.id = $2
                AND ${driverEligibilitySql("NOW() - ($4::int * INTERVAL '1 second')")}
                AND v.sector=r.sector AND v.category=r.vehicle_category
-               AND ST_DWithin(dp.last_location,r.pickup_location,$5)
+               AND (CASE WHEN r.sector='premium' THEN $6::text IS NOT NULL AND EXISTS(SELECT 1 FROM jsonb_array_elements($8::jsonb) approved WHERE approved->>'cityId'=$7 AND approved->'boundary'=$6::jsonb AND ${cityCoverageSql('$6', 'r.pickup_location::geometry')} AND ${cityCoverageSql('$6', 'dp.last_location::geometry')})
+                 WHEN r.sector='service' AND r.vehicle_category='ambulance' THEN TRUE
+                 ELSE ST_DWithin(dp.last_location,r.pickup_location,(CASE WHEN r.sector='passenger' THEN 10000 WHEN r.sector='logistics' OR (r.sector='service' AND r.vehicle_category IN ('towing','towing_van')) THEN 20000 ELSE $5 END)+0.000001) END)
            )
          RETURNING dispatch_attempt AS attempt`,
         [
@@ -739,6 +773,9 @@ export class PostgresRideRepository implements RideRepository {
           responseTimeoutMs,
           env.DRIVER_LOCATION_STALE_SECONDS,
           env.MAP_DRIVER_RADII_METERS.at(-1)!,
+          city?.boundaryGeoJson ?? null,
+          city?.cityId ?? null,
+          this.approvedCitiesJson(),
         ],
       );
       const attempt = leased.rows[0]?.attempt;
@@ -746,12 +783,12 @@ export class PostgresRideRepository implements RideRepository {
 
       await client.query(
         `INSERT INTO ride_dispatch_attempts (
-           ride_id, attempt, driver_profile_id, status, expires_at
+           ride_id, attempt, driver_profile_id, status, expires_at,city_id,boundary_geojson
          )
-         SELECT id, dispatch_attempt, dispatch_driver_id, 'offered', dispatch_expires_at
+         SELECT id, dispatch_attempt, dispatch_driver_id, 'offered', dispatch_expires_at,$3,$4::jsonb
          FROM rides
          WHERE id = $1 AND dispatch_attempt = $2`,
-        [rideId, attempt],
+        [rideId, attempt, city?.cityId ?? null, city?.boundaryGeoJson ?? null],
       );
       return true;
     });
@@ -776,10 +813,11 @@ export class PostgresRideRepository implements RideRepository {
 
       const attempt = await client.query(
         `UPDATE ride_dispatch_attempts
-         SET status = $3, responded_at = NOW()
+         SET status = CASE WHEN expires_at<=NOW() THEN 'timed_out' ELSE $3 END, responded_at = NOW()
          WHERE ride_id = $1
            AND driver_profile_id = $2
            AND status = 'offered'
+           AND ($3='rejected' OR expires_at<=NOW())
          RETURNING ride_id`,
         [rideId, driverProfileId, status],
       );
@@ -1107,23 +1145,51 @@ export class PostgresRideRepository implements RideRepository {
   }
 
   private activeAdvisoryLocks = 0;
+  async pendingDispatch(id: string): Promise<{ driverProfileId: string; expiresAt: Date } | null> {
+    const result = await this.pool.query(
+      `SELECT r.dispatch_driver_id AS "driverProfileId",r.dispatch_expires_at AS "expiresAt",
+       EXISTS(SELECT 1 FROM driver_profiles dp JOIN users u ON u.id=dp.user_id
+        JOIN vehicles v ON v.id=dp.active_vehicle_id
+        WHERE dp.id=r.dispatch_driver_id
+        AND ${driverEligibilitySql("NOW()-($2::int*INTERVAL '1 second')", 'r.id')}
+        AND v.sector=r.sector AND v.category=r.vehicle_category
+        AND (r.sector<>'premium' OR EXISTS(
+          SELECT 1 FROM ride_dispatch_attempts area_offer CROSS JOIN jsonb_array_elements($3::jsonb) approved
+          WHERE area_offer.ride_id=r.id AND area_offer.driver_profile_id=dp.id AND area_offer.status='offered'
+          AND area_offer.city_id=approved->>'cityId' AND area_offer.boundary_geojson=approved->'boundary'
+          AND ${cityCoverageSql('area_offer.boundary_geojson', 'r.pickup_location::geometry')}
+          AND ${cityCoverageSql('area_offer.boundary_geojson', 'dp.last_location::geometry')}
+        ))) AS eligible
+       FROM rides r WHERE r.id=$1 AND r.status='searching' AND r.assigned_driver_id IS NULL
+       AND r.dispatch_driver_id IS NOT NULL AND r.dispatch_expires_at>NOW()`,
+      [id, env.DRIVER_LOCATION_STALE_SECONDS, this.approvedCitiesJson()],
+    );
+    const pending = result.rows[0];
+    if (!pending) return null;
+    if (!pending.eligible) {
+      await this.finishDispatchAttempt(id, pending.driverProfileId, 'rejected');
+      return null;
+    }
+    return { driverProfileId: pending.driverProfileId, expiresAt: pending.expiresAt };
+  }
   async withDispatchLock<T>(id: string, work: () => Promise<T>): Promise<T | null> {
     return this.withRouteLock('dispatch:' + id, work);
   }
-  async listRecoverableDispatch(limit = 20): Promise<Ride[]> {
+  async listRecoverableDispatch(limit = 20, excludeRideIds: string[] = []): Promise<Ride[]> {
     const result = await this.pool.query(
       `SELECT ${detailedRideColumns('r')} FROM rides r ${detailedRideJoins('r')}
        WHERE r.status='searching' AND r.assigned_driver_id IS NULL
-       AND (r.dispatch_expires_at <= NOW() OR
+       AND NOT(r.id=ANY($2::uuid[]))
+       AND (r.dispatch_driver_id IS NOT NULL OR
          (r.dispatch_driver_id IS NULL AND r.created_at <= NOW() - INTERVAL '5 seconds'))
        ORDER BY r.created_at ASC, r.id ASC LIMIT $1`,
-      [limit],
+      [limit, excludeRideIds],
     );
     return result.rows.map((row) => mapRide(row, false));
   }
   async reconcileDispatch(id: string): Promise<Ride | null> {
     // Existing durable leases and attempts are sufficient to resume after a crash.
-    // The caller holds the existing session advisory lock for this dispatch run.
+    // Row locks and conditional updates arbitrate independent recovery processes.
     await withTransaction(async (client) => {
       await client.query('SELECT id FROM rides WHERE id=$1 FOR UPDATE', [id]);
       await client.query(
@@ -1444,3 +1510,4 @@ export class PostgresRideRepository implements RideRepository {
     return result.rows.map((row) => mapRide(row, false));
   }
 }
+import { premiumCityAreas, type PremiumCityAreas } from '../../maps/premium-city-areas.js';

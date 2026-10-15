@@ -28,8 +28,12 @@ live('Redis lifecycle and BullMQ live audit', () => {
       fixture: 'local',
     });
     expect(await connection.redis.ttl(key)).toBeGreaterThanOrEqual(0);
-    await new Promise((resolve) => setTimeout(resolve, 1100));
-    expect(await connection.redis.get(key)).toBeNull();
+    const remaining = await connection.redis.pttl(key);
+    expect(remaining).toBeGreaterThan(0);
+    expect(remaining).toBeLessThanOrEqual(1000);
+    // Observe the server's expiry rather than assuming a host sleep aligns with
+    // the container's event loop under concurrent integration-test load.
+    await expect.poll(() => connection.redis.get(key), { timeout: 5000, interval: 100 }).toBeNull();
   });
   it('uses the configured producer and processes an isolated queue with a blocking worker connection', async () => {
     const { notificationQueue } = await import('../../queue/notification.queue.js');
