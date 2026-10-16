@@ -1,6 +1,5 @@
 import { Worker, type Job } from 'bullmq';
 import { env } from '../../config/env.js';
-import { redis } from '../redis/redis.js';
 import { getFirebaseMessaging } from '../firebase/firebase.admin.js';
 import { PostgresDeviceTokenRepository } from '../../modules/notifications/device-tokens/repositories/device-token.repository.js';
 import { PostgresNotificationRepository } from '../../modules/notifications/repositories/notification.repository.js';
@@ -66,7 +65,12 @@ export const notificationWorker = new Worker<NotificationJobData>(
     }
   },
   {
-    connection: redis,
+    // Blocking workers need their own unlimited-retry connection; API calls stay bounded.
+    connection: {
+      url: env.REDIS_URL!,
+      maxRetriesPerRequest: null,
+      connectTimeout: env.REDIS_CONNECT_TIMEOUT_MS,
+    },
     concurrency: 5,
   },
 );
