@@ -2,6 +2,7 @@ import { SignJWT, jwtVerify } from 'jose';
 
 import { env } from '../../../config/env.js';
 import type { AccessTokenPayload } from '../types/token.js';
+import { isDeletedSubject } from '../services/deleted-subjects.js';
 
 const currentSecret = new TextEncoder().encode(env.JWT_ACCESS_SECRET);
 
@@ -24,6 +25,7 @@ async function verifyWithSecret(token: string, secret: Uint8Array): Promise<Acce
   });
 
   if (
+    isDeletedSubject(String(payload.sub)) ||
     typeof payload.sub !== 'string' ||
     payload.type !== 'access' ||
     typeof payload.role !== 'string'

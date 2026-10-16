@@ -4,26 +4,31 @@ export const permissionCatalog = [
   'users.read',
   'users.detail',
   'users.update',
+  'users.delete',
   'users.sensitive',
   'drivers.read',
   'drivers.detail',
   'drivers.documents',
   'drivers.sensitive',
   'drivers.verify',
+  'drivers.delete',
   'partners.read',
   'partners.detail',
   'partners.sensitive',
   'partners.documents',
+  'partners.delete',
   'vehicles.read',
   'vehicles.detail',
   'vehicles.create',
   'vehicles.update',
   'vehicles.deactivate',
+  'vehicles.delete',
   'vehicles.verify',
   'documents.verify',
   'pricing.read',
   'pricing.create',
   'pricing.update',
+  'pricing.delete',
   'fleet.read',
   'fleet.detail',
   'approvals.read',
@@ -44,6 +49,7 @@ export const permissionCatalog = [
   'coupons.read',
   'coupons.create',
   'coupons.update',
+  'coupons.delete',
   'support.read',
   'support.update',
   'notifications.read',
@@ -58,6 +64,13 @@ export function requiredPermissions(
   body?: { status?: string },
 ): string[] | null {
   const path = rawPath.replace(/\/+$/, '');
+  const deletion = path.match(
+    /^\/admin\/records\/(users|drivers|partners|vehicles|vehicle-types|coupons)\/[\da-f-]{36}$/i,
+  );
+  if (deletion && method === 'DELETE') {
+    const resource = deletion[1] === 'vehicle-types' ? 'pricing' : deletion[1]!;
+    return [resource + '.read', resource + '.delete'];
+  }
   if (path === '/admin/access/me') return method === 'GET' ? [] : null;
   if (/^\/auth\/(logout|logout-all|refresh|sessions(?:\/[^/]+)?|change-password)$/.test(path))
     return [];

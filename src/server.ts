@@ -1,4 +1,5 @@
 import { attachProviderTracking } from './modules/providers/services/provider-tracking.socket.js';
+import { loadDeletedSubjects } from './modules/auth/services/deleted-subjects.js';
 import { PostgresProviderOperationsRepository } from './modules/providers/repositories/provider-operations.repository.js';
 import { PostgresProviderFinanceRepository } from './modules/providers/repositories/provider-finance.repository.js';
 import { AppError } from './common/errors/app-error.js';
@@ -268,6 +269,7 @@ async function startServer() {
     );
   }
 
+  await loadDeletedSubjects(pool);
   const io = createSocketServer(server, {
     authorizeAccount: (userId, role) =>
       new PostgresProviderOperationsRepository(pool).authorize(userId, role),

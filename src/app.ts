@@ -1,4 +1,6 @@
 import { requireAuth } from './modules/auth/middleware/auth.middleware.js';
+import { RecordDeletionService } from './modules/admin/services/record-deletion.service.js';
+import { createRecordDeletionRouter } from './modules/admin/routes/record-deletion.routes.js';
 import type { PostgresProviderOperationsRepository } from './modules/providers/repositories/provider-operations.repository.js';
 import {
   createProviderOperationsRouter,
@@ -216,6 +218,7 @@ export function createApp(
   const administrativeAccess = new AdminManagementService(pool);
   app.use(administrativePermissionGate(administrativeAccess));
   app.use('/admin/access', createAdminManagementRouter(administrativeAccess));
+  app.use('/admin/records', createRecordDeletionRouter(new RecordDeletionService(pool)));
 
   // ==========================================================
   // Health
