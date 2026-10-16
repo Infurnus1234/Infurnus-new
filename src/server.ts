@@ -21,6 +21,7 @@ import {
   pool,
 } from './infrastructure/database/postgres.js';
 import { createSocketServer } from './infrastructure/socket/socket.server.js';
+import { notificationWorker, closeNotificationQueue } from './infrastructure/queue/index.js';
 
 import { PostgresPartnerRepository } from './modules/partners/repositories/partner.repository.js';
 import { PostgresPartnerDocumentRepository } from './modules/partners/repositories/partner-document.repository.js';
@@ -320,6 +321,9 @@ async function startServer() {
 
         await disconnectRedis().catch(() => {});
       }
+
+      await notificationWorker.close().catch(() => {});
+      await closeNotificationQueue().catch(() => {});
 
       await pool.end();
 

@@ -1,26 +1,107 @@
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:dio/dio.dart';
+
+import '../network/dio_client.dart';
+
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+  debugPrint('Handling a background message: ${message.messageId}');
+}
 
 class NotificationService {
+  final Dio _dio;
   final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
+  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+
+  NotificationService(this._dio);
 
   Future<void> init() async {
-    const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
-    
-    const DarwinInitializationSettings initializationSettingsIOS = DarwinInitializationSettings();
+    try {
+      await Firebase.initializeApp();
+      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
-    const InitializationSettings initializationSettings = InitializationSettings(
-      android: initializationSettingsAndroid,
-      iOS: initializationSettingsIOS,
-    );
+      const AndroidInitializationSettings initializationSettingsAndroid =
+          AndroidInitializationSettings('@mipmap/ic_launcher');
+      const DarwinInitializationSettings initializationSettingsIOS = DarwinInitializationSettings();
 
-    await _notificationsPlugin.initialize(
-      initializationSettings,
-      onDidReceiveNotificationResponse: (details) {
-        // Handle notification tap
-      },
-    );
+      const InitializationSettings initializationSettings = InitializationSettings(
+        android: initializationSettingsAndroid,
+        iOS: initializationSettingsIOS,
+      );
+
+      await _notificationsPlugin.initialize(
+        initializationSettings,
+        onDidReceiveNotificationResponse: (details) {
+          debugPrint('Notification tapped with payload: ${details.payload}');
+        },
+      );
+
+      final messaging = FirebaseMessaging.instance;
+      final settings = await messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+
+      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+        debugPrint('User granted push notification permission');
+
+        final fcmToken = await messaging.getToken();
+        if (fcmToken != null) {
+          debugPrint('FCM Token: $fcmToken');
+          await registerDeviceToken(fcmToken);
+        }
+
+        messaging.onTokenRefresh.listen((newToken) {
+          debugPrint('FCM Token refreshed: $newToken');
+          registerDeviceToken(newToken);
+        });
+
+        FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+          debugPrint('Received foreground message: ${message.notification?.title}');
+          final notification = message.notification;
+          if (notification != null) {
+            showNotification(
+              id: notification.hashCode,
+              title: notification.title ?? 'Infurnus',
+              body: notification.body ?? '',
+              payload: message.data['rideId'] ?? message.data['payload'],
+            );
+          }
+        });
+      } else {
+        debugPrint('User declined or has not accepted push notification permission');
+      }
+    } catch (e) {
+      debugPrint('Notification initialization error: $e');
+    }
+  }
+
+  Future<void> registerDeviceToken(String fcmToken) async {
+    try {
+      String? deviceId = await _storage.read(key: 'device_id');
+      if (deviceId == null) {
+        deviceId = 'device_${DateTime.now().millisecondsSinceEpoch}_${defaultTargetPlatform.name}';
+        await _storage.write(key: 'device_id', value: deviceId);
+      }
+
+      final platform = defaultTargetPlatform == TargetPlatform.iOS ? 'IOS' : 'ANDROID';
+
+      await _dio.post('/notifications/devices', data: {
+        'fcmToken': fcmToken,
+        'platform': platform,
+        'deviceId': deviceId,
+      });
+      debugPrint('Device token successfully registered with backend');
+    } catch (e) {
+      debugPrint('Failed to register device token with backend: $e');
+    }
   }
 
   Future<void> showNotification({
@@ -45,4 +126,4 @@ class NotificationService {
   }
 }
 
-final notificationServiceProvider = Provider((ref) => NotificationService());
+final notificationServiceProvider = Provider((ref) => NotificationService(ref.read(dioProvider)));

@@ -16,6 +16,7 @@ import '../../../../shared/widgets/infurnus_outlined_button.dart';
 import '../../data/models/fleet_vehicle_model.dart';
 import '../providers/ride_provider.dart';
 import '../widgets/fare_range_details.dart';
+import '../widgets/waiting_timer_widget.dart';
 import '../providers/ride_use_case_providers.dart';
 
 class RideBookingScreen extends ConsumerStatefulWidget {
@@ -1645,7 +1646,14 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 10),
+
+        // Live Free/Billable Waiting Timer
+        WaitingTimerWidget(
+          arrivalTime: state.currentRide?.updatedAt ?? DateTime.now(),
+          isCustomerView: true,
+        ),
+        const SizedBox(height: 10),
 
         // Verification OTP Pill
         Container(
