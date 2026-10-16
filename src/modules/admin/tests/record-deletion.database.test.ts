@@ -207,11 +207,18 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
       );
       expect((await remove('vehicle-types', type.rows[0].id)).status).toBe(200);
       const existing = await pool.query(`SELECT id,code FROM vehicle_types WHERE code='sedan'`);
+      let sedanId = existing.rows[0]?.id;
+      if (!sedanId) {
+        const created = await pool.query(
+          `INSERT INTO vehicle_types(name,code,sector,base_fare_paise,per_km_rate_paise) VALUES('Sedan','sedan','passenger',100,100) RETURNING id`,
+        );
+        sedanId = created.rows[0].id;
+      }
       await pool.query(
         `INSERT INTO vehicles(make,model,plate_number,category) VALUES('TEST_ONLY','Keep',$1,'sedan')`,
         ['KEEP' + randomUUID().slice(0, 8)],
       );
-      expect((await remove('vehicle-types', existing.rows[0].id)).status).toBe(409);
+      expect((await remove('vehicle-types', sedanId)).status).toBe(409);
     });
     it('prevents deletion through an alternate module without the required driver grant', async () => {
       const id = await user('driver');
