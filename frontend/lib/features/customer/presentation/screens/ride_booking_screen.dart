@@ -55,7 +55,6 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
   int _selectedRating = 5;
   String _selectedPaymentMethod = 'wallet';
   bool _isProcessingPayment = false;
-  bool _isChangingVehicle = false;
   bool _isLoadingFleet = true;
   List<FleetVehicleModel> _fleetVehicles = [];
 
