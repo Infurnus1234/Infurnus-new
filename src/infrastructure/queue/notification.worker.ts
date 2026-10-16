@@ -80,5 +80,7 @@ notificationWorker.on('completed', (job) => {
 });
 
 notificationWorker.on('failed', (job, err) => {
-  console.error(JSON.stringify({ event: 'notification_job_failed', jobId: job?.id, error: err.message }));
+  console.error(
+    JSON.stringify({ event: 'notification_job_failed', jobId: job?.id, error: err.message }),
+  );
 });
