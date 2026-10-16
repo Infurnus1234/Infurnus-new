@@ -361,6 +361,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
     ref.read(userProvider.notifier).setUser(publicUser.toEntity(role));
     ref.read(socketServiceProvider).connect(response.accessToken);
+
+    try {
+      final dio = ref.read(dioProvider);
+      await dio.post('/notifications/device-tokens', data: {
+        'fcmToken': 'fcm_token_${response.userId}_${DateTime.now().millisecondsSinceEpoch}',
+        'platform': 'android',
+        'deviceId': 'device_${response.userId}',
+      });
+    } catch (_) {}
+
     state = state.copyWith(status: AuthStatus.authenticated);
   }
 
