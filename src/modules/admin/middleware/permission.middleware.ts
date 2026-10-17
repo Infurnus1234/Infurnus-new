@@ -12,7 +12,7 @@ export function redactContactData(value: unknown): unknown {
       .filter(
         ([key]) =>
           !/email|phone|address|bank|accountnumber|contact|documentnumber|licen[cs]enumber|^dob$|^gender$|^pincode$/i.test(
-            key,
+            key.replaceAll('_', ''),
           ),
       )
       .map(([key, field]) => [key, redactContactData(field)]),

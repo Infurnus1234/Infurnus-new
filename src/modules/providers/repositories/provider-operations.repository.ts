@@ -2,6 +2,12 @@ import { env } from '../../../config/env.js';
 import type { Pool, PoolClient } from 'pg';
 import { AppError } from '../../../common/errors/app-error.js';
 import {
+  groupedApprovals,
+  onboardingProfile,
+  onboardingItems,
+  changedOnboarding,
+} from './driver-onboarding-review.js';
+import {
   approvalIdentityFields,
   approvalIdentityJoins,
   approvalReviewPermission,
@@ -39,10 +45,11 @@ export class PostgresProviderOperationsRepository {
     }
   }
 
-  async pendingApprovals(actorId: string, status: string = 'PENDING') {
+  async pendingApprovals(actorId: string, status: string = 'PENDING', groupDriver = false) {
     const client = await this.pool.connect();
     try {
       await this.authorizeReviewer(client, actorId);
+      if (groupDriver) return await groupedApprovals(client, actorId, status);
       return (
         await client.query(
           `SELECT r.id,r.requester_id,r.requester_role,r.fleet_id,r.request_type,r.target_type,r.target_id,r.status,r.submitted_at,
@@ -59,7 +66,7 @@ export class PostgresProviderOperationsRepository {
     }
   }
 
-  async approvalDetails(actorId: string, id: string) {
+  async approvalDetails(actorId: string, id: string, groupDriver = false) {
     const client = await this.pool.connect();
     try {
       await this.authorizeReviewer(client, actorId);
@@ -172,6 +179,62 @@ export class PostgresProviderOperationsRepository {
         for (const doc of documents) {
           doc.pageCount = Math.max(1, counts.get(doc.id) ?? 0);
           doc.pages = pageMetadata.get(doc.id) || [];
+        }
+      }
+      if (groupDriver) {
+        const profile = await onboardingProfile(client, id);
+        if (profile?.id) {
+          const owner = (
+            await client.query(
+              `SELECT u.email,u.phone,u.role::text,NULLIF(btrim(concat_ws(' ',u.first_name,u.last_name)),'') AS name,to_jsonb(dp) AS profile,
+              provider_compliance_satisfied(u.id,dp.id,NULL,dp.active_vehicle_id,v.category) AS compliant,
+              EXISTS(SELECT 1 FROM provider_document_requirements policy JOIN driver_documents doc
+                ON doc.driver_profile_id=dp.id AND COALESCE(doc.document_metadata->>'documentCode',doc.document_type::text)=policy.document_code
+                WHERE policy.provider_role=u.role::text AND policy.active AND policy.required
+                AND policy.vehicle_category IN('*',COALESCE(v.category,'*')) AND doc.verification_status='rejected') AS rejected_required_document
+            FROM driver_profiles dp JOIN users u ON u.id=dp.user_id LEFT JOIN vehicles v ON v.id=dp.active_vehicle_id
+            WHERE dp.id=$1 AND u.deleted_at IS NULL`,
+              [profile.id],
+            )
+          ).rows[0];
+          if (!owner) throw new AppError('TARGET_NOT_FOUND', 'Driver no longer exists', 404);
+          const items = await onboardingItems(client, profile.id);
+          const onboardingStatus =
+            owner.profile.verification_status === 'approved' && !owner.compliant
+              ? owner.rejected_required_document
+                ? 'REJECTED'
+                : 'PENDING'
+              : owner.profile.verification_status.toUpperCase();
+          const events = (
+            await client.query(
+              `SELECT r.id,r.status,r.reviewed_at,r.submitted_at,r.rejection_reason,
+            NULLIF(btrim(concat_ws(' ',u.first_name,u.last_name)),'') AS reviewer_display_name,u.role::text AS reviewer_account_role
+            FROM provider_approval_requests r LEFT JOIN users u ON u.id=r.reviewer_id
+            WHERE r.id=ANY($1::uuid[]) ORDER BY r.submitted_at DESC,r.id DESC`,
+              [items.map((item) => item.id)],
+            )
+          ).rows;
+          return {
+            request: {
+              ...row,
+              requester_id: profile.user_id,
+              requester_display_name: owner.name,
+              requester_account_role: owner.role,
+              requester_email: owner.email,
+              requester_phone: owner.phone,
+              request_type: 'driver_onboarding',
+              status: items.some((item) => item.status === 'PENDING')
+                ? 'PENDING'
+                : onboardingStatus,
+              can_review:
+                profile.user_id !== actorId && items.some((item) => item.status === 'PENDING'),
+            },
+            target: owner.profile,
+            documents,
+            history: events,
+            onboarding_items: items,
+            onboarding_status: onboardingStatus,
+          };
         }
       }
       return { request: row, target, documents, history };
@@ -558,6 +621,91 @@ export class PostgresProviderOperationsRepository {
       throw error;
     } finally {
       if (!existingClient) client.release();
+    }
+  }
+
+  async reviewOnboarding(
+    actorId: string,
+    id: string,
+    input: {
+      status: 'APPROVED' | 'REJECTED';
+      reason?: string | undefined;
+      items: { id: string; expectedUpdatedAt: string }[];
+      expectedUpdatedAt: string;
+    },
+  ) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await this.authorizeReviewer(client, actorId);
+      const profile = await onboardingProfile(client, id);
+      if (!profile?.id)
+        throw new AppError('APPROVAL_NOT_FOUND', 'Driver onboarding not found', 404);
+      await client.query('SELECT id FROM driver_profiles WHERE id=$1 FOR UPDATE', [profile.id]);
+      if (
+        !(
+          await client.query(
+            'SELECT updated_at=$2::timestamptz AS matches FROM driver_profiles WHERE id=$1',
+            [profile.id, input.expectedUpdatedAt],
+          )
+        ).rows[0]?.matches
+      )
+        changedOnboarding();
+      await client.query(
+        'SELECT id FROM driver_documents WHERE driver_profile_id=$1 ORDER BY id FOR UPDATE',
+        [profile.id],
+      );
+      const pending = (await onboardingItems(client, profile.id)).filter(
+        (item) => item.status === 'PENDING',
+      );
+      if (
+        !pending.length ||
+        pending.length !== input.items.length ||
+        new Set(input.items.map((item) => item.id)).size !== input.items.length
+      )
+        changedOnboarding();
+      for (const item of pending) {
+        const expected = input.items.find((value) => value.id === item.id);
+        if (
+          !expected ||
+          !(
+            await client.query('SELECT $1::timestamptz=$2::timestamptz AS matches', [
+              item.expected_updated_at,
+              expected.expectedUpdatedAt,
+            ])
+          ).rows[0].matches
+        )
+          changedOnboarding();
+      }
+      // Documents first; the existing profile approval checks all required,
+      // unexpired evidence. Any failure rolls the entire review back.
+      pending.sort(
+        (a, b) =>
+          Number(a.target_type === 'driver_profile') - Number(b.target_type === 'driver_profile') ||
+          a.id.localeCompare(b.id),
+      );
+      for (const item of pending) {
+        const current = (await onboardingItems(client, profile.id)).find(
+          (value) => value.id === item.id,
+        )!;
+        await this.reviewApproval(
+          actorId,
+          item.id,
+          {
+            status: input.status,
+            reason: input.reason,
+            expectedUpdatedAt: current.expected_updated_at,
+          },
+          client,
+        );
+      }
+      await client.query('COMMIT');
+      return { id, status: input.status, reviewed: pending.length };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
   }
 

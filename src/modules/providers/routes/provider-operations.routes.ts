@@ -302,12 +302,17 @@ export function createProviderApprovalRouter(repository: PostgresProviderOperati
           status: z
             .enum(['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED', 'EXPIRED', 'ALL'])
             .default('PENDING'),
+          group: z.literal('driver').optional(),
         })
         .strict()
         .parse(req.query);
       res.json({
         success: true,
-        data: await repository.pendingApprovals(req.auth!.userId, query.status),
+        data: await repository.pendingApprovals(
+          req.auth!.userId,
+          query.status,
+          query.group === 'driver',
+        ),
       });
     } catch (error) {
       next(error);
@@ -315,11 +320,16 @@ export function createProviderApprovalRouter(repository: PostgresProviderOperati
   });
   router.get('/:id', async (req, res, next) => {
     try {
+      const query = z
+        .object({ group: z.literal('driver').optional() })
+        .strict()
+        .parse(req.query);
       res.json({
         success: true,
         data: await repository.approvalDetails(
           req.auth!.userId,
           z.string().uuid().parse(req.params.id),
+          query.group === 'driver',
         ),
       });
     } catch (error) {
@@ -359,16 +369,35 @@ export function createProviderApprovalRouter(repository: PostgresProviderOperati
           status: z.enum(['APPROVED', 'REJECTED']),
           reason: z.string().trim().min(1).max(1000).optional(),
           expectedUpdatedAt: z.iso.datetime({ offset: true }),
+          items: z
+            .array(
+              z
+                .object({
+                  id: z.string().uuid(),
+                  expectedUpdatedAt: z.iso.datetime({ offset: true }),
+                })
+                .strict(),
+            )
+            .min(1)
+            .max(100)
+            .optional(),
         })
         .strict()
         .parse(req.body);
       res.json({
         success: true,
-        data: await repository.reviewApproval(
-          req.auth!.userId,
-          z.string().uuid().parse(req.params.id),
-          input,
-        ),
+        data: await (input.items
+          ? repository.reviewOnboarding(req.auth!.userId, z.string().uuid().parse(req.params.id), {
+              status: input.status,
+              reason: input.reason,
+              items: input.items,
+              expectedUpdatedAt: input.expectedUpdatedAt,
+            })
+          : repository.reviewApproval(
+              req.auth!.userId,
+              z.string().uuid().parse(req.params.id),
+              input,
+            )),
       });
     } catch (error) {
       next(error);
