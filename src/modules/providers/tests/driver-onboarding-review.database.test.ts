@@ -318,6 +318,15 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
         current = await detail();
         expect(current.onboarding_status).toBe('REJECTED');
         expect(current.request.status).toBe('REJECTED');
+        for (const status of ['ALL', 'REJECTED', 'APPROVED']) {
+          const queue = await request(app)
+            .get('/provider-approvals?group=driver&status=' + status)
+            .set('Authorization', 'Bearer ' + adminToken)
+            .expect(200);
+          const entry = queue.body.data.find((item: any) => item.requester_id === driver);
+          if (status === 'APPROVED') expect(entry).toBeUndefined();
+          else expect(entry?.status).toBe('REJECTED');
+        }
         await request(app)
           .get('/rides/driver/documents')
           .set('Authorization', 'Bearer ' + driverToken)
