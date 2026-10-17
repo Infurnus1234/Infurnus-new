@@ -117,6 +117,26 @@ describeDatabase('ride PostgreSQL integration', () => {
     if (fixture) await cleanFixture(fixture);
   });
 
+  it('availability writes enum values and preserves eligibility', async () => {
+    expect(await driverRepository.updateAvailability(fixture.driverProfileId, 'unavailable')).toBe(
+      true,
+    );
+    expect(await driverRepository.updateAvailability(fixture.driverProfileId, 'available')).toBe(
+      true,
+    );
+    expect(await driverRepository.getAvailability(fixture.driverProfileId)).toBe('available');
+    await pool.query("UPDATE driver_profiles SET verification_status='pending' WHERE id=$1", [
+      fixture.driverProfileId,
+    ]);
+    expect(await driverRepository.updateAvailability(fixture.driverProfileId, 'unavailable')).toBe(
+      true,
+    );
+    expect(await driverRepository.updateAvailability(fixture.driverProfileId, 'available')).toBe(
+      false,
+    );
+    expect(await driverRepository.getAvailability(fixture.driverProfileId)).toBe('unavailable');
+  });
+
   it('persists the exact normal response window regardless of the caller timeout', async () => {
     const result = await pool.query(
       `SELECT EXTRACT(EPOCH FROM(expires_at-offered_at))*1000 AS ms FROM ride_dispatch_attempts WHERE ride_id=$1`,

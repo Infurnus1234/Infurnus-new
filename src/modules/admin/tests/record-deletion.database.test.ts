@@ -117,6 +117,78 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
       expect((await remove('users', other)).status).toBe(403);
       expect((await remove('users', admin)).status).toBe(403);
     });
+    it('removes an empty wallet shell with eligible profiles and leaves other accounts untouched', async () => {
+      const id = await user('driver_fleet_owner');
+      const other = await user();
+      await pool.query(`INSERT INTO provider_wallets(user_id) VALUES($1)`, [id]);
+      await pool.query(
+        `INSERT INTO driver_profiles(user_id,license_number,license_expiry) VALUES($1,$2,'2099-01-01')`,
+        [id, 'TEST_ONLY_' + id],
+      );
+      await pool.query(
+        `INSERT INTO partners(user_id,business_name) VALUES($1,'TEST_ONLY_DELETE')`,
+        [id],
+      );
+      const old = await token(id, 'driver_fleet_owner');
+      const response = await remove('users', id);
+      expect(response.status).toBe(200);
+      expect(response.body.data).toEqual({ id, deleted: true });
+      for (const table of ['users', 'driver_profiles', 'partners', 'provider_wallets']) {
+        const column = table === 'users' ? 'id' : 'user_id';
+        expect((await pool.query(`SELECT 1 FROM ${table} WHERE ${column}=$1`, [id])).rowCount).toBe(
+          0,
+        );
+      }
+      expect((await pool.query('SELECT id FROM users WHERE id=$1', [other])).rowCount).toBe(1);
+      await expect(verifyAccessToken(old)).rejects.toBeDefined();
+    });
+    it('retains a zero-balance wallet with settled ledger history and explains the restriction', async () => {
+      const id = await user();
+      await pool.query(`INSERT INTO provider_wallets(user_id) VALUES($1)`, [id]);
+      for (const [amount, balance] of [
+        [100, 100],
+        [-100, 0],
+      ])
+        await pool.query(
+          `INSERT INTO provider_wallet_entries(user_id,amount_paise,balance_after_paise,entry_type,reference,idempotency_key,actor_id)
+           VALUES($1,$2,$3,'ADJUSTMENT','TEST_ONLY',$4,$5)`,
+          [id, amount, balance, randomUUID(), owner],
+        );
+      const response = await remove('users', id);
+      expect(response.status).toBe(409);
+      expect(response.body.error.message).toMatch(/financial records.*deactivation/);
+      expect(
+        (await pool.query('SELECT 1 FROM provider_wallet_entries WHERE user_id=$1', [id])).rowCount,
+      ).toBe(2);
+      expect((await pool.query('SELECT 1 FROM users WHERE id=$1', [id])).rowCount).toBe(1);
+    });
+    it('retains a nonzero wallet even without ledger entries', async () => {
+      const id = await user();
+      await pool.query(`INSERT INTO provider_wallets(user_id,balance_paise) VALUES($1,100)`, [id]);
+      expect((await remove('users', id)).status).toBe(409);
+      expect(
+        (await pool.query('SELECT balance_paise FROM provider_wallets WHERE user_id=$1', [id]))
+          .rows[0].balance_paise,
+      ).toBe('100');
+    });
+    it('does not revoke a surviving account when the transaction fails at commit', async () => {
+      const id = await user();
+      const old = await token(id, 'customer');
+      await pool.query(
+        `CREATE FUNCTION test_delete_commit_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'TEST_ONLY commit failure' USING ERRCODE='23514'; END $$`,
+      );
+      try {
+        await pool.query(
+          `CREATE CONSTRAINT TRIGGER test_delete_commit_failure AFTER DELETE ON users DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN (OLD.id='${id}'::uuid) EXECUTE FUNCTION test_delete_commit_failure()`,
+        );
+        expect((await remove('users', id)).status).toBe(409);
+        expect((await pool.query('SELECT id FROM users WHERE id=$1', [id])).rowCount).toBe(1);
+        await expect(verifyAccessToken(old)).resolves.toMatchObject({ sub: id });
+      } finally {
+        await pool.query('DROP TRIGGER IF EXISTS test_delete_commit_failure ON users');
+        await pool.query('DROP FUNCTION test_delete_commit_failure()');
+      }
+    });
     it('deletes an eligible Admin only through Super Admin governance and retains previous revocation audits', async () => {
       const created = await access.create(owner, {
         email: randomUUID() + '@example.invalid',
@@ -151,7 +223,9 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
         `INSERT INTO rides(customer_id,status,pickup_location,destination_location) VALUES($1,'requested',ST_SetSRID(ST_Point(85.1,25.6),4326)::geography,ST_SetSRID(ST_Point(85.2,25.6),4326)::geography)`,
         [id],
       );
-      expect((await remove('users', id)).status).toBe(409);
+      const response = await remove('users', id);
+      expect(response.status).toBe(409);
+      expect(response.body.error.message).toMatch(/rides:.*operational.*deactivation/);
       expect(
         (await pool.query('SELECT id FROM user_credentials WHERE user_id=$1', [id])).rowCount,
       ).toBe(1);
@@ -247,7 +321,11 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
           'SELECT id FROM provider_approval_requests WHERE target_id=$1',
           [profile],
         );
-        expect((await remove('drivers', profile)).status).toBe(409);
+        const response = await remove('drivers', profile);
+        expect(response.status).toBe(409);
+        expect(response.body.error.message).toMatch(
+          document ? /protected documents/ : /provider location history/,
+        );
         expect(
           (
             await pool.query('SELECT id FROM provider_approval_requests WHERE target_id=$1', [
