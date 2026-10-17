@@ -17,13 +17,13 @@ class BookingHistoryScreen extends ConsumerStatefulWidget {
 }
 
 class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
-  static const Color mainBg = Color(0xFF000000);
-  static const Color cardBg = Color(0xFF111111);
-  static const Color borderCard = Color(0xFF262626);
-  static const Color textWhite = Color(0xFFFFFFFF);
-  static const Color textGray = Color(0xFFA1A1AA);
-  static const Color brandGreen = Color(0xFF22C55E);
-  static const Color serviceRed = Color(0xFFEF4444);
+  static const Color mainBg = Color(0xFFF8FAFC);
+  static const Color cardBg = Color(0xFFFFFFFF);
+  static const Color borderCard = Color(0xFFE2E8F0);
+  static const Color textBlack = Color(0xFF111827);
+  static const Color textGray = Color(0xFF6B7280);
+  static const Color brandGreen = Color(0xFF10B981);
+  static const Color serviceRed = Color(0xFFDC2626);
 
   @override
   void initState() {
@@ -42,10 +42,10 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
       appBar: AppBar(
         title: const Text(
           'Booking History',
-          style: TextStyle(color: textWhite, fontWeight: FontWeight.bold),
+          style: TextStyle(color: textBlack, fontWeight: FontWeight.bold),
         ),
-        backgroundColor: const Color(0xFF050505),
-        foregroundColor: textWhite,
+        backgroundColor: cardBg,
+        foregroundColor: textBlack,
         elevation: 0,
       ),
       body: _buildBody(rideState),
@@ -87,6 +87,13 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
                 color: cardBg,
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(color: borderCard),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: Material(
                 color: Colors.transparent,
@@ -132,7 +139,7 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 15,
-                                  color: textWhite,
+                                  color: textBlack,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -152,7 +159,7 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
                                 Text(
                                   'Actual: ${((ride.actualDistanceMeters ?? 0) / 1000.0).toStringAsFixed(1)} km • ₹${ride.actualFuelCost?.toStringAsFixed(0) ?? "0"} fuel',
                                   style: const TextStyle(
-                                    color: Color(0xFFFACC15),
+                                    color: Color(0xFFD97706),
                                     fontSize: 11,
                                     fontWeight: FontWeight.w500,
                                   ),
@@ -171,7 +178,7 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w900,
                                   fontSize: 16,
-                                  color: textWhite,
+                                  color: textBlack,
                                 ),
                               ),
                             const SizedBox(height: 4),
@@ -237,9 +244,9 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
         return serviceRed;
       case model.RideStatus.requested:
       case model.RideStatus.searching:
-        return const Color(0xFFF59E0B);
+        return const Color(0xFFD97706);
       default:
-        return const Color(0xFF3B82F6);
+        return const Color(0xFF2563EB);
     }
   }
 }
