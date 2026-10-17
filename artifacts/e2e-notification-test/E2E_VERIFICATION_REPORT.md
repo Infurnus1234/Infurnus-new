@@ -3,6 +3,7 @@
 **Verification Date:** March 2026  
 **Environment:** Local Development / Sandbox / CI Automated Test Runner  
 **Repositories:**
+
 - Backend & Customer App: `C:\Users\abhis\Infurnus-new`
 - Driver App: `C:\Users\abhis\Infurnus-driver`
 
@@ -11,6 +12,7 @@
 ## 1. End-to-End Integration Architecture Verification
 
 ### A. Customer Booking & Dispatch Architecture
+
 1. **Customer App:** Customer selects pickup/destination, requests fare quote, and submits ride request (`POST /rides`).
 2. **Backend API & Dispatch:**
    - `RideService.createRide` creates a PostgreSQL ride record in `searching` / `requested` state.
@@ -23,6 +25,7 @@
    - Stale/expired registration tokens (`messaging/registration-token-not-registered`) are automatically deactivated in PostgreSQL.
 
 ### B. Driver Request, Acceptance & Assignment Architecture
+
 1. **Driver App:** Receives real-time `ride:incoming` Socket.IO event and FCM push notification. Displays 15-second `DispatchCountdownWidget`.
 2. **Driver Acceptance:**
    - Driver clicks "Accept" (`POST /rides/:id/status` or socket acceptance).
@@ -33,6 +36,7 @@
    - Customer App updates UI state to `driverAssigned` / `driverArriving`.
 
 ### C. Ride Lifecycle & Waiting Timer Architecture
+
 1. **Driver Arrival:** Driver clicks "Arrived at Pickup" (`driver_arrived`).
 2. **Waiting Timer:**
    - Customer App (`_buildDriverArrivedPanel`) & Driver App (`production_driver_screen.dart`) display `WaitingTimerWidget`.
@@ -45,15 +49,15 @@
 
 ### Automated Checks Summary
 
-| Test Suite | Command | Result | Details |
-| :--- | :--- | :---: | :--- |
+| Test Suite                    | Command                                              |  Result  | Details                                                                             |
+| :---------------------------- | :--------------------------------------------------- | :------: | :---------------------------------------------------------------------------------- |
 | **Backend Dispatch & Socket** | `npx vitest run src/infrastructure/socket/tests/...` | **PASS** | 12/12 socket auth & server tests passed, 43/43 fare & sector dispatch tests passed. |
-| **Backend Typecheck** | `npm run typecheck` | **PASS** | 0 TypeScript errors across backend codebase. |
-| **Customer App Analysis** | `flutter analyze` | **PASS** | 0 errors found in `Infurnus-new/frontend`. |
-| **Customer App Tests** | `flutter test` | **PASS** | 150 passed, 0 failed in `Infurnus-new/frontend`. |
-| **Customer App Debug Build** | `flutter build apk --debug` | **PASS** | `app-debug.apk` built successfully. |
-| **Driver App Analysis** | `flutter analyze` | **PASS** | 0 errors found in `Infurnus-driver`. |
-| **Driver App Tests** | `flutter test` | **PASS** | 106 passed, 0 failed in `Infurnus-driver`. |
+| **Backend Typecheck**         | `npm run typecheck`                                  | **PASS** | 0 TypeScript errors across backend codebase.                                        |
+| **Customer App Analysis**     | `flutter analyze`                                    | **PASS** | 0 errors found in `Infurnus-new/frontend`.                                          |
+| **Customer App Tests**        | `flutter test`                                       | **PASS** | 150 passed, 0 failed in `Infurnus-new/frontend`.                                    |
+| **Customer App Debug Build**  | `flutter build apk --debug`                          | **PASS** | `app-debug.apk` built successfully.                                                 |
+| **Driver App Analysis**       | `flutter analyze`                                    | **PASS** | 0 errors found in `Infurnus-driver`.                                                |
+| **Driver App Tests**          | `flutter test`                                       | **PASS** | 106 passed, 0 failed in `Infurnus-driver`.                                          |
 
 ---
 
