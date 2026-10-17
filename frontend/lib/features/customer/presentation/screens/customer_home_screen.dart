@@ -1117,6 +1117,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Instant',
         icon: Icons.two_wheeler_rounded,
         category: VehicleCategoryType.bike,
+        assetImagePath: 'assets/images/bike_rider_green_white.png',
       ),
       _VehicleCategoryItem(
         title: 'Auto',
@@ -1125,6 +1126,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Instant',
         icon: Icons.electric_rickshaw_rounded,
         category: VehicleCategoryType.auto,
+        assetImagePath: 'assets/images/auto_green_white.png',
       ),
       _VehicleCategoryItem(
         title: 'E-Rickshaw',
@@ -1133,6 +1135,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Instant',
         icon: Icons.electric_rickshaw_outlined,
         category: VehicleCategoryType.auto,
+        assetImagePath: 'assets/images/e_rickshaw_green_white.png',
       ),
       _VehicleCategoryItem(
         title: 'Force Traveller',
@@ -1141,6 +1144,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Scheduled',
         icon: Icons.airport_shuttle_rounded,
         category: VehicleCategoryType.rides,
+        assetImagePath: 'assets/images/passenger_car_visual.jpg',
       ),
       _VehicleCategoryItem(
         title: 'Winger',
@@ -1149,6 +1153,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Scheduled',
         icon: Icons.directions_bus_rounded,
         category: VehicleCategoryType.rides,
+        assetImagePath: 'assets/images/passenger_car_visual.jpg',
       ),
       _VehicleCategoryItem(
         title: 'Mini / Compact',
@@ -1157,6 +1162,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Instant',
         icon: Icons.directions_car_rounded,
         category: VehicleCategoryType.rides,
+        assetImagePath: 'assets/images/sedan_green_white.png',
       ),
       _VehicleCategoryItem(
         title: 'Sedan',
@@ -1165,6 +1171,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Instant',
         icon: Icons.airport_shuttle_rounded,
         category: VehicleCategoryType.rides,
+        assetImagePath: 'assets/images/sedan_green_white.png',
       ),
       _VehicleCategoryItem(
         title: 'SUV / Scorpio N',
@@ -1173,6 +1180,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Instant',
         icon: Icons.directions_car_filled_rounded,
         category: VehicleCategoryType.premium,
+        assetImagePath: 'assets/images/suv_green_white.png',
       ),
     ];
 
@@ -1216,6 +1224,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'On-demand',
         icon: Icons.electric_rickshaw_rounded,
         category: VehicleCategoryType.auto,
+        assetImagePath: 'assets/images/auto_green_white.png',
       ),
       _VehicleCategoryItem(
         title: 'Piaggio Ape',
@@ -1224,6 +1233,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'On-demand',
         icon: Icons.local_shipping_outlined,
         category: VehicleCategoryType.logistics,
+        assetImagePath: 'assets/images/piaggio_ape_yellow.png',
       ),
       _VehicleCategoryItem(
         title: 'Tata Magic',
@@ -1232,6 +1242,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'On-demand',
         icon: Icons.local_shipping_rounded,
         category: VehicleCategoryType.logistics,
+        assetImagePath: 'assets/images/piaggio_magic_blue.png',
       ),
       _VehicleCategoryItem(
         title: '207 Cargo',
@@ -1240,6 +1251,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'On-demand',
         icon: Icons.local_shipping_rounded,
         category: VehicleCategoryType.logistics,
+        assetImagePath: 'assets/images/mahindra_207_white.png',
       ),
       _VehicleCategoryItem(
         title: '407 Cargo',
@@ -1248,6 +1260,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'On-demand',
         icon: Icons.directions_bus_outlined,
         category: VehicleCategoryType.logistics,
+        assetImagePath: 'assets/images/tata_407_beige.png',
       ),
       _VehicleCategoryItem(
         title: 'Mini Truck 1T',
@@ -1256,6 +1269,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'On-demand',
         icon: Icons.local_shipping_rounded,
         category: VehicleCategoryType.logistics,
+        assetImagePath: 'assets/images/tata_white_truck.png',
       ),
     ];
 
@@ -1296,6 +1310,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Priority',
         icon: Icons.medical_services_rounded,
         category: VehicleCategoryType.emergency,
+        assetImagePath: 'assets/images/ambulance_visual.jpg',
       ),
       _VehicleCategoryItem(
         title: 'Towing Van',
@@ -1304,6 +1319,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Priority',
         icon: Icons.car_repair_rounded,
         category: VehicleCategoryType.emergency,
+        assetImagePath: 'assets/images/towing_van_green.png',
       ),
       _VehicleCategoryItem(
         title: 'JCB / Excavator',
@@ -1312,6 +1328,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Scheduled',
         icon: Icons.agriculture_rounded,
         category: VehicleCategoryType.logistics,
+        assetImagePath: 'assets/images/flatbed_towing_truck.png',
       ),
       _VehicleCategoryItem(
         title: 'Roadside Assist',
@@ -1320,6 +1337,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Priority',
         icon: Icons.build_rounded,
         category: VehicleCategoryType.emergency,
+        assetImagePath: 'assets/images/towing_van_green.png',
       ),
     ];
 
@@ -1364,7 +1382,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         badge: 'Rugged SUV',
         subtitle: 'The Big Daddy of SUVs',
         price: 'Chauffeur + Fuel',
-        assetImagePath: 'assets/images/passenger_car_visual.jpg',
+        assetImagePath: 'assets/images/scorpio_n_black.png',
       ),
       _LuxuryVehicleItem(
         title: 'Mahindra Thar',
@@ -1648,11 +1666,28 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            VehicleCategoryVisual(
-              category: item.category,
-              size: 40,
-              borderRadius: 10,
-            ),
+            item.assetImagePath != null
+                ? Container(
+                    width: 48,
+                    height: 38,
+                    alignment: Alignment.center,
+                    child: Image.asset(
+                      item.assetImagePath!,
+                      width: 48,
+                      height: 38,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => VehicleCategoryVisual(
+                        category: item.category,
+                        size: 40,
+                        borderRadius: 10,
+                      ),
+                    ),
+                  )
+                : VehicleCategoryVisual(
+                    category: item.category,
+                    size: 40,
+                    borderRadius: 10,
+                  ),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -2043,6 +2078,7 @@ class _VehicleCategoryItem {
   final String eta;
   final IconData icon;
   final VehicleCategoryType category;
+  final String? assetImagePath;
 
   const _VehicleCategoryItem({
     required this.title,
@@ -2051,6 +2087,7 @@ class _VehicleCategoryItem {
     required this.eta,
     required this.icon,
     required this.category,
+    this.assetImagePath,
   });
 }
 
