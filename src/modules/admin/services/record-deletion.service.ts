@@ -24,10 +24,25 @@ const permission = {
   coupons: 'coupons',
 } as const;
 const quote = (name: string) => '"' + name.replaceAll('"', '""') + '"';
-const conflict = () =>
+const dependencyReason = (table: string) => {
+  if (/document/.test(table))
+    return 'protected documents: retain these records and use account deactivation, or an authorized retention workflow';
+  if (/wallet|payout|payment|bank|coupon_redemption/.test(table))
+    return 'financial records: settle outstanding obligations, retain required financial history and use account deactivation';
+  if (table === 'vehicles')
+    return 'owned or assigned vehicles: resolve vehicle ownership/assignments through the existing vehicle workflow before retrying';
+  if (/approval|application/.test(table))
+    return 'approval/application history: retain reviewed or submitted records and use account deactivation';
+  if (/partner_drivers|assignment/.test(table))
+    return 'fleet/vehicle associations: resolve active associations through the existing fleet workflow; retained association history must be preserved';
+  return `${table.replaceAll('_', ' ')}: retained operational records cannot be removed here; use account deactivation or the authorized retention workflow`;
+};
+const conflict = (dependencies?: string[]) =>
   new AppError(
     'DELETE_DEPENDENCY_CONFLICT',
-    'This record has documents, operational history or dependent records. Remove eligible associations first; retained business history cannot be deleted here.',
+    dependencies?.length
+      ? `Permanent deletion blocked by ${[...new Set(dependencies)].map(dependencyReason).join('; ')}. No records were deleted.`
+      : 'A related record changed during deletion. Refresh and retry; retained documents and business history cannot be deleted here. No records were deleted.',
     409,
   );
 
@@ -49,13 +64,15 @@ export class RecordDeletionService {
        WHERE c.contype='f' AND c.confrelid=('public.'||$1)::regclass AND p.attname='id'`,
       [table],
     );
+    const blocked: string[] = [];
     for (const ref of refs.rows) {
       const result = await client.query(
         `SELECT 1 FROM ${quote(ref.schema)}.${quote(ref.table)} WHERE ${quote(ref.column)}=$1 LIMIT 1`,
         [id],
       );
-      if (result.rowCount) throw conflict();
+      if (result.rowCount) blocked.push(ref.table);
     }
+    if (blocked.length) throw conflict(blocked);
   }
 
   private async clearUnreviewedRequest(client: PoolClient, kind: string, id: string) {
@@ -71,7 +88,7 @@ export class RecordDeletionService {
         )
       ).rowCount
     )
-      throw conflict();
+      throw conflict(['provider_approval_requests']);
   }
 
   private async deleteProfile(
@@ -84,8 +101,12 @@ export class RecordDeletionService {
     ]);
     const row = found.rows[0];
     if (!row) return;
-    if (Object.entries(row).some(([key, value]) => /(?:document|photo)_key$/.test(key) && value))
-      throw conflict();
+    if (
+      Object.entries(row).some(
+        ([key, value]) => /(?:document|photo)_(?:key|url)$/.test(key) && value,
+      )
+    )
+      throw conflict([table === 'partners' ? 'partner_documents' : 'driver_documents']);
     await this.clearUnreviewedRequest(
       client,
       table === 'partners' ? 'partner' : 'driver_profile',
@@ -158,6 +179,17 @@ export class RecordDeletionService {
           requirePermission('partners');
         await this.deleteProfile(client, 'driver_profiles', userId);
         await this.deleteProfile(client, 'partners', userId);
+        // Merely opening the wallet API creates a zero-balance shell. It is not
+        // financial history, but even a settled wallet with entries must remain.
+        await client.query('SELECT user_id FROM provider_wallets WHERE user_id=$1 FOR UPDATE', [
+          userId,
+        ]);
+        await client.query(
+          `DELETE FROM provider_wallets w WHERE w.user_id=$1 AND w.balance_paise=0
+           AND NOT EXISTS(SELECT 1 FROM provider_wallet_entries e WHERE e.user_id=w.user_id)
+           AND NOT EXISTS(SELECT 1 FROM provider_payouts p WHERE p.user_id=w.user_id)`,
+          [userId],
+        );
         // Preserve audit records under the acting administrator, including the
         // durable token revocations belonging to previously deleted subjects.
         await client.query('UPDATE user_history SET user_id=$2 WHERE user_id=$1', [
@@ -190,7 +222,8 @@ export class RecordDeletionService {
         const found = await client.query(`SELECT * FROM ${table} WHERE id=$1 FOR UPDATE`, [id]);
         const row = found.rows[0];
         if (!row) throw new AppError('NOT_FOUND', 'Record not found', 404);
-        if (module === 'coupons' && Number(row.usage_count) > 0) throw conflict();
+        if (module === 'coupons' && Number(row.usage_count) > 0)
+          throw conflict(['coupon_redemptions']);
         if (module === 'vehicles') await this.clearUnreviewedRequest(client, 'vehicle', id);
         if (module === 'vehicle-types') {
           // Category codes are also persisted in records without foreign keys.
@@ -206,7 +239,7 @@ export class RecordDeletionService {
                 )
               ).rowCount
             )
-              throw conflict();
+              throw conflict([c.table]);
         }
         await this.assertUnreferenced(client, table, id);
         await client.query(`DELETE FROM ${table} WHERE id=$1`, [id]);
@@ -219,13 +252,16 @@ export class RecordDeletionService {
           JSON.stringify({ module, ...(deletedSubjectId ? { deletedSubjectId } : {}) }),
         ],
       );
-      if (deletedSubjectId) revokeDeletedSubject(deletedSubjectId);
       await client.query('COMMIT');
+      if (deletedSubjectId) revokeDeletedSubject(deletedSubjectId);
       return { id, deleted: true };
     } catch (error) {
       await client.query('ROLLBACK');
-      if (['23503', '40P01', '40001'].includes((error as { code?: string }).code || ''))
-        throw conflict();
+      if ((error as { code?: string }).code === '23503') {
+        const table = (error as { table?: string }).table;
+        throw conflict(table ? [table] : undefined);
+      }
+      if (['40P01', '40001'].includes((error as { code?: string }).code || '')) throw conflict();
       throw error;
     } finally {
       client.release();

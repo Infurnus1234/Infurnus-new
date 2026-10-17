@@ -1186,7 +1186,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         ),
         const SizedBox(height: 12),
         SizedBox(
-          height: 145,
+          height: 172,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: items.length,
@@ -1269,7 +1269,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         ),
         const SizedBox(height: 12),
         SizedBox(
-          height: 145,
+          height: 172,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: items.length,
@@ -1336,7 +1336,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         ),
         const SizedBox(height: 12),
         SizedBox(
-          height: 145,
+          height: 172,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: items.length,

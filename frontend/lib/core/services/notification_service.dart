@@ -54,12 +54,10 @@ class NotificationService {
 
         final fcmToken = await messaging.getToken();
         if (fcmToken != null) {
-          debugPrint('FCM Token: $fcmToken');
           await registerDeviceToken(fcmToken);
         }
 
         messaging.onTokenRefresh.listen((newToken) {
-          debugPrint('FCM Token refreshed: $newToken');
           registerDeviceToken(newToken);
         });
 

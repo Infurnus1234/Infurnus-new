@@ -307,7 +307,7 @@ export class PostgresDriverRepository implements DriverRepository {
   async updateAvailability(profileId: string, status: DriverAvailabilityStatus): Promise<boolean> {
     const result = await this.pool.query(
       `UPDATE driver_profiles
-       SET availability_status = $2
+       SET availability_status = $2::driver_availability_status
        WHERE id = $1
          AND user_id IS NOT NULL
          AND EXISTS(SELECT 1 FROM users u WHERE u.id=user_id AND u.status='active' AND u.deleted_at IS NULL AND u.role IN ('driver','driver_fleet_owner'))

@@ -13,12 +13,12 @@ class WalletScreen extends ConsumerStatefulWidget {
 }
 
 class _WalletScreenState extends ConsumerState<WalletScreen> {
-  static const Color mainBg = Color(0xFF000000);
-  static const Color cardBg = Color(0xFF111111);
-  static const Color borderCard = Color(0xFF262626);
-  static const Color textWhite = Color(0xFFFFFFFF);
-  static const Color textGray = Color(0xFFA1A1AA);
-  static const Color brandGreen = Color(0xFF22C55E);
+  static const Color mainBg = Color(0xFFF8FAFC);
+  static const Color cardBg = Color(0xFFFFFFFF);
+  static const Color borderCard = Color(0xFFE2E8F0);
+  static const Color textBlack = Color(0xFF111827);
+  static const Color textGray = Color(0xFF6B7280);
+  static const Color brandGreen = Color(0xFF10B981);
 
   @override
   void initState() {
@@ -38,11 +38,11 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
       appBar: AppBar(
         title: const Text(
           'INFURNUS Wallet & Pay',
-          style: TextStyle(color: textWhite, fontWeight: FontWeight.bold),
+          style: TextStyle(color: textBlack, fontWeight: FontWeight.bold),
         ),
         elevation: 0,
-        backgroundColor: const Color(0xFF050505),
-        foregroundColor: textWhite,
+        backgroundColor: cardBg,
+        foregroundColor: textBlack,
       ),
       body: Padding(
         padding: const EdgeInsets.all(20.0),
@@ -59,7 +59,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: textWhite,
+                    color: textBlack,
                   ),
                 ),
                 Text(
@@ -95,7 +95,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
         border: Border.all(color: borderCard),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.5),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
@@ -111,7 +111,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
           const Text(
             '₹0.00',
             style: TextStyle(
-              color: textWhite,
+              color: textBlack,
               fontSize: 36,
               fontWeight: FontWeight.w900,
             ),
@@ -142,10 +142,10 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
               ),
               const SizedBox(width: 12),
               OutlinedButton.icon(
-                icon: const Icon(Icons.qr_code, color: textWhite, size: 18),
+                icon: const Icon(Icons.qr_code, color: textBlack, size: 18),
                 label: const Text(
                   'Scan & Pay',
-                  style: TextStyle(color: textWhite),
+                  style: TextStyle(color: textBlack),
                 ),
                 style: OutlinedButton.styleFrom(
                   side: const BorderSide(color: borderCard),
@@ -195,12 +195,12 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
           leading: CircleAvatar(
             backgroundColor: status == 'completed'
                 ? brandGreen.withValues(alpha: 0.15)
-                : const Color(0xFF3A290A),
+                : const Color(0xFFFEF3C7),
             child: Icon(
               Icons.directions_car_rounded,
               color: status == 'completed'
                   ? brandGreen
-                  : const Color(0xFFF59E0B),
+                  : const Color(0xFFD97706),
             ),
           ),
           title: Text(
@@ -208,7 +208,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
             style: const TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 14,
-              color: textWhite,
+              color: textBlack,
             ),
           ),
           subtitle: Text(
@@ -219,7 +219,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
             '-₹${amount.toStringAsFixed(2)}',
             style: const TextStyle(
               fontWeight: FontWeight.w900,
-              color: Color(0xFFEF4444),
+              color: Color(0xFFDC2626),
               fontSize: 14,
             ),
           ),
