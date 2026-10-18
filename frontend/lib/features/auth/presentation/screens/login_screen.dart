@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../core/theme/app_colors.dart';
 import '../../data/models/auth_models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
@@ -112,35 +111,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   children: [
                     const SizedBox(height: 20),
                     Image.asset(
-                      'assets/images/infurnus_logo_square.png',
-                      height: 72,
+                      'assets/images/infurnus_3d_logo.png',
+                      height: 100,
                       fit: BoxFit.contain,
                       errorBuilder: (_, __, ___) => const Icon(
                         Icons.location_on_rounded,
                         color: Color(0xFF10B981),
-                        size: 60,
+                        size: 64,
                       ),
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'Infurnus',
+                      'Move. Haul. Rise.',
                       style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1.0,
-                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.8,
+                        color: Color(0xFF10B981),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _tagText('Ride'),
-                        _dot(),
-                        _tagText('Move'),
-                        _dot(),
-                        _tagText('Explore'),
-                      ],
                     ),
                   ],
                 ),
@@ -452,26 +440,5 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         );
       }
     }
-  }
-
-  Widget _tagText(String text) {
-    return Text(
-      text,
-      style: const TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.w600,
-        color: Color(0xFF86EFAC),
-      ),
-    );
-  }
-
-  Widget _dot() {
-    return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 6),
-      child: Text(
-        '•',
-        style: TextStyle(color: Color(0xFF86EFAC), fontSize: 12),
-      ),
-    );
   }
 }
