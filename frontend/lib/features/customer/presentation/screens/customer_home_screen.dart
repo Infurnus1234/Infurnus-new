@@ -11,9 +11,9 @@ import '../../../../core/services/places_autocomplete_service.dart';
 import '../../../../core/services/geocoding_service.dart';
 import '../../../../shared/widgets/infurnus_empty_state.dart';
 import '../../../../shared/widgets/infurnus_skeleton.dart';
+import '../../../../shared/widgets/vehicle_visual_image.dart';
 import '../../data/models/ride_model.dart' as model;
 import '../providers/ride_provider.dart';
-import '../widgets/animated_vehicle_hero.dart';
 import '../widgets/vehicle_category_visual.dart';
 import '../../../auth/presentation/providers/user_provider.dart';
 
@@ -831,14 +831,14 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
+          colors: [Color(0xFF041E0F), Color(0xFF093A1D)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF1E3A8A).withValues(alpha: 0.25),
+            color: const Color(0xFF041E0F).withValues(alpha: 0.3),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
@@ -848,7 +848,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
                 child: Column(
@@ -860,7 +860,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                         vertical: 3,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.18),
+                        color: Colors.white.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: const Text(
@@ -869,7 +869,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                           fontSize: 10,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 1.5,
-                          color: Color(0xFFBFDBFE),
+                          color: Color(0xFF00FF88),
                         ),
                       ),
                     ),
@@ -885,14 +885,9 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton(
-                      onPressed: () {
-                        ref
-                            .read(rideProvider.notifier)
-                            .selectSector('passenger');
-                        context.push('/ride-booking');
-                      },
+                      onPressed: () => context.push('/concierge-fleet'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: buttonBlack,
+                        backgroundColor: const Color(0xFF16A34A),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
@@ -915,10 +910,19 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                 ),
               ),
               const SizedBox(width: 10),
-              // Dedicated Animated Vehicle Element Container
-              const AnimatedVehicleHero(
-                height: 100,
-                assetImagePath: 'assets/images/infurnus_3d_logo.png',
+              ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Image.asset(
+                  'assets/images/vehicle_fleet_banner.png',
+                  width: 110,
+                  height: 90,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const Icon(
+                    Icons.directions_car_filled_rounded,
+                    size: 60,
+                    color: Colors.white70,
+                  ),
+                ),
               ),
             ],
           ),
@@ -933,10 +937,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         'title': 'Rides',
         'subtitle': 'Bike, Auto, Cab',
         'category': VehicleCategoryType.rides,
-        'action': () {
-          ref.read(rideProvider.notifier).selectSector('passenger');
-          context.push('/ride-booking');
-        },
+        'action': () => context.push('/passenger-rides'),
       },
       {
         'title': 'Logistics',
@@ -948,16 +949,13 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         'title': 'Emergency',
         'subtitle': 'Ambulance & Tow',
         'category': VehicleCategoryType.emergency,
-        'action': () {
-          ref.read(rideProvider.notifier).selectSector('service');
-          context.push('/ride-booking');
-        },
+        'action': () => context.push('/specialty-emergency'),
       },
       {
         'title': 'Rentals',
         'subtitle': 'Luxury & Chauffeur',
         'category': VehicleCategoryType.rental,
-        'action': () => context.push('/rentals'),
+        'action': () => context.push('/concierge-fleet'),
       },
     ];
 
@@ -1117,7 +1115,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Instant',
         icon: Icons.two_wheeler_rounded,
         category: VehicleCategoryType.bike,
-        assetImagePath: 'assets/images/bike_rider_green_white.png',
       ),
       _VehicleCategoryItem(
         title: 'Auto',
@@ -1126,7 +1123,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Instant',
         icon: Icons.electric_rickshaw_rounded,
         category: VehicleCategoryType.auto,
-        assetImagePath: 'assets/images/auto_green_white.png',
       ),
       _VehicleCategoryItem(
         title: 'E-Rickshaw',
@@ -1135,7 +1131,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Instant',
         icon: Icons.electric_rickshaw_outlined,
         category: VehicleCategoryType.auto,
-        assetImagePath: 'assets/images/e_rickshaw_green_white.png',
       ),
       _VehicleCategoryItem(
         title: 'Force Traveller',
@@ -1144,7 +1139,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Scheduled',
         icon: Icons.airport_shuttle_rounded,
         category: VehicleCategoryType.rides,
-        assetImagePath: 'assets/images/passenger_car_visual.jpg',
       ),
       _VehicleCategoryItem(
         title: 'Winger',
@@ -1153,7 +1147,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Scheduled',
         icon: Icons.directions_bus_rounded,
         category: VehicleCategoryType.rides,
-        assetImagePath: 'assets/images/passenger_car_visual.jpg',
       ),
       _VehicleCategoryItem(
         title: 'Mini / Compact',
@@ -1162,7 +1155,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Instant',
         icon: Icons.directions_car_rounded,
         category: VehicleCategoryType.rides,
-        assetImagePath: 'assets/images/sedan_green_white.png',
       ),
       _VehicleCategoryItem(
         title: 'Sedan',
@@ -1171,7 +1163,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Instant',
         icon: Icons.airport_shuttle_rounded,
         category: VehicleCategoryType.rides,
-        assetImagePath: 'assets/images/sedan_green_white.png',
       ),
       _VehicleCategoryItem(
         title: 'SUV / Scorpio N',
@@ -1180,7 +1171,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Instant',
         icon: Icons.directions_car_filled_rounded,
         category: VehicleCategoryType.premium,
-        assetImagePath: 'assets/images/suv_green_white.png',
       ),
     ];
 
@@ -1224,7 +1214,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'On-demand',
         icon: Icons.electric_rickshaw_rounded,
         category: VehicleCategoryType.auto,
-        assetImagePath: 'assets/images/auto_green_white.png',
       ),
       _VehicleCategoryItem(
         title: 'Piaggio Ape',
@@ -1233,7 +1222,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'On-demand',
         icon: Icons.local_shipping_outlined,
         category: VehicleCategoryType.logistics,
-        assetImagePath: 'assets/images/piaggio_ape_yellow.png',
       ),
       _VehicleCategoryItem(
         title: 'Tata Magic',
@@ -1242,7 +1230,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'On-demand',
         icon: Icons.local_shipping_rounded,
         category: VehicleCategoryType.logistics,
-        assetImagePath: 'assets/images/piaggio_magic_blue.png',
       ),
       _VehicleCategoryItem(
         title: '207 Cargo',
@@ -1251,7 +1238,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'On-demand',
         icon: Icons.local_shipping_rounded,
         category: VehicleCategoryType.logistics,
-        assetImagePath: 'assets/images/mahindra_207_white.png',
       ),
       _VehicleCategoryItem(
         title: '407 Cargo',
@@ -1260,7 +1246,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'On-demand',
         icon: Icons.directions_bus_outlined,
         category: VehicleCategoryType.logistics,
-        assetImagePath: 'assets/images/tata_407_beige.png',
       ),
       _VehicleCategoryItem(
         title: 'Mini Truck 1T',
@@ -1269,7 +1254,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'On-demand',
         icon: Icons.local_shipping_rounded,
         category: VehicleCategoryType.logistics,
-        assetImagePath: 'assets/images/tata_white_truck.png',
       ),
     ];
 
@@ -1310,7 +1294,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Priority',
         icon: Icons.medical_services_rounded,
         category: VehicleCategoryType.emergency,
-        assetImagePath: 'assets/images/ambulance_visual.jpg',
       ),
       _VehicleCategoryItem(
         title: 'Towing Van',
@@ -1319,7 +1302,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Priority',
         icon: Icons.car_repair_rounded,
         category: VehicleCategoryType.emergency,
-        assetImagePath: 'assets/images/towing_van_green.png',
       ),
       _VehicleCategoryItem(
         title: 'JCB / Excavator',
@@ -1328,7 +1310,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Scheduled',
         icon: Icons.agriculture_rounded,
         category: VehicleCategoryType.logistics,
-        assetImagePath: 'assets/images/flatbed_towing_truck.png',
       ),
       _VehicleCategoryItem(
         title: 'Roadside Assist',
@@ -1337,7 +1318,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Priority',
         icon: Icons.build_rounded,
         category: VehicleCategoryType.emergency,
-        assetImagePath: 'assets/images/towing_van_green.png',
       ),
     ];
 
@@ -1382,7 +1362,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         badge: 'Rugged SUV',
         subtitle: 'The Big Daddy of SUVs',
         price: 'Chauffeur + Fuel',
-        assetImagePath: 'assets/images/scorpio_n_black.png',
+        assetImagePath: 'assets/images/passenger_car_visual.jpg',
       ),
       _LuxuryVehicleItem(
         title: 'Mahindra Thar',
@@ -1666,28 +1646,13 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            item.assetImagePath != null
-                ? Container(
-                    width: 48,
-                    height: 38,
-                    alignment: Alignment.center,
-                    child: Image.asset(
-                      item.assetImagePath!,
-                      width: 48,
-                      height: 38,
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => VehicleCategoryVisual(
-                        category: item.category,
-                        size: 40,
-                        borderRadius: 10,
-                      ),
-                    ),
-                  )
-                : VehicleCategoryVisual(
-                    category: item.category,
-                    size: 40,
-                    borderRadius: 10,
-                  ),
+            VehicleVisualImage(
+              vehicleName: item.title,
+              category: item.category.name,
+              width: 52,
+              height: 40,
+              borderRadius: 10,
+            ),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -2011,7 +1976,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         border: Border(top: BorderSide(color: cardBorder, width: 1.0)),
       ),
       child: BottomNavigationBar(
-        selectedItemColor: buttonBlack,
+        selectedItemColor: successGreen,
         unselectedItemColor: textMuted,
         currentIndex: 0,
         type: BottomNavigationBarType.fixed,
@@ -2078,7 +2043,6 @@ class _VehicleCategoryItem {
   final String eta;
   final IconData icon;
   final VehicleCategoryType category;
-  final String? assetImagePath;
 
   const _VehicleCategoryItem({
     required this.title,
@@ -2087,7 +2051,6 @@ class _VehicleCategoryItem {
     required this.eta,
     required this.icon,
     required this.category,
-    this.assetImagePath,
   });
 }
 

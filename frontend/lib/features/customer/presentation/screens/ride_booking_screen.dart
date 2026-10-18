@@ -13,6 +13,7 @@ import '../../../../core/services/places_autocomplete_service.dart';
 import '../../../../shared/widgets/infurnus_button.dart';
 import '../../../../shared/widgets/infurnus_map.dart';
 import '../../../../shared/widgets/infurnus_outlined_button.dart';
+import '../../../../shared/widgets/vehicle_visual_image.dart';
 import '../../data/models/fleet_vehicle_model.dart';
 import '../providers/ride_provider.dart';
 import '../widgets/fare_range_details.dart';
@@ -1228,15 +1229,12 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
             ),
             child: Row(
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: Image.asset(
-                    _getVehicleImagePath(vehicle),
-                    width: 54,
-                    height: 42,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => Icon(_vehicleIcon(vehicle), size: 36, color: textWhite),
-                  ),
+                VehicleVisualImage(
+                  vehicleName: vehicle.displayName,
+                  category: vehicle.category,
+                  width: 54,
+                  height: 42,
+                  borderRadius: 10,
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -1290,70 +1288,6 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
         );
       },
     );
-  }
-
-  String _getVehicleImagePath(FleetVehicleModel vehicle) {
-    final cat = vehicle.category.toLowerCase();
-    final name = vehicle.displayName.toLowerCase();
-    if (cat.contains('bike') || name.contains('bike')) return 'assets/images/bike_rider_green_white.png';
-    if (cat.contains('auto') || name.contains('auto')) return 'assets/images/auto_green_white.png';
-    if (cat.contains('e_rickshaw') || name.contains('rickshaw') || name.contains('e-rickshaw')) return 'assets/images/e_rickshaw_green_white.png';
-    if (cat.contains('sedan') || name.contains('sedan')) return 'assets/images/sedan_green_white.png';
-    if (cat.contains('suv') || name.contains('suv') || name.contains('fortuner') || name.contains('thar')) return 'assets/images/suv_green_white.png';
-    if (cat.contains('scorpio')) return 'assets/images/scorpio_n_black.png';
-    if (cat.contains('towing') || name.contains('towing')) return 'assets/images/towing_van_green.png';
-    if (cat.contains('ambulance')) return 'assets/images/ambulance_visual.jpg';
-    if (cat.contains('ape') || name.contains('ape')) return 'assets/images/piaggio_ape_yellow.png';
-    if (cat.contains('tata') || cat.contains('407') || name.contains('407')) return 'assets/images/tata_407_beige.png';
-    if (cat.contains('207') || name.contains('207')) return 'assets/images/mahindra_207_white.png';
-    return 'assets/images/passenger_car_visual.jpg';
-  }
-
-  IconData _vehicleIcon(FleetVehicleModel vehicle) {
-    final cat = vehicle.category.toLowerCase();
-    final name = vehicle.displayName.toLowerCase();
-
-    if (cat.contains('bike') || name.contains('bike')) {
-      return Icons.two_wheeler_rounded;
-    }
-    if (cat.contains('auto') ||
-        name.contains('auto') ||
-        cat.contains('three_wheeler')) {
-      return Icons.electric_rickshaw_rounded;
-    }
-    if (cat.contains('ambulance') || name.contains('ambulance')) {
-      return Icons.medical_services_rounded;
-    }
-    if (cat.contains('towing') || name.contains('towing')) {
-      return Icons.car_repair_rounded;
-    }
-    if (cat.contains('jcb') || name.contains('jcb')) {
-      return Icons.agriculture_rounded;
-    }
-    if (cat.contains('thar') || name.contains('thar')) {
-      return Icons.terrain_rounded;
-    }
-    if (cat.contains('fortuner') || name.contains('fortuner')) {
-      return Icons.directions_car_filled_rounded;
-    }
-    if (cat.contains('luxury') ||
-        cat.contains('bmw') ||
-        cat.contains('mercedes') ||
-        name.contains('suv')) {
-      return Icons.stars_rounded;
-    }
-    if (vehicle.sector == 'logistics' ||
-        cat.contains('truck') ||
-        cat.contains('shipping')) {
-      return Icons.local_shipping_rounded;
-    }
-    if (vehicle.sector == 'service') {
-      return Icons.build_rounded;
-    }
-    if (cat.contains('sedan')) {
-      return Icons.airport_shuttle_rounded;
-    }
-    return Icons.directions_car_rounded;
   }
 
   // --- Step 2: Searching Radar Sheet ---

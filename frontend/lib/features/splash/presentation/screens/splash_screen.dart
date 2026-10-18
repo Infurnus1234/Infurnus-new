@@ -180,7 +180,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 FadeTransition(
                   opacity: _taglineFadeAnimation,
                   child: Text(
-                    'Move. Deliver. Serve.',
+                    'Move. Haul. Rise.',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
