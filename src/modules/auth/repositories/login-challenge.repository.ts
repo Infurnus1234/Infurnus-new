@@ -1,6 +1,7 @@
 import type { Pool, PoolClient } from 'pg';
 
 import { AppError } from '../../../common/errors/app-error.js';
+import { env } from '../../../config/env.js';
 
 import type {
   ConsumeLoginChallengeResult,
@@ -14,6 +15,7 @@ import type {
 // ============================================================
 
 export interface LoginChallengeRepository {
+  claimVerificationAttempt(id: string, maxAttempts: number): Promise<boolean>;
   create(data: CreateLoginChallengeData): Promise<{ id: string }>;
 
   getProviderSession(challengeId: string): Promise<LoginChallengeProviderSession | null>;
@@ -33,6 +35,16 @@ export interface LoginChallengeRepository {
 // ============================================================
 
 export class PostgresLoginChallengeRepository implements LoginChallengeRepository {
+  async claimVerificationAttempt(id: string, maxAttempts: number): Promise<boolean> {
+    const result = await this.pool.query(
+      `UPDATE login_challenges SET verification_attempts=verification_attempts+1
+       WHERE id=$1 AND consumed_at IS NULL AND expires_at>NOW()
+       AND verification_attempts<$2 RETURNING id`,
+      [id, maxAttempts],
+    );
+    return result.rowCount === 1;
+  }
+
   constructor(private readonly pool: Pool) {}
 
   // ==========================================================
@@ -195,6 +207,8 @@ export class PostgresLoginChallengeRepository implements LoginChallengeRepositor
             AND consumed_at IS NULL
             AND verified_at IS NULL
             AND expires_at > NOW()
+            AND provider_expires_at > NOW()
+            AND verification_attempts < $3
             AND last_otp_sent_at <=
               NOW() - ($2 * INTERVAL '1 second')
           RETURNING
@@ -209,7 +223,7 @@ export class PostgresLoginChallengeRepository implements LoginChallengeRepositor
             expires_at AS "expiresAt",
             last_otp_sent_at AS "lastOtpSentAt"
         `,
-      [challengeId, cooldownSeconds],
+      [challengeId, cooldownSeconds, env.AUTH_OTP_MAX_ATTEMPTS],
     );
 
     return result.rows[0] ?? null;

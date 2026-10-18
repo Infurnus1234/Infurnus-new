@@ -1,23 +1,52 @@
-import { randomBytes } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 
-import { Resend } from 'resend';
+import { Resend, type CreateEmailOptions } from 'resend';
 
 import { env } from '../../../config/env.js';
 import { AppError } from '../../../common/errors/app-error.js';
 import { generateOtp, hashOtp } from '../utils/otp.js';
 import type { ResendOtpSessionRepository } from '../types/resend-otp.js';
 
-const OTP_EXPIRY_MINUTES = 10;
+const OTP_EXPIRY_MINUTES = (env.AUTH_EMAIL_OTP_TTL_SECONDS ?? 600) / 60;
 
 export class ResendOtpProvider {
   private readonly client: Resend;
 
-  constructor(private readonly repository: ResendOtpSessionRepository) {
+  private hashCode(sessionToken: string, otp: string): string {
+    return createHmac('sha256', Buffer.from(env.AUTH_OTP_ENCRYPTION_KEY, 'base64'))
+      .update('infurnus:email-otp:v1:' + sessionToken + ':' + otp)
+      .digest('hex');
+  }
+
+  constructor(
+    private readonly repository: ResendOtpSessionRepository,
+    private readonly timeoutMs = 10000,
+  ) {
     if (!env.RESEND_API_KEY) {
       throw new AppError('OTP_PROVIDER_NOT_CONFIGURED', 'Resend API key is not configured', 500);
     }
 
     this.client = new Resend(env.RESEND_API_KEY);
+  }
+
+  private async send(message: CreateEmailOptions) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        this.client.emails.send(message),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error('timeout')), this.timeoutMs);
+        }),
+      ]);
+    } catch {
+      throw new AppError(
+        'OTP_PROVIDER_SEND_FAILED',
+        'Email verification service is temporarily unavailable',
+        502,
+      );
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   // ==========================================================
@@ -35,7 +64,7 @@ export class ResendOtpProvider {
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
     const lastSentAt = new Date();
 
-    const result = await this.client.emails.send({
+    const result = await this.send({
       from: env.RESEND_FROM_EMAIL,
       to: email,
       subject: 'INFURNUS Email Verification OTP',
@@ -62,7 +91,7 @@ export class ResendOtpProvider {
     const session = await this.repository.create({
       email,
       sessionTokenHash: hashOtp(sessionToken),
-      otpHash: hashOtp(otp),
+      otpHash: this.hashCode(sessionToken, otp),
       expiresAt,
       lastSentAt,
     });
@@ -85,7 +114,11 @@ export class ResendOtpProvider {
     verified: boolean;
     attemptsRemaining: number;
   }> {
-    const result = await this.repository.verify(hashOtp(sessionToken), hashOtp(otp));
+    const result = await this.repository.verify(
+      hashOtp(sessionToken),
+      this.hashCode(sessionToken, otp),
+      hashOtp(otp),
+    );
 
     if (result.status === 'not_found') {
       throw new AppError('OTP_SESSION_NOT_FOUND', 'OTP session not found', 404);
@@ -135,11 +168,24 @@ export class ResendOtpProvider {
       throw new AppError('OTP_ALREADY_VERIFIED', 'OTP session has already been consumed', 409);
     }
 
+    if (session.expiresAt.getTime() <= Date.now())
+      throw new AppError('OTP_EXPIRED', 'OTP has expired', 400);
+    if (session.attempts >= session.maxAttempts)
+      throw new AppError(
+        'OTP_ATTEMPTS_EXCEEDED',
+        'Maximum OTP verification attempts exceeded',
+        429,
+      );
+    if (
+      session.lastSentAt.getTime() >
+      Date.now() - (env.AUTH_OTP_RESEND_COOLDOWN_SECONDS ?? 60) * 1000
+    )
+      throw new AppError('OTP_RESEND_COOLDOWN', 'Please wait before requesting another OTP', 429);
     const otp = generateOtp();
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
     const lastSentAt = new Date();
 
-    const result = await this.client.emails.send({
+    const result = await this.send({
       from: env.RESEND_FROM_EMAIL,
       to: session.email,
       subject: 'INFURNUS Email Verification OTP',
@@ -164,7 +210,7 @@ export class ResendOtpProvider {
 
     const updated = await this.repository.resend(
       hashOtp(sessionToken),
-      hashOtp(otp),
+      this.hashCode(sessionToken, otp),
       expiresAt,
       lastSentAt,
     );

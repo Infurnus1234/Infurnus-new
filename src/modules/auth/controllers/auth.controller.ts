@@ -6,7 +6,7 @@ import { AppError } from '../../../common/errors/app-error.js';
 import { env } from '../../../config/env.js';
 import { pool } from '../../../infrastructure/database/postgres.js';
 
-import { DevOtpProvider } from '../providers/dev-otp.provider.js';
+import { createConfiguredOtpProvider } from '../providers/otp-provider.factory.js';
 import type { OtpProvider } from '../providers/otp.provider.js';
 
 import { PostgresAccountRepository } from '../repositories/account.repository.js';
@@ -84,7 +84,7 @@ export interface AuthControllerDependencies {
 // ============================================================
 
 export function createAuthController(
-  otpProvider: OtpProvider = new DevOtpProvider(),
+  otpProvider: OtpProvider = createConfiguredOtpProvider(pool),
 ): AuthControllerDependencies {
   const pendingSignupRepository = new PostgresPendingSignupRepository();
 
@@ -467,6 +467,13 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
         throw new AppError('AUTHENTICATION_REQUIRED', 'Authentication required', 401);
       }
 
+      if (req.auth.role === 'customer' || req.auth.role === 'driver') {
+        throw new AppError(
+          'PASSWORD_AUTH_DISABLED',
+          'Use OTP authentication for this account',
+          400,
+        );
+      }
       const input = changePasswordSchema.parse(req.body);
 
       await changePasswordService.changePassword(

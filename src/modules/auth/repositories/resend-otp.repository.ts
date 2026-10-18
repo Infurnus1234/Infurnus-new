@@ -76,7 +76,11 @@ export class PostgresResendOtpSessionRepository implements ResendOtpSessionRepos
   // Verify OTP
   // ==========================================================
 
-  async verify(sessionTokenHash: string, otpHash: string): Promise<VerifyResendOtpResult> {
+  async verify(
+    sessionTokenHash: string,
+    otpHash: string,
+    legacyOtpHash?: string,
+  ): Promise<VerifyResendOtpResult> {
     const result = await this.pool.query<{
       status: VerifyResendOtpResult['status'];
       attemptsRemaining: number | null;
@@ -104,7 +108,7 @@ export class PostgresResendOtpSessionRepository implements ResendOtpSessionRepos
             AND c.consumed_at IS NULL
             AND c.expires_at > NOW()
             AND c.attempts < c.max_attempts
-            AND c.otp_hash = $2
+            AND c.otp_hash IN ($2::text, COALESCE($3::text, $2::text))
           RETURNING
             'verified'::text AS status,
             GREATEST(s.max_attempts - s.attempts, 0) AS "attemptsRemaining"
@@ -119,7 +123,7 @@ export class PostgresResendOtpSessionRepository implements ResendOtpSessionRepos
             AND c.consumed_at IS NULL
             AND c.expires_at > NOW()
             AND c.attempts < c.max_attempts
-            AND c.otp_hash <> $2
+            AND c.otp_hash NOT IN ($2::text, COALESCE($3::text, $2::text))
           RETURNING
             'invalid'::text AS status,
             GREATEST(s.max_attempts - s.attempts, 0) AS "attemptsRemaining"
@@ -157,7 +161,7 @@ export class PostgresResendOtpSessionRepository implements ResendOtpSessionRepos
           SELECT 1 FROM invalid
         )
       `,
-      [sessionTokenHash, otpHash],
+      [sessionTokenHash, otpHash, legacyOtpHash ?? null],
     );
 
     const row = result.rows[0];
@@ -189,7 +193,6 @@ export class PostgresResendOtpSessionRepository implements ResendOtpSessionRepos
         UPDATE resend_otp_sessions
         SET
           otp_hash = $2,
-          attempts = 0,
           expires_at = $3,
           last_sent_at = $4,
           consumed_at = NULL,
@@ -197,6 +200,7 @@ export class PostgresResendOtpSessionRepository implements ResendOtpSessionRepos
         WHERE session_token_hash = $1
           AND consumed_at IS NULL
           AND expires_at > NOW()
+          AND attempts < max_attempts
       `,
       [sessionTokenHash, otpHash, expiresAt, lastSentAt],
     );

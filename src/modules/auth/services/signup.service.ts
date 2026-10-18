@@ -1,3 +1,4 @@
+import { randomBytes, randomUUID } from 'node:crypto';
 import { AppError } from '../../../common/errors/app-error.js';
 
 import { encryptSecret } from '../../../common/crypto/encryption.js';
@@ -29,7 +30,7 @@ export interface SignupInput {
   email?: string;
   phone?: string;
 
-  password: string;
+  password?: string | undefined;
 
   role: PublicSignupRole;
 
@@ -251,6 +252,12 @@ export class SignupService {
     // Existing phone account
     // --------------------------------------------------------
 
+    if (
+      (input.role === 'customer' || input.role === 'driver') &&
+      (existingPhone || existingEmail)
+    ) {
+      return { signupId: randomUUID(), contactType, expiresAt: new Date(Date.now() + 10 * 60_000) };
+    }
     if (existingPhone) {
       throw new AppError(
         'ACCOUNT_ALREADY_EXISTS',
@@ -275,8 +282,19 @@ export class SignupService {
     // Prevent duplicate pending signup
     // ========================================================
 
-    const existingPendingSignup = await this.repository.findByContact(contactType, contactValue);
+    let existingPendingSignup = await this.repository.findByContact(contactType, contactValue);
+    if (
+      existingPendingSignup &&
+      (input.role === 'customer' || input.role === 'driver') &&
+      existingPendingSignup.otpProviderExpiresAt &&
+      existingPendingSignup.otpProviderExpiresAt.getTime() <= Date.now() &&
+      (await this.repository.deleteExpiredById(existingPendingSignup.id))
+    )
+      existingPendingSignup = null;
 
+    if (existingPendingSignup && (input.role === 'customer' || input.role === 'driver')) {
+      return { signupId: randomUUID(), contactType, expiresAt: new Date(Date.now() + 10 * 60_000) };
+    }
     if (existingPendingSignup) {
       throw new AppError(
         'SIGNUP_ALREADY_PENDING',
@@ -289,7 +307,14 @@ export class SignupService {
     // Hash password before persistence
     // ========================================================
 
-    const passwordHash = await hashPassword(input.password);
+    // Retain the non-null legacy column without creating a usable password credential.
+    const passwordless = input.role === 'customer' || input.role === 'driver';
+    if (!passwordless && !input.password) {
+      throw new AppError('INVALID_PASSWORD', 'Password is required', 400);
+    }
+    const passwordHash = await hashPassword(
+      passwordless ? randomBytes(48).toString('hex') : input.password!,
+    );
 
     // ========================================================
     // Request provider-managed OTP
@@ -381,7 +406,10 @@ export class SignupService {
       firstName: input.firstName.trim(),
       lastName: input.lastName.trim(),
 
-      email,
+      email:
+        (input.role === 'customer' || input.role === 'driver') && contactType === 'phone'
+          ? null
+          : email,
 
       contactType,
       contactValue,

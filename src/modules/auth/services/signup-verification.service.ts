@@ -1,3 +1,4 @@
+import { env } from '../../../config/env.js';
 import { AppError } from '../../../common/errors/app-error.js';
 import { decryptSecret } from '../../../common/crypto/encryption.js';
 
@@ -68,6 +69,15 @@ export class SignupVerificationService {
     // --------------------------------------------------------
     // Decrypt provider session token
     // --------------------------------------------------------
+
+    if (
+      !(await this.pendingSignupRepository.claimVerificationAttempt(
+        signupId,
+        env.AUTH_OTP_MAX_ATTEMPTS,
+      ))
+    ) {
+      throw new AppError('OTP_ATTEMPTS_EXCEEDED', 'Maximum OTP attempts exceeded', 429);
+    }
 
     let providerSessionToken: string;
 

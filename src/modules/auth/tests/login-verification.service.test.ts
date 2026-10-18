@@ -34,6 +34,7 @@ function createProviderSession(
 
 function createDependencies() {
   const loginChallengeRepository = {
+    claimVerificationAttempt: vi.fn(async () => true),
     getProviderSession: vi.fn(),
     consume: vi.fn(),
   } as unknown as LoginChallengeRepository;

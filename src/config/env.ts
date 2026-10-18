@@ -88,6 +88,8 @@ export const envSchema = z
     AUTH_OTP_RESEND_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
 
     AUTH_OTP_RESEND_COOLDOWN_SECONDS: z.coerce.number().int().positive().default(60),
+    AUTH_OTP_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(5),
+    AUTH_EMAIL_OTP_TTL_SECONDS: z.coerce.number().int().min(60).max(900).default(600),
 
     AUTH_REFRESH_RATE_LIMIT_WINDOW_MS: z.coerce
       .number()
@@ -269,6 +271,10 @@ export const envSchema = z
     GOOGLE_ANDROID_CLIENT_ID: z.string().trim().min(1).optional(),
 
     OTP_PROVIDER_CONFIG: z.string().optional(),
+    MSG91_AUTH_KEY: z.string().trim().min(1).optional(),
+    MSG91_TEMPLATE_ID: z.string().trim().min(1).optional(),
+    MSG91_OTP_EXPIRY_MINUTES: z.coerce.number().int().min(1).max(10).default(5),
+    MSG91_TIMEOUT_MS: z.coerce.number().int().min(1).max(60000).default(10000),
 
     // ============================================================
     // Resend Email Provider

@@ -253,16 +253,15 @@ describe('Password reset integration', () => {
     email: string;
   }> {
     const email = uniqueEmail(prefix);
-    const phone = `+91${randomUUID().replace(/\D/g, '').slice(0, 10).padEnd(10, '1')}`;
 
     const signupResponse = await request(app).post('/auth/signup').send({
       firstName: 'Reset',
       lastName: 'User',
       email,
-      phone,
       password: ORIGINAL_PASSWORD,
       confirmPassword: ORIGINAL_PASSWORD,
-      role: 'customer',
+      role: 'fleet_owner',
+      businessName: 'Reset Fixture',
     });
 
     expect(signupResponse.status).toBe(201);
@@ -287,6 +286,11 @@ describe('Password reset integration', () => {
   }
 
   async function cleanupUser(userId: string): Promise<void> {
+    await pool.query(
+      'DELETE FROM provider_approval_requests WHERE requester_id=$1 OR fleet_id IN (SELECT id FROM partners WHERE user_id=$1)',
+      [userId],
+    );
+    await pool.query('DELETE FROM partners WHERE user_id=$1', [userId]);
     await pool.query(
       `
         DELETE FROM password_reset_challenges
@@ -455,6 +459,19 @@ describe('Password reset integration', () => {
               .send({ challengeId: login.body.data.challengeId, otp: '123456' })
               .expect(200);
           }
+        }
+        if (role === 'customer' || role === 'driver') {
+          const disabled = await requestPasswordReset(user.email);
+          await request(app)
+            .post('/auth/forgot-password/verify')
+            .send({ resetSessionToken: disabled.resetSessionToken, otp: '123456' })
+            .expect(400);
+          const count = await pool.query(
+            'SELECT id FROM password_reset_challenges WHERE user_id=$1',
+            [user.userId],
+          );
+          expect(count.rows).toHaveLength(0);
+          return;
         }
         const session = await requestPasswordReset(user.email);
         await request(app)
