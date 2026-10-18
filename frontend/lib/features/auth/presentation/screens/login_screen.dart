@@ -112,8 +112,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   children: [
                     const SizedBox(height: 20),
                     Image.asset(
-                      'assets/images/infurnus_logo.png',
-                      height: 68,
+                      'assets/images/infurnus_logo_square.png',
+                      height: 72,
                       fit: BoxFit.contain,
                       errorBuilder: (_, __, ___) => const Icon(
                         Icons.location_on_rounded,
