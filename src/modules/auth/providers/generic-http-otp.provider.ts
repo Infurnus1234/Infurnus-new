@@ -102,7 +102,7 @@ const matches = (data: unknown, match: Match) => {
 export class GenericHttpOtpProvider implements OtpProvider {
   constructor(
     private readonly configuration: () => HttpOtpConfiguration,
-    private readonly fallback?: ResendOtpProvider,
+    private readonly fallback?: OtpProvider,
     private readonly request = fetch,
     private readonly secrets: Record<string, string | undefined> = process.env,
   ) {}
@@ -229,10 +229,18 @@ export class GenericHttpOtpProvider implements OtpProvider {
   }
   private async send(channel: Channel, recipient: string) {
     try {
+      const config = this.config();
+      if (!config[channel] && this.fallback) {
+        const result =
+          channel === 'email'
+            ? await this.fallback.sendEmailOtp(recipient)
+            : await this.fallback.sendSmsOtp(recipient);
+        return { ...result, sessionToken: `fallback:${result.sessionToken}`, provider: 'fallback' };
+      }
       if (
         channel === 'email' &&
-        !this.config().email &&
-        this.config().emailFallbackOnMissing &&
+        !config.email &&
+        config.emailFallbackOnMissing &&
         this.fallback
       ) {
         const result = await this.fallback.sendEmailOtp(recipient);
@@ -256,16 +264,16 @@ export class GenericHttpOtpProvider implements OtpProvider {
         provider: profile.id,
       };
     } catch (error) {
-      // Exactly the existing fallback trigger; configuration/invalid-response errors do not switch providers.
       if (
-        channel !== 'email' ||
-        !this.fallback ||
-        !(error instanceof AppError) ||
-        error.code !== 'OTP_PROVIDER_SEND_FAILED'
-      )
-        throw error;
-      const result = await this.fallback.sendEmailOtp(recipient);
-      return { ...result, sessionToken: `resend:${result.sessionToken}`, provider: 'resend' };
+        channel === 'email' &&
+        this.fallback &&
+        error instanceof AppError &&
+        error.code === 'OTP_PROVIDER_SEND_FAILED'
+      ) {
+        const result = await this.fallback.sendEmailOtp(recipient);
+        return { ...result, sessionToken: `resend:${result.sessionToken}`, provider: 'resend' };
+      }
+      throw error;
     }
   }
   private session(channel: Channel, session: string) {
@@ -274,14 +282,18 @@ export class GenericHttpOtpProvider implements OtpProvider {
       throw safeError('OTP_PROVIDER_SESSION_INVALID', 400);
     const id = session.slice(0, separator),
       token = session.slice(separator + 1);
-    if (id === 'resend' && channel === 'email' && this.fallback)
+    if ((id === 'resend' || id === 'fallback') && this.fallback)
       return { token, fallback: this.fallback };
     return { token, profile: this.profile(channel, id) };
   }
   private async verify(channel: Channel, token: string, otp: string) {
     if (!/^\d{6}$/.test(otp)) throw safeError('INVALID_OTP', 400);
     const session = this.session(channel, token);
-    if (session.fallback) return session.fallback.verifyEmailOtp(session.token, otp);
+    if (session.fallback) {
+      return channel === 'email'
+        ? session.fallback.verifyEmailOtp(session.token, otp)
+        : session.fallback.verifySmsOtp(session.token, otp);
+    }
     const { data, verified } = await this.call(session.profile!, 'verify', {
       sessionToken: session.token,
       otp,
@@ -299,7 +311,11 @@ export class GenericHttpOtpProvider implements OtpProvider {
   }
   private async resend(channel: Channel, token: string) {
     const session = this.session(channel, token);
-    if (session.fallback) return session.fallback.resendEmailOtp(session.token);
+    if (session.fallback) {
+      return channel === 'email'
+        ? session.fallback.resendEmailOtp(session.token)
+        : session.fallback.resendSmsOtp(session.token);
+    }
     const { data } = await this.call(session.profile!, 'resend', {
       sessionToken: session.token,
       channel,

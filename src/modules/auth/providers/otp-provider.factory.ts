@@ -1,6 +1,7 @@
 import type { Pool } from 'pg';
 import { env } from '../../../config/env.js';
 import { PostgresResendOtpSessionRepository } from '../repositories/resend-otp.repository.js';
+import { DevOtpProvider } from './dev-otp.provider.js';
 import { GenericHttpOtpProvider, type HttpOtpConfiguration } from './generic-http-otp.provider.js';
 import { ResendOtpProvider } from './resend-otp.provider.js';
 
@@ -8,7 +9,7 @@ import { ResendOtpProvider } from './resend-otp.provider.js';
 export function createConfiguredOtpProvider(pool: Pool) {
   const fallback = env.RESEND_API_KEY
     ? new ResendOtpProvider(new PostgresResendOtpSessionRepository(pool))
-    : undefined;
+    : (env.NODE_ENV !== 'production' ? new DevOtpProvider() : undefined);
   return new GenericHttpOtpProvider(
     () =>
       env.OTP_PROVIDER_CONFIG !== undefined
