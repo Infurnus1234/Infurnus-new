@@ -111,7 +111,7 @@ Final local validation passed on the stable patch:
 | Source/private-artifact scan                       | **954 files, 0 findings**                                                    |
 | Reviewed candidate scan against configured secrets | **37 files, 0 secret matches, 0 frontend files**                             |
 
-The stable full run took 288.89 seconds and used actual disposable PostgreSQL/PostGIS and Redis, including dispatch/load integrations. Final ignored evidence is `tmp/auth-audit/final-stable-validation.log`; detailed suite logs are under `tmp/auth-completion/`. No required check was disabled, newly skipped or weakened. GitHub publication/check results are recorded below after the authorized push; these local results alone do not establish CI success.
+The stable full run took 288.89 seconds and used actual disposable PostgreSQL/PostGIS and Redis, including dispatch/load integrations. Final ignored evidence is `tmp/auth-audit/final-stable-validation.log`; detailed suite logs are under `tmp/auth-completion/`. No required check was disabled, newly skipped or weakened. GitHub evidence is recorded below separately from the local results.
 
 Commands:
 
@@ -132,3 +132,13 @@ npx prettier --check <reviewed-changed-files>
 The isolated runner creates `admin_master_test_<random-uuid>`, migrates it, validates another clean migration database, runs auth and full tests serially, then drops only its own generated database. Database, Redis, dispatch and load integration flags are enabled for the final audit. Live email/SMS keys are excluded from its child processes. Local evidence is ignored under `tmp/auth-audit/` and `tmp/auth-completion/` and is not pushed.
 
 Publication target: the isolated integration branch above, using a normal non-force push after local validation. The existing GitHub workflow runs on integration branches and enforces dependency audit, source scanning, migrations, typecheck, lint, formatting, tests, optional-storage checks and build. No workflows or branch protections are changed; the latest main workflow was already successful at the audited baseline. Actual pushed-commit CI must complete before this task is declared successful. No production deployment is part of this task.
+
+## GitHub publication and verified CI
+
+- Implementation pushed: [`afd2752abebb57dddd58c1ed8ed768e60c85761e`](https://github.com/Infurnus1234/Infurnus-new/commit/afd2752abebb57dddd58c1ed8ed768e60c85761e), `fix(auth): secure passwordless customer and driver authentication`.
+- Review: [PR #25](https://github.com/Infurnus1234/Infurnus-new/pull/25), from `integration/backend-passwordless-audit-20261019` into `main`. It is not merged.
+- Actual implementation push CI: **SUCCESS**, [run 39161778983](https://github.com/Infurnus1234/Infurnus-new/actions/runs/39161778983).
+- Actual implementation PR quality job: **SUCCESS**, [run 39161845239](https://github.com/Infurnus1234/Infurnus-new/actions/runs/39161845239).
+- Both required quality jobs passed dependency security audit, private-artifact scan, disposable database creation, migrations and clean-schema verification, typecheck, lint, formatting, backend tests, the separate optional-storage test and build. These results were read from GitHub Actions for the pushed revision, not inferred from local success.
+- This report receives a documentation-only follow-up commit to record those observed results. The current head's authoritative result is available in [PR checks](https://github.com/Infurnus1234/Infurnus-new/pull/25/checks) and the [branch CI history](https://github.com/Infurnus1234/Infurnus-new/actions?query=branch%3Aintegration%2Fbackend-passwordless-audit-20261019); final reporting also verifies that follow-up's checks.
+- The original checkout's Git status was compared with its pre-task snapshot and remained unchanged. No frontend, unrelated work, secrets or local diagnostic artifacts were committed. There was no force push, merge, branch-protection bypass, production migration or deployment.
