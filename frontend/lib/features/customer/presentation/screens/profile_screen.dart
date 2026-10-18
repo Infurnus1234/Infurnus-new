@@ -378,6 +378,12 @@ class ProfileScreen extends ConsumerWidget {
                         ),
                         const Divider(height: 1, color: Color(0xFFF3F4F6)),
                         _buildSettingsRow(
+                          Icons.dashboard_customize_rounded,
+                          'UI Kit Presentation Board (8 Screens)',
+                          onTap: () => context.push('/ui-kit-board'),
+                        ),
+                        const Divider(height: 1, color: Color(0xFFF3F4F6)),
+                        _buildSettingsRow(
                           Icons.help_outline_rounded,
                           'Help & Support',
                           onTap: () => context.push('/support'),

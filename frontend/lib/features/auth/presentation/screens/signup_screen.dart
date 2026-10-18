@@ -129,11 +129,21 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Center(
-                child: InfurnusBrandMark(
-                  iconSize: 48,
-                  fontSize: 18,
-                  spacing: 12,
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Image.asset(
+                  'assets/images/vehicle_fleet_banner.png',
+                  height: 180,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const Center(
+                    child: InfurnusBrandMark(
+                      iconSize: 48,
+                      fontSize: 18,
+                      spacing: 12,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 24),
