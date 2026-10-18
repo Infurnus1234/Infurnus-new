@@ -47,3 +47,4 @@ export interface OtpProvider {
 }
 
 export type SmsOtpProvider = Pick<OtpProvider, 'sendSmsOtp' | 'verifySmsOtp' | 'resendSmsOtp'>;
+export type EmailOtpProvider = Pick<OtpProvider, 'sendEmailOtp' | 'verifyEmailOtp' | 'resendEmailOtp'>;
