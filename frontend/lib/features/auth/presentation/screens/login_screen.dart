@@ -20,7 +20,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isEmailLogin = false;
-  bool _isPasswordVisible = false;
   bool _rememberMe = true;
 
   @override
@@ -29,13 +28,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
-  }
-
-  void _showForgotPasswordDialog() {
-    context.push(
-      '/forgot-password',
-      extra: _isEmailLogin ? _emailController.text.trim() : '',
-    );
   }
 
   @override
@@ -54,21 +46,37 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // 1. Dark Neon Hero Background Header
+          // 1. Dark Neon Cityscape Hero Background Header
           Positioned(
             top: 0,
             left: 0,
             right: 0,
-            height: MediaQuery.of(context).size.height * 0.38,
+            height: MediaQuery.of(context).size.height * 0.46,
             child: Stack(
               fit: StackFit.expand,
               children: [
                 Container(
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [Color(0xFF021B0B), Color(0xFF000000)],
+                      colors: [Color(0xFF032B13), Color(0xFF001105), Color(0xFF000000)],
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
+                    ),
+                  ),
+                ),
+                // Optional subtle glowing city vibe
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    height: 120,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.transparent, Colors.black.withValues(alpha: 0.8)],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
                     ),
                   ),
                 ),
@@ -76,31 +84,50 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   top: 50,
                   left: 16,
                   child: IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    icon: const Icon(Icons.arrow_back, color: Colors.white, size: 24),
                     onPressed: () => context.pop(),
+                  ),
+                ),
+                Positioned(
+                  top: 54,
+                  right: 16,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF16A34A),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      '64',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
                   ),
                 ),
                 Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
                     Image.asset(
                       'assets/images/infurnus_logo.png',
-                      height: 72,
+                      height: 68,
                       fit: BoxFit.contain,
                       errorBuilder: (_, __, ___) => const Icon(
-                        Icons.flash_on,
-                        color: AppColors.emeraldNeon,
-                        size: 56,
+                        Icons.location_on_rounded,
+                        color: Color(0xFF10B981),
+                        size: 60,
                       ),
                     ),
                     const SizedBox(height: 8),
                     const Text(
                       'Infurnus',
                       style: TextStyle(
-                        fontSize: 26,
+                        fontSize: 32,
                         fontWeight: FontWeight.w900,
-                        letterSpacing: 1.2,
+                        letterSpacing: 1.0,
                         color: Colors.white,
                       ),
                     ),
@@ -121,9 +148,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ),
 
-          // 2. White Card Sheet
+          // 2. Bottom Rounded White Card Sheet
           Positioned.fill(
-            top: MediaQuery.of(context).size.height * 0.34,
+            top: MediaQuery.of(context).size.height * 0.42,
             child: Container(
               decoration: const BoxDecoration(
                 color: Colors.white,
@@ -144,15 +171,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 24),
 
                     // Phone or Email Input
                     if (!_isEmailLogin)
                       Container(
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF9FAFB),
+                          color: Colors.white,
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFFE5E7EB)),
+                          border: Border.all(color: const Color(0xFFD1D5DB)),
                         ),
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                         child: Row(
@@ -160,7 +187,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             Row(
                               children: [
                                 const Text('🇮🇳', style: TextStyle(fontSize: 20)),
-                                const SizedBox(width: 6),
+                                const SizedBox(width: 8),
                                 const Text(
                                   '+91',
                                   style: TextStyle(
@@ -169,7 +196,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     color: Color(0xFF111827),
                                   ),
                                 ),
-                                const SizedBox(width: 4),
+                                const SizedBox(width: 6),
                                 const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.grey, size: 20),
                                 const SizedBox(width: 8),
                                 Container(
@@ -202,9 +229,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     else
                       Container(
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF9FAFB),
+                          color: Colors.white,
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFFE5E7EB)),
+                          border: Border.all(color: const Color(0xFFD1D5DB)),
                         ),
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                         child: TextField(
@@ -226,30 +253,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                     const SizedBox(height: 12),
 
-                    // Password Input
+                    // Password Input (for password login)
                     Container(
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF9FAFB),
+                        color: Colors.white,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                        border: Border.all(color: const Color(0xFFD1D5DB)),
                       ),
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                       child: TextField(
                         controller: _passwordController,
-                        obscureText: !_isPasswordVisible,
-                        decoration: InputDecoration(
+                        obscureText: true,
+                        decoration: const InputDecoration(
                           hintText: 'Password',
-                          prefixIcon: const Icon(Icons.lock_outline_rounded, color: Colors.grey, size: 20),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _isPasswordVisible ? Icons.visibility_rounded : Icons.visibility_off_rounded,
-                              color: Colors.grey,
-                              size: 20,
-                            ),
-                            onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
-                          ),
+                          prefixIcon: Icon(Icons.lock_outline_rounded, color: Colors.grey, size: 20),
                           border: InputBorder.none,
-                          hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
+                          hintStyle: TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
                         ),
                         style: const TextStyle(
                           fontSize: 15,
@@ -259,9 +278,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                     ),
 
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 12),
 
-                    // Checkbox & Toggle Mode Row
+                    // Checkbox & Use Email Row
                     Row(
                       children: [
                         SizedBox(
@@ -269,7 +288,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           height: 24,
                           child: Checkbox(
                             value: _rememberMe,
-                            activeColor: const Color(0xFF16A34A),
+                            activeColor: const Color(0xFF10B981),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                             onChanged: (val) => setState(() => _rememberMe = val ?? true),
                           ),
@@ -278,7 +297,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         const Expanded(
                           child: Text(
                             'Remember my login for faster sign-in',
-                            style: TextStyle(fontSize: 11, color: Color(0xFF4B5563)),
+                            style: TextStyle(fontSize: 12, color: Color(0xFF4B5563), fontWeight: FontWeight.w500),
                           ),
                         ),
                         GestureDetector(
@@ -286,46 +305,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           child: Text(
                             _isEmailLogin ? 'Use Phone' : 'Use Email',
                             style: const TextStyle(
-                              fontSize: 12,
+                              fontSize: 13,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF16A34A),
+                              color: Color(0xFF10B981),
                             ),
                           ),
                         ),
                       ],
                     ),
 
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 24),
 
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: GestureDetector(
-                        onTap: _showForgotPasswordDialog,
-                        child: const Text(
-                          'Forgot Password?',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF16A34A),
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    // Continue Button
-                    SizedBox(
+                    // Continue Button (Black with green border glow like reference)
+                    Container(
                       width: double.infinity,
                       height: 52,
+                      decoration: BoxDecoration(
+                        color: Colors.black,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFF10B981), width: 1.5),
+                      ),
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF111827),
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
-                          elevation: 0,
                         ),
                         onPressed: authState.status == AuthStatus.loading ? null : _handleContinue,
                         child: authState.status == AuthStatus.loading
@@ -339,10 +346,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 children: [
                                   Text(
                                     'Continue',
-                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                                   ),
                                   SizedBox(width: 8),
-                                  Icon(Icons.arrow_forward_rounded, size: 18),
+                                  Icon(Icons.arrow_forward_rounded, size: 18, color: Colors.white),
                                 ],
                               ),
                       ),
@@ -355,7 +362,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       children: [
                         Expanded(child: Divider(color: Color(0xFFE5E7EB))),
                         Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 12),
+                          padding: EdgeInsets.symmetric(horizontal: 16),
                           child: Text(
                             'OR',
                             style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF9CA3AF)),
@@ -365,9 +372,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ],
                     ),
 
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
 
-                    // Google Sign-In
+                    // Google Sign-In Outlined Button
                     Center(
                       child: GoogleSignInButton(
                         enabled: authState.status != AuthStatus.loading,
@@ -389,7 +396,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                     const SizedBox(height: 24),
 
-                    // Bottom Link: Create Account
+                    // Bottom Link: Create a Customer account
                     Center(
                       child: GestureDetector(
                         onTap: () => context.push('/signup'),
