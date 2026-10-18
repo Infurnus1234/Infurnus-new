@@ -26,7 +26,7 @@ export class PostgresSignupUserRepository implements SignupUserRepository {
       `
         SELECT 1
         FROM users
-        WHERE phone = $1
+        WHERE ltrim(phone, '+') = ltrim($1, '+')
           AND deleted_at IS NULL
         LIMIT 1
       `,

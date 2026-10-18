@@ -72,9 +72,9 @@ export const signupSchema = z
 
     phone: phoneSchema.optional(),
 
-    password: passwordSchema,
+    password: passwordSchema.optional(),
 
-    confirmPassword: z.string().min(1, 'Please confirm your password'),
+    confirmPassword: z.string().optional(),
 
     role: z.enum(['customer', 'driver', 'fleet_owner', 'driver_fleet_owner']).default('customer'),
 
@@ -121,7 +121,10 @@ export const signupSchema = z
     // Password confirmation
     // --------------------------------------------------------
 
-    if (data.password !== data.confirmPassword) {
+    if (
+      data.password !== data.confirmPassword &&
+      (data.role === 'fleet_owner' || data.role === 'driver_fleet_owner')
+    ) {
       ctx.addIssue({
         code: 'custom',
         path: ['confirmPassword'],
@@ -132,6 +135,10 @@ export const signupSchema = z
     // --------------------------------------------------------
     // Role-specific validation
     // --------------------------------------------------------
+
+    if ((data.role === 'fleet_owner' || data.role === 'driver_fleet_owner') && !data.password) {
+      ctx.addIssue({ code: 'custom', path: ['password'], message: 'Password is required' });
+    }
 
     const isDriver = data.role === 'driver' || data.role === 'driver_fleet_owner';
 
@@ -254,10 +261,7 @@ export const loginSchema = z
 
     phone: phoneSchema.optional(),
 
-    password: z
-      .string()
-      .min(1, 'Password is required')
-      .max(128, 'Password must not exceed 128 characters'),
+    password: z.string().max(128, 'Password must not exceed 128 characters').optional(),
   })
   .strict()
   .superRefine((data, ctx) => {

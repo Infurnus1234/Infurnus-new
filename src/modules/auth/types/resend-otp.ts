@@ -29,7 +29,11 @@ export interface ResendOtpSessionRepository {
 
   findBySessionTokenHash(sessionTokenHash: string): Promise<ResendOtpSession | null>;
 
-  verify(sessionTokenHash: string, otpHash: string): Promise<VerifyResendOtpResult>;
+  verify(
+    sessionTokenHash: string,
+    otpHash: string,
+    legacyOtpHash?: string,
+  ): Promise<VerifyResendOtpResult>;
 
   resend(
     sessionTokenHash: string,

@@ -1,3 +1,4 @@
+import { env } from '../../../config/env.js';
 import { AppError } from '../../../common/errors/app-error.js';
 import { isPasswordOnlyAdmin } from './admin-login-policy.js';
 import { decryptSecret } from '../../../common/crypto/encryption.js';
@@ -115,6 +116,15 @@ export class LoginVerificationService {
     //
     // The raw provider session token is encrypted at rest.
     // --------------------------------------------------------
+
+    if (
+      !(await this.loginChallengeRepository.claimVerificationAttempt(
+        challengeId,
+        env.AUTH_OTP_MAX_ATTEMPTS,
+      ))
+    ) {
+      throw new AppError('OTP_ATTEMPTS_EXCEEDED', 'Maximum OTP attempts exceeded', 429);
+    }
 
     let providerSessionToken: string;
 

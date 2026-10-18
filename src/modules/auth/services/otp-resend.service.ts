@@ -59,6 +59,10 @@ export class OtpResendService {
     if (signup.otpVerifiedAt) {
       throw new AppError('OTP_ALREADY_VERIFIED', 'OTP has already been verified', 400);
     }
+    if (signup.otpAttempts >= env.AUTH_OTP_MAX_ATTEMPTS)
+      throw new AppError('OTP_ATTEMPTS_EXCEEDED', 'Maximum OTP attempts exceeded', 429);
+    if (signup.otpProviderExpiresAt && signup.otpProviderExpiresAt.getTime() <= Date.now())
+      throw new AppError('OTP_EXPIRED', 'OTP has expired', 400);
 
     // --------------------------------------------------------
     // Validate signup contact type

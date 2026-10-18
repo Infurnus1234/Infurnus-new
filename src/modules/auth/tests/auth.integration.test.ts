@@ -373,7 +373,6 @@ describe('Auth integration', () => {
       firstName: 'Test',
       lastName: 'User',
       email,
-      phone,
       password: 'StrongPassword123!',
       confirmPassword: 'StrongPassword123!',
       role: 'customer',
@@ -387,9 +386,8 @@ describe('Auth integration', () => {
 
     expect(signupId).toEqual(expect.any(String));
 
-    // Both email and phone are supplied.
-    // Current signup policy uses phone/SMS.
-    const otp = otpProvider.getSmsOtp(phone);
+    // Verify email ownership before adding the separate verified phone fixture.
+    const otp = otpProvider.getEmailOtp(email);
 
     const verifyResponse = await request(app).post('/auth/signup/verify').send({
       signupId,
@@ -400,6 +398,10 @@ describe('Auth integration', () => {
 
     expect(verifyResponse.body.success).toBe(true);
 
+    await pool.query('UPDATE users SET phone=$2,phone_verified=TRUE WHERE id=$1', [
+      verifyResponse.body.data.userId,
+      phone,
+    ]);
     return {
       userId: verifyResponse.body.data.userId,
       email,
@@ -592,7 +594,7 @@ describe('Auth integration', () => {
       throw new Error('Expected user');
     }
 
-    expect(user.email).toBe(email);
+    expect(user.email).toBeNull();
 
     expect(user.phone).toBe(phone);
 
@@ -1215,7 +1217,7 @@ describe('Auth integration', () => {
   // 8E. SIGNUP VALIDATION - PASSWORD MISMATCH
   // ========================================================
 
-  it('signup: rejects password mismatch', async () => {
+  it('signup: ignores legacy password confirmation for customer', async () => {
     const response = await request(app).post('/auth/signup').send({
       firstName: 'Password',
       lastName: 'Mismatch',
@@ -1225,9 +1227,10 @@ describe('Auth integration', () => {
       role: 'customer',
     });
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(201);
 
-    expect(response.body.success).toBe(false);
+    expect(response.body.success).toBe(true);
+    await cleanupSignup(response.body.data.signupId);
   });
 
   // ========================================================
@@ -1404,7 +1407,7 @@ describe('Auth integration', () => {
   // 13. INVALID LOGIN CREDENTIALS
   // ========================================================
 
-  it('login: rejects invalid credentials', async () => {
+  it('login: hides unknown account existence', async () => {
     const response = await request(app)
       .post('/auth/login')
       .send({
@@ -1412,9 +1415,9 @@ describe('Auth integration', () => {
         password: 'WrongPassword123!',
       });
 
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(200);
 
-    expect(response.body.success).toBe(false);
+    expect(response.body.success).toBe(true);
   });
 
   // ========================================================

@@ -1,4 +1,5 @@
 import { AppError } from '../../../common/errors/app-error.js';
+import { env } from '../../../config/env.js';
 import { pool } from '../../../infrastructure/database/postgres.js';
 
 import type { CreatePendingSignupData, PendingSignup, SignupContactType } from '../types/signup.js';
@@ -8,6 +9,8 @@ import type { CreatePendingSignupData, PendingSignup, SignupContactType } from '
 // ============================================================
 
 export interface PendingSignupRepository {
+  deleteExpiredById(id: string): Promise<boolean>;
+  claimVerificationAttempt(id: string, maxAttempts: number): Promise<boolean>;
   create(data: CreatePendingSignupData): Promise<PendingSignup>;
 
   /**
@@ -69,6 +72,24 @@ export interface PendingSignupRepository {
 // ============================================================
 
 export class PostgresPendingSignupRepository implements PendingSignupRepository {
+  async deleteExpiredById(id: string): Promise<boolean> {
+    const result = await pool.query(
+      `DELETE FROM pending_signups WHERE id=$1 AND otp_verified_at IS NULL
+       AND otp_provider_expires_at <= NOW()`,
+      [id],
+    );
+    return result.rowCount === 1;
+  }
+  async claimVerificationAttempt(id: string, maxAttempts: number): Promise<boolean> {
+    const result = await pool.query(
+      `UPDATE pending_signups SET otp_attempts=otp_attempts+1
+       WHERE id=$1 AND otp_verified_at IS NULL AND otp_provider_expires_at>NOW()
+       AND otp_attempts<$2 RETURNING id`,
+      [id, maxAttempts],
+    );
+    return result.rowCount === 1;
+  }
+
   // ----------------------------------------------------------
   // Create pending signup
   // ----------------------------------------------------------
@@ -271,7 +292,7 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
           updated_at AS "updatedAt"
         FROM pending_signups
         WHERE contact_type = $1
-          AND contact_value = $2
+          AND (contact_value = $2 OR ($1 = 'phone' AND ltrim(contact_value, '+') = ltrim($2, '+')))
         LIMIT 1
       `,
       [contactType, contactValue],
@@ -362,6 +383,8 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
           AND otp_provider_session_id IS NOT NULL
           AND otp_provider_session_token IS NOT NULL
           AND otp_provider_expires_at IS NOT NULL
+          AND otp_provider_expires_at > NOW()
+          AND otp_attempts < $3
           AND last_otp_sent_at <=
               NOW() -
               ($2::integer * INTERVAL '1 second')
@@ -372,7 +395,7 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
           otp_provider_session_token AS "sessionToken",
           otp_provider_expires_at AS "expiresAt"
       `,
-      [id, cooldownSeconds],
+      [id, cooldownSeconds, env.AUTH_OTP_MAX_ATTEMPTS],
     );
 
     return result.rows[0] ?? null;
