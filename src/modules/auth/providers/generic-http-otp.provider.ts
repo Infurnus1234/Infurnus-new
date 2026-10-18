@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { AppError } from '../../../common/errors/app-error.js';
 import type { EmailOtpProvider, OtpProvider } from './otp.provider.js';
-import type { ResendOtpProvider } from './resend-otp.provider.js';
 
 type Channel = 'email' | 'sms';
 type Operation = 'send' | 'verify' | 'resend';
