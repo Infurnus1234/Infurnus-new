@@ -7,8 +7,8 @@ class SignupRequest {
   final String lastName;
   final String? email;
   final String? phone;
-  final String password;
-  final String confirmPassword;
+  final String? password;
+  final String? confirmPassword;
   final String role;
   final String? licenseNumber;
   final String? licenseExpiry;
@@ -18,8 +18,8 @@ class SignupRequest {
     required this.lastName,
     this.email,
     this.phone,
-    required this.password,
-    required this.confirmPassword,
+    this.password,
+    this.confirmPassword,
     required this.role,
     this.licenseNumber,
     this.licenseExpiry,
@@ -30,8 +30,8 @@ class SignupRequest {
     'lastName': lastName,
     if (email != null) 'email': email,
     if (phone != null) 'phone': phone,
-    'password': password,
-    'confirmPassword': confirmPassword,
+    if (password != null) 'password': password,
+    if (confirmPassword != null) 'confirmPassword': confirmPassword,
     'role': role,
     if (licenseNumber != null) 'licenseNumber': licenseNumber,
     if (licenseExpiry != null) 'licenseExpiry': licenseExpiry,
@@ -100,14 +100,14 @@ class ResendSignupRequest {
 class LoginRequest {
   final String? email;
   final String? phone;
-  final String password;
+  final String? password;
 
-  LoginRequest({this.email, this.phone, required this.password});
+  LoginRequest({this.email, this.phone, this.password});
 
   Map<String, dynamic> toJson() => {
     if (email != null) 'email': email,
     if (phone != null) 'phone': phone,
-    'password': password,
+    if (password != null) 'password': password,
   };
 }
 
