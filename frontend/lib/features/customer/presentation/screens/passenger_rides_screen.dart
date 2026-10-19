@@ -190,6 +190,8 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                             children: [
                               Text(
                                 item['title']!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
@@ -199,6 +201,8 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                               const SizedBox(height: 2),
                               Text(
                                 item['capacity']!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: Color(0xFF6B7280),
@@ -208,6 +212,8 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                               const SizedBox(height: 2),
                               Text(
                                 item['description']!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: Color(0xFF9CA3AF),
@@ -216,13 +222,16 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                             ],
                           ),
                         ),
+                        const SizedBox(width: 8),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text(
                               item['price']!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
-                                fontSize: 15,
+                                fontSize: 14,
                                 fontWeight: FontWeight.w900,
                                 color: Color(0xFF111827),
                               ),

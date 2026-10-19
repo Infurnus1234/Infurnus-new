@@ -169,6 +169,8 @@ class _SpecialtyEmergencyScreenState extends ConsumerState<SpecialtyEmergencyScr
                             children: [
                               Text(
                                 item['title']!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
@@ -178,6 +180,8 @@ class _SpecialtyEmergencyScreenState extends ConsumerState<SpecialtyEmergencyScr
                               const SizedBox(height: 2),
                               Text(
                                 item['subtitle']!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: Color(0xFF6B7280),
@@ -187,6 +191,8 @@ class _SpecialtyEmergencyScreenState extends ConsumerState<SpecialtyEmergencyScr
                               const SizedBox(height: 2),
                               Text(
                                 item['pricing']!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: Color(0xFF9CA3AF),
