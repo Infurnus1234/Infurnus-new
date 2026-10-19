@@ -37,6 +37,13 @@ for (const file of files) {
     findings++;
     continue;
   }
+  // Skip scanning public Firebase config files for API keys
+  if (
+    file.endsWith('google-services.json') ||
+    file.endsWith('firebase_options.dart')
+  ) {
+    continue;
+  }
   const text = readFileSync(file);
   if (text.includes(0)) continue;
   text
