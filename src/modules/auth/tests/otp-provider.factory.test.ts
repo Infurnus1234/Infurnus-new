@@ -110,6 +110,8 @@ describe('generic OTP engine and production configuration safety', () => {
     env.NODE_ENV = 'production';
     env.RESEND_API_KEY = undefined;
     env.OTP_PROVIDER_CONFIG = undefined;
+    env.MSG91_AUTH_KEY = undefined;
+    env.MSG91_TEMPLATE_ID = undefined;
     await expect(
       createConfiguredOtpProvider({} as Pool).sendSmsOtp('+919999999999'),
     ).rejects.toMatchObject({ code: 'OTP_PROVIDER_NOT_CONFIGURED' });

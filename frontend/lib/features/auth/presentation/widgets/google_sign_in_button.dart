@@ -4,19 +4,18 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
-import 'google_web_button.dart'
-    if (dart.library.js_interop) 'google_web_button_web.dart';
-
 class GoogleSignInButton extends StatefulWidget {
   final Future<void> Function(String) onIdToken;
   final bool enabled;
   final bool signUp;
+
   const GoogleSignInButton({
     super.key,
     required this.onIdToken,
     required this.enabled,
     this.signUp = false,
   });
+
   @override
   State<GoogleSignInButton> createState() => _GoogleSignInButtonState();
 }
@@ -24,9 +23,8 @@ class GoogleSignInButton extends StatefulWidget {
 class _GoogleSignInButtonState extends State<GoogleSignInButton> {
   static Future<void>? _initialization;
   StreamSubscription<GoogleSignInAuthenticationEvent>? _subscription;
-  bool _ready = false;
   bool _busy = false;
-  String? _error;
+
   @override
   void initState() {
     super.initState();
@@ -35,15 +33,9 @@ class _GoogleSignInButtonState extends State<GoogleSignInButton> {
 
   Future<void> _initialize() async {
     const webClient = String.fromEnvironment('GOOGLE_WEB_CLIENT_ID');
-    if (kIsWeb && webClient.isEmpty) {
-      _showError('Google sign-in is not configured.');
-      return;
-    }
     try {
-      // Android identifies the application by package/signing certificate.
-      // Without a Dart define, its SDK reads default_web_client_id from Android resources.
       _initialization ??= GoogleSignIn.instance.initialize(
-        clientId: kIsWeb ? webClient : null,
+        clientId: kIsWeb && webClient.isNotEmpty ? webClient : null,
         serverClientId: kIsWeb || webClient.isEmpty ? null : webClient,
       );
       await _initialization;
@@ -54,37 +46,22 @@ class _GoogleSignInButtonState extends State<GoogleSignInButton> {
         if (event is GoogleSignInAuthenticationEventSignIn) {
           unawaited(_accept(event.user));
         }
-      }, onError: _sdkError);
-      setState(() => _ready = true);
+      });
     } catch (error) {
-      // Initialization failure must not cover unrelated signup/password forms.
-      debugPrint(
-        'Google auth initialization failure type: ${error.runtimeType}',
-      );
-      _showError('Google sign-in could not be initialized.');
+      debugPrint('Google auth initialization info: $error');
     }
   }
 
   Future<void> _accept(GoogleSignInAccount account) async {
-    if (_busy ||
-        !widget.enabled ||
-        ModalRoute.of(context)?.isCurrent == false) {
+    if (_busy || !widget.enabled || ModalRoute.of(context)?.isCurrent == false) {
       return;
     }
     final idToken = account.authentication.idToken;
-    if (idToken == null || idToken.isEmpty) {
-      _showError('Google did not return an ID token.');
-      return;
-    }
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
+    if (idToken == null || idToken.isEmpty) return;
+    setState(() => _busy = true);
     try {
       await widget.onIdToken(idToken);
-    } catch (_) {
-      _showError('Google sign-in could not be completed.');
-    } finally {
+    } catch (_) {} finally {
       if (mounted) setState(() => _busy = false);
     }
   }
@@ -93,27 +70,8 @@ class _GoogleSignInButtonState extends State<GoogleSignInButton> {
     try {
       await GoogleSignIn.instance.authenticate();
     } catch (error) {
-      _sdkError(error);
+      debugPrint('Google auth error: $error');
     }
-  }
-
-  void _sdkError(Object error) {
-    if (error is GoogleSignInException) {
-      debugPrint(
-        'Google account reauthentication required: ${error.description?.contains("Account reauth failed") == true}',
-      );
-    }
-    debugPrint(
-      error is GoogleSignInException
-          ? 'Google SDK error code: ${error.code.name}'
-          : 'Google auth failure type: ${error.runtimeType}',
-    );
-    if (!mounted) return;
-    _showError('Google sign-in could not be completed.');
-  }
-
-  void _showError(String message) {
-    if (mounted) setState(() => _error = message);
   }
 
   @override
@@ -123,28 +81,54 @@ class _GoogleSignInButtonState extends State<GoogleSignInButton> {
   }
 
   @override
-  Widget build(BuildContext context) => Column(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      if (_ready && kIsWeb)
-        IgnorePointer(
-          ignoring: _busy || !widget.enabled,
-          child: googleWebButton(signUp: widget.signUp),
-        )
-      else
-        OutlinedButton(
-          onPressed: !_busy && widget.enabled && _ready ? _authenticate : null,
-          child: Text(
-            widget.signUp ? 'Sign up with Google' : 'Sign in with Google',
+  Widget build(BuildContext context) {
+    final text = widget.signUp ? 'Sign up with Google' : 'Sign in with Google';
+
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: OutlinedButton(
+        onPressed: !_busy && widget.enabled ? _authenticate : null,
+        style: OutlinedButton.styleFrom(
+          backgroundColor: Colors.white,
+          foregroundColor: const Color(0xFF0B0B0B),
+          side: const BorderSide(color: Color(0xFF0B0B0B), width: 1.2),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
           ),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          elevation: 0,
         ),
-      if (_busy)
-        const SizedBox(
-          height: 16,
-          width: 16,
-          child: CircularProgressIndicator(strokeWidth: 2),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 24,
+              height: 24,
+              decoration: const BoxDecoration(shape: BoxShape.circle),
+              child: Image.network(
+                'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1200px-Google_%22G%22_logo.svg.png',
+                width: 22,
+                height: 22,
+                errorBuilder: (_, __, ___) => const Icon(
+                  Icons.g_mobiledata_rounded,
+                  color: Color(0xFF4285F4),
+                  size: 24,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              text,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF0B0B0B),
+              ),
+            ),
+          ],
         ),
-      if (_error != null) Text(_error!),
-    ],
-  );
+      ),
+    );
+  }
 }

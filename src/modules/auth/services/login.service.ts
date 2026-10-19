@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { AppError } from '../../../common/errors/app-error.js';
 import { encryptSecret } from '../../../common/crypto/encryption.js';
 
@@ -136,6 +137,9 @@ export class LoginService {
     // User not found
     // --------------------------------------------------------
 
+    if (!identity && !adminOnly) {
+      return { challengeId: randomUUID(), expiresAt: new Date(Date.now() + 10 * 60_000) };
+    }
     if (!identity) {
       throw new AppError('INVALID_CREDENTIALS', 'Invalid email/phone or password', 401);
     }
@@ -152,7 +156,20 @@ export class LoginService {
     // Password Verification
     // ========================================================
 
-    const validPassword = await verifyPassword(identity.passwordHash, input.password);
+    const passwordless = identity.role === 'customer' || identity.role === 'driver';
+    // Legacy secondary contacts were stored before their ownership was proven.
+    // Refuse these identifiers instead of granting access to an unrelated account.
+    if (
+      passwordless &&
+      ((phone && identity.phoneVerified === false) ||
+        (!phone && email && identity.emailVerified === false))
+    ) {
+      return { challengeId: randomUUID(), expiresAt: new Date(Date.now() + 10 * 60_000) };
+    }
+    const validPassword =
+      passwordless ||
+      (typeof input.password === 'string' &&
+        (await verifyPassword(identity.passwordHash, input.password)));
 
     if (!validPassword) {
       throw new AppError('INVALID_CREDENTIALS', 'Invalid email/phone or password', 401);

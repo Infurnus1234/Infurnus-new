@@ -23,6 +23,9 @@ import '../../features/customer/presentation/screens/ride_booking_screen.dart';
 import '../../features/customer/presentation/screens/wallet_screen.dart';
 import '../../features/customer/presentation/screens/rentals_screen.dart';
 import '../../features/customer/presentation/screens/logistics_screen.dart';
+import '../../features/customer/presentation/screens/passenger_rides_screen.dart';
+import '../../features/customer/presentation/screens/specialty_emergency_screen.dart';
+import '../../features/customer/presentation/screens/concierge_fleet_screen.dart';
 import '../../features/ai_assistant/presentation/screens/ai_assistant_screen.dart';
 import '../../core/config/legal_texts.dart';
 import '../../features/customer/presentation/screens/legal_document_screen.dart';
@@ -30,6 +33,7 @@ import '../../features/customer/presentation/screens/delete_account_screen.dart'
 import '../../features/customer/presentation/screens/booking_history_screen.dart';
 import '../../features/support/presentation/screens/support_screen.dart';
 import '../../features/driver/presentation/screens/support_tickets_screen.dart';
+import '../../features/customer/presentation/screens/ui_kit_presentation_board_screen.dart';
 
 class RouterNotifier extends ChangeNotifier {
   final Ref _ref;
@@ -58,6 +62,10 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: '/splash',
     refreshListenable: notifier,
     routes: [
+      GoRoute(
+        path: '/ui-kit-board',
+        builder: (context, state) => const UiKitPresentationBoardScreen(),
+      ),
       GoRoute(
         path: '/support-tickets',
         builder: (context, state) => const SupportTicketsScreen(),
@@ -129,6 +137,18 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/logistics',
         builder: (context, state) => const LogisticsScreen(),
+      ),
+      GoRoute(
+        path: '/passenger-rides',
+        builder: (context, state) => const PassengerRidesScreen(),
+      ),
+      GoRoute(
+        path: '/specialty-emergency',
+        builder: (context, state) => const SpecialtyEmergencyScreen(),
+      ),
+      GoRoute(
+        path: '/concierge-fleet',
+        builder: (context, state) => const ConciergeFleetScreen(),
       ),
       GoRoute(
         path: '/ai-assistant/:role',

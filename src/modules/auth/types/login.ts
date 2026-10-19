@@ -1,7 +1,7 @@
 export interface LoginInput {
   email?: string;
   phone?: string;
-  password: string;
+  password?: string | undefined;
 }
 
 export interface LoginResult {
