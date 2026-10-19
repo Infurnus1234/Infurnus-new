@@ -6,6 +6,8 @@ export const envSchema = z
     NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
 
     PORT: z.coerce.number().int().positive().default(3000),
+    // Temporary local-only onboarding; never active in staging or production.
+    DRIVER_TEST_ONBOARDING_ENABLED: z.enum(['true', 'false']).default('false'),
     // Fail closed. Operators must configure the verified proxy topology before deployment.
     TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(10).default(0),
     // Explicit no-ownership preview: an idle serving revision must retain priority.

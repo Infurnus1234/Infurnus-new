@@ -1,5 +1,5 @@
 import rateLimit from 'express-rate-limit';
-import { Router } from 'express';
+import { Router, type RequestHandler } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../../auth/middleware/auth.middleware.js';
 import {
@@ -11,10 +11,13 @@ import {
 import type { PostgresProviderOperationsRepository } from '../repositories/provider-operations.repository.js';
 import { storageService } from '../../../infrastructure/storage/index.js';
 
-export function createProviderOperationsRouter(repository: PostgresProviderOperationsRepository) {
+export function createProviderOperationsRouter(
+  repository: PostgresProviderOperationsRepository,
+  authenticate: RequestHandler = requireAuth,
+) {
   const router = Router();
   router.use(
-    requireAuth,
+    authenticate,
     requireProvider(),
     rateLimit({
       windowMs: 60000,
