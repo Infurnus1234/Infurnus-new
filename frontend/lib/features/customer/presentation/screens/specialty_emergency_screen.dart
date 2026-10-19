@@ -29,8 +29,8 @@ class _SpecialtyEmergencyScreenState extends ConsumerState<SpecialtyEmergencyScr
       'title': 'Towing Van',
       'category': 'towing',
       'filter': 'Emergency',
-      'subtitle': 'Breakdown Assist • Trip-Based',
-      'image': 'assets/images/flatbed_towing_truck.png',
+      'subtitle': 'Breakdown Assistance • Trip-Based',
+      'image': 'assets/images/towing_van_green.png',
       'fallbackIcon': Icons.fire_truck_rounded,
     },
     {
@@ -38,7 +38,7 @@ class _SpecialtyEmergencyScreenState extends ConsumerState<SpecialtyEmergencyScr
       'category': 'jcb',
       'filter': 'Construction',
       'subtitle': 'Specialty Excavation • Trip-Based',
-      'image': 'assets/images/tata_pickup_207_heightened.png',
+      'image': 'assets/images/flatbed_towing_truck.png',
       'fallbackIcon': Icons.construction_rounded,
     },
     {

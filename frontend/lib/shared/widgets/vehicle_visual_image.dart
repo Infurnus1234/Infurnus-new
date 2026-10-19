@@ -47,6 +47,15 @@ class VehicleVisualImage extends StatelessWidget {
     if (key.contains('407') || key.contains('cargo 407')) {
       return 'assets/images/tata_407_beige.png';
     }
+    if (key.contains('mini truck') || key.contains('minitruck')) {
+      return 'assets/images/tata_white_truck.png';
+    }
+    if (key.contains('towing') || key.contains('tow')) {
+      return 'assets/images/towing_van_green.png';
+    }
+    if (key.contains('jcb') || key.contains('excavator')) {
+      return 'assets/images/flatbed_towing_truck.png';
+    }
     if (key.contains('thar')) {
       return 'assets/images/thar_visual.webp';
     }
@@ -56,7 +65,7 @@ class VehicleVisualImage extends StatelessWidget {
     if (key.contains('innova') || key.contains('mercedes') || key.contains('bmw') || key.contains('luxury')) {
       return 'assets/images/bmw_visual.webp';
     }
-    if (key.contains('truck') || key.contains('mini truck') || key.contains('logistics')) {
+    if (key.contains('truck') || key.contains('logistics')) {
       return 'assets/images/tata_white_truck.png';
     }
     if (key.contains('ambulance') || key.contains('emergency') || key.contains('roadside')) {
