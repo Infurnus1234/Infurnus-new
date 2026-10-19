@@ -50,7 +50,7 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
       'filter': 'Car',
       'subtitle': '4 seater • Compact & comfortable',
       'price': '₹120-180',
-      'image': 'assets/images/passenger_car_visual.jpg',
+      'image': 'assets/images/sedan_green_white.png',
       'fallbackIcon': Icons.directions_car_filled_rounded,
     },
     {
@@ -84,9 +84,17 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final rideState = ref.watch(rideProvider);
+    final selectedTier = rideState.selectedTier.isEmpty ? 'auto' : rideState.selectedTier;
+
     final filteredVehicles = _selectedFilter == 'All'
         ? _allVehicles
         : _allVehicles.where((v) => v['filter'] == _selectedFilter).toList();
+
+    final selectedVehicle = _allVehicles.firstWhere(
+      (v) => v['category'] == selectedTier,
+      orElse: () => _allVehicles[1],
+    );
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
@@ -156,25 +164,31 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
             child: ListView.separated(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               itemCount: filteredVehicles.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
               itemBuilder: (context, index) {
                 final vehicle = filteredVehicles[index];
+                final isSelected = selectedTier == vehicle['category'];
+
                 return GestureDetector(
                   onTap: () {
                     ref.read(rideProvider.notifier).selectSector('passenger');
                     ref.read(rideProvider.notifier).selectTier(vehicle['category']);
-                    context.push('/ride-booking');
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: isSelected ? const Color(0xFFF0FDF4) : Colors.white,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                      border: Border.all(
+                        color: isSelected ? const Color(0xFF16A34A) : const Color(0xFFE5E7EB),
+                        width: isSelected ? 1.8 : 1,
+                      ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.03),
-                          blurRadius: 6,
+                          color: isSelected
+                              ? const Color(0xFF16A34A).withValues(alpha: 0.12)
+                              : Colors.black.withValues(alpha: 0.03),
+                          blurRadius: isSelected ? 10 : 6,
                           offset: const Offset(0, 2),
                         ),
                       ],
@@ -210,13 +224,35 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(
-                                vehicle['title'],
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF111827),
-                                ),
+                              Row(
+                                children: [
+                                  Text(
+                                    vehicle['title'],
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: isSelected ? const Color(0xFF15803D) : const Color(0xFF111827),
+                                    ),
+                                  ),
+                                  if (isSelected) ...[
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF16A34A),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: const Text(
+                                        'Selected',
+                                        style: TextStyle(
+                                          fontSize: 9.5,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                               const SizedBox(height: 3),
                               Text(
@@ -242,19 +278,19 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                             children: [
                               Text(
                                 vehicle['price'],
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold,
-                                  color: Color(0xFF111827),
+                                  color: isSelected ? const Color(0xFF16A34A) : const Color(0xFF111827),
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.visible,
                               ),
                               const SizedBox(height: 4),
-                              const Icon(
-                                Icons.chevron_right_rounded,
-                                size: 18,
-                                color: Color(0xFF9CA3AF),
+                              Icon(
+                                isSelected ? Icons.check_circle_rounded : Icons.chevron_right_rounded,
+                                size: 20,
+                                color: isSelected ? const Color(0xFF16A34A) : const Color(0xFF9CA3AF),
                               ),
                             ],
                           ),
@@ -264,6 +300,57 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                   ),
                 );
               },
+            ),
+          ),
+
+          // Bottom Action Bar
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 10,
+                  offset: Offset(0, -2),
+                ),
+              ],
+            ),
+            child: SafeArea(
+              child: SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF16A34A),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(26),
+                    ),
+                    elevation: 0,
+                  ),
+                  onPressed: () {
+                    ref.read(rideProvider.notifier).selectSector('passenger');
+                    ref.read(rideProvider.notifier).selectTier(selectedVehicle['category']);
+                    context.push('/ride-booking');
+                  },
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Book ${selectedVehicle['title']} (${selectedVehicle['price']})',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Icon(Icons.arrow_forward_rounded, size: 18, color: Colors.white),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
         ],
