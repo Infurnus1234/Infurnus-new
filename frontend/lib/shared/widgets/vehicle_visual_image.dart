@@ -22,30 +22,42 @@ class VehicleVisualImage extends StatelessWidget {
     this.fit = BoxFit.contain,
   });
 
-  /// Map vehicle names/categories to existing verified asset paths
+  /// Map vehicle names/categories to correct verified asset paths
   static String? getAssetPath(String? name, String? cat) {
     final key = '${name ?? ''} ${cat ?? ''}'.toLowerCase().trim();
 
     if (key.contains('bike') || key.contains('two-wheeler') || key.contains('motorcycle')) {
-      return 'assets/images/bike_visual.jpg';
+      return 'assets/images/bike_rider_green_white.png';
     }
-    if (key.contains('auto') || key.contains('e-rickshaw') || key.contains('rickshaw') || key.contains('ape')) {
-      return 'assets/images/auto_visual.jpg';
+    if (key.contains('e-rickshaw') || key.contains('erickshaw')) {
+      return 'assets/images/e_rickshaw_green_white.png';
+    }
+    if (key.contains('auto') || key.contains('rickshaw') || key.contains('ape')) {
+      return 'assets/images/auto_green_white.png';
+    }
+    if (key.contains('tata magic') || key.contains('magic')) {
+      return 'assets/images/piaggio_magic_blue.png';
+    }
+    if (key.contains('207') && (key.contains('heavy') || key.contains('high') || key.contains('heightened'))) {
+      return 'assets/images/tata_pickup_207_heightened.png';
+    }
+    if (key.contains('207') || key.contains('cargo 207') || key.contains('normal')) {
+      return 'assets/images/mahindra_207_white.png';
+    }
+    if (key.contains('407') || key.contains('cargo 407')) {
+      return 'assets/images/tata_407_beige.png';
     }
     if (key.contains('thar')) {
       return 'assets/images/thar_visual.webp';
     }
-    if (key.contains('fortuner') || key.contains('scorpio')) {
-      return 'assets/images/fortuner_visual.jpg';
+    if (key.contains('fortuner') || key.contains('scorpio') || key.contains('suv')) {
+      return 'assets/images/scorpio_n_black.png';
     }
     if (key.contains('innova') || key.contains('mercedes') || key.contains('bmw') || key.contains('luxury')) {
       return 'assets/images/bmw_visual.webp';
     }
-    if (key.contains('207') || key.contains('407') || key.contains('tata magic') || key.contains('cargo') || key.contains('pickup')) {
-      return 'assets/images/tata_pickup_207_407.png';
-    }
     if (key.contains('truck') || key.contains('mini truck') || key.contains('logistics')) {
-      return 'assets/images/logistics_visual.jpg';
+      return 'assets/images/tata_white_truck.png';
     }
     if (key.contains('ambulance') || key.contains('emergency') || key.contains('roadside')) {
       return 'assets/images/ambulance_visual.jpg';
@@ -57,7 +69,7 @@ class VehicleVisualImage extends StatelessWidget {
       return 'assets/images/vehicle_fleet_banner.png';
     }
     if (key.contains('hatchback') || key.contains('sedan') || key.contains('cab') || key.contains('car') || key.contains('passenger')) {
-      return 'assets/images/passenger_car_visual.jpg';
+      return 'assets/images/sedan_green_white.png';
     }
 
     return 'assets/images/passenger_car_visual.jpg';
@@ -68,7 +80,7 @@ class VehicleVisualImage extends StatelessWidget {
     final key = '${name ?? ''} ${cat ?? ''}'.toLowerCase().trim();
 
     if (key.contains('bike')) return Icons.two_wheeler_rounded;
-    if (key.contains('auto') || key.contains('rickshaw')) return Icons.electric_rickshaw_rounded;
+    if (key.contains('auto') || key.contains('rickshaw') || key.contains('e-rickshaw')) return Icons.electric_rickshaw_rounded;
     if (key.contains('truck') || key.contains('cargo') || key.contains('ape')) return Icons.local_shipping_rounded;
     if (key.contains('ambulance')) return Icons.medical_services_rounded;
     if (key.contains('towing') || key.contains('roadside')) return Icons.car_repair_rounded;

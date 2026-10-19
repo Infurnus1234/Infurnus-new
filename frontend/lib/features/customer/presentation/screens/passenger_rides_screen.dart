@@ -77,7 +77,7 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
       'filter': 'Car',
       'subtitle': '12 seater • Group travel',
       'price': '₹400-700',
-      'image': 'assets/images/tata_white_truck.png',
+      'image': 'assets/images/rental_visual.jpg',
       'fallbackIcon': Icons.airport_shuttle_rounded,
     },
   ];
@@ -183,8 +183,8 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                       children: [
                         // Vehicle Image Thumbnail
                         Container(
-                          width: 60,
-                          height: 50,
+                          width: 64,
+                          height: 52,
                           decoration: BoxDecoration(
                             color: const Color(0xFFF3F4F6),
                             borderRadius: BorderRadius.circular(10),
@@ -196,7 +196,7 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                               fit: BoxFit.contain,
                               errorBuilder: (_, __, ___) => Icon(
                                 vehicle['fallbackIcon'] as IconData,
-                                size: 30,
+                                size: 28,
                                 color: const Color(0xFF16A34A),
                               ),
                             ),
@@ -208,6 +208,7 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
                                 vehicle['title'],
@@ -217,37 +218,46 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                                   color: Color(0xFF111827),
                                 ),
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 3),
                               Text(
                                 vehicle['subtitle'],
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: Color(0xFF6B7280),
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ],
                           ),
                         ),
+                        const SizedBox(width: 8),
 
-                        // Price and Chevron
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              vehicle['price'],
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF111827),
+                        // Price and Chevron with fixed width to prevent clipping
+                        SizedBox(
+                          width: 80,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                vehicle['price'],
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF111827),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.visible,
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            const Icon(
-                              Icons.chevron_right_rounded,
-                              size: 18,
-                              color: Color(0xFF9CA3AF),
-                            ),
-                          ],
+                              const SizedBox(height: 4),
+                              const Icon(
+                                Icons.chevron_right_rounded,
+                                size: 18,
+                                color: Color(0xFF9CA3AF),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
