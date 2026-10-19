@@ -41,60 +41,47 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Colors.white,
       body: Stack(
         children: [
-          // Top Hero Banner Background (Fleet & Mobility Banner Image)
+          // Top Edge-to-Edge Hero Banner Image
           Positioned(
             top: 0,
             left: 0,
             right: 0,
-            height: MediaQuery.of(context).size.height * 0.42,
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: RadialGradient(
-                  center: Alignment(0, -0.2),
-                  radius: 0.9,
-                  colors: [
-                    Color(0xFF092212),
-                    Color(0xFF000000),
-                  ],
-                ),
-              ),
-              child: SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Image.asset(
-                      'assets/images/vehicle_fleet_banner.png',
-                      fit: BoxFit.contain,
-                      alignment: Alignment.topCenter,
-                      errorBuilder: (_, __, ___) => Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
-                          Text(
-                            'INFURNUS',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 26,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 3,
-                            ),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'Move. Haul. Rise.',
-                            style: TextStyle(
-                              color: AppColors.emeraldNeon,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 2,
-                            ),
-                          ),
-                        ],
+            height: MediaQuery.of(context).size.height * 0.46,
+            child: SizedBox(
+              width: double.infinity,
+              height: double.infinity,
+              child: Image.asset(
+                'assets/images/vehicle_fleet_banner.png',
+                fit: BoxFit.cover,
+                alignment: Alignment.topCenter,
+                errorBuilder: (_, __, ___) => Container(
+                  color: const Color(0xFF092212),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Text(
+                        'INFURNUS',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 3,
+                        ),
                       ),
-                    ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Move. Haul. Rise.',
+                        style: TextStyle(
+                          color: AppColors.emeraldNeon,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -103,7 +90,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
           // Bottom White Sheet Card Container
           Positioned.fill(
-            top: MediaQuery.of(context).size.height * 0.38,
+            top: MediaQuery.of(context).size.height * 0.40,
             child: Container(
               decoration: const BoxDecoration(
                 color: Colors.white,
@@ -112,23 +99,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 20,
-                    offset: Offset(0, -5),
+                    color: Colors.black12,
+                    blurRadius: 16,
+                    offset: Offset(0, -4),
                   ),
                 ],
               ),
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Log in or sign up',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF111827),
+                    const Center(
+                      child: Text(
+                        'Log in or sign up',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF111827),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 18),
@@ -137,11 +126,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       // Phone Number Input
                       Container(
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF3F4F6),
+                          color: const Color(0xFFF9FAFB),
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(color: const Color(0xFFE5E7EB)),
                         ),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                         child: Row(
                           children: [
                             const Text('🇮🇳', style: TextStyle(fontSize: 20)),
@@ -154,7 +143,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 color: Color(0xFF111827),
                               ),
                             ),
-                            const Icon(Icons.arrow_drop_down, color: Colors.grey),
+                            const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.grey),
                             Container(
                               height: 24,
                               width: 1,
@@ -184,11 +173,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       // Email Input
                       Container(
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF3F4F6),
+                          color: const Color(0xFFF9FAFB),
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(color: const Color(0xFFE5E7EB)),
                         ),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                         child: TextField(
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
@@ -219,7 +208,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               width: 24,
                               child: Checkbox(
                                 value: _rememberMe,
-                                activeColor: AppColors.primaryGreen,
+                                activeColor: const Color(0xFF22C55E),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(4),
                                 ),
@@ -231,23 +220,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               'Remember my login for faster sign-in',
                               style: TextStyle(
                                 fontSize: 13,
-                                color: Color(0xFF4B5563),
+                                color: Color(0xFF374151),
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
                           ],
                         ),
-                        TextButton(
-                          onPressed: () => setState(() => _isEmailLogin = !_isEmailLogin),
-                          style: TextButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
+                        GestureDetector(
+                          onTap: () => setState(() => _isEmailLogin = !_isEmailLogin),
                           child: Text(
                             _isEmailLogin ? 'Use Phone' : 'Use Email',
                             style: const TextStyle(
-                              color: AppColors.primaryGreen,
+                              color: Color(0xFF22C55E),
                               fontSize: 13,
                               fontWeight: FontWeight.bold,
                             ),
@@ -256,81 +240,83 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ],
                     ),
 
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 18),
 
-                    // Primary Black Continue Button with Green Glow Shadow
+                    // Primary Black Continue Button with Glowing Green Border & Shadow
                     Container(
                       width: double.infinity,
                       height: 52,
                       decoration: BoxDecoration(
+                        color: const Color(0xFF03170C),
                         borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFF22C55E), width: 1.5),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF16A34A).withValues(alpha: 0.35),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
+                            color: const Color(0xFF22C55E).withValues(alpha: 0.4),
+                            blurRadius: 10,
+                            spreadRadius: 1,
+                            offset: const Offset(0, 2),
                           ),
                         ],
                       ),
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0B0B0B),
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          elevation: 0,
-                        ),
-                        onPressed: authState.status == AuthStatus.loading
-                            ? null
-                            : () {
-                                if (_isEmailLogin) {
-                                  if (_emailController.text.isNotEmpty) {
-                                    final request = LoginRequest(
-                                      email: _emailController.text.trim(),
-                                      password: '',
-                                    );
-                                    ref.read(authProvider.notifier).login(request, 'email');
-                                  }
-                                } else {
-                                  if (_phoneController.text.isNotEmpty) {
-                                    final phone = _phoneController.text.trim().replaceAll(
-                                      RegExp(r'[^\d+]'),
-                                      '',
-                                    );
-                                    final fullPhone = phone.startsWith('+') ? phone : '+91$phone';
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(14),
+                          onTap: authState.status == AuthStatus.loading
+                              ? null
+                              : () {
+                                  if (_isEmailLogin) {
+                                    if (_emailController.text.isNotEmpty) {
+                                      final request = LoginRequest(
+                                        email: _emailController.text.trim(),
+                                        password: '',
+                                      );
+                                      ref.read(authProvider.notifier).login(request, 'email');
+                                    }
+                                  } else {
+                                    if (_phoneController.text.isNotEmpty) {
+                                      final phone = _phoneController.text.trim().replaceAll(
+                                        RegExp(r'[^\d+]'),
+                                        '',
+                                      );
+                                      final fullPhone = phone.startsWith('+') ? phone : '+91$phone';
 
-                                    final request = LoginRequest(
-                                      phone: fullPhone,
-                                      password: '',
-                                    );
-                                    ref.read(authProvider.notifier).login(request, 'phone');
+                                      final request = LoginRequest(
+                                        phone: fullPhone,
+                                        password: '',
+                                      );
+                                      ref.read(authProvider.notifier).login(request, 'phone');
+                                    }
                                   }
-                                }
-                              },
-                        child: authState.status == AuthStatus.loading
-                            ? const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.5,
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                ),
-                              )
-                            : const Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    'Continue',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
+                                },
+                          child: Center(
+                            child: authState.status == AuthStatus.loading
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                                     ),
+                                  )
+                                : const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        'Continue',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      SizedBox(width: 8),
+                                      Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
+                                    ],
                                   ),
-                                  SizedBox(width: 8),
-                                  Icon(Icons.arrow_forward_rounded, size: 20),
-                                ],
-                              ),
+                          ),
+                        ),
                       ),
                     ),
 
@@ -372,12 +358,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     Center(
                       child: GestureDetector(
                         onTap: () => context.push('/signup'),
-                        child: const Text(
-                          'Create a Customer account',
-                          style: TextStyle(
-                            color: AppColors.primaryGreen,
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
+                        child: RichText(
+                          text: const TextSpan(
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                            children: [
+                              TextSpan(
+                                text: 'Create a ',
+                                style: TextStyle(color: Color(0xFF111827)),
+                              ),
+                              TextSpan(
+                                text: 'Customer',
+                                style: TextStyle(color: Color(0xFF22C55E)),
+                              ),
+                              TextSpan(
+                                text: ' account',
+                                style: TextStyle(color: Color(0xFF111827)),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -394,21 +391,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                     ],
 
-                    const SizedBox(height: 22),
-
-                    // Terms & Privacy Notice
-                    const Center(
-                      child: Text(
-                        'By continuing, you agree to our Terms of Service,\nPrivacy Policy & Content Policy',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Color(0xFF9CA3AF),
-                          fontSize: 11,
-                          height: 1.4,
-                          fontWeight: FontWeight.w400,
-                        ),
-                      ),
-                    ),
                     const SizedBox(height: 16),
                   ],
                 ),
