@@ -1,13 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 
-import '../../../../core/services/location_service.dart';
-import '../../../../shared/widgets/infurnus_button.dart';
-import '../../data/models/fleet_vehicle_model.dart';
 import '../providers/ride_provider.dart';
-import '../providers/ride_use_case_providers.dart';
 
 class RentalsScreen extends ConsumerStatefulWidget {
   const RentalsScreen({super.key});
@@ -17,708 +12,222 @@ class RentalsScreen extends ConsumerStatefulWidget {
 }
 
 class _RentalsScreenState extends ConsumerState<RentalsScreen> {
-  static const Color mainBg = Color(0xFFF9FAFB);
-  static const Color cardBg = Color(0xFFFFFFFF);
-  static const Color borderCard = Color(0xFFE5E7EB);
-  static const Color textWhite = Color(0xFF111827);
-  static const Color textGray = Color(0xFF4B5563);
-  static const Color brandGreen = Color(0xFF16A34A);
-  static const Color goldAccent = Color(0xFFCA8A04);
+  String _selectedFilter = 'All';
 
-  final _pickupController = TextEditingController();
-  String _selectedVehicle = 'fortuner';
-  int _selectedHours = 4;
-  DateTime _selectedDate = DateTime.now();
-  TimeOfDay _selectedTime = const TimeOfDay(hour: 10, minute: 0);
+  final List<String> _filters = ['All', 'SUV', 'Off-road', 'Luxury', 'Vans'];
 
-  List<FleetVehicleModel> _fleetVehicles = [];
-  bool _isLoadingFleet = true;
-  bool _isContinuingToBooking = false;
-  String? _fleetError;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _fetchFleet();
-      _detectCurrentLocation();
-    });
-  }
-
-  Future<void> _fetchFleet() async {
-    setState(() {
-      _isLoadingFleet = true;
-      _fleetError = null;
-    });
-    try {
-      final fleet = await ref.read(getFleetUseCaseProvider)(sector: 'premium');
-      if (mounted) {
-        setState(() {
-          _fleetVehicles = fleet;
-          _isLoadingFleet = false;
-          if (fleet.isNotEmpty) {
-            if (!_fleetVehicles.any((v) => v.category == _selectedVehicle)) {
-              _selectedVehicle = fleet.first.category;
-            }
-          }
-        });
-        _syncToRideProvider();
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoadingFleet = false;
-          _fleetError = e.toString();
-        });
-      }
-    }
-  }
-
-  Future<void> _detectCurrentLocation() async {
-    try {
-      final pos = await ref.read(locationServiceProvider).getCurrentPosition();
-      if (pos != null && mounted) {
-        ref
-            .read(rideProvider.notifier)
-            .setPickupCoords(
-              LatLng(pos.latitude, pos.longitude),
-              address: 'Current Location',
-            );
-        _pickupController.text = 'Current Location';
-        _syncToRideProvider();
-      }
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(error.toString()),
-            backgroundColor: const Color(0xFFEF4444),
-          ),
-        );
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _pickupController.dispose();
-    super.dispose();
-  }
-
-  FleetVehicleModel? get _currentCar {
-    if (_fleetVehicles.isEmpty) return null;
-    return _fleetVehicles.firstWhere(
-      (c) => c.category == _selectedVehicle,
-      orElse: () => _fleetVehicles.first,
-    );
-  }
-
-  void _syncToRideProvider() {
-    final car = _currentCar;
-    ref
-        .read(rideProvider.notifier)
-        .setRoute(
-          _pickupController.text.trim(),
-          'Hourly Standby / As Directed',
-        );
-    ref.read(rideProvider.notifier).selectSector('premium');
-    if (car != null) {
-      ref.read(rideProvider.notifier).selectTier(car.category);
-      ref.read(rideProvider.notifier).setRentalDetails({
-        'hours': _selectedHours,
-        'startDate':
-            '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}',
-        'startTime':
-            '${_selectedTime.hour}:${_selectedTime.minute.toString().padLeft(2, '0')}',
-        'fuelRatePerKm': car.fuelRatePerKm,
-        'vehicleModel': '${car.make} ${car.model}',
-      });
-    }
-  }
-
-  Future<void> _handleBooking() async {
-    if (_isContinuingToBooking) return;
-    if (_pickupController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter pickup location')),
-      );
-      return;
-    }
-
-    if (_currentCar == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No premium vehicle available to book')),
-      );
-      return;
-    }
-
-    setState(() => _isContinuingToBooking = true);
-    try {
-      _syncToRideProvider();
-      await context.push('/ride-booking');
-    } finally {
-      if (mounted) setState(() => _isContinuingToBooking = false);
-    }
-  }
-
-  IconData _getVehicleIcon(String category) {
-    switch (category.toLowerCase()) {
-      case 'fortuner':
-        return Icons.directions_car_filled_rounded;
-      case 'thar':
-        return Icons.terrain_rounded;
-      case 'luxury_suv':
-        return Icons.stars_rounded;
-      default:
-        return Icons.directions_car_rounded;
-    }
-  }
+  final List<Map<String, dynamic>> _vehicles = [
+    {
+      'title': 'Scorpio N',
+      'category': 'scorpio_n',
+      'filter': 'SUV',
+      'subtitle': 'Rugged SUV • Chauffeur + Fuel',
+      'image': 'assets/images/scorpio_n_black.png',
+      'fallbackIcon': Icons.directions_car_filled_rounded,
+    },
+    {
+      'title': 'Mahindra Thar',
+      'category': 'thar',
+      'filter': 'Off-road',
+      'subtitle': 'Off-road • Chauffeur + Fuel',
+      'image': 'assets/images/thar_visual.webp',
+      'fallbackIcon': Icons.directions_car_filled_rounded,
+    },
+    {
+      'title': 'Innova Crysta',
+      'category': 'innova',
+      'filter': 'Luxury',
+      'subtitle': 'Executive • Chauffeur + Fuel',
+      'image': 'assets/images/sedan_green_white.png',
+      'fallbackIcon': Icons.directions_car_rounded,
+    },
+    {
+      'title': 'Force Traveller',
+      'category': 'traveller',
+      'filter': 'Vans',
+      'subtitle': '12 seater • Chauffeur + Fuel',
+      'image': 'assets/images/tata_white_truck.png',
+      'fallbackIcon': Icons.airport_shuttle_rounded,
+    },
+    {
+      'title': 'Mercedes V-Class',
+      'category': 'mercedes_v_class',
+      'filter': 'Luxury',
+      'subtitle': 'Luxury Van • Chauffeur + Fuel',
+      'image': 'assets/images/bmw_visual.webp',
+      'fallbackIcon': Icons.airport_shuttle_rounded,
+    },
+    {
+      'title': 'Helicopter',
+      'category': 'helicopter',
+      'filter': 'Luxury',
+      'subtitle': 'On-demand • Chauffeur + Pilot',
+      'image': 'assets/images/vehicle_fleet_banner.png',
+      'fallbackIcon': Icons.flight_rounded,
+    },
+  ];
 
   @override
   Widget build(BuildContext context) {
-    final rideState = ref.watch(rideProvider);
-    final car = _currentCar;
-    final fuelRate = car?.fuelRatePerKm ?? 0.0;
-    final estimatedAdvance = rideState.fare;
+    final filtered = _selectedFilter == 'All'
+        ? _vehicles
+        : _vehicles.where((v) => v['filter'] == _selectedFilter).toList();
 
     return Scaffold(
-      backgroundColor: mainBg,
+      backgroundColor: const Color(0xFFF9FAFB),
       appBar: AppBar(
-        title: const Text(
-          'Premium & Luxury Fleet',
-          style: TextStyle(color: textWhite, fontWeight: FontWeight.bold),
-        ),
+        backgroundColor: Colors.white,
         elevation: 0,
-        backgroundColor: const Color(0xFF050505),
-        foregroundColor: textWhite,
+        centerTitle: false,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF111827)),
+          onPressed: () => context.pop(),
+        ),
+        title: const Text(
+          'The Concierge Fleet',
+          style: TextStyle(
+            color: Color(0xFF111827),
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Banner
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: cardBg,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: goldAccent.withValues(alpha: 0.4)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1F1A00),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: goldAccent.withValues(alpha: 0.3),
+      body: Column(
+        children: [
+          // Filter Chips Horizontal Row
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: SizedBox(
+              height: 36,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _filters.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final filter = _filters[index];
+                  final isSelected = filter == _selectedFilter;
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedFilter = filter),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isSelected ? const Color(0xFF16A34A) : Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isSelected ? const Color(0xFF16A34A) : const Color(0xFFE5E7EB),
+                        ),
                       ),
-                    ),
-                    child: const Icon(
-                      Icons.stars_rounded,
-                      color: goldAccent,
-                      size: 28,
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Hourly Chauffeur Service',
+                      child: Center(
+                        child: Text(
+                          filter,
                           style: TextStyle(
-                            color: textWhite,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: isSelected ? Colors.white : const Color(0xFF374151),
                           ),
                         ),
-                        SizedBox(height: 4),
-                        Text(
-                          'Dedicated luxury vehicle with standby driver. Fuel billed on actual distance.',
-                          style: TextStyle(color: textGray, fontSize: 12),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          const Divider(height: 1, color: Color(0xFFE5E7EB)),
+
+          // Vertical Vehicle List
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              itemCount: filtered.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                final item = filtered[index];
+                return GestureDetector(
+                  onTap: () {
+                    ref.read(rideProvider.notifier).selectSector('premium');
+                    ref.read(rideProvider.notifier).selectTier(item['category']);
+                    context.push('/ride-booking');
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.03),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
                         ),
                       ],
                     ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Select Fleet
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Choose Your Vehicle',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: textWhite,
-                  ),
-                ),
-                if (_isLoadingFleet)
-                  const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: brandGreen,
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            if (_isLoadingFleet)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 32),
-                child: Center(
-                  child: CircularProgressIndicator(color: brandGreen),
-                ),
-              )
-            else if (_fleetError != null)
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF3A1111),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: const Color(0xFFEF4444).withValues(alpha: 0.4),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.error_outline, color: Color(0xFFEF4444)),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Unable to load active fleet: $_fleetError',
-                        style: const TextStyle(color: textWhite, fontSize: 13),
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: _fetchFleet,
-                      child: const Text(
-                        'Retry',
-                        style: TextStyle(color: brandGreen),
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            else if (_fleetVehicles.isEmpty)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: cardBg,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: borderCard),
-                ),
-                child: const Column(
-                  children: [
-                    Icon(
-                      Icons.directions_car_outlined,
-                      size: 40,
-                      color: textGray,
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'No premium vehicles currently available',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        color: textWhite,
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      'All luxury fleet units are currently on assignment.',
-                      style: TextStyle(color: textGray, fontSize: 12),
-                    ),
-                  ],
-                ),
-              )
-            else
-              ..._fleetVehicles.map((item) {
-                final isSelected = item.category == _selectedVehicle;
-                final icon = _getVehicleIcon(item.category);
-
-                return GestureDetector(
-                  onTap: () {
-                    setState(() => _selectedVehicle = item.category);
-                    _syncToRideProvider();
-                  },
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: isSelected ? const Color(0xFF1F1A00) : cardBg,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isSelected ? goldAccent : borderCard,
-                        width: isSelected ? 2 : 1,
-                      ),
-                    ),
                     child: Row(
                       children: [
-                        CircleAvatar(
-                          radius: 24,
-                          backgroundColor: isSelected
-                              ? goldAccent.withValues(alpha: 0.2)
-                              : const Color(0xFF1A1A1A),
-                          child: Icon(
-                            icon,
-                            color: isSelected ? goldAccent : textWhite,
+                        // Image Thumbnail
+                        Container(
+                          width: 60,
+                          height: 50,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF3F4F6),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.asset(
+                              item['image'],
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, __, ___) => Icon(
+                                item['fallbackIcon'] as IconData,
+                                size: 30,
+                                color: const Color(0xFFCA8A04),
+                              ),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 14),
+
+                        // Title & Subtitle
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '${item.make} ${item.model}',
+                                item['title'],
                                 style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
                                   fontSize: 15,
-                                  color: textWhite,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF111827),
                                 ),
                               ),
-                              const SizedBox(height: 2),
+                              const SizedBox(height: 4),
                               Text(
-                                '${item.category.toUpperCase()} • Chauffeur Standby',
+                                item['subtitle'],
                                 style: const TextStyle(
-                                  color: textGray,
                                   fontSize: 12,
+                                  color: Color(0xFF6B7280),
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              '₹${item.fuelRatePerKm.toStringAsFixed(0)}/km',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                                color: goldAccent,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            const Text(
-                              'fuel rate',
-                              style: TextStyle(fontSize: 11, color: textGray),
-                            ),
-                          ],
+
+                        // Trailing Chevron
+                        const Icon(
+                          Icons.chevron_right_rounded,
+                          size: 20,
+                          color: Color(0xFF9CA3AF),
                         ),
                       ],
                     ),
                   ),
                 );
-              }),
-            const SizedBox(height: 20),
-
-            // Pickup & Schedule
-            const Text(
-              'Trip Schedule & Pickup',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-                color: textWhite,
-              ),
+              },
             ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: cardBg,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: borderCard),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.location_on_rounded,
-                        color: Color(0xFFEF4444),
-                        size: 20,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextField(
-                          controller: _pickupController,
-                          style: const TextStyle(color: textWhite),
-                          decoration: const InputDecoration(
-                            hintText: 'Pickup Location',
-                            hintStyle: TextStyle(color: textGray),
-                            border: InputBorder.none,
-                            isDense: true,
-                          ),
-                          onChanged: (value) {
-                            ref
-                                .read(rideProvider.notifier)
-                                .updatePickupAddress(value);
-                            _syncToRideProvider();
-                          },
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(
-                          Icons.gps_fixed_rounded,
-                          size: 18,
-                          color: brandGreen,
-                        ),
-                        onPressed: _detectCurrentLocation,
-                      ),
-                    ],
-                  ),
-                  const Divider(color: borderCard),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      TextButton.icon(
-                        icon: const Icon(
-                          Icons.calendar_today_rounded,
-                          size: 18,
-                          color: brandGreen,
-                        ),
-                        label: Text(
-                          '${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: textWhite,
-                          ),
-                        ),
-                        onPressed: () async {
-                          final picked = await showDatePicker(
-                            context: context,
-                            initialDate: _selectedDate,
-                            firstDate: DateTime.now(),
-                            lastDate: DateTime.now().add(
-                              const Duration(days: 30),
-                            ),
-                          );
-                          if (picked != null) {
-                            setState(() => _selectedDate = picked);
-                            _syncToRideProvider();
-                          }
-                        },
-                      ),
-                      TextButton.icon(
-                        icon: const Icon(
-                          Icons.access_time_rounded,
-                          size: 18,
-                          color: brandGreen,
-                        ),
-                        label: Text(
-                          _selectedTime.format(context),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: textWhite,
-                          ),
-                        ),
-                        onPressed: () async {
-                          final picked = await showTimePicker(
-                            context: context,
-                            initialTime: _selectedTime,
-                          );
-                          if (picked != null) {
-                            setState(() => _selectedTime = picked);
-                            _syncToRideProvider();
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Number of Hours
-            const Text(
-              'Booking Duration',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-                color: textWhite,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [2, 4, 8, 12].map((hrs) {
-                final isSelected = _selectedHours == hrs;
-                return Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      setState(() => _selectedHours = hrs);
-                      _syncToRideProvider();
-                    },
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 4),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        color: isSelected ? const Color(0xFF1F1A00) : cardBg,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isSelected ? goldAccent : borderCard,
-                        ),
-                      ),
-                      child: Column(
-                        children: [
-                          Text(
-                            '$hrs Hrs',
-                            style: TextStyle(
-                              color: isSelected ? goldAccent : textWhite,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Standby',
-                            style: TextStyle(
-                              color: isSelected ? goldAccent : textGray,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 24),
-
-            // Transparent Pricing Structure Box
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: cardBg,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: borderCard),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Billing Structure',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: textWhite,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Base Package ($_selectedHours hours standby)',
-                        style: const TextStyle(color: textGray, fontSize: 13),
-                      ),
-                      Text(
-                        rideState.fareEstimate?.baseAmount != null
-                            ? '₹${rideState.fareEstimate!.baseAmount.toStringAsFixed(2)}'
-                            : (estimatedAdvance != null
-                                  ? '₹${estimatedAdvance.toStringAsFixed(2)}'
-                                  : 'Calculating...'),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                          color: textWhite,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Configured Fuel Rate',
-                        style: TextStyle(color: textGray, fontSize: 13),
-                      ),
-                      Text(
-                        '₹${fuelRate.toStringAsFixed(2)} / km',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                          color: goldAccent,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Fuel Cost Policy',
-                        style: TextStyle(color: textGray, fontSize: 12),
-                      ),
-                      Text(
-                        'Billed on actual GPS distance',
-                        style: TextStyle(
-                          color: textGray.withValues(alpha: 0.8),
-                          fontSize: 12,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Divider(height: 20, color: borderCard),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Total Package Advance',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                          color: textWhite,
-                        ),
-                      ),
-                      Text(
-                        estimatedAdvance != null
-                            ? '₹${estimatedAdvance.toStringAsFixed(2)}'
-                            : (rideState.isEstimatingFare
-                                  ? 'Calculating...'
-                                  : '--'),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w900,
-                          fontSize: 20,
-                          color: brandGreen,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 28),
-
-            // Book Button
-            InfurnusButton(
-              text: estimatedAdvance != null
-                  ? 'Continue to Booking • ₹${estimatedAdvance.toStringAsFixed(0)}'
-                  : 'Choose Destination & Continue',
-              isLoading: rideState.isEstimatingFare || _isContinuingToBooking,
-              onPressed: _fleetVehicles.isEmpty ? null : _handleBooking,
-            ),
-            const SizedBox(height: 20),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

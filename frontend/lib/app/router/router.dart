@@ -15,6 +15,8 @@ import '../../features/auth/presentation/screens/location_permission_screen.dart
 import '../../features/auth/presentation/screens/notifications_permission_screen.dart';
 import '../../features/auth/presentation/screens/setup_complete_screen.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
+import '../../features/customer/presentation/screens/passenger_rides_screen.dart';
+import '../../features/customer/presentation/screens/specialty_emergency_screen.dart';
 import '../../features/customer/presentation/screens/customer_home_screen.dart';
 import '../../features/customer/presentation/screens/profile_screen.dart';
 import '../../features/customer/presentation/screens/ride_booking_screen.dart';
@@ -99,6 +101,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/customer-home',
         builder: (context, state) => const CustomerHomeScreen(),
+      ),
+      GoRoute(
+        path: '/passenger-rides',
+        builder: (context, state) => const PassengerRidesScreen(),
+      ),
+      GoRoute(
+        path: '/emergency',
+        builder: (context, state) => const SpecialtyEmergencyScreen(),
       ),
       GoRoute(
         path: '/profile',

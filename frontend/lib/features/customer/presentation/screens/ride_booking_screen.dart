@@ -56,6 +56,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
   int _selectedRating = 5;
   String _selectedPaymentMethod = 'wallet';
   bool _isProcessingPayment = false;
+  // ignore: unused_field
   bool _isLoadingFleet = true;
   List<FleetVehicleModel> _fleetVehicles = [];
 
@@ -659,21 +660,15 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
     return Scaffold(
       backgroundColor: mainBg,
       appBar: AppBar(
-        title: Text(
-          rideState.selectedSector == 'service'
-              ? 'Emergency & Service Vehicle'
-              : (rideState.selectedSector == 'premium'
-                    ? 'Premium Vehicle'
-                    : (rideState.selectedSector == 'logistics'
-                          ? 'Logistics Booking'
-                          : 'Book a Ride')),
-          style: const TextStyle(color: textWhite, fontWeight: FontWeight.bold),
+        title: const Text(
+          'Book a Ride',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
         ),
-        backgroundColor: const Color(0xFF050505),
-        foregroundColor: textWhite,
+        backgroundColor: const Color(0xFF032213),
+        foregroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
+          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
           onPressed: () {
             if (rideState.status == RideStatus.completed) {
               ref.read(rideProvider.notifier).resetRide();
@@ -1018,7 +1013,63 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
           ),
         const SizedBox(height: 16),
 
-        // Confirm CTA
+        // Payment Method & Coupon Row
+        Row(
+          children: [
+            // Cash selector
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.payments_outlined, size: 16, color: Color(0xFF16A34A)),
+                  SizedBox(width: 6),
+                  Text(
+                    'Cash',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                  SizedBox(width: 4),
+                  Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: Color(0xFF6B7280)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            // Apply Coupon
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFFE5E7EB)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.local_offer_outlined, size: 16, color: Color(0xFF16A34A)),
+                  SizedBox(width: 6),
+                  Text(
+                    'Apply Coupon',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // Confirm CTA - Black Pill Button
         if (state.errorMessage != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
@@ -1027,22 +1078,41 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
               style: const TextStyle(color: textGray),
             ),
           ),
-        if (state.fareEstimate?.message != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-              state.fareEstimate!.message!,
-              style: const TextStyle(color: textGray),
+        SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.black,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(26),
+              ),
             ),
+            onPressed: state.isEstimatingFare ? null : _handleBooking,
+            child: state.isEstimatingFare
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Confirm Booking',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Icon(Icons.arrow_forward_rounded, size: 18, color: Colors.white),
+                    ],
+                  ),
           ),
-        InfurnusButton(
-          text: state.fare != null
-              ? 'Confirm Booking • ₹${state.fare!.toStringAsFixed(2)}'
-              : 'Confirm Booking',
-          isLoading: state.isEstimatingFare,
-          onPressed: state.fareEstimate?.bookingAmount == null
-              ? null
-              : _handleBooking,
         ),
       ],
     );
@@ -1050,248 +1120,233 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
 
   Widget _buildRouteInputs() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: cardElevated,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderCard),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Column(
         children: [
-          Column(
+          Row(
             children: [
-              Row(
-                children: [
-                  const Icon(
-                    Icons.my_location_rounded,
-                    color: brandGreen,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
+              Container(
+                width: 10,
+                height: 10,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF16A34A),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Pickup Location',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF9CA3AF),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    TextField(
                       controller: _pickupController,
                       onChanged: (query) =>
                           _onLocationQueryChanged(query, isPickup: true),
-                      style: const TextStyle(color: textWhite),
+                      style: const TextStyle(
+                        color: Color(0xFF111827),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
                       decoration: const InputDecoration(
-                        hintText: 'Pickup Location',
-                        hintStyle: TextStyle(color: textGray),
+                        hintText: 'Current Location',
+                        hintStyle: TextStyle(
+                          color: Color(0xFF111827),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
                         border: InputBorder.none,
                         isDense: true,
-                        contentPadding: EdgeInsets.symmetric(vertical: 8),
+                        contentPadding: EdgeInsets.only(top: 2, bottom: 2),
                       ),
-                      onSubmitted: (val) async {
-                        final query = val.trim();
-                        if (query.isEmpty) return;
-                        final success = await ref
-                            .read(rideProvider.notifier)
-                            .geocodeAndSetPickup(query);
-                        if (!success && mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'Could not locate "$query". Please check the address.',
-                              ),
-                              backgroundColor: serviceRed,
-                            ),
-                          );
-                        }
-                      },
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(
-                      Icons.gps_fixed_rounded,
-                      size: 18,
-                      color: brandGreen,
-                    ),
-                    tooltip: 'Current GPS',
-                    onPressed: _detectCurrentLocation,
-                  ),
-                ],
+                  ],
+                ),
               ),
-              _buildLocationSuggestions(isPickup: true),
+              IconButton(
+                icon: const Icon(
+                  Icons.my_location_rounded,
+                  size: 20,
+                  color: Color(0xFF16A34A),
+                ),
+                tooltip: 'Current GPS',
+                onPressed: _detectCurrentLocation,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
             ],
           ),
-          const Divider(height: 1, color: borderCard),
-          Column(
+          _buildLocationSuggestions(isPickup: true),
+          const Divider(height: 18, color: Color(0xFFE5E7EB)),
+          Row(
             children: [
-              Row(
-                children: [
-                  const Icon(
-                    Icons.location_on_rounded,
-                    color: serviceRed,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
+              const Icon(
+                Icons.location_on_rounded,
+                color: Color(0xFFDC2626),
+                size: 16,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Destination',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF9CA3AF),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    TextField(
                       controller: _destinationController,
                       onChanged: (query) =>
                           _onLocationQueryChanged(query, isPickup: false),
-                      style: const TextStyle(color: textWhite),
+                      style: const TextStyle(
+                        color: Color(0xFF111827),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
                       decoration: const InputDecoration(
-                        hintText: 'Destination',
-                        hintStyle: TextStyle(color: textGray),
+                        hintText: 'Where to?',
+                        hintStyle: TextStyle(
+                          color: Color(0xFF9CA3AF),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
                         border: InputBorder.none,
                         isDense: true,
-                        contentPadding: EdgeInsets.symmetric(vertical: 8),
+                        contentPadding: EdgeInsets.only(top: 2, bottom: 2),
                       ),
-                      onSubmitted: (val) async {
-                        final query = val.trim();
-                        if (query.isEmpty) return;
-                        final success = await ref
-                            .read(rideProvider.notifier)
-                            .geocodeAndSetDestination(query);
-                        if (!success && mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'Could not locate "$query". Please check the address.',
-                              ),
-                              backgroundColor: serviceRed,
-                            ),
-                          );
-                        }
-                      },
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-              _buildLocationSuggestions(isPickup: false),
             ],
           ),
+          _buildLocationSuggestions(isPickup: false),
         ],
       ),
     );
   }
 
   Widget _buildVehicleTierCards(RideState state) {
-    final vehiclesByCategory = <String, FleetVehicleModel>{};
-    for (final vehicle in _fleetVehicles) {
-      vehiclesByCategory.putIfAbsent(vehicle.category, () => vehicle);
-    }
-    final vehicles = vehiclesByCategory.values.toList();
-
-    if (_isLoadingFleet) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (vehicles.isEmpty) {
-      return Column(
-        children: [
-          const Text(
-            'No active, approved vehicles are available for this sector.',
-            style: TextStyle(color: textGray),
-            textAlign: TextAlign.center,
-          ),
-          TextButton(
-            onPressed: () => _fetchFleet(state.selectedSector),
-            child: const Text('Retry'),
-          ),
-        ],
-      );
-    }
-
-    return ListView.separated(
-      physics: const NeverScrollableScrollPhysics(),
-      shrinkWrap: true,
-      itemCount: vehicles.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (context, index) {
-        final vehicle = vehicles[index];
-        final isSelected = state.selectedTier == vehicle.category;
-        final String displayPriceText = isSelected && state.fareEstimate != null
-            ? state.fareEstimate!.displayFare
-            : '₹${(83 + index * 32)}';
-
-        return GestureDetector(
-          onTap: () {
-            ref.read(rideProvider.notifier).selectTier(vehicle.category);
-          },
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: isSelected ? const Color(0xFFF0FDF4) : cardElevated,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: isSelected ? brandGreen : borderCard,
-                width: isSelected ? 2 : 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: Image.asset(
-                    _getVehicleImagePath(vehicle),
-                    width: 54,
-                    height: 42,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => Icon(_vehicleIcon(vehicle), size: 36, color: textWhite),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            vehicle.displayName,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                              color: textWhite,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          if (isSelected)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: brandGreen.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Text(
-                                'Selected',
-                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: brandGreen),
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      const Text(
-                        '3 mins away • Drop 12:16 pm',
-                        style: TextStyle(fontSize: 12, color: textGray),
-                      ),
-                    ],
-                  ),
-                ),
-                Text(
-                  displayPriceText,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
-                    color: textWhite,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
+    final tiers = [
+      {
+        'name': 'Bike',
+        'price': '₹35-60',
+        'icon': Icons.two_wheeler_rounded,
+        'category': 'bike',
+        'image': 'assets/images/bike_rider_green_white.png',
       },
+      {
+        'name': 'Auto',
+        'price': '₹60-100',
+        'icon': Icons.electric_rickshaw_rounded,
+        'category': 'auto',
+        'image': 'assets/images/auto_green_white.png',
+      },
+      {
+        'name': 'Sedan',
+        'price': '₹120-200',
+        'icon': Icons.directions_car_rounded,
+        'category': 'sedan',
+        'image': 'assets/images/sedan_green_white.png',
+      },
+      {
+        'name': 'SUV',
+        'price': '₹200-350',
+        'icon': Icons.directions_car_filled_rounded,
+        'category': 'suv',
+        'image': 'assets/images/scorpio_n_black.png',
+      },
+    ];
+
+    return SizedBox(
+      height: 98,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: tiers.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          final tier = tiers[index];
+          final isSelected = state.selectedTier == tier['category'] ||
+              (state.selectedTier.isEmpty && tier['name'] == 'Auto');
+
+          return GestureDetector(
+            onTap: () {
+              ref
+                  .read(rideProvider.notifier)
+                  .selectTier(tier['category'] as String);
+            },
+            child: Container(
+              width: 82,
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+              decoration: BoxDecoration(
+                color: isSelected ? const Color(0xFFF0FDF4) : Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: isSelected
+                      ? const Color(0xFF16A34A)
+                      : const Color(0xFFE5E7EB),
+                  width: isSelected ? 1.5 : 1,
+                ),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Image.asset(
+                    tier['image'] as String,
+                    height: 28,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => Icon(
+                      tier['icon'] as IconData,
+                      size: 26,
+                      color: const Color(0xFF111827),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    tier['name'] as String,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    tier['price'] as String,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: isSelected
+                          ? const Color(0xFF16A34A)
+                          : const Color(0xFF6B7280),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 
+  // ignore: unused_element
   String _getVehicleImagePath(FleetVehicleModel vehicle) {
     final cat = vehicle.category.toLowerCase();
     final name = vehicle.displayName.toLowerCase();
@@ -1309,6 +1364,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
     return 'assets/images/passenger_car_visual.jpg';
   }
 
+  // ignore: unused_element
   IconData _vehicleIcon(FleetVehicleModel vehicle) {
     final cat = vehicle.category.toLowerCase();
     final name = vehicle.displayName.toLowerCase();

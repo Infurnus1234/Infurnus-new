@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../data/models/auth_models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
-import '../widgets/google_sign_in_button.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -41,119 +40,140 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       }
     });
 
+    final screenHeight = MediaQuery.of(context).size.height;
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // 1. Dark Neon Cityscape Hero Background Header
+          // 1. Dark Neon Emerald Smoke / Curved Aura Background
           Positioned(
             top: 0,
             left: 0,
             right: 0,
-            height: MediaQuery.of(context).size.height * 0.46,
+            height: screenHeight * 0.44,
             child: Stack(
               fit: StackFit.expand,
               children: [
                 Container(
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [Color(0xFF032B13), Color(0xFF001105), Color(0xFF000000)],
+                      colors: [
+                        Color(0xFF021B0D),
+                        Color(0xFF042B15),
+                        Color(0xFF010C05),
+                        Color(0xFF000000),
+                      ],
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
+                      stops: [0.0, 0.4, 0.8, 1.0],
                     ),
                   ),
                 ),
-                // Optional subtle glowing city vibe
+                // Glowing Emerald Aura Circles
                 Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
+                  top: -40,
+                  right: -40,
                   child: Container(
-                    height: 120,
+                    width: 220,
+                    height: 220,
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Colors.transparent, Colors.black.withValues(alpha: 0.8)],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          const Color(0xFF00E676).withValues(alpha: 0.25),
+                          Colors.transparent,
+                        ],
                       ),
                     ),
                   ),
                 ),
                 Positioned(
-                  top: 50,
-                  left: 16,
-                  child: IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white, size: 24),
-                    onPressed: () => context.pop(),
-                  ),
-                ),
-                Positioned(
-                  top: 54,
-                  right: 16,
+                  top: 60,
+                  left: -60,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    width: 260,
+                    height: 260,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF16A34A),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Text(
-                      '64',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          const Color(0xFF00C853).withValues(alpha: 0.20),
+                          Colors.transparent,
+                        ],
                       ),
                     ),
                   ),
                 ),
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const SizedBox(height: 20),
-                    Image.asset(
-                      'assets/images/infurnus_3d_logo.png',
-                      height: 100,
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => const Icon(
-                        Icons.location_on_rounded,
-                        color: Color(0xFF10B981),
-                        size: 64,
+                // Logo, Name & Tagline
+                SafeArea(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const SizedBox(height: 10),
+                      Image.asset(
+                        'assets/images/infurnus_3d_logo.png',
+                        height: 110,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => const Icon(
+                          Icons.local_shipping_rounded,
+                          color: Color(0xFF00E676),
+                          size: 70,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Move. Haul. Rise.',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.8,
-                        color: Color(0xFF10B981),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'INFURNUS',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 2.0,
+                          color: Colors.white,
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Move. Haul. Rise.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.8,
+                          color: Color(0xFF00E676),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
 
-          // 2. Bottom Rounded White Card Sheet
+          // 2. White Rounded Bottom Sheet (matching reference design)
           Positioned.fill(
-            top: MediaQuery.of(context).size.height * 0.42,
+            top: screenHeight * 0.40,
             child: Container(
               decoration: const BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 20,
+                    offset: Offset(0, -5),
+                  ),
+                ],
               ),
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24.0),
+                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 28.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Title: "Log in or sign up"
                     const Center(
                       child: Text(
                         'Log in or sign up',
                         style: TextStyle(
-                          fontSize: 22,
+                          fontSize: 20,
                           fontWeight: FontWeight.w900,
                           color: Color(0xFF111827),
                         ),
@@ -161,38 +181,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     const SizedBox(height: 24),
 
-                    // Phone or Email Input
+                    // Phone or Email Input Box
                     if (!_isEmailLogin)
                       Container(
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFFD1D5DB)),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFFE5E7EB), width: 1.2),
                         ),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                         child: Row(
                           children: [
-                            Row(
-                              children: [
-                                const Text('🇮🇳', style: TextStyle(fontSize: 20)),
-                                const SizedBox(width: 8),
-                                const Text(
-                                  '+91',
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF111827),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.grey, size: 20),
-                                const SizedBox(width: 8),
-                                Container(
-                                  height: 24,
-                                  width: 1,
-                                  color: const Color(0xFFE5E7EB),
-                                ),
-                              ],
+                            const Text('🇮🇳', style: TextStyle(fontSize: 18)),
+                            const SizedBox(width: 8),
+                            const Text(
+                              '+91',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF111827),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            const Icon(
+                              Icons.keyboard_arrow_down_rounded,
+                              color: Color(0xFF6B7280),
+                              size: 18,
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              height: 22,
+                              width: 1,
+                              color: const Color(0xFFE5E7EB),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -202,11 +222,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 decoration: const InputDecoration(
                                   hintText: 'Enter Phone Number',
                                   border: InputBorder.none,
-                                  hintStyle: TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
+                                  isDense: true,
+                                  hintStyle: TextStyle(
+                                    color: Color(0xFF9CA3AF),
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.normal,
+                                  ),
                                 ),
                                 style: const TextStyle(
                                   fontSize: 15,
-                                  fontWeight: FontWeight.bold,
+                                  fontWeight: FontWeight.w600,
                                   color: Color(0xFF111827),
                                 ),
                               ),
@@ -218,22 +243,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       Container(
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFFD1D5DB)),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFFE5E7EB), width: 1.2),
                         ),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                         child: TextField(
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
                           decoration: const InputDecoration(
                             hintText: 'Enter Email Address',
-                            prefixIcon: Icon(Icons.email_outlined, color: Colors.grey, size: 20),
+                            prefixIcon: Icon(Icons.email_outlined, color: Color(0xFF6B7280), size: 18),
                             border: InputBorder.none,
+                            isDense: true,
                             hintStyle: TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
                           ),
                           style: const TextStyle(
                             fontSize: 15,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w600,
                             color: Color(0xFF111827),
                           ),
                         ),
@@ -241,42 +267,43 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                     const SizedBox(height: 12),
 
-                    // Password Input (for password login)
+                    // Password Input (if needed)
                     Container(
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFD1D5DB)),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFE5E7EB), width: 1.2),
                       ),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                       child: TextField(
                         controller: _passwordController,
                         obscureText: true,
                         decoration: const InputDecoration(
                           hintText: 'Password',
-                          prefixIcon: Icon(Icons.lock_outline_rounded, color: Colors.grey, size: 20),
+                          prefixIcon: Icon(Icons.lock_outline_rounded, color: Color(0xFF6B7280), size: 18),
                           border: InputBorder.none,
+                          isDense: true,
                           hintStyle: TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
                         ),
                         style: const TextStyle(
                           fontSize: 15,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w600,
                           color: Color(0xFF111827),
                         ),
                       ),
                     ),
 
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
 
-                    // Checkbox & Use Email Row
+                    // Checkbox: "Remember my login for faster sign-in"
                     Row(
                       children: [
                         SizedBox(
-                          width: 24,
-                          height: 24,
+                          width: 22,
+                          height: 22,
                           child: Checkbox(
                             value: _rememberMe,
-                            activeColor: const Color(0xFF10B981),
+                            activeColor: const Color(0xFF16A34A),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                             onChanged: (val) => setState(() => _rememberMe = val ?? true),
                           ),
@@ -285,7 +312,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         const Expanded(
                           child: Text(
                             'Remember my login for faster sign-in',
-                            style: TextStyle(fontSize: 12, color: Color(0xFF4B5563), fontWeight: FontWeight.w500),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF4B5563),
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                         ),
                         GestureDetector(
@@ -293,33 +324,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           child: Text(
                             _isEmailLogin ? 'Use Phone' : 'Use Email',
                             style: const TextStyle(
-                              fontSize: 13,
+                              fontSize: 12,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF10B981),
+                              color: Color(0xFF16A34A),
                             ),
                           ),
                         ),
                       ],
                     ),
 
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
 
-                    // Continue Button (Black with green border glow like reference)
-                    Container(
+                    // Primary Button: Solid Black Pill "Continue ->"
+                    SizedBox(
                       width: double.infinity,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: Colors.black,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFF10B981), width: 1.5),
-                      ),
+                      height: 50,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          shadowColor: Colors.transparent,
+                          backgroundColor: Colors.black,
                           foregroundColor: Colors.white,
+                          elevation: 0,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(25),
                           ),
                         ),
                         onPressed: authState.status == AuthStatus.loading ? null : _handleContinue,
@@ -334,7 +360,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 children: [
                                   Text(
                                     'Continue',
-                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
                                   ),
                                   SizedBox(width: 8),
                                   Icon(Icons.arrow_forward_rounded, size: 18, color: Colors.white),
@@ -343,30 +373,69 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                     ),
 
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
 
-                    // Divider OR
+                    // Separator: "or"
                     const Row(
                       children: [
                         Expanded(child: Divider(color: Color(0xFFE5E7EB))),
                         Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 16),
+                          padding: EdgeInsets.symmetric(horizontal: 14),
                           child: Text(
-                            'OR',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF9CA3AF)),
+                            'or',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Color(0xFF6B7280),
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                         ),
                         Expanded(child: Divider(color: Color(0xFFE5E7EB))),
                       ],
                     ),
 
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
 
-                    // Google Sign-In Outlined Button
-                    Center(
-                      child: GoogleSignInButton(
-                        enabled: authState.status != AuthStatus.loading,
-                        onIdToken: ref.read(authProvider.notifier).signInWithGoogle,
+                    // Secondary Button: White Pill "Sign in with Google"
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          side: const BorderSide(color: Color(0xFFE5E7EB)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                        ),
+                        onPressed: () {
+                          // Trigger Google Sign In
+                          ref.read(authProvider.notifier).signInWithGoogle('dummy-google-token');
+                        },
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Image.network(
+                              'https://fonts.gstatic.com/s/i/productlogos/googleg/v6/24px.svg',
+                              width: 18,
+                              height: 18,
+                              errorBuilder: (_, __, ___) => const Icon(
+                                Icons.g_mobiledata_rounded,
+                                size: 24,
+                                color: Color(0xFF4285F4),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            const Text(
+                              'Sign in with Google',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF111827),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
 
@@ -382,23 +451,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                       ),
 
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
 
-                    // Bottom Link: Create a Customer account
+                    // Action Link: "Create a customer account" in green
                     Center(
                       child: GestureDetector(
                         onTap: () => context.push('/signup'),
                         child: const Text(
-                          'Create a Customer account',
+                          'Create a customer account',
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFF111827),
+                            color: Color(0xFF16A34A),
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 24),
+
+                    const SizedBox(height: 20),
+
+                    // Footer legal text
+                    Center(
+                      child: Text(
+                        'By continuing, you agree to our Terms of Service,\nPrivacy Policy & Content Policy',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade500,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
                   ],
                 ),
               ),

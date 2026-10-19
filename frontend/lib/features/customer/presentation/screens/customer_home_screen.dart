@@ -316,15 +316,15 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
           children: [
             _buildHeaderIcon(
               icon: Icons.chat_bubble_outline_rounded,
-              tooltip: 'AI Assistant',
-              showBadge: true,
+              tooltip: 'Chat',
+              badgeText: '1',
               onTap: () => context.push('/ai-assistant/customer'),
             ),
             const SizedBox(width: 10),
             _buildHeaderIcon(
-              icon: Icons.person_outline_rounded,
-              tooltip: 'Profile',
-              onTap: () => context.push('/profile'),
+              icon: Icons.notifications_none_rounded,
+              tooltip: 'Notifications',
+              onTap: () => context.push('/support'),
             ),
           ],
         ),
@@ -336,12 +336,13 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     required IconData icon,
     required String tooltip,
     required VoidCallback onTap,
-    bool showBadge = false,
+    String? badgeText,
   }) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
       child: Stack(
+        clipBehavior: Clip.none,
         children: [
           Container(
             width: 42,
@@ -360,16 +361,26 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
             ),
             child: Icon(icon, size: 20, color: textBlack),
           ),
-          if (showBadge)
+          if (badgeText != null)
             Positioned(
-              right: 2,
-              top: 2,
+              right: -2,
+              top: -2,
               child: Container(
-                width: 9,
-                height: 9,
+                padding: const EdgeInsets.all(4),
                 decoration: const BoxDecoration(
-                  color: successGreen,
+                  color: Color(0xFFDC2626),
                   shape: BoxShape.circle,
+                ),
+                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                child: Center(
+                  child: Text(
+                    badgeText,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -827,27 +838,26 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
   }
 
   Widget _buildHeroFeatureCard(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF1E3A8A), Color(0xFF2563EB)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF1E3A8A).withValues(alpha: 0.25),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF032213), Color(0xFF063B23), Color(0xFF0A4F30)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF032213).withValues(alpha: 0.25),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
@@ -860,16 +870,16 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                         vertical: 3,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.18),
+                        color: Colors.white.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: const Text(
                         'ONE APP • EVERY WHEEL',
                         style: TextStyle(
-                          fontSize: 10,
+                          fontSize: 9,
                           fontWeight: FontWeight.w900,
-                          letterSpacing: 1.5,
-                          color: Color(0xFFBFDBFE),
+                          letterSpacing: 1.2,
+                          color: Color(0xFFA7F3D0),
                         ),
                       ),
                     ),
@@ -877,7 +887,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                     const Text(
                       'From auto to\nhelicopter',
                       style: TextStyle(
-                        fontSize: 22,
+                        fontSize: 20,
                         fontWeight: FontWeight.w900,
                         color: Colors.white,
                         height: 1.2,
@@ -886,44 +896,89 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                     const SizedBox(height: 16),
                     ElevatedButton(
                       onPressed: () {
-                        ref
-                            .read(rideProvider.notifier)
-                            .selectSector('passenger');
-                        context.push('/ride-booking');
+                        context.push('/passenger-rides');
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: buttonBlack,
+                        backgroundColor: const Color(0xFF16A34A),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(20),
                         ),
                         padding: const EdgeInsets.symmetric(
                           horizontal: 16,
-                          vertical: 10,
+                          vertical: 9,
                         ),
                         elevation: 0,
                       ),
-                      child: const Text(
-                        'Explore fleet →',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 12,
-                        ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Explore fleet',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12,
+                            ),
+                          ),
+                          SizedBox(width: 4),
+                          Icon(Icons.arrow_forward_rounded, size: 14),
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 10),
-              // Dedicated Animated Vehicle Element Container
-              const AnimatedVehicleHero(
-                height: 100,
-                assetImagePath: 'assets/images/infurnus_3d_logo.png',
+              ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Image.asset(
+                  'assets/images/vehicle_fleet_banner.png',
+                  width: 130,
+                  height: 105,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const AnimatedVehicleHero(
+                    height: 100,
+                    assetImagePath: 'assets/images/infurnus_3d_logo.png',
+                  ),
+                ),
               ),
             ],
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 8),
+        // 3 Dots indicator
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 8,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFF16A34A),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Container(
+              width: 4,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFFD1D5DB),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Container(
+              width: 4,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFFD1D5DB),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -933,10 +988,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         'title': 'Rides',
         'subtitle': 'Bike, Auto, Cab',
         'category': VehicleCategoryType.rides,
-        'action': () {
-          ref.read(rideProvider.notifier).selectSector('passenger');
-          context.push('/ride-booking');
-        },
+        'action': () => context.push('/passenger-rides'),
       },
       {
         'title': 'Logistics',
@@ -948,10 +1000,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         'title': 'Emergency',
         'subtitle': 'Ambulance & Tow',
         'category': VehicleCategoryType.emergency,
-        'action': () {
-          ref.read(rideProvider.notifier).selectSector('service');
-          context.push('/ride-booking');
-        },
+        'action': () => context.push('/emergency'),
       },
       {
         'title': 'Rentals',
@@ -1190,14 +1239,14 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         _buildSectionHeader(
           title: 'Passenger Rides',
           subtitle: 'Everyday rides across the city',
-          onSeeAll: () => _showSeeAllVehiclesModal(context, 'Passenger Rides', items),
+          onSeeAll: () => context.push('/passenger-rides'),
         ),
         const SizedBox(height: 12),
         SizedBox(
-          height: 172,
+          height: 130,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            itemCount: items.length,
+            itemCount: 3,
             separatorBuilder: (_, __) => const SizedBox(width: 12),
             itemBuilder: (context, index) {
               final item = items[index];
@@ -1205,6 +1254,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                 item: item,
                 onTap: () {
                   ref.read(rideProvider.notifier).selectSector('passenger');
+                  ref.read(rideProvider.notifier).selectTier(item.title.toLowerCase());
                   context.push('/ride-booking');
                 },
               );
@@ -1629,9 +1679,9 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         GestureDetector(
           onTap: onSeeAll,
           child: const Text(
-            'See all ↗',
+            'See all →',
             style: TextStyle(
-              color: textBlack,
+              color: Color(0xFF16A34A),
               fontWeight: FontWeight.bold,
               fontSize: 13,
             ),
@@ -1648,11 +1698,11 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     return _PressableScaleCard(
       onTap: onTap,
       child: Container(
-        width: 140,
-        padding: const EdgeInsets.all(12),
+        width: 105,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
         decoration: BoxDecoration(
           color: surfaceWhite,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: cardBorder),
           boxShadow: [
             BoxShadow(
@@ -1663,71 +1713,44 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
           ],
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            item.assetImagePath != null
-                ? Container(
-                    width: 48,
-                    height: 38,
-                    alignment: Alignment.center,
-                    child: Image.asset(
+            Container(
+              height: 48,
+              alignment: Alignment.center,
+              child: item.assetImagePath != null
+                  ? Image.asset(
                       item.assetImagePath!,
-                      width: 48,
-                      height: 38,
+                      height: 44,
                       fit: BoxFit.contain,
                       errorBuilder: (_, __, ___) => VehicleCategoryVisual(
                         category: item.category,
-                        size: 40,
+                        size: 38,
                         borderRadius: 10,
                       ),
+                    )
+                  : VehicleCategoryVisual(
+                      category: item.category,
+                      size: 38,
+                      borderRadius: 10,
                     ),
-                  )
-                : VehicleCategoryVisual(
-                    category: item.category,
-                    size: 40,
-                    borderRadius: 10,
-                  ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                    color: textBlack,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  item.capacity,
-                  style: const TextStyle(fontSize: 11, color: textSecondary),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      item.rate,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 10,
-                        color: textBlack,
-                      ),
-                    ),
-                    Text(
-                      item.eta,
-                      style: const TextStyle(
-                        fontSize: 10,
-                        color: textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              item.title,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+                color: textBlack,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              item.capacity,
+              style: const TextStyle(fontSize: 11, color: textSecondary),
             ),
           ],
         ),
@@ -2011,7 +2034,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         border: Border(top: BorderSide(color: cardBorder, width: 1.0)),
       ),
       child: BottomNavigationBar(
-        selectedItemColor: buttonBlack,
+        selectedItemColor: const Color(0xFF16A34A),
         unselectedItemColor: textMuted,
         currentIndex: 0,
         type: BottomNavigationBarType.fixed,
@@ -2030,8 +2053,8 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: 'Home'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.local_activity_outlined),
-            activeIcon: Icon(Icons.local_activity_rounded),
+            icon: Icon(Icons.receipt_long_outlined),
+            activeIcon: Icon(Icons.receipt_long_rounded),
             label: 'Activity',
           ),
           BottomNavigationBarItem(
