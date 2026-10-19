@@ -19,6 +19,7 @@ import express from 'express';
 import helmet from 'helmet';
 
 import { errorMiddleware } from './common/middleware/error.middleware.js';
+import { createTestOnboardingRouter } from './modules/driver-test-onboarding/router.js';
 import { env } from './config/env.js';
 import { pool } from './infrastructure/database/postgres.js';
 
@@ -215,6 +216,10 @@ export function createApp(
   );
 
   app.use(cookieParser());
+  // This isolated namespace authenticates its own restricted test tokens.
+  // Normal routes still pass through the unchanged JWT and administrative gates.
+  const testOnboardingRouter = express.Router();
+  app.use('/driver-test-onboarding', testOnboardingRouter);
   const administrativeAccess = new AdminManagementService(pool);
   app.use(administrativePermissionGate(administrativeAccess));
   app.use('/admin/access', createAdminManagementRouter(administrativeAccess));
@@ -483,6 +488,17 @@ export function createApp(
       : undefined;
 
     app.use('/rides', createRideRouter(new RideController(rideService), driverController));
+    if (driverController && repository && providerOperationsRepository) {
+      testOnboardingRouter.use(
+        createTestOnboardingRouter(
+          driverController,
+          new UserController(
+            new UserService(repository, new LogoutService(new PostgresRefreshTokenRepository())),
+          ),
+          providerOperationsRepository,
+        ),
+      );
+    }
   }
 
   // ==========================================================
