@@ -63,12 +63,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
               child: SafeArea(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(16),
                     child: Image.asset(
                       'assets/images/vehicle_fleet_banner.png',
-                      fit: BoxFit.cover,
+                      fit: BoxFit.contain,
+                      alignment: Alignment.topCenter,
                       errorBuilder: (_, __, ___) => Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: const [
@@ -102,7 +103,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
           // Bottom White Sheet Card Container
           Positioned.fill(
-            top: MediaQuery.of(context).size.height * 0.36,
+            top: MediaQuery.of(context).size.height * 0.38,
             child: Container(
               decoration: const BoxDecoration(
                 color: Colors.white,
@@ -122,34 +123,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Log in or sign up',
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF111827),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () => setState(() => _isEmailLogin = !_isEmailLogin),
-                          style: TextButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          child: Text(
-                            _isEmailLogin ? 'Use Phone Number' : 'Use Email Address',
-                            style: const TextStyle(
-                              color: AppColors.primaryGreen,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
+                    const Text(
+                      'Log in or sign up',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF111827),
+                      ),
                     ),
                     const SizedBox(height: 18),
 
@@ -228,28 +208,49 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                     const SizedBox(height: 14),
 
-                    // Remember my login checkbox
+                    // Remember my login checkbox & Use Email link
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        SizedBox(
-                          height: 24,
-                          width: 24,
-                          child: Checkbox(
-                            value: _rememberMe,
-                            activeColor: AppColors.primaryGreen,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(4),
+                        Row(
+                          children: [
+                            SizedBox(
+                              height: 24,
+                              width: 24,
+                              child: Checkbox(
+                                value: _rememberMe,
+                                activeColor: AppColors.primaryGreen,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                onChanged: (val) => setState(() => _rememberMe = val ?? true),
+                              ),
                             ),
-                            onChanged: (val) => setState(() => _rememberMe = val ?? true),
-                          ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Remember my login for faster sign-in',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Color(0xFF4B5563),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          'Remember my login for faster sign-in',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Color(0xFF4B5563),
-                            fontWeight: FontWeight.w500,
+                        TextButton(
+                          onPressed: () => setState(() => _isEmailLogin = !_isEmailLogin),
+                          style: TextButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: Text(
+                            _isEmailLogin ? 'Use Phone' : 'Use Email',
+                            style: const TextStyle(
+                              color: AppColors.primaryGreen,
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ],
@@ -257,13 +258,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                     const SizedBox(height: 20),
 
-                    // Primary Black Continue Button
-                    SizedBox(
+                    // Primary Black Continue Button with Green Glow Shadow
+                    Container(
                       width: double.infinity,
                       height: 52,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF16A34A).withValues(alpha: 0.35),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF111827),
+                          backgroundColor: const Color(0xFF0B0B0B),
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
@@ -325,15 +336,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                     const SizedBox(height: 20),
 
-                    // Divider Row
+                    // Divider Row with uppercase OR
                     const Row(
                       children: [
                         Expanded(child: Divider(color: Color(0xFFE5E7EB))),
                         Padding(
                           padding: EdgeInsets.symmetric(horizontal: 16),
                           child: Text(
-                            'or',
-                            style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
+                            'OR',
+                            style: TextStyle(
+                              color: Color(0xFF9CA3AF),
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1,
+                            ),
                           ),
                         ),
                         Expanded(child: Divider(color: Color(0xFFE5E7EB))),
@@ -357,7 +373,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       child: GestureDetector(
                         onTap: () => context.push('/signup'),
                         child: const Text(
-                          'Create a customer account',
+                          'Create a Customer account',
                           style: TextStyle(
                             color: AppColors.primaryGreen,
                             fontSize: 15,
