@@ -8,7 +8,8 @@ class PassengerRidesScreen extends ConsumerStatefulWidget {
   const PassengerRidesScreen({super.key});
 
   @override
-  ConsumerState<PassengerRidesScreen> createState() => _PassengerRidesScreenState();
+  ConsumerState<PassengerRidesScreen> createState() =>
+      _PassengerRidesScreenState();
 }
 
 class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
@@ -50,7 +51,7 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
       'filter': 'Car',
       'subtitle': '4 seater • Compact & comfortable',
       'price': '₹120-180',
-      'image': 'assets/images/sedan_green_white.png',
+      'image': 'assets/images/hatchback_visual.png',
       'fallbackIcon': Icons.directions_car_filled_rounded,
     },
     {
@@ -68,7 +69,7 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
       'filter': 'Car',
       'subtitle': '6-7 seater • Spacious & powerful',
       'price': '₹200-350',
-      'image': 'assets/images/scorpio_n_black.png',
+      'image': 'assets/images/scorpio_n_white.png',
       'fallbackIcon': Icons.directions_car_rounded,
     },
     {
@@ -77,7 +78,7 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
       'filter': 'Car',
       'subtitle': '12 seater • Group travel',
       'price': '₹400-700',
-      'image': 'assets/images/rental_visual.jpg',
+      'image': 'assets/images/force_traveller_van.png',
       'fallbackIcon': Icons.airport_shuttle_rounded,
     },
   ];
@@ -133,12 +134,19 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                   return GestureDetector(
                     onTap: () => setState(() => _selectedFilter = filter),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
-                        color: isSelected ? const Color(0xFF16A34A) : Colors.white,
+                        color: isSelected
+                            ? const Color(0xFF16A34A)
+                            : Colors.white,
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: isSelected ? const Color(0xFF16A34A) : const Color(0xFFE5E7EB),
+                          color: isSelected
+                              ? const Color(0xFF16A34A)
+                              : const Color(0xFFE5E7EB),
                         ),
                       ),
                       child: Center(
@@ -147,7 +155,9 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: isSelected ? Colors.white : const Color(0xFF374151),
+                            color: isSelected
+                                ? Colors.white
+                                : const Color(0xFF374151),
                           ),
                         ),
                       ),
@@ -172,10 +182,15 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                 return GestureDetector(
                   onTap: () {
                     ref.read(rideProvider.notifier).selectSector('passenger');
-                    ref.read(rideProvider.notifier).selectTier(vehicle['category']);
+                    ref
+                        .read(rideProvider.notifier)
+                        .selectTier(vehicle['category']);
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
                     decoration: BoxDecoration(
                       color: isSelected ? const Color(0xFFF0FDF4) : Colors.white,
                       borderRadius: BorderRadius.circular(16),
@@ -226,12 +241,16 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                             children: [
                               Row(
                                 children: [
-                                  Text(
-                                    vehicle['title'],
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.bold,
-                                      color: isSelected ? const Color(0xFF15803D) : const Color(0xFF111827),
+                                  Flexible(
+                                    child: Text(
+                                      vehicle['title'],
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                        color: isSelected ? const Color(0xFF15803D) : const Color(0xFF111827),
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                   if (isSelected) ...[
@@ -269,22 +288,25 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                         ),
                         const SizedBox(width: 8),
 
-                        // Price and Chevron with fixed width to prevent clipping
-                        SizedBox(
-                          width: 80,
+                        // Price and Selection / Chevron
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(minWidth: 70, maxWidth: 95),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(
-                                vehicle['price'],
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: isSelected ? const Color(0xFF16A34A) : const Color(0xFF111827),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerRight,
+                                child: Text(
+                                  vehicle['price'],
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                    color: isSelected ? const Color(0xFF16A34A) : const Color(0xFF111827),
+                                    letterSpacing: -0.2,
+                                  ),
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.visible,
                               ),
                               const SizedBox(height: 4),
                               Icon(

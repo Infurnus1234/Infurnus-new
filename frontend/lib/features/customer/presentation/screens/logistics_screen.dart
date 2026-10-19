@@ -30,7 +30,7 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
       'category': 'tata_magic',
       'filter': 'Mini Truck',
       'subtitle': 'Up to 750 kg • Goods transport',
-      'image': 'assets/images/piaggio_magic_blue.png',
+      'image': 'assets/images/tata_magic_cream.png',
       'fallbackIcon': Icons.local_shipping_rounded,
     },
     {
@@ -38,7 +38,7 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
       'category': 'cargo_207',
       'filter': 'Mini Truck',
       'subtitle': 'Up to 1200 kg • Medium cargo',
-      'image': 'assets/images/mahindra_207_white.png',
+      'image': 'assets/images/cargo_207_heavy.png',
       'fallbackIcon': Icons.local_shipping_rounded,
     },
     {
@@ -54,7 +54,7 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
       'category': 'pickup_truck',
       'filter': 'Mini Truck',
       'subtitle': 'Up to 1500 kg • Flexible cargo',
-      'image': 'assets/images/tata_pickup_207_407.png',
+      'image': 'assets/images/cargo_207_normal.png',
       'fallbackIcon': Icons.local_shipping_rounded,
     },
     {
@@ -62,7 +62,7 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
       'category': 'mini_truck',
       'filter': 'Truck',
       'subtitle': 'Up to 2000 kg • Bulk delivery',
-      'image': 'assets/images/tata_white_truck.png',
+      'image': 'assets/images/cargo_207_heavy.png',
       'fallbackIcon': Icons.local_shipping_rounded,
     },
   ];
@@ -110,12 +110,19 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
                   return GestureDetector(
                     onTap: () => setState(() => _selectedFilter = filter),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
-                        color: isSelected ? const Color(0xFF16A34A) : Colors.white,
+                        color: isSelected
+                            ? const Color(0xFF16A34A)
+                            : Colors.white,
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: isSelected ? const Color(0xFF16A34A) : const Color(0xFFE5E7EB),
+                          color: isSelected
+                              ? const Color(0xFF16A34A)
+                              : const Color(0xFFE5E7EB),
                         ),
                       ),
                       child: Center(
@@ -124,7 +131,9 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: isSelected ? Colors.white : const Color(0xFF374151),
+                            color: isSelected
+                                ? Colors.white
+                                : const Color(0xFF374151),
                           ),
                         ),
                       ),
@@ -147,11 +156,16 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
                 return GestureDetector(
                   onTap: () {
                     ref.read(rideProvider.notifier).selectSector('logistics');
-                    ref.read(rideProvider.notifier).selectTier(item['category']);
+                    ref
+                        .read(rideProvider.notifier)
+                        .selectTier(item['category']);
                     context.push('/ride-booking');
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(16),

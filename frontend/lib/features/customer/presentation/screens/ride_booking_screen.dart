@@ -662,7 +662,11 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
       appBar: AppBar(
         title: const Text(
           'Book a Ride',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
         ),
         backgroundColor: const Color(0xFF032213),
         foregroundColor: Colors.white,
@@ -1026,7 +1030,11 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.payments_outlined, size: 16, color: Color(0xFF16A34A)),
+                  Icon(
+                    Icons.payments_outlined,
+                    size: 16,
+                    color: Color(0xFF16A34A),
+                  ),
                   SizedBox(width: 6),
                   Text(
                     'Cash',
@@ -1037,7 +1045,11 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                     ),
                   ),
                   SizedBox(width: 4),
-                  Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: Color(0xFF6B7280)),
+                  Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    size: 16,
+                    color: Color(0xFF6B7280),
+                  ),
                 ],
               ),
             ),
@@ -1052,7 +1064,11 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.local_offer_outlined, size: 16, color: Color(0xFF16A34A)),
+                  Icon(
+                    Icons.local_offer_outlined,
+                    size: 16,
+                    color: Color(0xFF16A34A),
+                  ),
                   SizedBox(width: 6),
                   Text(
                     'Apply Coupon',
@@ -1095,7 +1111,10 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                 ? const SizedBox(
                     width: 20,
                     height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
                   )
                 : const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -1109,7 +1128,11 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                         ),
                       ),
                       SizedBox(width: 8),
-                      Icon(Icons.arrow_forward_rounded, size: 18, color: Colors.white),
+                      Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 18,
+                        color: Colors.white,
+                      ),
                     ],
                   ),
           ),
@@ -1270,7 +1293,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
         'price': '₹200-350',
         'icon': Icons.directions_car_filled_rounded,
         'category': 'suv',
-        'image': 'assets/images/scorpio_n_black.png',
+        'image': 'assets/images/scorpio_n_white.png',
       },
     ];
 
@@ -1282,7 +1305,8 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
         separatorBuilder: (_, __) => const SizedBox(width: 10),
         itemBuilder: (context, index) {
           final tier = tiers[index];
-          final isSelected = state.selectedTier == tier['category'] ||
+          final isSelected =
+              state.selectedTier == tier['category'] ||
               (state.selectedTier.isEmpty && tier['name'] == 'Auto');
 
           return GestureDetector(
@@ -1292,7 +1316,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                   .selectTier(tier['category'] as String);
             },
             child: Container(
-              width: 82,
+              width: 88,
               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
               decoration: BoxDecoration(
                 color: isSelected ? const Color(0xFFF0FDF4) : Colors.white,
@@ -1325,16 +1349,21 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                       fontWeight: FontWeight.bold,
                       color: Color(0xFF111827),
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 2),
-                  Text(
-                    tier['price'] as String,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: isSelected
-                          ? const Color(0xFF16A34A)
-                          : const Color(0xFF6B7280),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      tier['price'] as String,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: isSelected
+                            ? const Color(0xFF16A34A)
+                            : const Color(0xFF6B7280),
+                      ),
                     ),
                   ),
                 ],
@@ -1350,18 +1379,63 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
   String _getVehicleImagePath(FleetVehicleModel vehicle) {
     final cat = vehicle.category.toLowerCase();
     final name = vehicle.displayName.toLowerCase();
-    if (cat.contains('bike') || name.contains('bike')) return 'assets/images/bike_rider_green_white.png';
-    if (cat.contains('auto') || name.contains('auto')) return 'assets/images/auto_green_white.png';
-    if (cat.contains('e_rickshaw') || name.contains('rickshaw') || name.contains('e-rickshaw')) return 'assets/images/e_rickshaw_green_white.png';
-    if (cat.contains('sedan') || name.contains('sedan')) return 'assets/images/sedan_green_white.png';
-    if (cat.contains('suv') || name.contains('suv') || name.contains('fortuner') || name.contains('thar')) return 'assets/images/suv_green_white.png';
-    if (cat.contains('scorpio')) return 'assets/images/scorpio_n_black.png';
-    if (cat.contains('towing') || name.contains('towing')) return 'assets/images/towing_van_green.png';
-    if (cat.contains('ambulance')) return 'assets/images/ambulance_visual.jpg';
-    if (cat.contains('ape') || name.contains('ape')) return 'assets/images/piaggio_ape_yellow.png';
-    if (cat.contains('tata') || cat.contains('407') || name.contains('407')) return 'assets/images/tata_407_beige.png';
-    if (cat.contains('207') || name.contains('207')) return 'assets/images/mahindra_207_white.png';
-    return 'assets/images/passenger_car_visual.jpg';
+    if (cat.contains('e_rickshaw') ||
+        name.contains('rickshaw') ||
+        name.contains('e-rickshaw')) {
+      return 'assets/images/e_rickshaw_green_white.png';
+    }
+    if (cat.contains('bike') || name.contains('bike')) {
+      return 'assets/images/bike_rider_green_white.png';
+    }
+    if (cat.contains('auto') || name.contains('auto')) {
+      return 'assets/images/auto_green_white.png';
+    }
+    if (cat.contains('hatchback') || name.contains('hatchback')) {
+      return 'assets/images/hatchback_visual.png';
+    }
+    if (cat.contains('sedan') || name.contains('sedan')) {
+      return 'assets/images/sedan_green_white.png';
+    }
+    if (cat.contains('scorpio') || name.contains('scorpio')) {
+      return 'assets/images/scorpio_n_white.png';
+    }
+    if (cat.contains('thar') || name.contains('thar')) {
+      return 'assets/images/thar_visual.webp';
+    }
+    if (cat.contains('fortuner') || name.contains('fortuner')) {
+      return 'assets/images/fortuner_visual.jpg';
+    }
+    if (cat.contains('suv') || name.contains('suv')) {
+      return 'assets/images/scorpio_n_white.png';
+    }
+    if (cat.contains('traveller') ||
+        cat.contains('winger') ||
+        name.contains('traveller')) {
+      return 'assets/images/force_traveller_van.png';
+    }
+    if (cat.contains('towing') || name.contains('towing')) {
+      return 'assets/images/flatbed_towing_truck.png';
+    }
+    if (cat.contains('ambulance') || name.contains('ambulance')) {
+      return 'assets/images/ambulance_visual.jpg';
+    }
+    if (cat.contains('ape') || name.contains('ape')) {
+      return 'assets/images/piaggio_ape_yellow.png';
+    }
+    if (cat.contains('magic') || name.contains('magic')) {
+      return 'assets/images/tata_magic_cream.png';
+    }
+    if ((cat.contains('207') || name.contains('207')) &&
+        (cat.contains('heavy') || name.contains('heavy'))) {
+      return 'assets/images/cargo_207_heavy.png';
+    }
+    if (cat.contains('207') || name.contains('207')) {
+      return 'assets/images/cargo_207_normal.png';
+    }
+    if (cat.contains('407') || name.contains('407')) {
+      return 'assets/images/tata_407_beige.png';
+    }
+    return 'assets/images/sedan_green_white.png';
   }
 
   // ignore: unused_element

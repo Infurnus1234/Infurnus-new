@@ -22,7 +22,7 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
       'category': 'scorpio_n',
       'filter': 'SUV',
       'subtitle': 'Rugged SUV • Chauffeur + Fuel',
-      'image': 'assets/images/scorpio_n_black.png',
+      'image': 'assets/images/scorpio_n_white.png',
       'fallbackIcon': Icons.directions_car_filled_rounded,
     },
     {
@@ -42,11 +42,19 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
       'fallbackIcon': Icons.directions_car_rounded,
     },
     {
+      'title': 'Tata Magic',
+      'category': 'tata_magic',
+      'filter': 'Vans',
+      'subtitle': 'Commercial Rental • Chauffeur + Fuel',
+      'image': 'assets/images/tata_magic_cream.png',
+      'fallbackIcon': Icons.local_shipping_rounded,
+    },
+    {
       'title': 'Force Traveller',
       'category': 'traveller',
       'filter': 'Vans',
       'subtitle': '12 seater • Chauffeur + Fuel',
-      'image': 'assets/images/tata_white_truck.png',
+      'image': 'assets/images/force_traveller_van.png',
       'fallbackIcon': Icons.airport_shuttle_rounded,
     },
     {
@@ -62,7 +70,7 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
       'category': 'helicopter',
       'filter': 'Luxury',
       'subtitle': 'On-demand • Chauffeur + Pilot',
-      'image': 'assets/images/vehicle_fleet_banner.png',
+      'image': null,
       'fallbackIcon': Icons.flight_rounded,
     },
   ];
@@ -110,12 +118,19 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                   return GestureDetector(
                     onTap: () => setState(() => _selectedFilter = filter),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
-                        color: isSelected ? const Color(0xFF16A34A) : Colors.white,
+                        color: isSelected
+                            ? const Color(0xFF16A34A)
+                            : Colors.white,
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: isSelected ? const Color(0xFF16A34A) : const Color(0xFFE5E7EB),
+                          color: isSelected
+                              ? const Color(0xFF16A34A)
+                              : const Color(0xFFE5E7EB),
                         ),
                       ),
                       child: Center(
@@ -124,7 +139,9 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: isSelected ? Colors.white : const Color(0xFF374151),
+                            color: isSelected
+                                ? Colors.white
+                                : const Color(0xFF374151),
                           ),
                         ),
                       ),
@@ -147,11 +164,16 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                 return GestureDetector(
                   onTap: () {
                     ref.read(rideProvider.notifier).selectSector('premium');
-                    ref.read(rideProvider.notifier).selectTier(item['category']);
+                    ref
+                        .read(rideProvider.notifier)
+                        .selectTier(item['category']);
                     context.push('/ride-booking');
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
@@ -176,15 +198,21 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                           ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(10),
-                            child: Image.asset(
-                              item['image'],
-                              fit: BoxFit.contain,
-                              errorBuilder: (_, __, ___) => Icon(
-                                item['fallbackIcon'] as IconData,
-                                size: 30,
-                                color: const Color(0xFFCA8A04),
-                              ),
-                            ),
+                            child: item['image'] != null
+                                ? Image.asset(
+                                    item['image'] as String,
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (_, __, ___) => Icon(
+                                      item['fallbackIcon'] as IconData,
+                                      size: 30,
+                                      color: const Color(0xFFCA8A04),
+                                    ),
+                                  )
+                                : Icon(
+                                    item['fallbackIcon'] as IconData,
+                                    size: 30,
+                                    color: const Color(0xFFCA8A04),
+                                  ),
                           ),
                         ),
                         const SizedBox(width: 14),
@@ -201,6 +229,8 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                                   fontWeight: FontWeight.bold,
                                   color: Color(0xFF111827),
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: 4),
                               Text(
@@ -209,6 +239,8 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                                   fontSize: 12,
                                   color: Color(0xFF6B7280),
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ],
                           ),

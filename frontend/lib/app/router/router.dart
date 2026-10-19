@@ -23,8 +23,6 @@ import '../../features/customer/presentation/screens/ride_booking_screen.dart';
 import '../../features/customer/presentation/screens/wallet_screen.dart';
 import '../../features/customer/presentation/screens/rentals_screen.dart';
 import '../../features/customer/presentation/screens/logistics_screen.dart';
-import '../../features/customer/presentation/screens/passenger_rides_screen.dart';
-import '../../features/customer/presentation/screens/specialty_emergency_screen.dart';
 import '../../features/customer/presentation/screens/concierge_fleet_screen.dart';
 import '../../features/ai_assistant/presentation/screens/ai_assistant_screen.dart';
 import '../../core/config/legal_texts.dart';

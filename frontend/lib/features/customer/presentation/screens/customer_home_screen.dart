@@ -1083,7 +1083,11 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     );
   }
 
-  void _showSeeAllVehiclesModal(BuildContext context, String title, List<_VehicleCategoryItem> vehicles) {
+  void _showSeeAllVehiclesModal(
+    BuildContext context,
+    String title,
+    List<_VehicleCategoryItem> vehicles,
+  ) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1103,7 +1107,11 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: textBlack),
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: textBlack,
+                    ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.close_rounded, color: textBlack),
@@ -1131,19 +1139,56 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                         side: const BorderSide(color: cardBorder),
                       ),
                       leading: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: const BoxDecoration(
+                        width: 44,
+                        height: 44,
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
                           color: surfaceWhite,
-                          shape: BoxShape.circle,
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Icon(item.icon, color: buttonBlack),
+                        child: item.assetImagePath != null
+                            ? Image.asset(
+                                item.assetImagePath!,
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, __, ___) => Icon(
+                                  item.icon,
+                                  color: buttonBlack,
+                                  size: 22,
+                                ),
+                              )
+                            : Icon(item.icon, color: buttonBlack, size: 22),
                       ),
-                      title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold, color: textBlack)),
-                      subtitle: Text('${item.capacity} • ${item.eta}', style: const TextStyle(color: textSecondary, fontSize: 12)),
-                      trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: textBlack),
+                      title: Text(
+                        item.title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: textBlack,
+                        ),
+                      ),
+                      subtitle: Text(
+                        '${item.capacity} • ${item.eta}',
+                        style: const TextStyle(
+                          color: textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                      trailing: const Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        size: 14,
+                        color: textBlack,
+                      ),
                       onTap: () {
                         Navigator.pop(context);
-                        ref.read(rideProvider.notifier).selectSector('passenger');
+                        final sector =
+                            item.category == VehicleCategoryType.logistics
+                            ? 'logistics'
+                            : (item.category == VehicleCategoryType.emergency
+                                  ? 'service'
+                                  : 'passenger');
+                        ref.read(rideProvider.notifier).selectSector(sector);
+                        ref
+                            .read(rideProvider.notifier)
+                            .selectTier(item.title.toLowerCase());
                         context.push('/ride-booking');
                       },
                     );
@@ -1193,7 +1238,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Scheduled',
         icon: Icons.airport_shuttle_rounded,
         category: VehicleCategoryType.rides,
-        assetImagePath: 'assets/images/passenger_car_visual.jpg',
+        assetImagePath: 'assets/images/force_traveller_van.png',
       ),
       _VehicleCategoryItem(
         title: 'Winger',
@@ -1202,7 +1247,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Scheduled',
         icon: Icons.directions_bus_rounded,
         category: VehicleCategoryType.rides,
-        assetImagePath: 'assets/images/passenger_car_visual.jpg',
+        assetImagePath: 'assets/images/force_traveller_van.png',
       ),
       _VehicleCategoryItem(
         title: 'Mini / Compact',
@@ -1211,7 +1256,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Instant',
         icon: Icons.directions_car_rounded,
         category: VehicleCategoryType.rides,
-        assetImagePath: 'assets/images/sedan_green_white.png',
+        assetImagePath: 'assets/images/hatchback_visual.png',
       ),
       _VehicleCategoryItem(
         title: 'Sedan',
@@ -1229,7 +1274,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Instant',
         icon: Icons.directions_car_filled_rounded,
         category: VehicleCategoryType.premium,
-        assetImagePath: 'assets/images/suv_green_white.png',
+        assetImagePath: 'assets/images/scorpio_n_white.png',
       ),
     ];
 
@@ -1246,7 +1291,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
           height: 130,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            itemCount: 3,
+            itemCount: items.length,
             separatorBuilder: (_, __) => const SizedBox(width: 12),
             itemBuilder: (context, index) {
               final item = items[index];
@@ -1254,7 +1299,9 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                 item: item,
                 onTap: () {
                   ref.read(rideProvider.notifier).selectSector('passenger');
-                  ref.read(rideProvider.notifier).selectTier(item.title.toLowerCase());
+                  ref
+                      .read(rideProvider.notifier)
+                      .selectTier(item.title.toLowerCase());
                   context.push('/ride-booking');
                 },
               );
@@ -1273,8 +1320,8 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         rate: 'Server Rate',
         eta: 'On-demand',
         icon: Icons.electric_rickshaw_rounded,
-        category: VehicleCategoryType.auto,
-        assetImagePath: 'assets/images/auto_green_white.png',
+        category: VehicleCategoryType.logistics,
+        assetImagePath: 'assets/images/piaggio_ape_yellow.png',
       ),
       _VehicleCategoryItem(
         title: 'Piaggio Ape',
@@ -1292,7 +1339,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'On-demand',
         icon: Icons.local_shipping_rounded,
         category: VehicleCategoryType.logistics,
-        assetImagePath: 'assets/images/piaggio_magic_blue.png',
+        assetImagePath: 'assets/images/tata_magic_cream.png',
       ),
       _VehicleCategoryItem(
         title: '207 Cargo',
@@ -1301,7 +1348,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'On-demand',
         icon: Icons.local_shipping_rounded,
         category: VehicleCategoryType.logistics,
-        assetImagePath: 'assets/images/mahindra_207_white.png',
+        assetImagePath: 'assets/images/cargo_207_heavy.png',
       ),
       _VehicleCategoryItem(
         title: '407 Cargo',
@@ -1319,7 +1366,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'On-demand',
         icon: Icons.local_shipping_rounded,
         category: VehicleCategoryType.logistics,
-        assetImagePath: 'assets/images/tata_white_truck.png',
+        assetImagePath: 'assets/images/cargo_207_normal.png',
       ),
     ];
 
@@ -1329,7 +1376,8 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         _buildSectionHeader(
           title: 'Logistics',
           subtitle: 'Move goods with muscle',
-          onSeeAll: () => _showSeeAllVehiclesModal(context, 'Logistics & Cargo', items),
+          onSeeAll: () =>
+              _showSeeAllVehiclesModal(context, 'Logistics & Cargo', items),
         ),
         const SizedBox(height: 12),
         SizedBox(
@@ -1432,7 +1480,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         badge: 'Rugged SUV',
         subtitle: 'The Big Daddy of SUVs',
         price: 'Chauffeur + Fuel',
-        assetImagePath: 'assets/images/scorpio_n_black.png',
+        assetImagePath: 'assets/images/scorpio_n_white.png',
       ),
       _LuxuryVehicleItem(
         title: 'Mahindra Thar',
@@ -1567,7 +1615,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                         item.assetImagePath!,
                         width: 52,
                         height: 52,
-                        fit: BoxFit.cover,
+                        fit: BoxFit.contain,
                       )
                     : const VehicleCategoryVisual(
                         category: VehicleCategoryType.premium,
@@ -1751,6 +1799,8 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
             Text(
               item.capacity,
               style: const TextStyle(fontSize: 11, color: textSecondary),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
