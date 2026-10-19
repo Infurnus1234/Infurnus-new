@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "479633076709",
+    "project_id": "infurnus-299d7",
+    "storage_bucket": "infurnus-299d7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:479633076709:android:5a5336fcbeed70636e3f0c",
+        "android_client_info": {
+          "package_name": "com.infurnus.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB0YOOuDa-E4l7e0AEbGO1eNK_nnuWKYgE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:479633076709:android:028d10ba6aea47596e3f0c",
+        "android_client_info": {
+          "package_name": "com.infurnus.driver.infurnus_driver"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB0YOOuDa-E4l7e0AEbGO1eNK_nnuWKYgE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
