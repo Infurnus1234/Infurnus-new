@@ -3,6 +3,7 @@ import { Server as SocketIOServer } from 'socket.io';
 
 import { env } from '../../config/env.js';
 import { authenticateSocket } from './socket.auth.js';
+import { canActAsDriver } from './socket.authorization.js';
 import {
   driverSectorCategoryRoom,
   driverSectorRoom,
@@ -22,6 +23,7 @@ import type { Ride } from '../../modules/rides/types/ride.js';
 import { sanitizeRideForDriver } from '../../modules/rides/utils/ride-sanitizer.js';
 import type { MatchingService } from '../../modules/rides/services/matching.service.js';
 import { RideDispatchService } from '../../modules/rides/services/ride-dispatch.service.js';
+import type { NotificationType } from '../../modules/notifications/types/notification.types.js';
 
 export interface RideSocketDependencies {
   driverService: DriverService;
@@ -30,6 +32,9 @@ export interface RideSocketDependencies {
   routeRecalculationService: RouteRecalculationService;
   matchingService?: MatchingService;
   dispatchResponseTimeoutMs?: number;
+  authorizeAccount?: (userId: string, role: string) => Promise<void>;
+  notifyRideOffer?: (userId: string, ride: Ride, expiresAt: Date) => Promise<void>;
+  notifyRideUpdate?: (ride: Ride, type: NotificationType) => Promise<void>;
 }
 
 interface SocketAck {
@@ -51,13 +56,75 @@ export function createSocketServer(
   io.use(async (socket, next) => {
     try {
       await authenticateSocket(socket);
+      if (rideDependencies?.authorizeAccount) {
+        await rideDependencies.authorizeAccount(socket.data.auth.userId, socket.data.auth.role);
+      }
       next();
     } catch {
       next(new Error('Authentication failed'));
     }
   });
 
+  io.on('connection', (socket) => {
+    const validate = async () => {
+      await authenticateSocket(socket);
+      if (rideDependencies?.authorizeAccount) {
+        await rideDependencies.authorizeAccount(socket.data.auth.userId, socket.data.auth.role);
+      }
+    };
+    socket.use(async (packet, next) => {
+      try {
+        await validate();
+        next();
+      } catch {
+        const ack = packet[packet.length - 1];
+        if (typeof ack === 'function') {
+          ack({
+            success: false,
+            error: { code: 'AUTHENTICATION_REQUIRED', message: 'Session authorization expired' },
+          });
+        }
+        next(new Error('Session authorization expired'));
+        socket.disconnect(true);
+      }
+    });
+    // Idle sockets lose private room access after token expiry or account changes.
+    const timer = setInterval(() => {
+      void validate().catch(() => socket.disconnect(true));
+    }, 30_000);
+    timer.unref();
+    socket.on('disconnect', () => clearInterval(timer));
+    socket.on('error', () => {});
+  });
+
   if (rideDependencies) {
+    const emitRide = (event: string, ride: Ride, payload: Record<string, unknown>) => {
+      void io
+        .in(rideRoom(ride.id))
+        .fetchSockets()
+        .then(async (sockets) => {
+          await Promise.all(
+            sockets.map(async (socket) => {
+              const auth = socket.data.auth;
+              if (!auth) return;
+              try {
+                await rideDependencies.authorizeAccount?.(auth.userId, auth.role);
+              } catch {
+                socket.disconnect(true);
+                return;
+              }
+              if (['driver', 'driver_fleet_owner'].includes(auth.role)) {
+                if (!(await rideDependencies.rideRepository.isAssignedDriver(ride.id, auth.userId))) { socket.leave(rideRoom(ride.id)); return; }
+                const safe = { ...payload, ride: sanitizeRideForDriver(ride) };
+                for (const key of ['pin', 'billing', 'finalFare', 'fareEstimate', 'actualFuelCost'])
+                  delete (safe as Record<string, unknown>)[key];
+                socket.emit(event, safe);
+              } else socket.emit(event, payload);
+            }),
+          );
+        })
+        .catch(() => console.warn(JSON.stringify({ event: 'ride_event_delivery_failed' })));
+    };
     const dispatchService = rideDependencies.matchingService
       ? new RideDispatchService(
           rideDependencies.rideRepository,
@@ -67,6 +134,9 @@ export function createSocketServer(
               ride: sanitizeRideForDriver(ride),
               expiresAt: expiresAt.toISOString(),
             });
+            void rideDependencies
+              .notifyRideOffer?.(candidate.userId, ride, expiresAt)
+              .catch(() => console.warn('Ride offer push could not be queued'));
           },
           rideDependencies.dispatchResponseTimeoutMs,
         )
@@ -91,7 +161,10 @@ export function createSocketServer(
       sector?: string | null;
       vehicleCategory?: string | null;
     }) => {
-      io.to(rideRoom(ride.id)).emit('ride:driver_assigned', { ride });
+      emitRide('ride:driver_assigned', ride as Ride, { ride });
+      void rideDependencies
+        .notifyRideUpdate?.(ride as Ride, 'ride.accepted')
+        .catch(() => console.warn('Ride assignment push could not be queued'));
       const sector = ride.sector || 'passenger';
       const category = ride.vehicleCategory;
       if (category) {
@@ -105,24 +178,42 @@ export function createSocketServer(
       rideDependencies.routeRecalculationService.clear(rideId);
       io.to(rideRoom(rideId)).emit('ride:cancelled', { rideId });
       io.to('drivers:available').emit('ride:cancelled', { rideId });
+      if (rideDependencies.notifyRideUpdate) {
+        void rideDependencies.rideRepository
+          .findById(rideId)
+          .then(async (ride) => {
+            if (ride) await rideDependencies.notifyRideUpdate!(ride, 'ride.cancelled');
+          })
+          .catch(() => console.warn('Ride cancellation push could not be queued'));
+      }
     };
 
     const onRideLifecycle = (ride: Ride) => {
+      const notificationTypes: Partial<Record<Ride['status'], NotificationType>> = {
+        driver_arrived: 'ride.driver_arrived',
+        in_progress: 'ride.started',
+        completed: 'ride.completed',
+      };
+      const notificationType = notificationTypes[ride.status];
+      if (notificationType)
+        void rideDependencies
+          .notifyRideUpdate?.(ride, notificationType)
+          .catch(() => console.warn('Ride status push could not be queued'));
       if (['completed', 'cancelled'].includes(ride.status))
         rideDependencies.routeRecalculationService.clear(ride.id);
       const segment = ['driver_assigned', 'driver_arriving', 'driver_arrived'].includes(ride.status)
         ? 'pickup'
-        : ride.status === 'in_progress'
+        : ride.status === 'in_progress' && ride.pinVerified === true
           ? 'destination'
           : null;
-      io.to(rideRoom(ride.id)).emit('ride:lifecycle_updated', {
+      emitRide('ride:lifecycle_updated', ride, {
         ride,
         segment,
         navigationTarget:
           segment === 'pickup' ? ride.pickup : segment === 'destination' ? ride.destination : null,
       });
       if (ride.status === 'completed')
-        io.to(rideRoom(ride.id)).emit('ride:completed', {
+        emitRide('ride:completed', ride, {
           rideId: ride.id,
           ride,
           finalFare: ride.finalFare ?? ride.fareEstimate,
@@ -204,7 +295,7 @@ export function createSocketServer(
             ['completed', 'cancelled'].includes(active.status)
           )
             return;
-          const segment = active.status === 'in_progress' ? 'destination' : 'pickup';
+          const segment = active.status === 'in_progress' && active.pinVerified === true ? 'destination' : 'pickup';
           const target = segment === 'destination' ? active.destination : active.pickup;
           const previous =
             rideDependencies.routeRecalculationService.transientMetadata(ride.id) ??
@@ -238,14 +329,14 @@ export function createSocketServer(
           )
             return;
           if (next && (next.routeVersion ?? 0) !== (previous?.routeVersion ?? 0))
-            io.to(rideRoom(ride.id)).emit('ride:route_updated', {
+            emitRide('ride:route_updated', current, {
               rideId: ride.id,
               route: next.route,
               segment,
               routeVersion: next.routeVersion,
             });
           if (next?.segment === segment && next.etaSeconds !== undefined)
-            io.to(rideRoom(ride.id)).emit('ride:eta_updated', {
+            emitRide('ride:eta_updated', current, {
               rideId: ride.id,
               etaSeconds: next.etaSeconds,
               source: 'route_progress_estimate',
@@ -335,7 +426,7 @@ export function createSocketServer(
     io.on('connection', async (socket) => {
       const userId = socket.data.auth?.userId;
 
-      if (socket.data.auth?.role === 'driver') {
+      if (canActAsDriver(socket)) {
         let sector =
           (socket.handshake.auth?.sector as string) || (socket.handshake.query?.sector as string);
         let category =
@@ -436,11 +527,7 @@ export function createSocketServer(
 
       socket.on('driver:location', async (payload: unknown, ack?: SocketAck) => {
         try {
-          if (
-            socket.data.auth?.role !== 'driver' ||
-            typeof payload !== 'object' ||
-            payload === null
-          ) {
+          if (!canActAsDriver(socket) || typeof payload !== 'object' || payload === null) {
             throw new Error('Driver authorization failed');
           }
 
@@ -474,7 +561,7 @@ export function createSocketServer(
 
       socket.on('driver:accept', async (rideId: unknown, ack?: SocketAck) => {
         try {
-          if (socket.data.auth?.role !== 'driver' || typeof rideId !== 'string') {
+          if (!canActAsDriver(socket) || typeof rideId !== 'string') {
             throw new Error('Driver authorization failed');
           }
 
@@ -484,7 +571,7 @@ export function createSocketServer(
 
           // Service emits ride:accepted for both HTTP and Socket.IO acceptance.
 
-          ack?.({ success: true, data: ride });
+          ack?.({ success: true, data: sanitizeRideForDriver(ride) });
         } catch {
           ack?.({
             success: false,
@@ -498,11 +585,7 @@ export function createSocketServer(
 
       socket.on('ride:status', async (payload: unknown, ack?: SocketAck) => {
         try {
-          if (
-            socket.data.auth?.role !== 'driver' ||
-            typeof payload !== 'object' ||
-            payload === null
-          ) {
+          if (!canActAsDriver(socket) || typeof payload !== 'object' || payload === null) {
             throw new Error('Driver authorization failed');
           }
 
@@ -523,7 +606,7 @@ export function createSocketServer(
 
           onRideLifecycle(ride);
 
-          ack?.({ success: true, data: ride });
+          ack?.({ success: true, data: sanitizeRideForDriver(ride) });
         } catch (error: unknown) {
           const errorCode =
             typeof error === 'object' &&
@@ -545,8 +628,8 @@ export function createSocketServer(
       });
 
       socket.on('disconnect', () => {
-        if (socket.data.auth?.role === 'driver') {
-          const userId = socket.data.auth.userId;
+        if (canActAsDriver(socket)) {
+          const userId = socket.data.auth!.userId;
           void io
             .in(driverUserRoom(userId))
             .allSockets()

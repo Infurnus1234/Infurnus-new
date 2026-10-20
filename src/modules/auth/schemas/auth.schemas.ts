@@ -72,9 +72,9 @@ export const signupSchema = z
 
     phone: phoneSchema.optional(),
 
-    password: passwordSchema,
+    password: passwordSchema.optional(),
 
-    confirmPassword: z.string().min(1, 'Please confirm your password'),
+    confirmPassword: z.string().optional(),
 
     role: z.enum(['customer', 'driver', 'fleet_owner', 'driver_fleet_owner']).default('customer'),
 
@@ -121,7 +121,10 @@ export const signupSchema = z
     // Password confirmation
     // --------------------------------------------------------
 
-    if (data.password !== data.confirmPassword) {
+    if (
+      data.password !== data.confirmPassword &&
+      (data.role === 'fleet_owner' || data.role === 'driver_fleet_owner')
+    ) {
       ctx.addIssue({
         code: 'custom',
         path: ['confirmPassword'],
@@ -132,6 +135,10 @@ export const signupSchema = z
     // --------------------------------------------------------
     // Role-specific validation
     // --------------------------------------------------------
+
+    if ((data.role === 'fleet_owner' || data.role === 'driver_fleet_owner') && !data.password) {
+      ctx.addIssue({ code: 'custom', path: ['password'], message: 'Password is required' });
+    }
 
     const isDriver = data.role === 'driver' || data.role === 'driver_fleet_owner';
 
@@ -254,10 +261,7 @@ export const loginSchema = z
 
     phone: phoneSchema.optional(),
 
-    password: z
-      .string()
-      .min(1, 'Password is required')
-      .max(128, 'Password must not exceed 128 characters'),
+    password: z.string().max(128, 'Password must not exceed 128 characters').optional(),
   })
   .strict()
   .superRefine((data, ctx) => {
@@ -377,7 +381,7 @@ export const changePasswordSchema = z
     }
   });
 
-export const googleAuthSchema = z
+export const googleLinkSchema = z
   .object({
     idToken: z
       .string()
@@ -386,3 +390,20 @@ export const googleAuthSchema = z
       .regex(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/),
   })
   .strict();
+
+// Driver enrollment is distinct from operational driver approval. Existing
+// customer callers omit this field and retain their current behavior.
+export const googleAuthSchema = googleLinkSchema
+  .extend({
+    driverFlow: z.enum(['signup', 'signin']).optional(),
+    providerRole: z.enum(['driver', 'fleet_owner', 'driver_fleet_owner']).optional(),
+  })
+  .superRefine((input, ctx) => {
+    if (input.providerRole && input.driverFlow !== 'signup') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['providerRole'],
+        message: 'Provider role is only accepted for provider signup',
+      });
+    }
+  });

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { decryptSecret, encryptSecret } from './encryption.js';
 
 describe('encryption', () => {
-  const secret = 'sendmator-session-token-example';
+  const secret = 'configured-session-token-example';
 
   it('encrypts and decrypts a secret correctly', () => {
     const encrypted = encryptSecret(secret);

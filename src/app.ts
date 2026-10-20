@@ -104,6 +104,7 @@ import { createVehicleRouter } from './modules/vehicles/routes/vehicle.routes.js
 import { VehicleService } from './modules/vehicles/services/vehicle.service.js';
 
 import { createDeviceTokenRouter } from './modules/notifications/device-tokens/routes/device-token.routes.js';
+import { createNotificationInboxRouter } from './modules/notifications/routes/notification-inbox.routes.js';
 
 export interface AppOptions {
   enableAuthRateLimiting?: boolean;
@@ -178,7 +179,7 @@ export function createApp(
 ) {
   const app = express();
 
-  app.set('trust proxy', true);
+  app.set('trust proxy', env.TRUST_PROXY_HOPS || false);
 
   app.use(helmet());
 
@@ -284,7 +285,16 @@ export function createApp(
   let fleetService: FleetService | undefined;
   if (providerOperationsRepository) {
     app.use(
-      ['/fleet', '/provider', '/partners', '/rides/driver', '/vehicles', '/driver-applications'],
+      [
+        '/fleet',
+        '/provider',
+        '/partners',
+        '/rides',
+        '/vehicles',
+        '/driver-applications',
+        '/admin',
+        '/provider-approvals',
+      ],
       requireAuth,
       async (req, _res, next) => {
         try {
@@ -556,6 +566,7 @@ export function createApp(
   // ==========================================================
 
   app.use('/notifications/devices', createDeviceTokenRouter());
+  app.use('/notifications/inbox', createNotificationInboxRouter());
 
   // ==========================================================
   // Authentication

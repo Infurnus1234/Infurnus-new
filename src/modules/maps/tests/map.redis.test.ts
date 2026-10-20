@@ -36,8 +36,10 @@ live('live Redis map caching and distributed deduplication', () => {
     expect(await cache.get(key)).toBeNull();
     await cache.set(key, 'value', 1);
     expect(await cache.get(key)).toBe('value');
-    await new Promise((resolve) => setTimeout(resolve, 1100));
-    expect(await cache.get(key)).toBeNull();
+    const ttl = await connection.redis.pttl(key);
+    expect(ttl).toBeGreaterThan(0);
+    expect(ttl).toBeLessThanOrEqual(1000);
+    await expect.poll(() => cache.get(key), { timeout: 5000, interval: 100 }).toBeNull();
   });
   it('deduplicates identical requests from two independent service instances', async () => {
     const provider: MapProvider = {

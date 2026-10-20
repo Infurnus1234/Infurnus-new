@@ -1,5 +1,5 @@
 import { GoogleAuthService } from '../services/google-auth.service.js';
-import { googleAuthSchema } from '../schemas/auth.schemas.js';
+import { googleAuthSchema, googleLinkSchema } from '../schemas/auth.schemas.js';
 import type { NextFunction, Request, Response } from 'express';
 
 import { AppError } from '../../../common/errors/app-error.js';
@@ -305,13 +305,22 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
     try {
       const input = loginSchema.parse(req.body);
 
-      const result = await loginService.authenticate({
+      const credentials = {
         ...(input.email !== undefined ? { email: input.email } : {}),
 
         ...(input.phone !== undefined ? { phone: input.phone } : {}),
 
         password: input.password,
-      });
+      };
+      const result =
+        req.path === '/admin/login'
+          ? await loginService.authenticate(credentials, true)
+          : await loginService.authenticate(credentials);
+
+      if ('userId' in result) {
+        await issueAuthentication(req, res, result.userId, result.role);
+        return;
+      }
 
       res.status(200).json({
         success: true,
@@ -458,6 +467,13 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
         throw new AppError('AUTHENTICATION_REQUIRED', 'Authentication required', 401);
       }
 
+      if (req.auth.role === 'customer' || req.auth.role === 'driver') {
+        throw new AppError(
+          'PASSWORD_AUTH_DISABLED',
+          'Use OTP authentication for this account',
+          400,
+        );
+      }
       const input = changePasswordSchema.parse(req.body);
 
       await changePasswordService.changePassword(
@@ -664,7 +680,14 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
   async function google(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const input = googleAuthSchema.parse(req.body);
-      const identity = await googleAuthService.authenticate(input.idToken);
+      const identity = input.driverFlow
+        ? await googleAuthService.authenticate(
+            input.idToken,
+            undefined,
+            input.driverFlow,
+            input.providerRole,
+          )
+        : await googleAuthService.authenticate(input.idToken);
       await issueAuthentication(req, res, identity.id, identity.role);
     } catch (error) {
       next(error);
@@ -673,7 +696,7 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
 
   async function linkGoogle(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const input = googleAuthSchema.parse(req.body);
+      const input = googleLinkSchema.parse(req.body);
       if (!req.auth) throw new AppError('AUTHENTICATION_REQUIRED', 'Authentication required', 401);
       await googleAuthService.authenticate(input.idToken, req.auth.userId);
       res.status(200).json({ success: true });

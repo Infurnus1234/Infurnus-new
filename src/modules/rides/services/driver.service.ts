@@ -1,3 +1,4 @@
+import { storageService } from '../../../infrastructure/storage/index.js';
 import { MatchingService } from './matching.service.js';
 import { rideEvents } from '../events/ride.events.js';
 import { validateCoordinates } from '../../maps/geometry.js';
@@ -87,7 +88,8 @@ export class DriverService {
 
       if (
         profile.licenseExpiry &&
-        new Date(profile.licenseExpiry).getTime() < this.clock().getTime()
+        new Date(profile.licenseExpiry).toISOString().slice(0, 10) <
+          this.clock().toISOString().slice(0, 10)
       ) {
         throw new AppError(
           'DOCUMENT_EXPIRED',
@@ -220,7 +222,19 @@ export class DriverService {
     if (!vehicle) {
       throw new AppError('NO_ASSIGNED_VEHICLE', 'No active vehicle assigned', 404);
     }
-    return vehicle;
+    const { photoStorage, ...safe } = vehicle;
+    let photoUrl: string | null = null;
+    let photoStatus = 'missing';
+    if (photoStorage) {
+      try {
+        photoUrl = await storageService.getAccessUrl({
+          storageKey: photoStorage.storageKey, resourceType: photoStorage.resourceType,
+          accessMode: photoStorage.accessMode, options: { expiresIn: 300 },
+        });
+        photoStatus = 'available';
+      } catch { photoStatus = 'unavailable'; }
+    }
+    return { ...safe, photoUrl, photoStatus, photoExpiresIn: photoUrl ? 300 : null, assignmentStatus: 'selected' };
   }
 
   async nearby(latitude: number, longitude: number, sector?: string, vehicleCategory?: string) {

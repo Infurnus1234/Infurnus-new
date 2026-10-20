@@ -8,6 +8,7 @@ import type { CreatePendingSignupData, PendingSignup, SignupContactType } from '
 // ============================================================
 
 export interface PendingSignupRepository {
+  claimVerificationAttempt(id: string, maxAttempts: number): Promise<boolean>;
   create(data: CreatePendingSignupData): Promise<PendingSignup>;
 
   /**
@@ -69,6 +70,16 @@ export interface PendingSignupRepository {
 // ============================================================
 
 export class PostgresPendingSignupRepository implements PendingSignupRepository {
+  async claimVerificationAttempt(id: string, maxAttempts: number): Promise<boolean> {
+    const result = await pool.query(
+      `UPDATE pending_signups SET otp_attempts=otp_attempts+1
+       WHERE id=$1 AND otp_verified_at IS NULL AND otp_provider_expires_at>NOW()
+       AND otp_attempts<$2 RETURNING id`,
+      [id, maxAttempts],
+    );
+    return result.rowCount === 1;
+  }
+
   // ----------------------------------------------------------
   // Create pending signup
   // ----------------------------------------------------------

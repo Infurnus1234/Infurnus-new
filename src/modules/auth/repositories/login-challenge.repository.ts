@@ -14,6 +14,7 @@ import type {
 // ============================================================
 
 export interface LoginChallengeRepository {
+  claimVerificationAttempt(id: string, maxAttempts: number): Promise<boolean>;
   create(data: CreateLoginChallengeData): Promise<{ id: string }>;
 
   getProviderSession(challengeId: string): Promise<LoginChallengeProviderSession | null>;
@@ -33,6 +34,16 @@ export interface LoginChallengeRepository {
 // ============================================================
 
 export class PostgresLoginChallengeRepository implements LoginChallengeRepository {
+  async claimVerificationAttempt(id: string, maxAttempts: number): Promise<boolean> {
+    const result = await this.pool.query(
+      `UPDATE login_challenges SET verification_attempts=verification_attempts+1
+       WHERE id=$1 AND consumed_at IS NULL AND expires_at>NOW()
+       AND verification_attempts<$2 RETURNING id`,
+      [id, maxAttempts],
+    );
+    return result.rowCount === 1;
+  }
+
   constructor(private readonly pool: Pool) {}
 
   // ==========================================================
@@ -161,9 +172,15 @@ export class PostgresLoginChallengeRepository implements LoginChallengeRepositor
             provider_expires_at AS "providerExpiresAt",
             expires_at AS "expiresAt",
             verified_at AS "verifiedAt",
+              (expires_at<=NOW() OR provider_expires_at<=NOW()) AS "databaseExpired",
             consumed_at AS "consumedAt"
           FROM login_challenges
           WHERE id = $1
+            AND EXISTS (
+              SELECT 1 FROM users u WHERE u.id = login_challenges.user_id
+                AND u.role NOT IN ('admin', 'super_admin')
+                AND u.status = 'active' AND u.deleted_at IS NULL
+            )
           LIMIT 1
         `,
       [challengeId],
@@ -247,16 +264,14 @@ export class PostgresLoginChallengeRepository implements LoginChallengeRepositor
         userId: string;
         verifiedAt: Date | null;
         consumedAt: Date | null;
-        providerExpiresAt: Date;
-        expiresAt: Date;
+        expired: boolean;
       }>(
         `
           SELECT
             user_id AS "userId",
             verified_at AS "verifiedAt",
             consumed_at AS "consumedAt",
-            provider_expires_at AS "providerExpiresAt",
-            expires_at AS "expiresAt"
+            (expires_at <= NOW() OR provider_expires_at <= NOW()) AS expired
           FROM login_challenges
           WHERE id = $1
           FOR UPDATE
@@ -276,8 +291,6 @@ export class PostgresLoginChallengeRepository implements LoginChallengeRepositor
         };
       }
 
-      const now = Date.now();
-
       // ------------------------------------------------------
       // Challenge expired
       // ------------------------------------------------------
@@ -288,7 +301,7 @@ export class PostgresLoginChallengeRepository implements LoginChallengeRepositor
        * If either the local challenge or the provider session
        * has expired, the challenge cannot be used anymore.
        */
-      if (challenge.expiresAt.getTime() <= now || challenge.providerExpiresAt.getTime() <= now) {
+      if (challenge.expired) {
         return {
           status: 'expired',
         };

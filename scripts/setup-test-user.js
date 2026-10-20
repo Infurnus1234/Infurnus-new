@@ -1,8 +1,10 @@
 import pg from 'pg';
 const { Pool } = pg;
 
+if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required');
+
 const pool = new Pool({
-  connectionString: 'postgresql://infurnus:infurnus_dev@localhost:5432/infurnus',
+  connectionString: process.env.DATABASE_URL,
 });
 
 async function setup() {

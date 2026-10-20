@@ -53,11 +53,11 @@ const redemption: CouponRedemption = {
 
 function createRepositoryMock() {
   return {
-    findByCode: vi.fn(),
-    findByCodeForUpdate: vi.fn(),
-    countUserRedemptions: vi.fn(),
-    incrementUsage: vi.fn(),
-    createRedemption: vi.fn(),
+    findByCode: vi.fn<CouponRepository['findByCode']>(),
+    findByCodeForUpdate: vi.fn<CouponRepository['findByCodeForUpdate']>(),
+    countUserRedemptions: vi.fn<CouponRepository['countUserRedemptions']>(),
+    incrementUsage: vi.fn<CouponRepository['incrementUsage']>(),
+    createRedemption: vi.fn<CouponRepository['createRedemption']>(),
   } satisfies {
     [K in keyof CouponRepository]: ReturnType<typeof vi.fn>;
   };

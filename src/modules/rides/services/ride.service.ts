@@ -1,6 +1,6 @@
 import type { CommonMapService } from '../../maps/map.service.js';
 import type { RideMapData, UserRideMapData, DriverRideMapData } from '../types/ride-map.js';
-import { activeMapStatuses, freshRideLocation, rideInformation } from '../utils/ride-map-mapper.js';
+import { activeMapStatuses, freshRideLocation, rideInformation, driverDestinationAllowed } from '../utils/ride-map-mapper.js';
 import {
   geographicDistance,
   validRouteResult,
@@ -158,7 +158,7 @@ export class RideService {
     const active = activeMapStatuses.includes(ride.status) && !!ride.assignedDriverId;
     let driverLocation = active ? freshRideLocation(snapshot.driverLocation) : null;
     let userLocation = active ? freshRideLocation(snapshot.userLocation) : null;
-    const segment = active ? (ride.status === 'in_progress' ? 'destination' : 'pickup') : null;
+    const segment = active ? (ride.status === 'in_progress' && driverDestinationAllowed(ride) ? 'destination' : 'pickup') : null;
     const metadata = snapshot.metadata;
     let route: RideMapData['route'] = null,
       progress: RideMapData['progress'] = null,
@@ -194,10 +194,10 @@ export class RideService {
       active &&
       includeRoute &&
       this.maps &&
-      (segment === 'destination' || driverLocation)
+      driverLocation
     ) {
       route = await this.maps
-        .calculateRoute(segment === 'destination' ? ride.pickup : driverLocation!, target, {
+        .calculateRoute(driverLocation!, target, {
           source: 'RIDE',
         })
         .catch((error: unknown) => {
@@ -218,7 +218,7 @@ export class RideService {
       current.ride.status !== ride.status ||
       current.ride.assignedDriverId !== ride.assignedDriverId
     )
-      return this.inactiveMap(current.ride);
+      return this.inactiveMap(current.ride, view === 'user' || driverDestinationAllowed(current.ride));
     ride = current.ride;
     driverLocation = active ? freshRideLocation(current.driverLocation) : null;
     userLocation = active ? freshRideLocation(current.userLocation) : null;
@@ -238,7 +238,7 @@ export class RideService {
         };
     }
     return {
-      ...rideInformation(ride),
+      ...rideInformation(ride, view === 'user' || driverDestinationAllowed(ride)),
       rideId: ride.id,
       driverLocation,
       userLocation,
@@ -260,9 +260,9 @@ export class RideService {
       updatedAt: ride.updatedAt.toISOString(),
     };
   }
-  private inactiveMap(ride: import('../types/ride.js').Ride): RideMapData {
+  private inactiveMap(ride: import('../types/ride.js').Ride, reveal = false): RideMapData {
     return {
-      ...rideInformation(ride),
+      ...rideInformation(ride, reveal),
       rideId: ride.id,
       driverLocation: null,
       userLocation: null,
@@ -466,48 +466,20 @@ export class RideService {
       throw new AppError('INVALID_PIN', 'PIN must be exactly 4 digits', 400);
     }
 
-    const normalizedPin = inputPin.trim();
-
-    const isAssigned = await this.repository.isAssignedDriverProfile(rideId, driverProfileId);
-
-    if (!isAssigned) {
-      throw new AppError('FORBIDDEN', 'Not assigned to this ride', 403);
+    if (!this.repository.verifyPinAttempt) {
+      throw new AppError('PIN_SERVICE_UNAVAILABLE', 'Secure ride start is unavailable', 503);
     }
-
-    if (typeof this.repository.findById === 'function') {
-      const ride = await this.repository.findById(rideId);
-
-      if (!ride) {
-        throw new AppError('RIDE_NOT_FOUND', 'Ride not found', 404);
-      }
-
-      if (
-        ride.status === 'cancelled' ||
-        ride.status === 'completed' ||
-        ride.status === 'requested' ||
-        ride.status === 'searching'
-      ) {
-        throw new AppError(
-          'INVALID_RIDE_STATE',
-          `Cannot verify PIN for ride in '${ride.status}' status`,
-          409,
-        );
-      }
-    }
-
-    const storedPin = await this.repository.getRidePin(rideId);
-
-    if (!storedPin) {
-      throw new AppError('RIDE_NOT_FOUND', 'Ride not found or PIN not generated', 404);
-    }
-
-    if (storedPin !== normalizedPin) {
-      throw new AppError('INVALID_PIN', 'Invalid ride verification PIN', 400);
-    }
-
-    await this.repository.markPinVerified(rideId);
-
-    return { verified: true };
+    const result = await this.repository.verifyPinAttempt(rideId, driverProfileId, inputPin.trim());
+    if (result === 'verified') return { verified: true };
+    const errors = {
+      invalid: ['INVALID_PIN', 'Invalid ride verification PIN', 400],
+      locked: ['PIN_ATTEMPTS_EXCEEDED', 'Too many PIN attempts. Retry after 10 minutes.', 429],
+      not_found: ['RIDE_NOT_FOUND', 'Ride not found or PIN not generated', 404],
+      forbidden: ['FORBIDDEN', 'Not assigned to this ride', 403],
+      invalid_state: ['INVALID_RIDE_STATE', 'Cannot verify PIN in this ride state', 409],
+    } as const;
+    const [code, message, status] = errors[result];
+    throw new AppError(code, message, status);
   }
 
   async transitionRide(id: string, status: RideStatus, assignedDriverId?: string, pin?: string) {
@@ -523,54 +495,13 @@ export class RideService {
       return this.completeRide(id, assignedDriverId);
     }
 
-    if (status === 'driver_arrived' && pin !== undefined) {
-      if (!assignedDriverId) {
-        throw new AppError('FORBIDDEN', 'Assigned driver is required to verify PIN', 403);
-      }
-
-      await this.verifyRidePin(id, assignedDriverId, pin);
-    }
-
     if (status === 'in_progress') {
-      if (!assignedDriverId) {
-        throw new AppError('FORBIDDEN', 'Assigned driver is required to start a ride', 403);
-      }
-
-      const isAssigned = await this.repository.isAssignedDriverProfile(id, assignedDriverId);
-
-      if (!isAssigned) {
-        throw new AppError('FORBIDDEN', 'Not assigned to this ride', 403);
-      }
-
-      if (typeof this.repository.findById === 'function') {
-        const currentRide = await this.repository.findById(id);
-
-        if (!currentRide) {
-          throw new AppError('RIDE_NOT_FOUND', 'Ride not found', 404);
-        }
-
-        if (currentRide.status !== 'driver_arrived' && currentRide.status !== 'in_progress') {
-          throw new AppError(
-            'RIDE_TRANSITION_CONFLICT',
-            `Cannot start ride from '${currentRide.status}' state`,
-            409,
-          );
-        }
-      }
-
-      if (pin !== undefined) {
-        await this.verifyRidePin(id, assignedDriverId, pin);
-      }
-
-      const isVerified = await this.repository.isPinVerified(id);
-
-      if (!isVerified) {
-        throw new AppError(
-          'PIN_VERIFICATION_REQUIRED',
-          'Ride pickup PIN must be verified before starting the trip',
-          409,
-        );
-      }
+      if (!assignedDriverId) throw new AppError('FORBIDDEN', 'Assigned driver is required to start a ride', 403);
+      if (pin === undefined) throw new AppError('PIN_VERIFICATION_REQUIRED', 'Ride pickup PIN must be verified before starting the trip', 409);
+      await this.verifyRidePin(id, assignedDriverId, pin);
+      const ride = await this.repository.findById(id);
+      if (!ride) throw new AppError('RIDE_NOT_FOUND', 'Ride not found', 404);
+      return this.hydrateDriverPhoto(ride);
     }
 
     try {

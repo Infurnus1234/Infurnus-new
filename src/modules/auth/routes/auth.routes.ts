@@ -100,6 +100,8 @@ export function createAuthRouter(
   // ==========================================================
 
   router.post('/login', ...(enableRateLimiting ? [authLoginRateLimiter] : []), login);
+  // The same limiter and password/session machinery protect both login paths.
+  router.post('/admin/login', ...(enableRateLimiting ? [authLoginRateLimiter] : []), login);
 
   // ==========================================================
   // POST /auth/login/verify

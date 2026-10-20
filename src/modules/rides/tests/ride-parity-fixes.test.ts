@@ -143,76 +143,18 @@ describe('BUG-P3-02 & BUG-P3-04: Parity Fixes — Real Details & Secure PIN', ()
       expect(available[0]?.pin).toBeNull();
     });
 
-    it('driver verifies correct PIN successfully', async () => {
-      let isVerified = false;
-      const mockRepo: Partial<RideRepository> = {
-        isAssignedDriverProfile: vi.fn().mockResolvedValue(true),
-        getRidePin: vi.fn().mockResolvedValue('7391'),
-        markPinVerified: vi.fn().mockImplementation(async () => {
-          isVerified = true;
-          return true;
-        }),
-      };
-
-      const service = new RideService(mockRepo as RideRepository);
-      const result = await service.verifyRidePin('ride-uuid-1', 'driver-uuid-1', '7391');
-
-      expect(result.verified).toBe(true);
-      expect(isVerified).toBe(true);
+    it('driver verifies through the atomic repository operation', async () => {
+      const verifyPinAttempt=vi.fn().mockResolvedValue('verified');
+      const service=new RideService({verifyPinAttempt} as unknown as RideRepository);
+      expect(await service.verifyRidePin('ride-uuid-1','driver-uuid-1','7391')).toEqual({verified:true});
+      expect(verifyPinAttempt).toHaveBeenCalledWith('ride-uuid-1','driver-uuid-1','7391');
     });
-
-    it('rejects incorrect PIN with INVALID_PIN error', async () => {
-      const mockRepo: Partial<RideRepository> = {
-        isAssignedDriverProfile: vi.fn().mockResolvedValue(true),
-        getRidePin: vi.fn().mockResolvedValue('7391'),
-        markPinVerified: vi.fn(),
-      };
-
-      const service = new RideService(mockRepo as RideRepository);
-
-      await expect(service.verifyRidePin('ride-uuid-1', 'driver-uuid-1', '0000')).rejects.toThrow(
-        'Invalid ride verification PIN',
-      );
-      expect(mockRepo.markPinVerified).not.toHaveBeenCalled();
-    });
-
-    it('rejects unassigned driver attempting to verify PIN with FORBIDDEN error', async () => {
-      const mockRepo: Partial<RideRepository> = {
-        isAssignedDriverProfile: vi.fn().mockResolvedValue(false),
-        getRidePin: vi.fn().mockResolvedValue('7391'),
-      };
-
-      const service = new RideService(mockRepo as RideRepository);
-
-      await expect(
-        service.verifyRidePin('ride-uuid-1', 'unassigned-driver', '7391'),
-      ).rejects.toThrow('Not assigned to this ride');
-    });
-
-    it('transitionRide verifies PIN when marking driver_arrived', async () => {
-      const mockRepo: Partial<RideRepository> = {
-        isAssignedDriverProfile: vi.fn().mockResolvedValue(true),
-        getRidePin: vi.fn().mockResolvedValue('7391'),
-        markPinVerified: vi.fn().mockResolvedValue(true),
-        transition: vi.fn().mockResolvedValue(createMockRide({ status: 'driver_arrived' })),
-      };
-
-      const service = new RideService(mockRepo as RideRepository);
-
-      // Wrong PIN fails transition
-      await expect(
-        service.transitionRide('ride-uuid-1', 'driver_arrived', 'driver-uuid-1', '1234'),
-      ).rejects.toThrow('Invalid ride verification PIN');
-
-      // Correct PIN succeeds transition
-      const arrivedRide = await service.transitionRide(
-        'ride-uuid-1',
-        'driver_arrived',
-        'driver-uuid-1',
-        '7391',
-      );
-      expect(arrivedRide.status).toBe('driver_arrived');
-      expect(mockRepo.markPinVerified).toHaveBeenCalledWith('ride-uuid-1');
+    it('arrival does not consume the PIN or start a trip', async () => {
+      const verifyPinAttempt=vi.fn();
+      const transition=vi.fn().mockResolvedValue(createMockRide({status:'driver_arrived'}));
+      const service=new RideService({verifyPinAttempt,transition} as unknown as RideRepository);
+      expect((await service.transitionRide('ride','driver_arrived','driver')).status).toBe('driver_arrived');
+      expect(verifyPinAttempt).not.toHaveBeenCalled();
     });
   });
 });

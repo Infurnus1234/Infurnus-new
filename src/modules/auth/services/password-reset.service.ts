@@ -107,7 +107,7 @@ export class PasswordResetService {
     //
     // OtpProvider is responsible for:
     //
-    // Sendmator -> Resend fallback
+    // Configured email delivery with existing fallback
     //
     // The service does not generate or verify the provider OTP
     // itself.
@@ -252,7 +252,7 @@ export class PasswordResetService {
     // --------------------------------------------------------
     // Verify OTP through configured provider
     //
-    // Sendmator / Resend provider owns OTP verification.
+    // The configured delivery adapter owns OTP verification.
     // --------------------------------------------------------
 
     let verification: {

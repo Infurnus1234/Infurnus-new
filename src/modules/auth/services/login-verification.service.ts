@@ -1,4 +1,6 @@
+import { env } from '../../../config/env.js';
 import { AppError } from '../../../common/errors/app-error.js';
+import { isPasswordOnlyAdmin } from './admin-login-policy.js';
 import { decryptSecret } from '../../../common/crypto/encryption.js';
 
 import type { AuthUserRepository } from '../repositories/auth-user.repository.js';
@@ -87,7 +89,7 @@ export class LoginVerificationService {
 
     const now = Date.now();
 
-    if (providerSession.expiresAt.getTime() <= now) {
+    if (providerSession.databaseExpired === true || providerSession.expiresAt.getTime() <= now) {
       throw new AppError('OTP_EXPIRED', 'OTP has expired', 400);
     }
 
@@ -114,6 +116,15 @@ export class LoginVerificationService {
     //
     // The raw provider session token is encrypted at rest.
     // --------------------------------------------------------
+
+    if (
+      !(await this.loginChallengeRepository.claimVerificationAttempt(
+        challengeId,
+        env.AUTH_OTP_MAX_ATTEMPTS,
+      ))
+    ) {
+      throw new AppError('OTP_ATTEMPTS_EXCEEDED', 'Maximum OTP attempts exceeded', 429);
+    }
 
     let providerSessionToken: string;
 
@@ -212,6 +223,10 @@ export class LoginVerificationService {
     // ========================================================
 
     const identity = await this.authUserRepository.findIdentityById(consumed.userId);
+
+    if (identity && isPasswordOnlyAdmin(identity.role)) {
+      throw new AppError('ADMIN_PASSWORD_LOGIN_REQUIRED', 'Use administrative password login', 400);
+    }
 
     if (!identity) {
       throw new AppError('ACCOUNT_NOT_FOUND', 'Account is not available', 401);

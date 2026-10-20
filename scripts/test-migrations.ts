@@ -333,6 +333,47 @@ try {
       Number(catalog.rows[0].seeded) !== 0
     )
       throw new Error('Vehicle pricing migration must create a constrained, empty catalog');
+    const authSchema = await testPool.query(`SELECT
+      EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='driver_profiles' AND column_name='emergency_contact_relationship') AS driver_contact,
+      EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='login_challenges' AND column_name='verification_attempts') AS otp_attempts,
+      to_regprocedure('public.provider_compliance_satisfied(uuid,uuid,uuid,uuid,text)') IS NOT NULL AS compliance`);
+    if (
+      !authSchema.rows[0]?.driver_contact ||
+      !authSchema.rows[0]?.compliance ||
+      !authSchema.rows[0]?.otp_attempts
+    )
+      throw new Error('Authentication/provider schema is incomplete');
+    const proof = await testPool.connect();
+    try {
+      await proof.query('BEGIN');
+      const user = await proof.query(
+        "INSERT INTO users(first_name,last_name,role) VALUES('Migration','Proof','driver') RETURNING id",
+      );
+      const id = user.rows[0].id;
+      const evaluate = async () =>
+        (
+          await proof.query(
+            'SELECT provider_compliance_satisfied($1,NULL,NULL,NULL,NULL) AS compliant',
+            [id],
+          )
+        ).rows[0].compliant;
+      if (!(await evaluate()))
+        throw new Error('Empty policy must not invent compliance requirements');
+      await proof.query(
+        "INSERT INTO provider_document_requirements(provider_role,document_code,required,updated_by) VALUES('driver','migration_proof',TRUE,$1)",
+        [id],
+      );
+      if (await evaluate())
+        throw new Error('Configured required documents must block missing evidence');
+      await proof.query(
+        "UPDATE provider_document_requirements SET active=FALSE WHERE document_code='migration_proof'",
+      );
+      if (!(await evaluate())) throw new Error('Inactive policy must not block compliance');
+    } finally {
+      await proof.query('ROLLBACK');
+      proof.release();
+    }
+    console.log('Driver schema, OTP attempts and real compliance function behavior verified');
     console.log('Vehicle type catalog constraints/indexes present; no invented seed prices');
     console.log(`Clean migration verification passed for ${databaseName}`);
 

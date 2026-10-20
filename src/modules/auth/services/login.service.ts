@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { AppError } from '../../../common/errors/app-error.js';
 import { encryptSecret } from '../../../common/crypto/encryption.js';
 
@@ -6,6 +7,7 @@ import type { LoginChallengeRepository } from '../repositories/login-challenge.r
 import type { OtpProvider } from '../providers/otp.provider.js';
 
 import { verifyPassword } from '../utils/password.js';
+import { isPasswordOnlyAdmin } from './admin-login-policy.js';
 
 import { normalizeEmail, normalizePhone } from '../utils/contact.js';
 
@@ -18,6 +20,11 @@ import type { LoginInput } from '../types/login.js';
 export interface LoginChallengeResult {
   challengeId: string;
   expiresAt: Date;
+}
+
+export interface PasswordLoginResult {
+  userId: string;
+  role: string;
 }
 
 // ============================================================
@@ -43,7 +50,10 @@ export class LoginService {
   // Authenticate
   // ==========================================================
 
-  async authenticate(input: LoginInput): Promise<LoginChallengeResult> {
+  async authenticate(
+    input: LoginInput,
+    adminOnly = false,
+  ): Promise<LoginChallengeResult | PasswordLoginResult> {
     // --------------------------------------------------------
     // Determine supplied identifiers
     //
@@ -127,6 +137,9 @@ export class LoginService {
     // User not found
     // --------------------------------------------------------
 
+    if (!identity && !adminOnly) {
+      return { challengeId: randomUUID(), expiresAt: new Date(Date.now() + 10 * 60_000) };
+    }
     if (!identity) {
       throw new AppError('INVALID_CREDENTIALS', 'Invalid email/phone or password', 401);
     }
@@ -143,10 +156,42 @@ export class LoginService {
     // Password Verification
     // ========================================================
 
-    const validPassword = await verifyPassword(identity.passwordHash, input.password);
+    const passwordless = identity.role === 'customer' || identity.role === 'driver';
+    // Legacy secondary contacts were stored before their ownership was proven.
+    // Refuse these identifiers instead of granting access to an unrelated account.
+    if (
+      passwordless &&
+      ((phone && identity.phoneVerified === false) ||
+        (!phone && email && identity.emailVerified === false))
+    ) {
+      return { challengeId: randomUUID(), expiresAt: new Date(Date.now() + 10 * 60_000) };
+    }
+    const validPassword =
+      passwordless ||
+      (typeof input.password === 'string' &&
+        (await verifyPassword(identity.passwordHash, input.password)));
 
     if (!validPassword) {
       throw new AppError('INVALID_CREDENTIALS', 'Invalid email/phone or password', 401);
+    }
+
+    if (
+      isPasswordOnlyAdmin(identity.role) &&
+      identity.lockedUntil &&
+      new Date(identity.lockedUntil).getTime() > Date.now()
+    ) {
+      throw new AppError('ACCOUNT_LOCKED', 'Account is temporarily locked', 401);
+    }
+
+    if (adminOnly && !isPasswordOnlyAdmin(identity.role)) {
+      throw new AppError(
+        'ADMIN_ACCESS_REQUIRED',
+        'An active administrative account is required',
+        403,
+      );
+    }
+    if (isPasswordOnlyAdmin(identity.role)) {
+      return { userId: identity.id, role: identity.role };
     }
 
     // ========================================================

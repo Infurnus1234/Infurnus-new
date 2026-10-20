@@ -99,8 +99,6 @@ export class DevOtpProvider implements OtpProvider {
       attempts: 0,
     });
 
-    console.log(`[DEV OTP] ${channel.toUpperCase()} ${contact}: ${otp}`);
-
     return {
       sessionId,
       sessionToken,
@@ -181,8 +179,6 @@ export class DevOtpProvider implements OtpProvider {
     }
 
     session.expiresAt = Date.now() + 10 * 60 * 1000;
-
-    console.log(`[DEV OTP RESEND] ${channel.toUpperCase()} ${session.contact}: ${session.otp}`);
 
     return {
       expiresAt: new Date(session.expiresAt).toISOString(),

@@ -14,6 +14,7 @@ import {
   updateUserStatusSchema,
   verifyDriverSchema,
   verifyVehicleSchema,
+  verifyDocumentSchema,
 } from '../schemas/admin.schemas.js';
 
 import type { DriverApplicationService } from '../../driver-applications/driver-application.service.js';
@@ -265,7 +266,7 @@ export class AdminController {
 
       const { status, rejectionReason } = verifyDriverSchema.parse(req.body);
 
-      const result = await this.service.verifyDriver(id, status, rejectionReason);
+      const result = await this.service.verifyDriver(id, status, rejectionReason, req.auth!.userId);
 
       res.json({
         success: true,
@@ -283,7 +284,12 @@ export class AdminController {
 
       const { status, rejectionReason } = verifyVehicleSchema.parse(req.body);
 
-      const result = await this.service.verifyVehicle(id, status, rejectionReason);
+      const result = await this.service.verifyVehicle(
+        id,
+        status,
+        rejectionReason,
+        req.auth!.userId,
+      );
 
       res.json({
         success: true,
@@ -298,9 +304,9 @@ export class AdminController {
   verifyDocument = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { id } = adminIdSchema.parse(req.params);
-      const { status, comments } = req.body;
+      const { status, comments } = verifyDocumentSchema.parse(req.body);
 
-      const result = await this.service.verifyDocument(id, status, comments);
+      const result = await this.service.verifyDocument(id, status, comments, req.auth!.userId);
 
       res.json({
         success: true,

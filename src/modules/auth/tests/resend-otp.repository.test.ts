@@ -208,10 +208,21 @@ describe('PostgresResendOtpSessionRepository', () => {
 
     expect(session).not.toBeNull();
     expect(session!.otpHash).toBe(newOtpHash);
-    expect(session!.attempts).toBe(0);
+    expect(session!.attempts).toBe(1);
     expect(session!.expiresAt.getTime()).toBe(newExpiry.getTime());
     expect(session!.lastSentAt.getTime()).toBe(newLastSentAt.getTime());
     expect(session!.consumedAt).toBeNull();
+  });
+
+  it('does not resend an exhausted session', async () => {
+    const data = createSessionData();
+    await repository.create(data);
+    for (let attempt = 0; attempt < 10; attempt += 1)
+      await repository.verify(data.sessionTokenHash, 'wrong-otp-hash');
+    expect(
+      await repository.resend(data.sessionTokenHash, 'replacement', data.expiresAt, new Date()),
+    ).toBe(false);
+    expect((await repository.findBySessionTokenHash(data.sessionTokenHash))!.attempts).toBe(10);
   });
 
   it('does not resend an expired session', async () => {

@@ -13,7 +13,17 @@ export class GoogleAuthService {
     > = new PostgresGoogleIdentityRepository(),
   ) {}
 
-  async authenticate(idToken: string, linkUserId?: string) {
-    return this.repository.resolve(await this.provider.verify(idToken), linkUserId);
+  async authenticate(
+    idToken: string,
+    linkUserId?: string,
+    driverFlow?: 'signup' | 'signin',
+    providerRole?: 'driver' | 'fleet_owner' | 'driver_fleet_owner',
+  ) {
+    return this.repository.resolve(
+      await this.provider.verify(idToken),
+      linkUserId,
+      driverFlow,
+      providerRole,
+    );
   }
 }

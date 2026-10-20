@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "worker:notifications": "tsx src/infrastructure/queue/notification-worker.ts",
     "build": "tsc -p tsconfig.json",
     "migrate": "tsx src/infrastructure/database/run-migrations.ts",
     "test:migrations": "tsx scripts/test-migrations.ts",
@@ -13,10 +14,10 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "migrate:baseline": "tsx src/infrastructure/database/baseline-migrations.ts"
+    "migrate:baseline": "tsx src/infrastructure/database/baseline-migrations.ts",
+    "test:backend:isolated": "tsx scripts/test-backend-isolated.ts"
   },
   "dependencies": {
-    "@sendmator/node": "^0.0.4",
     "argon2": "^0.45.1",
     "bullmq": "^6.3.8",
     "cloudinary": "^2.11.0",
@@ -52,6 +53,11 @@
     "tsx": "^4.20.5",
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.42.0",
-    "vitest": "^3.2.4"
+    "vitest": "^5.0.3"
+  },
+  "overrides": {
+    "gaxios@6.7.1": {
+      "uuid": "^11.1.1"
+    }
   }
 }

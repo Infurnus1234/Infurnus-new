@@ -24,7 +24,7 @@ export interface RideInformation {
     source: 'booking' | 'geographic_estimate' | 'unavailable';
   };
   pickup: RideLocation & { address: string | null };
-  drop: RideLocation & { address: string | null };
+  drop: (RideLocation & { address: string | null }) | null;
   rideType: string;
   vehicleCategory: string | null;
   rideStatus: Ride['status'];

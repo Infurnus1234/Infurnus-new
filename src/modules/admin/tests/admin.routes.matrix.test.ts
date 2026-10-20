@@ -681,7 +681,12 @@ describe('Admin API route matrix', () => {
     expect(response.body.data.vehicleId).toBe(vehicleId);
     expect(response.body.data.status).toBe('APPROVED');
 
-    expect(repository.verifyVehicle).toHaveBeenCalledWith(vehicleId, 'APPROVED', undefined);
+    expect(repository.verifyVehicle).toHaveBeenCalledWith(
+      vehicleId,
+      'APPROVED',
+      undefined,
+      adminId,
+    );
   });
 
   it.each(['admin', 'super_admin'])(
@@ -703,7 +708,12 @@ describe('Admin API route matrix', () => {
       expect(response.body.data.vehicleId).toBe(vehicleId);
       expect(response.body.data.status).toBe('REJECTED');
 
-      expect(repository.verifyVehicle).toHaveBeenCalledWith(vehicleId, 'REJECTED', rejectionReason);
+      expect(repository.verifyVehicle).toHaveBeenCalledWith(
+        vehicleId,
+        'REJECTED',
+        rejectionReason,
+        adminId,
+      );
     },
   );
 

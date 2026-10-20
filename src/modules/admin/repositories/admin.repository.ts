@@ -1,3 +1,4 @@
+import { PostgresProviderOperationsRepository } from '../../providers/repositories/provider-operations.repository.js';
 import type { Pool, QueryResultRow } from 'pg';
 
 import type {
@@ -33,11 +34,26 @@ export interface AdminRepository {
   getVehicle(id: string): Promise<AdminVehicle | null>;
   dashboard(): Promise<AdminDashboard>;
 
-  verifyDriver(driverId: string, status: string, rejectionReason?: string): Promise<boolean>;
+  verifyDriver(
+    driverId: string,
+    status: string,
+    rejectionReason?: string,
+    actorId?: string,
+  ): Promise<boolean>;
 
-  verifyVehicle(vehicleId: string, status: string, rejectionReason?: string): Promise<boolean>;
+  verifyVehicle(
+    vehicleId: string,
+    status: string,
+    rejectionReason?: string,
+    actorId?: string,
+  ): Promise<boolean>;
 
-  verifyDocument(documentId: string, status: string, comments?: string): Promise<boolean>;
+  verifyDocument(
+    documentId: string,
+    status: string,
+    comments?: string,
+    actorId?: string,
+  ): Promise<boolean>;
 
   // Fleet Analytics
   getFleetAnalyticsSummary(filters: FleetFilters): Promise<FleetAnalyticsSummary>;
@@ -641,52 +657,47 @@ export class PostgresAdminRepository implements AdminRepository {
     };
   }
 
-  async verifyDriver(driverId: string, status: string, rejectionReason?: string): Promise<boolean> {
-    const res = await this.pool.query(
-      `UPDATE driver_profiles
-       SET verification_status = $1,
-           rejection_reason = CASE
-             WHEN $1 = 'rejected' THEN $3
-             ELSE NULL
-           END,
-           updated_at = NOW()
-       WHERE id = $2 OR user_id = $2
-       RETURNING id`,
-      [status, driverId, rejectionReason ?? null],
+  async verifyDriver(
+    driverId: string,
+    status: string,
+    rejectionReason?: string,
+    actorId?: string,
+  ): Promise<boolean> {
+    return new PostgresProviderOperationsRepository(this.pool).reviewLegacyTarget(
+      actorId,
+      'driver_profile',
+      driverId,
+      status,
+      rejectionReason,
     );
-
-    return (res.rowCount ?? 0) > 0;
   }
-
   async verifyVehicle(
     vehicleId: string,
     status: string,
-    _rejectionReason?: string,
+    rejectionReason?: string,
+    actorId?: string,
   ): Promise<boolean> {
-    const res = await this.pool.query(
-      `UPDATE vehicles
-       SET verification_status = $1,
-           updated_at = NOW()
-       WHERE id = $2
-       RETURNING id`,
-      [status, vehicleId],
+    return new PostgresProviderOperationsRepository(this.pool).reviewLegacyTarget(
+      actorId,
+      'vehicle',
+      vehicleId,
+      status,
+      rejectionReason,
     );
-
-    return (res.rowCount ?? 0) > 0;
   }
-
-  async verifyDocument(documentId: string, status: string, comments?: string): Promise<boolean> {
-    const res = await this.pool.query(
-      `UPDATE partner_documents
-       SET status = $1,
-           comments = COALESCE($2, comments),
-           updated_at = NOW()
-       WHERE id = $3
-       RETURNING id`,
-      [status, comments ?? null, documentId],
+  async verifyDocument(
+    documentId: string,
+    status: string,
+    comments?: string,
+    actorId?: string,
+  ): Promise<boolean> {
+    return new PostgresProviderOperationsRepository(this.pool).reviewLegacyTarget(
+      actorId,
+      'partner_document',
+      documentId,
+      status,
+      comments,
     );
-
-    return (res.rowCount ?? 0) > 0;
   }
 
   // --- Fleet Analytics Implementation ---
