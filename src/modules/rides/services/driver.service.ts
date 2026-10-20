@@ -228,13 +228,23 @@ export class DriverService {
     if (photoStorage) {
       try {
         photoUrl = await storageService.getAccessUrl({
-          storageKey: photoStorage.storageKey, resourceType: photoStorage.resourceType,
-          accessMode: photoStorage.accessMode, options: { expiresIn: 300 },
+          storageKey: photoStorage.storageKey,
+          resourceType: photoStorage.resourceType,
+          accessMode: photoStorage.accessMode,
+          options: { expiresIn: 300 },
         });
         photoStatus = 'available';
-      } catch { photoStatus = 'unavailable'; }
+      } catch {
+        photoStatus = 'unavailable';
+      }
     }
-    return { ...safe, photoUrl, photoStatus, photoExpiresIn: photoUrl ? 300 : null, assignmentStatus: 'selected' };
+    return {
+      ...safe,
+      photoUrl,
+      photoStatus,
+      photoExpiresIn: photoUrl ? 300 : null,
+      assignmentStatus: 'selected',
+    };
   }
 
   async nearby(latitude: number, longitude: number, sector?: string, vehicleCategory?: string) {

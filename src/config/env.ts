@@ -92,8 +92,6 @@ export const envSchema = z
     AUTH_EMAIL_OTP_TTL_SECONDS: z.coerce.number().int().min(60).max(900).default(600),
 
     AUTH_OTP_RESEND_COOLDOWN_SECONDS: z.coerce.number().int().positive().default(60),
-    AUTH_OTP_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(5),
-    AUTH_EMAIL_OTP_TTL_SECONDS: z.coerce.number().int().min(60).max(900).default(600),
 
     AUTH_REFRESH_RATE_LIMIT_WINDOW_MS: z.coerce
       .number()

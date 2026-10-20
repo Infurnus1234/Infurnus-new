@@ -115,7 +115,12 @@ export function createSocketServer(
                 return;
               }
               if (['driver', 'driver_fleet_owner'].includes(auth.role)) {
-                if (!(await rideDependencies.rideRepository.isAssignedDriver(ride.id, auth.userId))) { socket.leave(rideRoom(ride.id)); return; }
+                if (
+                  !(await rideDependencies.rideRepository.isAssignedDriver(ride.id, auth.userId))
+                ) {
+                  socket.leave(rideRoom(ride.id));
+                  return;
+                }
                 const safe = { ...payload, ride: sanitizeRideForDriver(ride) };
                 for (const key of ['pin', 'billing', 'finalFare', 'fareEstimate', 'actualFuelCost'])
                   delete (safe as Record<string, unknown>)[key];
@@ -301,7 +306,10 @@ export function createSocketServer(
             ['completed', 'cancelled'].includes(active.status)
           )
             return;
-          const segment = active.status === 'in_progress' && active.pinVerified === true ? 'destination' : 'pickup';
+          const segment =
+            active.status === 'in_progress' && active.pinVerified === true
+              ? 'destination'
+              : 'pickup';
           const target = segment === 'destination' ? active.destination : active.pickup;
           const previous =
             rideDependencies.routeRecalculationService.transientMetadata(ride.id) ??

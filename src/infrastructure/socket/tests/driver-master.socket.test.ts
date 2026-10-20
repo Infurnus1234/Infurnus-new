@@ -55,7 +55,10 @@ describe('Driver audit Socket.IO security parity', () => {
           acceptRide: vi.fn().mockResolvedValue(ride),
           transitionRide: vi.fn().mockResolvedValue(ride),
         } as never,
-        rideRepository: { isParticipant: vi.fn().mockResolvedValue(true), isAssignedDriver: vi.fn().mockImplementation(async () => assigned) } as never,
+        rideRepository: {
+          isParticipant: vi.fn().mockResolvedValue(true),
+          isAssignedDriver: vi.fn().mockImplementation(async () => assigned),
+        } as never,
         routeRecalculationService: { clear: vi.fn() } as never,
         ...(authorizeAccount ? { authorizeAccount } : {}),
       });
@@ -130,18 +133,17 @@ describe('Driver audit Socket.IO security parity', () => {
     expect(customerPayload.ride.finalFare).toBe(320);
   });
   it('rechecks assignment before delivering a private lifecycle payload', async () => {
-    const driver = await connect('driver_fleet_owner','driver');
+    const driver = await connect('driver_fleet_owner', 'driver');
     const customer = await connect('customer');
-    await ack(driver,'ride:join','fixture-ride');
-    await ack(customer,'ride:join','fixture-ride');
+    await ack(driver, 'ride:join', 'fixture-ride');
+    await ack(customer, 'ride:join', 'fixture-ride');
     assigned = false;
-    const received:unknown[]=[];
-    driver.on('ride:lifecycle_updated',payload=>received.push(payload));
-    const event=new Promise(resolve=>customer.once('ride:lifecycle_updated',resolve));
-    rideEvents.emit('ride:lifecycle_updated',ride);
+    const received: unknown[] = [];
+    driver.on('ride:lifecycle_updated', (payload) => received.push(payload));
+    const event = new Promise((resolve) => customer.once('ride:lifecycle_updated', resolve));
+    rideEvents.emit('ride:lifecycle_updated', ride);
     await event;
-    await new Promise(resolve=>setTimeout(resolve,50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
     expect(received).toHaveLength(0);
   });
-
 });

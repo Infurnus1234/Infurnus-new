@@ -141,7 +141,10 @@ describe('PartnerVehicleService authorization and ownership matrix', () => {
 
     await expect(service.listVehicles(actor)).resolves.toEqual([]);
     expect(fleet.listVehicles).toHaveBeenCalledWith(partner.userId);
-    await expect(service.deactivateVehicle(actor,vehicleId)).rejects.toMatchObject({code:'PARTNER_NOT_APPROVED',statusCode:403});
+    await expect(service.deactivateVehicle(actor, vehicleId)).rejects.toMatchObject({
+      code: 'PARTNER_NOT_APPROVED',
+      statusCode: 403,
+    });
   });
 
   it('returns not found when deactivation finds no active vehicle', async () => {

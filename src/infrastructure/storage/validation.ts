@@ -92,7 +92,13 @@ const CATEGORY_POLICIES: Record<StorageDocumentCategory, FilePolicy> = {
     extensions: IMAGE_EXTENSIONS,
   },
 
-  'partner-vehicle-photo': { resourceType: 'image', accessMode: 'authenticated', maxSizeBytes: IMAGE_MAX_SIZE, mimeTypes: IMAGE_MIME_TYPES, extensions: IMAGE_EXTENSIONS },
+  'partner-vehicle-photo': {
+    resourceType: 'image',
+    accessMode: 'authenticated',
+    maxSizeBytes: IMAGE_MAX_SIZE,
+    mimeTypes: IMAGE_MIME_TYPES,
+    extensions: IMAGE_EXTENSIONS,
+  },
   'vehicle-photo': {
     resourceType: 'image',
     accessMode: 'public',

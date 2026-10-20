@@ -144,16 +144,23 @@ describe('BUG-P3-02 & BUG-P3-04: Parity Fixes — Real Details & Secure PIN', ()
     });
 
     it('driver verifies through the atomic repository operation', async () => {
-      const verifyPinAttempt=vi.fn().mockResolvedValue('verified');
-      const service=new RideService({verifyPinAttempt} as unknown as RideRepository);
-      expect(await service.verifyRidePin('ride-uuid-1','driver-uuid-1','7391')).toEqual({verified:true});
-      expect(verifyPinAttempt).toHaveBeenCalledWith('ride-uuid-1','driver-uuid-1','7391');
+      const verifyPinAttempt = vi.fn().mockResolvedValue('verified');
+      const service = new RideService({ verifyPinAttempt } as unknown as RideRepository);
+      expect(await service.verifyRidePin('ride-uuid-1', 'driver-uuid-1', '7391')).toEqual({
+        verified: true,
+      });
+      expect(verifyPinAttempt).toHaveBeenCalledWith('ride-uuid-1', 'driver-uuid-1', '7391');
     });
     it('arrival does not consume the PIN or start a trip', async () => {
-      const verifyPinAttempt=vi.fn();
-      const transition=vi.fn().mockResolvedValue(createMockRide({status:'driver_arrived'}));
-      const service=new RideService({verifyPinAttempt,transition} as unknown as RideRepository);
-      expect((await service.transitionRide('ride','driver_arrived','driver')).status).toBe('driver_arrived');
+      const verifyPinAttempt = vi.fn();
+      const transition = vi.fn().mockResolvedValue(createMockRide({ status: 'driver_arrived' }));
+      const service = new RideService({
+        verifyPinAttempt,
+        transition,
+      } as unknown as RideRepository);
+      expect((await service.transitionRide('ride', 'driver_arrived', 'driver')).status).toBe(
+        'driver_arrived',
+      );
       expect(verifyPinAttempt).not.toHaveBeenCalled();
     });
   });

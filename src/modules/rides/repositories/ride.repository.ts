@@ -8,7 +8,15 @@ import {
 import type { RideMapSnapshot, LiveRideLocation } from '../types/ride-map.js';
 import { driverEligibilitySql, driverOperationalEligibilitySql } from './driver-eligibility.js';
 import { randomUUID } from 'node:crypto';
-import { evaluatePinAttempt, generateRidePin, pinVerifier, sealRidePin, openRidePin, matchesPinVerifier, type PinAttemptResult } from './ride-pin.js';
+import {
+  evaluatePinAttempt,
+  generateRidePin,
+  pinVerifier,
+  sealRidePin,
+  openRidePin,
+  matchesPinVerifier,
+  type PinAttemptResult,
+} from './ride-pin.js';
 import type { Pool, PoolClient } from 'pg';
 import { withTransaction } from '../../../infrastructure/database/postgres.js';
 
@@ -302,7 +310,11 @@ function mapRide(row: Record<string, unknown>, forCustomer = false): Ride {
 
     pin:
       forCustomer && !row.pinVerified && row.status !== 'completed' && row.status !== 'cancelled'
-        ? (row.pinCiphertext ? openRidePin(String(row.id), String(row.pinCiphertext)) : row.pin != null ? String(row.pin) : null)
+        ? row.pinCiphertext
+          ? openRidePin(String(row.id), String(row.pinCiphertext))
+          : row.pin != null
+            ? String(row.pin)
+            : null
         : null,
 
     pinVerified: Boolean(row.pinVerified),
@@ -517,7 +529,9 @@ export class PostgresRideRepository implements RideRepository {
         null,
         input.bookingDistanceMeters ?? null,
         input.bookingFareSnapshot ? JSON.stringify(input.bookingFareSnapshot) : null,
-        id, sealRidePin(id, pin), pinVerifier(id, pin),
+        id,
+        sealRidePin(id, pin),
+        pinVerifier(id, pin),
       ],
     );
 
@@ -1401,7 +1415,12 @@ export class PostgresRideRepository implements RideRepository {
     try {
       await client.query('BEGIN');
       // Match the driver-before-ride lock order used during acceptance.
-      const eligible = (await client.query(`SELECT dp.id FROM driver_profiles dp JOIN users u ON u.id=dp.user_id JOIN vehicles v ON v.id=dp.active_vehicle_id WHERE dp.id=$1 AND ${driverOperationalEligibilitySql()} FOR SHARE OF dp,u,v`,[driverProfileId])).rowCount;
+      const eligible = (
+        await client.query(
+          `SELECT dp.id FROM driver_profiles dp JOIN users u ON u.id=dp.user_id JOIN vehicles v ON v.id=dp.active_vehicle_id WHERE dp.id=$1 AND ${driverOperationalEligibilitySql()} FOR SHARE OF dp,u,v`,
+          [driverProfileId],
+        )
+      ).rowCount;
       const ride = (
         await client.query(
           `SELECT assigned_driver_id,status,COALESCE(pin,route_metadata->>'pin') AS pin,
@@ -1414,14 +1433,19 @@ export class PostgresRideRepository implements RideRepository {
       let result: PinAttemptResult;
       if (!ride) result = 'not_found';
       else if (ride.assigned_driver_id !== driverProfileId || !eligible) result = 'forbidden';
-      else if (
-        ride.status !== 'driver_arrived' || ride.pin_verified === true
-      )
+      else if (ride.status !== 'driver_arrived' || ride.pin_verified === true)
         result = 'invalid_state';
       else if (!ride.pin && !ride.pin_verifier) result = 'not_found';
       else {
-        const correct = ride.pin_verifier ? matchesPinVerifier(id, pin, ride.pin_verifier) : ride.pin === pin;
-        const attempt = evaluatePinAttempt('match', correct ? 'match' : 'wrong', ride.metadata, Number(ride.now_ms));
+        const correct = ride.pin_verifier
+          ? matchesPinVerifier(id, pin, ride.pin_verifier)
+          : ride.pin === pin;
+        const attempt = evaluatePinAttempt(
+          'match',
+          correct ? 'match' : 'wrong',
+          ride.metadata,
+          Number(ride.now_ms),
+        );
         result = attempt.result;
         if (result !== 'locked' || attempt.metadata !== ride.metadata) {
           await client.query(
@@ -1432,7 +1456,15 @@ export class PostgresRideRepository implements RideRepository {
               pin_ciphertext=CASE WHEN $3 THEN NULL ELSE pin_ciphertext END,
               pin_verifier=CASE WHEN $3 THEN NULL ELSE pin_verifier END,
               updated_at=NOW() WHERE id=$1`,
-            [id, JSON.stringify(Object.fromEntries(Object.entries(attempt.metadata).filter(([key]) => key !== 'pin'))), result === 'verified'],
+            [
+              id,
+              JSON.stringify(
+                Object.fromEntries(
+                  Object.entries(attempt.metadata).filter(([key]) => key !== 'pin'),
+                ),
+              ),
+              result === 'verified',
+            ],
           );
         }
       }

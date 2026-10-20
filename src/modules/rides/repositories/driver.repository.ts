@@ -64,7 +64,8 @@ export interface DriverRepository {
     verificationStatus?: string;
     operationalStatus?: string;
     isActive?: boolean;
-    photoStorage?: import('../../partners/types/partner-document.js').PartnerDocumentStorageMetadata | null;
+    photoStorage?:
+      import('../../partners/types/partner-document.js').PartnerDocumentStorageMetadata | null;
   } | null>;
 
   findNearbyEligible(
@@ -117,7 +118,8 @@ export interface DriverRepository {
     verificationStatus?: string;
     operationalStatus?: string;
     isActive?: boolean;
-    photoStorage?: import('../../partners/types/partner-document.js').PartnerDocumentStorageMetadata | null;
+    photoStorage?:
+      import('../../partners/types/partner-document.js').PartnerDocumentStorageMetadata | null;
   } | null>;
 }
 
@@ -438,7 +440,8 @@ export class PostgresDriverRepository implements DriverRepository {
     verificationStatus?: string;
     operationalStatus?: string;
     isActive?: boolean;
-    photoStorage?: import('../../partners/types/partner-document.js').PartnerDocumentStorageMetadata | null;
+    photoStorage?:
+      import('../../partners/types/partner-document.js').PartnerDocumentStorageMetadata | null;
   } | null> {
     const result = await this.pool.query<{
       sector: string;
@@ -965,7 +968,8 @@ export class PostgresDriverRepository implements DriverRepository {
     verificationStatus?: string;
     operationalStatus?: string;
     isActive?: boolean;
-    photoStorage?: import('../../partners/types/partner-document.js').PartnerDocumentStorageMetadata | null;
+    photoStorage?:
+      import('../../partners/types/partner-document.js').PartnerDocumentStorageMetadata | null;
   } | null> {
     const result = await this.pool.query<{
       id: string;

@@ -23,6 +23,7 @@ function fixture(
   const devices = {
     findActiveByUserId: vi.fn(async () => [{ id: 'device', fcmToken: 'fixture-token' }]),
     deactivateById: vi.fn(),
+    deactivateByFcmToken: vi.fn(),
   };
   const sender = {
     send: vi.fn(async () => [
@@ -89,7 +90,8 @@ describe('push provider acceptance semantics', () => {
   it('deactivates invalid tokens and never reports all-invalid devices as SENT', async () => {
     const f = fixture({ invalid: true });
     await f.service.deliver(f.job);
-    expect(f.devices.deactivateById).toHaveBeenCalledWith('device');
+    expect(f.devices.deactivateByFcmToken).toHaveBeenCalledWith('fixture-token');
+    expect(f.devices.deactivateById).not.toHaveBeenCalled();
     expect(f.notifications.markSent).not.toHaveBeenCalled();
     expect(f.notifications.markFailed).toHaveBeenCalledWith('notification', 'NO_VALID_DEVICE');
   });

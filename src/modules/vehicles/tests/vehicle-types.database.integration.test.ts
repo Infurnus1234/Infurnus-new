@@ -490,8 +490,8 @@ live('admin catalog → existing fare/booking → MAP3 real PostgreSQL', () => {
       expect((await service.getDriverMap(driverId, ride.id)).fare.bookedAmount).toBe(400);
       await rides.transition(ride.id, 'driver_arriving', profileId);
       await rides.transition(ride.id, 'driver_arrived', profileId);
-      await rides.markPinVerified(ride.id);
-      await rides.transition(ride.id, 'in_progress', profileId);
+      const pin = (await rides.findByIdForCustomer(ride.id, customerId))!.pin!;
+      expect(await rides.verifyPinAttempt(ride.id, profileId, pin)).toBe('verified');
       await admin.updateVehicleType(adminId, type.id, { baseFare: 120, expectedVersion: 1 });
       const complete = await service.completeRide(ride.id, profileId);
       expect(complete.finalFare).toBe(400);

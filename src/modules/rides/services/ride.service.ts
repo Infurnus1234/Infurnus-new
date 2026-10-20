@@ -1,6 +1,11 @@
 import type { CommonMapService } from '../../maps/map.service.js';
 import type { RideMapData, UserRideMapData, DriverRideMapData } from '../types/ride-map.js';
-import { activeMapStatuses, freshRideLocation, rideInformation, driverDestinationAllowed } from '../utils/ride-map-mapper.js';
+import {
+  activeMapStatuses,
+  freshRideLocation,
+  rideInformation,
+  driverDestinationAllowed,
+} from '../utils/ride-map-mapper.js';
 import {
   geographicDistance,
   validRouteResult,
@@ -158,7 +163,11 @@ export class RideService {
     const active = activeMapStatuses.includes(ride.status) && !!ride.assignedDriverId;
     let driverLocation = active ? freshRideLocation(snapshot.driverLocation) : null;
     let userLocation = active ? freshRideLocation(snapshot.userLocation) : null;
-    const segment = active ? (ride.status === 'in_progress' && driverDestinationAllowed(ride) ? 'destination' : 'pickup') : null;
+    const segment = active
+      ? ride.status === 'in_progress' && driverDestinationAllowed(ride)
+        ? 'destination'
+        : 'pickup'
+      : null;
     const metadata = snapshot.metadata;
     let route: RideMapData['route'] = null,
       progress: RideMapData['progress'] = null,
@@ -190,12 +199,7 @@ export class RideService {
           : route.durationSeconds,
         source: progress ? 'route_progress_estimate' : 'provider_route',
       };
-    } else if (
-      active &&
-      includeRoute &&
-      this.maps &&
-      driverLocation
-    ) {
+    } else if (active && includeRoute && this.maps && driverLocation) {
       route = await this.maps
         .calculateRoute(driverLocation!, target, {
           source: 'RIDE',
@@ -218,7 +222,10 @@ export class RideService {
       current.ride.status !== ride.status ||
       current.ride.assignedDriverId !== ride.assignedDriverId
     )
-      return this.inactiveMap(current.ride, view === 'user' || driverDestinationAllowed(current.ride));
+      return this.inactiveMap(
+        current.ride,
+        view === 'user' || driverDestinationAllowed(current.ride),
+      );
     ride = current.ride;
     driverLocation = active ? freshRideLocation(current.driverLocation) : null;
     userLocation = active ? freshRideLocation(current.userLocation) : null;
@@ -496,8 +503,14 @@ export class RideService {
     }
 
     if (status === 'in_progress') {
-      if (!assignedDriverId) throw new AppError('FORBIDDEN', 'Assigned driver is required to start a ride', 403);
-      if (pin === undefined) throw new AppError('PIN_VERIFICATION_REQUIRED', 'Ride pickup PIN must be verified before starting the trip', 409);
+      if (!assignedDriverId)
+        throw new AppError('FORBIDDEN', 'Assigned driver is required to start a ride', 403);
+      if (pin === undefined)
+        throw new AppError(
+          'PIN_VERIFICATION_REQUIRED',
+          'Ride pickup PIN must be verified before starting the trip',
+          409,
+        );
       await this.verifyRidePin(id, assignedDriverId, pin);
       const ride = await this.repository.findById(id);
       if (!ride) throw new AppError('RIDE_NOT_FOUND', 'Ride not found', 404);

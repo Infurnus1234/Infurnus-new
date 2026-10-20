@@ -67,7 +67,8 @@ export class PushDeliveryService {
               'messaging/invalid-registration-token',
             ].includes(response.code ?? '')
           ) {
-            if (batch[index]) await this.devices.deactivateById(batch[index]!.id);
+            // A token may rotate while FCM is responding. Invalidate only the token sent.
+            if (batch[index]) await this.devices.deactivateByFcmToken(batch[index]!.fcmToken);
           } else retry = true;
         }
         if (retry) throw new Error('PUSH_PROVIDER_RETRY_REQUIRED');

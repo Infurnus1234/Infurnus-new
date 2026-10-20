@@ -22,7 +22,11 @@ export function freshRideLocation(location: LiveRideLocation | null, now = Date.
     : null;
 }
 export function driverDestinationAllowed(ride: Ride): boolean {
-  return !!ride.assignedDriverId && ride.pinVerified === true && ['in_progress','completed','cancelled'].includes(ride.status);
+  return (
+    !!ride.assignedDriverId &&
+    ride.pinVerified === true &&
+    ['in_progress', 'completed', 'cancelled'].includes(ride.status)
+  );
 }
 export function rideInformation(ride: Ride, includeDestination = true): RideInformation {
   const amount = (n: number | null | undefined) =>

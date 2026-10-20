@@ -707,7 +707,7 @@ export class PostgresProviderOperationsRepository {
       await client.query('ROLLBACK');
       throw error;
     } finally {
-      if (!existingClient) client.release();
+      client.release();
     }
   }
 
