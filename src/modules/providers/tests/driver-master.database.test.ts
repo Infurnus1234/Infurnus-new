@@ -282,7 +282,7 @@ describe.runIf(process.env.DRIVER_IMPLEMENTATION_DB_TESTS === 'true')(
       expect(await rides.verifyPinAttempt(ride, profile, '7391')).toBe('verified');
       expect(await rides.isPinVerified(ride)).toBe(true);
       await pool.query(
-        "UPDATE rides SET status='cancelled',cancelled_at=NOW(),cancellation_reason='Audit fixture' WHERE id=$1",
+        "UPDATE rides SET status='completed',completed_at=NOW() WHERE id=$1",
         [ride],
       );
       expect(await rides.verifyPinAttempt(ride, profile, '7391')).toBe('invalid_state');

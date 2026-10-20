@@ -1,0 +1,86 @@
+{
+  "emailFallbackOnMissing": true,
+  "sms": {
+    "id": "msg91_v5",
+    "timeoutMs": 10000,
+    "operations": {
+      "send": {
+        "url": "https://control.msg91.com/api/v5/otp",
+        "method": "POST",
+        "headers": {
+          "authkey": "{{env:MSG91_AUTH_KEY}}",
+          "Content-Type": "application/json"
+        },
+        "query": {
+          "template_id": "{{env:MSG91_TEMPLATE_ID}}",
+          "mobile": "{{recipientDigits}}",
+          "otp_length": "6",
+          "otp_expiry": "5"
+        },
+        "body": {},
+        "success": [
+          {
+            "path": "type",
+            "equals": "success"
+          }
+        ]
+      },
+      "verify": {
+        "url": "https://control.msg91.com/api/v5/otp/verify",
+        "method": "GET",
+        "headers": {
+          "authkey": "{{env:MSG91_AUTH_KEY}}"
+        },
+        "query": {
+          "mobile": "{{sessionToken}}",
+          "otp": "{{otp}}"
+        },
+        "success": [
+          {
+            "path": "type",
+            "equals": "success"
+          },
+          {
+            "path": "message",
+            "equals": "OTP verified success"
+          }
+        ],
+        "invalid": [
+          {
+            "path": "message",
+            "equals": "OTP not match"
+          },
+          {
+            "path": "message",
+            "equals": "OTP expired"
+          }
+        ]
+      },
+      "resend": {
+        "url": "https://control.msg91.com/api/v5/otp/retry",
+        "method": "GET",
+        "query": {
+          "authkey": "{{env:MSG91_AUTH_KEY}}",
+          "mobile": "{{sessionToken}}",
+          "retrytype": "text"
+        },
+        "success": [
+          {
+            "path": "type",
+            "equals": "success"
+          },
+          {
+            "path": "message",
+            "equals": "retry send successfully"
+          }
+        ]
+      }
+    },
+    "response": {
+      "sessionIdPath": "request_id",
+      "sessionTokenValue": "{{recipientDigits}}",
+      "ttlSeconds": 300,
+      "preserveExpiryOnResend": true
+    }
+  }
+}

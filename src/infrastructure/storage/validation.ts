@@ -12,6 +12,7 @@ export type StorageDocumentCategory =
   | 'vehicle-permit'
   | 'vehicle-fitness'
   | 'vehicle-photo'
+  | 'partner-vehicle-photo'
   | 'partner-profile-photo'
   | 'partner-aadhaar'
   | 'partner-pan'
@@ -59,6 +60,7 @@ const DOCUMENT_MAX_SIZE = 15 * MB;
 const PRIVATE_DOCUMENT_CATEGORIES: readonly StorageDocumentCategory[] = [
   'driver-profile-photo',
   'partner-profile-photo',
+  'partner-vehicle-photo',
   'owner-aadhaar',
   'owner-pan',
   'owner-address-proof',
@@ -90,6 +92,7 @@ const CATEGORY_POLICIES: Record<StorageDocumentCategory, FilePolicy> = {
     extensions: IMAGE_EXTENSIONS,
   },
 
+  'partner-vehicle-photo': { resourceType: 'image', accessMode: 'authenticated', maxSizeBytes: IMAGE_MAX_SIZE, mimeTypes: IMAGE_MIME_TYPES, extensions: IMAGE_EXTENSIONS },
   'vehicle-photo': {
     resourceType: 'image',
     accessMode: 'public',

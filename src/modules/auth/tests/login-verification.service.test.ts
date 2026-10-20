@@ -90,6 +90,17 @@ describe('LoginVerificationService', () => {
     expect(loginChallengeRepository.getProviderSession).not.toHaveBeenCalled();
   });
 
+  it('honors database expiry even when the application clock sees a future expiry', async () => {
+    vi.mocked(loginChallengeRepository.getProviderSession).mockResolvedValue(
+      createProviderSession({ databaseExpired: true, expiresAt: new Date(Date.now() + 600000) }),
+    );
+    await expect(service.verify('challenge-id', '123456')).rejects.toMatchObject({
+      code: 'OTP_EXPIRED',
+    });
+    expect(loginChallengeRepository.claimVerificationAttempt).not.toHaveBeenCalled();
+    expect(otpProvider.verifySmsOtp).not.toHaveBeenCalled();
+  });
+
   it('rejects an OTP that is not exactly six digits', async () => {
     await expect(service.verify('challenge-id', '12345')).rejects.toMatchObject({
       code: 'INVALID_OTP',

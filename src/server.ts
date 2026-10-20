@@ -272,6 +272,50 @@ async function startServer() {
 
   await loadDeletedSubjects(pool);
   const io = createSocketServer(server, {
+    ...(env.REDIS_URL
+      ? {
+          notifyRideOffer: async (
+            userId: string,
+            ride: import('./modules/rides/types/ride.js').Ride,
+            expiresAt: Date,
+          ) => {
+            const { NotificationService } =
+              await import('./modules/notifications/services/notification.service.js');
+            await new NotificationService().send({
+              userId,
+              type: 'ride.created',
+              title: 'New ride offer',
+              body: 'Open INFURNUS to review the current offer.',
+              resourceId: `${ride.id}:${expiresAt.getTime()}`,
+              eventVersion: 1,
+              data: {
+                rideId: ride.id,
+                expiresAt: expiresAt.toISOString(),
+                dispatchNotificationRequestedAt: new Date().toISOString(),
+              },
+            });
+          },
+          notifyRideUpdate: async (
+            ride: import('./modules/rides/types/ride.js').Ride,
+            type: import('./modules/notifications/types/notification.types.js').NotificationType,
+          ) => {
+            if (!ride.assignedDriverId) return;
+            const driver = await driverRepository.findProfileById(ride.assignedDriverId);
+            if (!driver) return;
+            const { NotificationService } =
+              await import('./modules/notifications/services/notification.service.js');
+            await new NotificationService().send({
+              userId: driver.userId,
+              type,
+              title: 'Trip status updated',
+              body: 'Open INFURNUS to view the current trip status.',
+              resourceId: ride.id,
+              eventVersion: new Date(ride.updatedAt).getTime(),
+              data: { rideId: ride.id, eventOccurredAt: new Date(ride.updatedAt).toISOString() },
+            });
+          },
+        }
+      : {}),
     authorizeAccount: (userId, role) =>
       new PostgresProviderOperationsRepository(pool).authorize(userId, role),
     driverService,

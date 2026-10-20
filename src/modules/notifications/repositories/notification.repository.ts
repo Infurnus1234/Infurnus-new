@@ -118,6 +118,59 @@ export interface NotificationRepository {
 }
 
 export class PostgresNotificationRepository implements NotificationRepository {
+  async pushAllowed(userId: string): Promise<boolean> {
+    const result = await pool.query<{ allowed: boolean }>(
+      `SELECT COALESCE(p.push_notifications_enabled,TRUE) AS allowed
+      FROM users u LEFT JOIN user_preferences p ON p.user_id=u.id
+      WHERE u.id=$1 AND u.status='active' AND u.deleted_at IS NULL`,
+      [userId],
+    );
+    return result.rows[0]?.allowed === true;
+  }
+  async acceptedDeviceIds(notificationId: string): Promise<string[]> {
+    const result = await pool.query<{ device_id: string }>(
+      'SELECT device_id FROM notification_device_acceptances WHERE notification_id=$1',
+      [notificationId],
+    );
+    return result.rows.map((row) => row.device_id);
+  }
+
+  async recordDeviceAcceptance(
+    notificationId: string,
+    deviceId: string,
+    messageId?: string,
+  ): Promise<void> {
+    await pool.query(
+      `INSERT INTO notification_device_acceptances(notification_id,device_id,provider_message_id)
+      SELECT n.id,d.id,$3 FROM notifications n JOIN user_devices d ON d.user_id=n.user_id
+      WHERE n.id=$1 AND d.id=$2 ON CONFLICT(notification_id,device_id) DO NOTHING`,
+      [notificationId, deviceId, messageId ?? null],
+    );
+  }
+
+  async inbox(userId: string, limit: number, offset: number) {
+    const result = await pool.query(
+      `SELECT id,notification_type AS type,title,body,payload,created_at AS "createdAt",
+       read_at AS "readAt" FROM notifications WHERE user_id=$1
+       ORDER BY created_at DESC,id DESC LIMIT $2 OFFSET $3`,
+      [userId, limit, offset],
+    );
+    const count = await pool.query<{ count: string }>(
+      'SELECT COUNT(*)::text AS count FROM notifications WHERE user_id=$1 AND read_at IS NULL',
+      [userId],
+    );
+    return { items: result.rows, unreadCount: Number(count.rows[0]?.count ?? 0) };
+  }
+
+  async readInbox(userId: string, id?: string) {
+    const result = await pool.query(
+      `UPDATE notifications SET read_at=COALESCE(read_at,NOW())
+       WHERE user_id=$1 ${id ? 'AND id=$2' : 'AND read_at IS NULL'} RETURNING id`,
+      id ? [userId, id] : [userId],
+    );
+    return result.rowCount ?? 0;
+  }
+
   async create(input: CreateNotificationRecordInput): Promise<NotificationRecord> {
     const result = await pool.query<NotificationRow>(
       `
