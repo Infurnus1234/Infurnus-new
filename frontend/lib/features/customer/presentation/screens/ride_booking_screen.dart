@@ -1286,7 +1286,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
         'price': '₹120-200',
         'icon': Icons.directions_car_rounded,
         'category': 'sedan',
-        'image': 'assets/images/sedan_green_white.png',
+        'image': 'assets/images/sedan.jpg',
       },
       {
         'name': 'SUV',
@@ -1379,22 +1379,49 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
   String _getVehicleImagePath(FleetVehicleModel vehicle) {
     final cat = vehicle.category.toLowerCase();
     final name = vehicle.displayName.toLowerCase();
+    if (cat.contains('jcb') ||
+        name.contains('jcb') ||
+        cat.contains('excavator') ||
+        name.contains('excavator')) {
+      return 'assets/images/jcb_excavator.jpg';
+    }
+    if (cat.contains('roller') || name.contains('roller')) {
+      return 'assets/images/road_roller.jpg';
+    }
+    if (cat.contains('crane') || name.contains('crane')) {
+      return 'assets/images/crane_truck.png';
+    }
+    if (cat.contains('garbage') ||
+        name.contains('garbage') ||
+        cat.contains('dump') ||
+        name.contains('dump')) {
+      return 'assets/images/garbage_dump_truck.png';
+    }
+    if (cat.contains('tuk') || name.contains('tuk')) {
+      return 'assets/images/e_rickshaw_passenger.png';
+    }
     if (cat.contains('e_rickshaw') ||
         name.contains('rickshaw') ||
         name.contains('e-rickshaw')) {
       return 'assets/images/e_rickshaw_green_white.png';
     }
     if (cat.contains('bike') || name.contains('bike')) {
-      return 'assets/images/bike_rider_green_white.png';
+      return 'assets/images/bike_motorcycle.png';
     }
     if (cat.contains('auto') || name.contains('auto')) {
-      return 'assets/images/auto_green_white.png';
+      return 'assets/images/auto_rickshaw.png';
     }
-    if (cat.contains('hatchback') || name.contains('hatchback')) {
-      return 'assets/images/hatchback_visual.png';
+    if (cat.contains('hatchback') ||
+        name.contains('hatchback') ||
+        cat.contains('baleno') ||
+        name.contains('baleno')) {
+      return 'assets/images/hatchback.jpg';
     }
     if (cat.contains('sedan') || name.contains('sedan')) {
-      return 'assets/images/sedan_green_white.png';
+      return 'assets/images/sedan.jpg';
+    }
+    if (cat.contains('innova') || name.contains('innova')) {
+      return 'assets/images/innova_crysta.jpg';
     }
     if (cat.contains('scorpio') || name.contains('scorpio')) {
       return 'assets/images/scorpio_n_white.png';
@@ -1408,19 +1435,35 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
     if (cat.contains('suv') || name.contains('suv')) {
       return 'assets/images/scorpio_n_white.png';
     }
-    if (cat.contains('traveller') ||
-        cat.contains('winger') ||
-        name.contains('traveller')) {
-      return 'assets/images/force_traveller_van.png';
+    if (cat.contains('winger') || name.contains('winger')) {
+      return 'assets/images/winger.jpg';
     }
-    if (cat.contains('towing') || name.contains('towing')) {
-      return 'assets/images/flatbed_towing_truck.png';
+    if (cat.contains('traveller') ||
+        name.contains('traveller') ||
+        cat.contains('urbania') ||
+        name.contains('urbania')) {
+      return 'assets/images/force_urbania.jpg';
+    }
+    if (cat.contains('towing') ||
+        name.contains('towing') ||
+        cat.contains('roadside') ||
+        name.contains('roadside')) {
+      return 'assets/images/towing_van.jpg';
     }
     if (cat.contains('ambulance') || name.contains('ambulance')) {
-      return 'assets/images/ambulance_visual.jpg';
+      return 'assets/images/ambulance_van.png';
     }
-    if (cat.contains('ape') || name.contains('ape')) {
-      return 'assets/images/piaggio_ape_yellow.png';
+    if (cat.contains('mini truck') ||
+        name.contains('mini truck') ||
+        cat.contains('mini_truck') ||
+        name.contains('mini_truck')) {
+      return 'assets/images/mini_truck.jpg';
+    }
+    if (cat.contains('ape') ||
+        name.contains('ape') ||
+        cat.contains('commercial') ||
+        name.contains('commercial')) {
+      return 'assets/images/mini_commercial.jpg';
     }
     if (cat.contains('magic') || name.contains('magic')) {
       return 'assets/images/tata_magic_cream.png';
@@ -1433,9 +1476,9 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
       return 'assets/images/cargo_207_normal.png';
     }
     if (cat.contains('407') || name.contains('407')) {
-      return 'assets/images/tata_407_beige.png';
+      return 'assets/images/cargo_407.jpg';
     }
-    return 'assets/images/sedan_green_white.png';
+    return 'assets/images/sedan.jpg';
   }
 
   // ignore: unused_element
@@ -1457,8 +1500,11 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
     if (cat.contains('towing') || name.contains('towing')) {
       return Icons.car_repair_rounded;
     }
-    if (cat.contains('jcb') || name.contains('jcb')) {
-      return Icons.agriculture_rounded;
+    if (cat.contains('jcb') ||
+        name.contains('jcb') ||
+        cat.contains('roller') ||
+        name.contains('roller')) {
+      return Icons.construction_rounded;
     }
     if (cat.contains('thar') || name.contains('thar')) {
       return Icons.terrain_rounded;

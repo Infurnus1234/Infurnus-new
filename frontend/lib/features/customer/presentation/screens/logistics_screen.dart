@@ -18,11 +18,11 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
 
   final List<Map<String, dynamic>> _vehicles = [
     {
-      'title': 'Piaggio Ape',
+      'title': 'Mini / Commercial (Piaggio Ape)',
       'category': 'piaggio_ape',
       'filter': '3-Wheeler',
       'subtitle': 'Up to 500 kg • City delivery',
-      'image': 'assets/images/piaggio_ape_yellow.png',
+      'image': 'assets/images/mini_commercial.jpg',
       'fallbackIcon': Icons.electric_rickshaw_rounded,
     },
     {
@@ -46,7 +46,7 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
       'category': 'cargo_407',
       'filter': 'Truck',
       'subtitle': 'Up to 2500 kg • Heavy cargo',
-      'image': 'assets/images/tata_407_beige.png',
+      'image': 'assets/images/cargo_407.jpg',
       'fallbackIcon': Icons.fire_truck_rounded,
     },
     {
@@ -54,7 +54,7 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
       'category': 'pickup_truck',
       'filter': 'Mini Truck',
       'subtitle': 'Up to 1500 kg • Flexible cargo',
-      'image': 'assets/images/cargo_207_normal.png',
+      'image': 'assets/images/cargo_407.jpg',
       'fallbackIcon': Icons.local_shipping_rounded,
     },
     {
@@ -62,7 +62,7 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
       'category': 'mini_truck',
       'filter': 'Truck',
       'subtitle': 'Up to 2000 kg • Bulk delivery',
-      'image': 'assets/images/cargo_207_heavy.png',
+      'image': 'assets/images/mini_truck.jpg',
       'fallbackIcon': Icons.local_shipping_rounded,
     },
   ];

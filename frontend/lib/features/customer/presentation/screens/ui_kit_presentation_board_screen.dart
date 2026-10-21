@@ -182,7 +182,7 @@ class UiKitPresentationBoardScreen extends ConsumerWidget {
                                 horizontal: 24,
                               ),
                               alignment: Alignment.center,
-                              child: Row(
+                              child: const Row(
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,
                                 children: const [

@@ -29,7 +29,12 @@ class VehicleVisualImage extends StatelessWidget {
     if (key.contains('bike') ||
         key.contains('two-wheeler') ||
         key.contains('motorcycle')) {
-      return 'assets/images/bike_rider_green_white.png';
+      return 'assets/images/bike_motorcycle.png';
+    }
+    if (key.contains('electric tuk') ||
+        key.contains('tuk-tuk') ||
+        key.contains('tuk tuk')) {
+      return 'assets/images/e_rickshaw_passenger.png';
     }
     if (key.contains('e_rickshaw') ||
         key.contains('e-rickshaw') ||
@@ -37,7 +42,7 @@ class VehicleVisualImage extends StatelessWidget {
       return 'assets/images/e_rickshaw_green_white.png';
     }
     if (key.contains('auto') || key.contains('rickshaw')) {
-      return 'assets/images/auto_green_white.png';
+      return 'assets/images/auto_rickshaw.png';
     }
     if (key.contains('thar')) {
       return 'assets/images/thar_visual.webp';
@@ -48,20 +53,46 @@ class VehicleVisualImage extends StatelessWidget {
     if (key.contains('fortuner')) {
       return 'assets/images/fortuner_visual.jpg';
     }
-    if (key.contains('suv')) {
-      return 'assets/images/scorpio_n_white.png';
+    if (key.contains('innova')) {
+      return 'assets/images/innova_crysta.jpg';
     }
-    if (key.contains('innova') ||
-        key.contains('mercedes') ||
+    if (key.contains('mercedes') ||
         key.contains('bmw') ||
         key.contains('luxury')) {
       return 'assets/images/bmw_visual.webp';
     }
+    if (key.contains('jcb') || key.contains('excavator')) {
+      return 'assets/images/jcb_excavator.jpg';
+    }
+    if (key.contains('roller') || key.contains('road roller')) {
+      return 'assets/images/road_roller.jpg';
+    }
+    if (key.contains('crane')) {
+      return 'assets/images/crane_truck.png';
+    }
+    if (key.contains('garbage') || key.contains('dump')) {
+      return 'assets/images/garbage_dump_truck.png';
+    }
+    if (key.contains('towing') || key.contains('roadside') || key.contains('tow')) {
+      return 'assets/images/towing_van.jpg';
+    }
+    if (key.contains('mini truck') || key.contains('mini_truck')) {
+      return 'assets/images/mini_truck.jpg';
+    }
+    if (key.contains('407')) {
+      return 'assets/images/cargo_407.jpg';
+    }
+    if (key.contains('mini / commercial') ||
+        key.contains('mini commercial') ||
+        key.contains('commercial') ||
+        key.contains('ape')) {
+      return 'assets/images/mini_commercial.jpg';
+    }
+    if (key.contains('sedan')) {
+      return 'assets/images/sedan.jpg';
+    }
     if (key.contains('tata magic') || key.contains('magic')) {
       return 'assets/images/tata_magic_cream.png';
-    }
-    if (key.contains('ape')) {
-      return 'assets/images/piaggio_ape_yellow.png';
     }
     if (key.contains('207') &&
         (key.contains('heavy') || key.contains('truck'))) {
@@ -70,42 +101,38 @@ class VehicleVisualImage extends StatelessWidget {
     if (key.contains('207')) {
       return 'assets/images/cargo_207_normal.png';
     }
-    if (key.contains('407')) {
-      return 'assets/images/tata_407_beige.png';
-    }
     if (key.contains('pickup')) {
-      return 'assets/images/cargo_207_normal.png';
+      return 'assets/images/cargo_407.jpg';
     }
-    if (key.contains('truck') ||
-        key.contains('mini truck') ||
-        key.contains('logistics')) {
-      return 'assets/images/cargo_207_heavy.png';
+    if (key.contains('truck') || key.contains('logistics')) {
+      return 'assets/images/mini_truck.jpg';
     }
     if (key.contains('ambulance') || key.contains('emergency')) {
-      return 'assets/images/ambulance_visual.jpg';
+      return 'assets/images/ambulance_van.png';
     }
-    if (key.contains('towing')) {
-      return 'assets/images/flatbed_towing_truck.png';
-    }
-    if (key.contains('roadside')) {
-      return 'assets/images/towing_van_green.png';
+    if (key.contains('winger')) {
+      return 'assets/images/winger.jpg';
     }
     if (key.contains('traveller') ||
-        key.contains('winger') ||
+        key.contains('urbania') ||
         key.contains('van')) {
-      return 'assets/images/force_traveller_van.png';
+      return 'assets/images/force_urbania.jpg';
     }
-    if (key.contains('hatchback') || key.contains('compact')) {
-      return 'assets/images/hatchback_visual.png';
+    if (key.contains('hatchback') ||
+        key.contains('compact') ||
+        key.contains('baleno')) {
+      return 'assets/images/hatchback.jpg';
     }
-    if (key.contains('sedan') ||
-        key.contains('cab') ||
+    if (key.contains('suv')) {
+      return 'assets/images/scorpio_n_white.png';
+    }
+    if (key.contains('cab') ||
         key.contains('car') ||
         key.contains('passenger')) {
-      return 'assets/images/sedan_green_white.png';
+      return 'assets/images/sedan.jpg';
     }
 
-    return 'assets/images/sedan_green_white.png';
+    return 'assets/images/sedan.jpg';
   }
 
   /// Get appropriate fallback icon for vehicle type
@@ -125,7 +152,8 @@ class VehicleVisualImage extends StatelessWidget {
     }
     if (key.contains('jcb') ||
         key.contains('crane') ||
-        key.contains('excavator')) {
+        key.contains('excavator') ||
+        key.contains('roller')) {
       return Icons.construction_rounded;
     }
     if (key.contains('helicopter')) return Icons.airplanemode_active_rounded;
