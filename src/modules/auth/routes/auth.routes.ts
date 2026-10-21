@@ -54,16 +54,11 @@ export function createAuthRouter(
     logoutAll,
     listSessions,
     revokeSession,
-    devToken,
   } = createAuthHandlers(dependencies);
 
   const enableRateLimiting = options.enableRateLimiting ?? true;
 
   const enableCsrfProtection = options.enableCsrfProtection ?? true;
-
-  if (process.env.NODE_ENV !== 'production') {
-    router.post('/dev-token', devToken);
-  }
 
   router.post('/google', ...(enableRateLimiting ? [authGoogleRateLimiter] : []), google);
   router.post(
