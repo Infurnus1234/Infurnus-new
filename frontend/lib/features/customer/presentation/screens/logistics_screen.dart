@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../providers/ride_provider.dart';
+import '../../../../shared/widgets/infurnus_button.dart';
 
 class LogisticsScreen extends ConsumerStatefulWidget {
   const LogisticsScreen({super.key});
@@ -18,18 +19,18 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
 
   final List<Map<String, dynamic>> _vehicles = [
     {
-      'title': 'Piaggio Ape',
+      'title': 'Mini / Commercial (Piaggio Ape)',
       'category': 'piaggio_ape',
       'filter': '3-Wheeler',
-      'subtitle': 'Up to 500 kg • City delivery',
-      'image': 'assets/images/piaggio_ape_yellow.png',
+      'subtitle': 'Up to 500 kg \u2022 City delivery',
+      'image': 'assets/images/mini_commercial.jpg',
       'fallbackIcon': Icons.electric_rickshaw_rounded,
     },
     {
       'title': 'Tata Magic',
       'category': 'tata_magic',
       'filter': 'Mini Truck',
-      'subtitle': 'Up to 750 kg • Goods transport',
+      'subtitle': 'Up to 750 kg \u2022 Goods transport',
       'image': 'assets/images/tata_magic_cream.png',
       'fallbackIcon': Icons.local_shipping_rounded,
     },
@@ -37,7 +38,7 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
       'title': '207 Cargo',
       'category': 'cargo_207',
       'filter': 'Mini Truck',
-      'subtitle': 'Up to 1200 kg • Medium cargo',
+      'subtitle': 'Up to 1200 kg \u2022 Medium cargo',
       'image': 'assets/images/cargo_207_heavy.png',
       'fallbackIcon': Icons.local_shipping_rounded,
     },
@@ -45,30 +46,35 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
       'title': '407 Cargo',
       'category': 'cargo_407',
       'filter': 'Truck',
-      'subtitle': 'Up to 2500 kg • Heavy cargo',
-      'image': 'assets/images/tata_407_beige.png',
+      'subtitle': 'Up to 2500 kg \u2022 Heavy cargo',
+      'image': 'assets/images/cargo_407.jpg',
       'fallbackIcon': Icons.fire_truck_rounded,
     },
     {
       'title': 'Pickup Truck',
       'category': 'pickup_truck',
       'filter': 'Mini Truck',
-      'subtitle': 'Up to 1500 kg • Flexible cargo',
-      'image': 'assets/images/cargo_207_normal.png',
+      'subtitle': 'Up to 1500 kg \u2022 Flexible cargo',
+      'image': 'assets/images/cargo_407.jpg',
       'fallbackIcon': Icons.local_shipping_rounded,
     },
     {
       'title': 'Mini Truck',
       'category': 'mini_truck',
       'filter': 'Truck',
-      'subtitle': 'Up to 2000 kg • Bulk delivery',
-      'image': 'assets/images/cargo_207_heavy.png',
+      'subtitle': 'Up to 2000 kg \u2022 Bulk delivery',
+      'image': 'assets/images/mini_truck.jpg',
       'fallbackIcon': Icons.local_shipping_rounded,
     },
   ];
 
   @override
   Widget build(BuildContext context) {
+    final rideState = ref.watch(rideProvider);
+    final fareEstimate = rideState.fareEstimate;
+    final isUnavailable = fareEstimate?.isUnavailable ?? false;
+    final hasBookingAmount = fareEstimate?.bookingAmount != null;
+
     final filtered = _selectedFilter == 'All'
         ? _vehicles
         : _vehicles.where((v) => v['filter'] == _selectedFilter).toList();
@@ -145,6 +151,21 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
           ),
           const Divider(height: 1, color: Color(0xFFE5E7EB)),
 
+          // Fare unavailability message
+          if (isUnavailable && fareEstimate?.message != null)
+            Container(
+              width: double.infinity,
+              color: const Color(0xFFFEF3C7),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Text(
+                fareEstimate!.message!,
+                style: const TextStyle(
+                  color: Color(0xFF92400E),
+                  fontSize: 13,
+                ),
+              ),
+            ),
+
           // Vertical Vehicle List
           Expanded(
             child: ListView.separated(
@@ -158,7 +179,7 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
                     ref.read(rideProvider.notifier).selectSector('logistics');
                     ref
                         .read(rideProvider.notifier)
-                        .selectTier(item['category']);
+                        .selectTier(item['category'] as String);
                     context.push('/ride-booking');
                   },
                   child: Container(
@@ -191,7 +212,7 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(10),
                             child: Image.asset(
-                              item['image'],
+                              item['image'] as String,
                               fit: BoxFit.contain,
                               errorBuilder: (_, __, ___) => Icon(
                                 item['fallbackIcon'] as IconData,
@@ -209,7 +230,7 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                item['title'],
+                                item['title'] as String,
                                 style: const TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.bold,
@@ -218,7 +239,7 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                item['subtitle'],
+                                item['subtitle'] as String,
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: Color(0xFF6B7280),
@@ -239,6 +260,17 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
                   ),
                 );
               },
+            ),
+          ),
+
+          // Booking confirmation button — enabled only when a booking quote exists
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: InfurnusButton(
+              text: 'Confirm Booking',
+              onPressed: hasBookingAmount
+                  ? () => context.push('/ride-booking')
+                  : null,
             ),
           ),
         ],
