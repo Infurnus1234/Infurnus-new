@@ -302,6 +302,23 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  Future<void> devBypassLogin() async {
+    if (_isProcessing) return;
+    _isProcessing = true;
+    state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
+    try {
+      final response = await ref.read(dioProvider).post('/auth/dev-token');
+      await _handleAuthSuccess(AuthResponse.fromJson(response.data['data']));
+    } catch (e) {
+      state = state.copyWith(
+        status: AuthStatus.unauthenticated,
+        errorMessage: _parseError(e),
+      );
+    } finally {
+      _isProcessing = false;
+    }
+  }
+
   String _parseError(dynamic e) {
     if (e is DioException) {
       final data = e.response?.data;
