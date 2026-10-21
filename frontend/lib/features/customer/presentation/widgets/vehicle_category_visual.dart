@@ -26,56 +26,56 @@ class VehicleCategoryConfig {
   });
 
   static Map<VehicleCategoryType, VehicleCategoryConfig> get registry => const {
-        VehicleCategoryType.rides: VehicleCategoryConfig(
-          category: VehicleCategoryType.rides,
-          title: 'Rides & Cabs',
-          subtitle: 'Daily city rides',
-          assetImagePath: 'assets/images/sedan_green_white.png',
-          fallbackIcon: Icons.directions_car_rounded,
-        ),
-        VehicleCategoryType.logistics: VehicleCategoryConfig(
-          category: VehicleCategoryType.logistics,
-          title: 'Logistics',
-          subtitle: 'Cargo & Trucks',
-          assetImagePath: 'assets/images/piaggio_ape_yellow.png',
-          fallbackIcon: Icons.local_shipping_rounded,
-        ),
-        VehicleCategoryType.emergency: VehicleCategoryConfig(
-          category: VehicleCategoryType.emergency,
-          title: 'Emergency',
-          subtitle: 'Ambulance & Tow',
-          assetImagePath: 'assets/images/towing_van_green.png',
-          fallbackIcon: Icons.medical_services_rounded,
-        ),
-        VehicleCategoryType.rental: VehicleCategoryConfig(
-          category: VehicleCategoryType.rental,
-          title: 'Rentals',
-          subtitle: 'Chauffeur & Self-drive',
-          assetImagePath: 'assets/images/suv_green_white.png',
-          fallbackIcon: Icons.car_rental_rounded,
-        ),
-        VehicleCategoryType.auto: VehicleCategoryConfig(
-          category: VehicleCategoryType.auto,
-          title: 'Auto',
-          subtitle: 'Fast 3-wheeler',
-          assetImagePath: 'assets/images/auto_green_white.png',
-          fallbackIcon: Icons.electric_rickshaw_rounded,
-        ),
-        VehicleCategoryType.bike: VehicleCategoryConfig(
-          category: VehicleCategoryType.bike,
-          title: 'Bike',
-          subtitle: 'Quick 2-wheeler',
-          assetImagePath: 'assets/images/bike_rider_green_white.png',
-          fallbackIcon: Icons.two_wheeler_rounded,
-        ),
-        VehicleCategoryType.premium: VehicleCategoryConfig(
-          category: VehicleCategoryType.premium,
-          title: 'Premium SUV',
-          subtitle: 'Luxury & Fortuner',
-          assetImagePath: 'assets/images/scorpio_n_black.png',
-          fallbackIcon: Icons.stars_rounded,
-        ),
-      };
+    VehicleCategoryType.rides: VehicleCategoryConfig(
+      category: VehicleCategoryType.rides,
+      title: 'Rides & Cabs',
+      subtitle: 'Daily city rides',
+      assetImagePath: 'assets/images/sedan.jpg',
+      fallbackIcon: Icons.directions_car_rounded,
+    ),
+    VehicleCategoryType.logistics: VehicleCategoryConfig(
+      category: VehicleCategoryType.logistics,
+      title: 'Logistics',
+      subtitle: 'Cargo & Trucks',
+      assetImagePath: 'assets/images/mini_commercial.jpg',
+      fallbackIcon: Icons.local_shipping_rounded,
+    ),
+    VehicleCategoryType.emergency: VehicleCategoryConfig(
+      category: VehicleCategoryType.emergency,
+      title: 'Emergency',
+      subtitle: 'Ambulance & Tow',
+      assetImagePath: 'assets/images/towing_van.jpg',
+      fallbackIcon: Icons.medical_services_rounded,
+    ),
+    VehicleCategoryType.rental: VehicleCategoryConfig(
+      category: VehicleCategoryType.rental,
+      title: 'Rentals',
+      subtitle: 'Chauffeur & Self-drive',
+      assetImagePath: 'assets/images/suv_green_white.png',
+      fallbackIcon: Icons.car_rental_rounded,
+    ),
+    VehicleCategoryType.auto: VehicleCategoryConfig(
+      category: VehicleCategoryType.auto,
+      title: 'Auto',
+      subtitle: 'Fast 3-wheeler',
+      assetImagePath: 'assets/images/auto_rickshaw.png',
+      fallbackIcon: Icons.electric_rickshaw_rounded,
+    ),
+    VehicleCategoryType.bike: VehicleCategoryConfig(
+      category: VehicleCategoryType.bike,
+      title: 'Bike',
+      subtitle: 'Quick 2-wheeler',
+      assetImagePath: 'assets/images/bike_motorcycle.png',
+      fallbackIcon: Icons.two_wheeler_rounded,
+    ),
+    VehicleCategoryType.premium: VehicleCategoryConfig(
+      category: VehicleCategoryType.premium,
+      title: 'Premium SUV',
+      subtitle: 'Luxury & Fortuner',
+      assetImagePath: 'assets/images/innova_crysta.jpg',
+      fallbackIcon: Icons.stars_rounded,
+    ),
+  };
 
   static VehicleCategoryConfig getConfig(VehicleCategoryType type) {
     return registry[type] ?? registry[VehicleCategoryType.rides]!;

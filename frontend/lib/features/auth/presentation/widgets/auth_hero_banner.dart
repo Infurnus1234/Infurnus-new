@@ -1,16 +1,46 @@
 import 'package:flutter/material.dart';
 
-/// Pixel-perfect Auth Hero Banner matching INFURNUS 3D luxury design
+/// Photo-realistic Auth Hero Banner using the Infurnus promotional image.
+/// Matches the reference login screen design with the full promotional artwork.
 class AuthHeroBanner extends StatelessWidget {
   const AuthHeroBanner({super.key});
 
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Hero takes ~60% of screen height
+        final screenHeight = MediaQuery.of(context).size.height;
+        final heroHeight = screenHeight * 0.60;
+
+        return SizedBox(
+          width: double.infinity,
+          height: heroHeight,
+          child: Image.asset(
+            'assets/images/login_hero_banner.jpg',
+            fit: BoxFit.cover,
+            alignment: Alignment.topCenter,
+            errorBuilder: (_, __, ___) => _FallbackHeroBanner(height: heroHeight),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Fallback widget-based banner in case the image asset fails to load.
+class _FallbackHeroBanner extends StatelessWidget {
+  final double height;
+  const _FallbackHeroBanner({required this.height});
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
+      height: height,
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            Color(0xFF01180B), // Rich dark forest emerald
+            Color(0xFF01180B),
             Color(0xFF00220F),
             Color(0xFF000D05),
             Color(0xFF000000),
@@ -22,7 +52,7 @@ class AuthHeroBanner extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          // Ambient Neon Glow Circles
+          // Ambient Neon Glow
           Positioned(
             top: -50,
             right: -50,
@@ -40,31 +70,12 @@ class AuthHeroBanner extends StatelessWidget {
               ),
             ),
           ),
-          Positioned(
-            top: 40,
-            left: -60,
-            child: Container(
-              width: 220,
-              height: 220,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFF00C853).withValues(alpha: 0.18),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-            ),
-          ),
-
           SafeArea(
             bottom: false,
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 12.0),
               child: Column(
                 children: [
-                  // 1. BRAND LOGO & HEADLINE
                   const SizedBox(height: 8),
                   Image.asset(
                     'assets/images/infurnus_3d_logo.png',
@@ -77,9 +88,6 @@ class AuthHeroBanner extends StatelessWidget {
                         fontWeight: FontWeight.w900,
                         letterSpacing: 2.5,
                         color: Colors.white,
-                        shadows: [
-                          Shadow(color: Color(0xFF00E676), blurRadius: 16),
-                        ],
                       ),
                     ),
                   ),
@@ -89,7 +97,6 @@ class AuthHeroBanner extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
-                      letterSpacing: 0.4,
                       color: Colors.white,
                     ),
                   ),
@@ -97,70 +104,65 @@ class AuthHeroBanner extends StatelessWidget {
                   const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      _CategoryBullet('Ride'),
-                      _BulletDot(),
-                      _CategoryBullet('Logistics'),
-                      _BulletDot(),
-                      _CategoryBullet('Premium Ride'),
-                      _BulletDot(),
-                      _CategoryBullet('Service Vehicles'),
+                      _Bullet('Ride'),
+                      _Dot(),
+                      _Bullet('Logistics'),
+                      _Dot(),
+                      _Bullet('Premium Ride'),
+                      _Dot(),
+                      _Bullet('Service Vehicles'),
                     ],
                   ),
                   const SizedBox(height: 16),
-
-                  // 2. 4 FEATURE CARDS ROW
                   SizedBox(
-                    height: 148,
+                    height: 140,
                     child: ListView(
                       scrollDirection: Axis.horizontal,
-                      physics: const BouncingScrollPhysics(),
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       children: const [
-                        _FeatureCard(
+                        _ServiceCard(
                           title: 'Ride',
                           subtitle: 'Daily rides\nfor every need',
                           footer: 'Hatchback • Sedan\nSUV • Bike • Auto',
                           icon: Icons.directions_car_rounded,
-                          accentColor: Color(0xFF00E676),
-                          bgGradient: [Color(0xFF022B14), Color(0xFF011A0C)],
-                          borderColor: Color(0x6600E676),
+                          accent: Color(0xFF00E676),
+                          bg: [Color(0xFF022B14), Color(0xFF011A0C)],
+                          border: Color(0x6600E676),
                         ),
                         SizedBox(width: 10),
-                        _FeatureCard(
+                        _ServiceCard(
                           title: 'Logistics',
                           subtitle: 'Deliver anything\nanywhere',
                           footer: 'Bike • Van • Mini Truck\nTruck • Courier',
                           icon: Icons.inventory_2_rounded,
-                          accentColor: Color(0xFFFFB300),
-                          bgGradient: [Color(0xFF2E1A00), Color(0xFF1F1000)],
-                          borderColor: Color(0x66FFB300),
+                          accent: Color(0xFFFFB300),
+                          bg: [Color(0xFF2E1A00), Color(0xFF1F1000)],
+                          border: Color(0x66FFB300),
                         ),
                         SizedBox(width: 10),
-                        _FeatureCard(
+                        _ServiceCard(
                           title: 'Premium Ride',
                           subtitle: 'Travel in style\nand comfort',
                           footer: 'Premium Sedan\nSUV • Luxury Cars',
                           icon: Icons.workspace_premium_rounded,
-                          accentColor: Color(0xFFB388FF),
-                          bgGradient: [Color(0xFF20003B), Color(0xFF140026)],
-                          borderColor: Color(0x66B388FF),
+                          accent: Color(0xFFB388FF),
+                          bg: [Color(0xFF20003B), Color(0xFF140026)],
+                          border: Color(0x66B388FF),
                         ),
                         SizedBox(width: 10),
-                        _FeatureCard(
+                        _ServiceCard(
                           title: 'Service Vehicles',
                           subtitle: 'On-demand vehicles\nfor your work',
-                          footer: 'Pickup • Mini Truck\nTruck • Crane • Tow',
+                          footer: 'Pickup • Mini Truck\nTruck • Crane • Tow\nJCB • Service Van',
                           icon: Icons.build_rounded,
-                          accentColor: Color(0xFF40C4FF),
-                          bgGradient: [Color(0xFF001D38), Color(0xFF001224)],
-                          borderColor: Color(0x6640C4FF),
+                          accent: Color(0xFF40C4FF),
+                          bg: [Color(0xFF001D38), Color(0xFF001224)],
+                          border: Color(0x6640C4FF),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 14),
-
-                  // 3. 4 VALUE PROPOSITION BADGES
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 16),
                     child: Row(
@@ -173,7 +175,6 @@ class AuthHeroBanner extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 12),
                 ],
               ),
             ),
@@ -184,55 +185,50 @@ class AuthHeroBanner extends StatelessWidget {
   }
 }
 
-class _CategoryBullet extends StatelessWidget {
+class _Bullet extends StatelessWidget {
   final String text;
-  const _CategoryBullet(this.text);
-
+  const _Bullet(this.text);
   @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: const TextStyle(
-        fontSize: 11,
-        fontWeight: FontWeight.w700,
-        color: Color(0xFF00E676),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Text(
+        text,
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: Color(0xFF00E676),
+        ),
+      );
 }
 
-class _BulletDot extends StatelessWidget {
-  const _BulletDot();
-
+class _Dot extends StatelessWidget {
+  const _Dot();
   @override
-  Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 5),
-      child: Text(
-        '•',
-        style: TextStyle(color: Color(0xFF00E676), fontSize: 10, fontWeight: FontWeight.bold),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 5),
+        child: Text('•',
+            style: TextStyle(
+                color: Color(0xFF00E676),
+                fontSize: 10,
+                fontWeight: FontWeight.bold)),
+      );
 }
 
-class _FeatureCard extends StatelessWidget {
+class _ServiceCard extends StatelessWidget {
   final String title;
   final String subtitle;
   final String footer;
   final IconData icon;
-  final Color accentColor;
-  final List<Color> bgGradient;
-  final Color borderColor;
+  final Color accent;
+  final List<Color> bg;
+  final Color border;
 
-  const _FeatureCard({
+  const _ServiceCard({
     required this.title,
     required this.subtitle,
     required this.footer,
     required this.icon,
-    required this.accentColor,
-    required this.bgGradient,
-    required this.borderColor,
+    required this.accent,
+    required this.bg,
+    required this.border,
   });
 
   @override
@@ -242,15 +238,15 @@ class _FeatureCard extends StatelessWidget {
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: bgGradient,
+          colors: bg,
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor, width: 1.2),
+        border: Border.all(color: border, width: 1.2),
         boxShadow: [
           BoxShadow(
-            color: accentColor.withValues(alpha: 0.15),
+            color: accent.withValues(alpha: 0.15),
             blurRadius: 10,
             spreadRadius: 1,
           ),
@@ -259,50 +255,41 @@ class _FeatureCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Icon Circle
           Container(
             padding: const EdgeInsets.all(5),
             decoration: BoxDecoration(
-              color: accentColor.withValues(alpha: 0.2),
+              color: accent.withValues(alpha: 0.2),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: accentColor, size: 18),
+            child: Icon(icon, color: accent, size: 18),
           ),
           const SizedBox(height: 6),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w900,
-              color: Colors.white,
-            ),
-          ),
+          Text(title,
+              style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white)),
           const SizedBox(height: 2),
-          Text(
-            subtitle,
-            style: const TextStyle(
-              fontSize: 9,
-              fontWeight: FontWeight.w500,
-              color: Color(0xFFE0E0E0),
-              height: 1.1,
-            ),
-          ),
+          Text(subtitle,
+              style: const TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFFE0E0E0),
+                  height: 1.1)),
           const Spacer(),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
             decoration: BoxDecoration(
               color: Colors.black.withValues(alpha: 0.4),
               borderRadius: BorderRadius.circular(4),
             ),
-            child: Text(
-              footer,
-              style: TextStyle(
-                fontSize: 7.5,
-                fontWeight: FontWeight.w600,
-                color: accentColor,
-                height: 1.1,
-              ),
-            ),
+            child: Text(footer,
+                style: TextStyle(
+                    fontSize: 7.5,
+                    fontWeight: FontWeight.w600,
+                    color: accent,
+                    height: 1.1)),
           ),
         ],
       ),
@@ -313,11 +300,7 @@ class _FeatureCard extends StatelessWidget {
 class _ValueBadge extends StatelessWidget {
   final String icon;
   final String label;
-
-  const _ValueBadge({
-    required this.icon,
-    required this.label,
-  });
+  const _ValueBadge({required this.icon, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -329,32 +312,25 @@ class _ValueBadge extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: const Color(0xFF022B14),
-            border: Border.all(color: const Color(0xFF00E676), width: 1.2),
+            border:
+                Border.all(color: const Color(0xFF00E676), width: 1.2),
             boxShadow: const [
               BoxShadow(
-                color: Color(0x3300E676),
-                blurRadius: 6,
-              ),
+                  color: Color(0x3300E676), blurRadius: 6),
             ],
           ),
           child: Center(
-            child: Text(
-              icon,
-              style: const TextStyle(fontSize: 16),
-            ),
-          ),
+              child:
+                  Text(icon, style: const TextStyle(fontSize: 16))),
         ),
         const SizedBox(height: 4),
-        Text(
-          label,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontSize: 9.5,
-            fontWeight: FontWeight.w700,
-            color: Colors.white,
-            height: 1.1,
-          ),
-        ),
+        Text(label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+                fontSize: 9.5,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                height: 1.1)),
       ],
     );
   }

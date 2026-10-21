@@ -932,7 +932,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
               ClipRRect(
                 borderRadius: BorderRadius.circular(16),
                 child: Image.asset(
-                  'assets/images/vehicle_fleet_banner.png',
+                  'assets/images/infurnus_hero_logo.png',
                   width: 130,
                   height: 105,
                   fit: BoxFit.contain,
@@ -1083,7 +1083,11 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     );
   }
 
-  void _showSeeAllVehiclesModal(BuildContext context, String title, List<_VehicleCategoryItem> vehicles) {
+  void _showSeeAllVehiclesModal(
+    BuildContext context,
+    String title,
+    List<_VehicleCategoryItem> vehicles,
+  ) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1103,7 +1107,11 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: textBlack),
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: textBlack,
+                    ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.close_rounded, color: textBlack),
@@ -1131,19 +1139,56 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                         side: const BorderSide(color: cardBorder),
                       ),
                       leading: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: const BoxDecoration(
+                        width: 44,
+                        height: 44,
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
                           color: surfaceWhite,
-                          shape: BoxShape.circle,
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Icon(item.icon, color: buttonBlack),
+                        child: item.assetImagePath != null
+                            ? Image.asset(
+                                item.assetImagePath!,
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, __, ___) => Icon(
+                                  item.icon,
+                                  color: buttonBlack,
+                                  size: 22,
+                                ),
+                              )
+                            : Icon(item.icon, color: buttonBlack, size: 22),
                       ),
-                      title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.bold, color: textBlack)),
-                      subtitle: Text('${item.capacity} • ${item.eta}', style: const TextStyle(color: textSecondary, fontSize: 12)),
-                      trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: textBlack),
+                      title: Text(
+                        item.title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: textBlack,
+                        ),
+                      ),
+                      subtitle: Text(
+                        '${item.capacity} • ${item.eta}',
+                        style: const TextStyle(
+                          color: textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                      trailing: const Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        size: 14,
+                        color: textBlack,
+                      ),
                       onTap: () {
                         Navigator.pop(context);
-                        ref.read(rideProvider.notifier).selectSector('passenger');
+                        final sector =
+                            item.category == VehicleCategoryType.logistics
+                            ? 'logistics'
+                            : (item.category == VehicleCategoryType.emergency
+                                  ? 'service'
+                                  : 'passenger');
+                        ref.read(rideProvider.notifier).selectSector(sector);
+                        ref
+                            .read(rideProvider.notifier)
+                            .selectTier(item.title.toLowerCase());
                         context.push('/ride-booking');
                       },
                     );
@@ -1166,7 +1211,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Instant',
         icon: Icons.two_wheeler_rounded,
         category: VehicleCategoryType.bike,
-        assetImagePath: 'assets/images/bike_rider_green_white.png',
+        assetImagePath: 'assets/images/bike_motorcycle.png',
       ),
       _VehicleCategoryItem(
         title: 'Auto',
@@ -1175,7 +1220,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Instant',
         icon: Icons.electric_rickshaw_rounded,
         category: VehicleCategoryType.auto,
-        assetImagePath: 'assets/images/auto_green_white.png',
+        assetImagePath: 'assets/images/auto_rickshaw.png',
       ),
       _VehicleCategoryItem(
         title: 'E-Rickshaw',
@@ -1184,7 +1229,43 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Instant',
         icon: Icons.electric_rickshaw_outlined,
         category: VehicleCategoryType.auto,
-        assetImagePath: 'assets/images/e_rickshaw_green_white.png',
+        assetImagePath: 'assets/images/e_rickshaw_passenger.png',
+      ),
+      _VehicleCategoryItem(
+        title: 'Hatchback',
+        capacity: '4 seater',
+        rate: 'Route Estimate',
+        eta: 'Instant',
+        icon: Icons.directions_car_rounded,
+        category: VehicleCategoryType.rides,
+        assetImagePath: 'assets/images/hatchback.jpg',
+      ),
+      _VehicleCategoryItem(
+        title: 'Sedan',
+        capacity: '4 seater',
+        rate: 'Route Estimate',
+        eta: 'Instant',
+        icon: Icons.directions_car_rounded,
+        category: VehicleCategoryType.rides,
+        assetImagePath: 'assets/images/sedan.jpg',
+      ),
+      _VehicleCategoryItem(
+        title: 'Innova Crysta',
+        capacity: '6-7 seater',
+        rate: 'Route Estimate',
+        eta: 'Instant',
+        icon: Icons.directions_car_filled_rounded,
+        category: VehicleCategoryType.premium,
+        assetImagePath: 'assets/images/innova_crysta.jpg',
+      ),
+      _VehicleCategoryItem(
+        title: 'Winger',
+        capacity: '9-12 seater',
+        rate: 'Route Estimate',
+        eta: 'Scheduled',
+        icon: Icons.directions_bus_rounded,
+        category: VehicleCategoryType.rides,
+        assetImagePath: 'assets/images/winger.jpg',
       ),
       _VehicleCategoryItem(
         title: 'Force Traveller',
@@ -1193,43 +1274,16 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Scheduled',
         icon: Icons.airport_shuttle_rounded,
         category: VehicleCategoryType.rides,
-        assetImagePath: 'assets/images/passenger_car_visual.jpg',
+        assetImagePath: 'assets/images/force_urbania.jpg',
       ),
       _VehicleCategoryItem(
-        title: 'Winger',
-        capacity: '9 seater',
-        rate: 'Route Estimate',
-        eta: 'Scheduled',
-        icon: Icons.directions_bus_rounded,
-        category: VehicleCategoryType.rides,
-        assetImagePath: 'assets/images/passenger_car_visual.jpg',
-      ),
-      _VehicleCategoryItem(
-        title: 'Mini / Compact',
-        capacity: '4 seater',
+        title: 'Mini / Commercial',
+        capacity: '3-4 seater',
         rate: 'Route Estimate',
         eta: 'Instant',
-        icon: Icons.directions_car_rounded,
+        icon: Icons.local_shipping_outlined,
         category: VehicleCategoryType.rides,
-        assetImagePath: 'assets/images/sedan_green_white.png',
-      ),
-      _VehicleCategoryItem(
-        title: 'Sedan',
-        capacity: '4 seater',
-        rate: 'Route Estimate',
-        eta: 'Instant',
-        icon: Icons.airport_shuttle_rounded,
-        category: VehicleCategoryType.rides,
-        assetImagePath: 'assets/images/sedan_green_white.png',
-      ),
-      _VehicleCategoryItem(
-        title: 'SUV / Scorpio N',
-        capacity: '6-7 seater',
-        rate: 'Route Estimate',
-        eta: 'Instant',
-        icon: Icons.directions_car_filled_rounded,
-        category: VehicleCategoryType.premium,
-        assetImagePath: 'assets/images/suv_green_white.png',
+        assetImagePath: 'assets/images/mini_commercial.jpg',
       ),
     ];
 
@@ -1246,7 +1300,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
           height: 130,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            itemCount: 3,
+            itemCount: items.length,
             separatorBuilder: (_, __) => const SizedBox(width: 12),
             itemBuilder: (context, index) {
               final item = items[index];
@@ -1254,7 +1308,9 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                 item: item,
                 onTap: () {
                   ref.read(rideProvider.notifier).selectSector('passenger');
-                  ref.read(rideProvider.notifier).selectTier(item.title.toLowerCase());
+                  ref
+                      .read(rideProvider.notifier)
+                      .selectTier(item.title.toLowerCase());
                   context.push('/ride-booking');
                 },
               );
@@ -1268,22 +1324,13 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
   Widget _buildLogisticsSection(BuildContext context) {
     const items = [
       _VehicleCategoryItem(
-        title: '3-Wheeler',
-        capacity: 'Up to 300 kg',
-        rate: 'Server Rate',
-        eta: 'On-demand',
-        icon: Icons.electric_rickshaw_rounded,
-        category: VehicleCategoryType.auto,
-        assetImagePath: 'assets/images/auto_green_white.png',
-      ),
-      _VehicleCategoryItem(
-        title: 'Piaggio Ape',
+        title: 'Mini / Commercial',
         capacity: 'Up to 500 kg',
         rate: 'Server Rate',
         eta: 'On-demand',
         icon: Icons.local_shipping_outlined,
         category: VehicleCategoryType.logistics,
-        assetImagePath: 'assets/images/piaggio_ape_yellow.png',
+        assetImagePath: 'assets/images/mini_commercial.jpg',
       ),
       _VehicleCategoryItem(
         title: 'Tata Magic',
@@ -1292,16 +1339,25 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'On-demand',
         icon: Icons.local_shipping_rounded,
         category: VehicleCategoryType.logistics,
-        assetImagePath: 'assets/images/piaggio_magic_blue.png',
+        assetImagePath: 'assets/images/tata_magic_cream.png',
       ),
       _VehicleCategoryItem(
-        title: '207 Cargo',
-        capacity: 'Up to 1200 kg',
+        title: '207 Cargo Normal',
+        capacity: 'Up to 1000 kg',
         rate: 'Server Rate',
         eta: 'On-demand',
         icon: Icons.local_shipping_rounded,
         category: VehicleCategoryType.logistics,
-        assetImagePath: 'assets/images/mahindra_207_white.png',
+        assetImagePath: 'assets/images/cargo_207_normal.png',
+      ),
+      _VehicleCategoryItem(
+        title: '207 Cargo Heavy',
+        capacity: 'Up to 1500 kg',
+        rate: 'Server Rate',
+        eta: 'On-demand',
+        icon: Icons.local_shipping_rounded,
+        category: VehicleCategoryType.logistics,
+        assetImagePath: 'assets/images/cargo_207_heavy.png',
       ),
       _VehicleCategoryItem(
         title: '407 Cargo',
@@ -1310,16 +1366,34 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'On-demand',
         icon: Icons.directions_bus_outlined,
         category: VehicleCategoryType.logistics,
-        assetImagePath: 'assets/images/tata_407_beige.png',
+        assetImagePath: 'assets/images/cargo_407.jpg',
       ),
       _VehicleCategoryItem(
-        title: 'Mini Truck 1T',
+        title: 'Mini Truck',
         capacity: 'Up to 1000 kg',
         rate: 'Server Rate',
         eta: 'On-demand',
         icon: Icons.local_shipping_rounded,
         category: VehicleCategoryType.logistics,
-        assetImagePath: 'assets/images/tata_white_truck.png',
+        assetImagePath: 'assets/images/mini_truck.jpg',
+      ),
+      _VehicleCategoryItem(
+        title: 'E-Rickshaw Cargo',
+        capacity: 'Up to 300 kg',
+        rate: 'Server Rate',
+        eta: 'On-demand',
+        icon: Icons.electric_rickshaw_rounded,
+        category: VehicleCategoryType.logistics,
+        assetImagePath: 'assets/images/e_rickshaw_green_white.png',
+      ),
+      _VehicleCategoryItem(
+        title: 'Electric Tuk-Tuk',
+        capacity: 'Up to 350 kg',
+        rate: 'Server Rate',
+        eta: 'On-demand',
+        icon: Icons.electric_rickshaw_outlined,
+        category: VehicleCategoryType.logistics,
+        assetImagePath: 'assets/images/e_rickshaw_passenger.png',
       ),
     ];
 
@@ -1329,7 +1403,8 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         _buildSectionHeader(
           title: 'Logistics',
           subtitle: 'Move goods with muscle',
-          onSeeAll: () => _showSeeAllVehiclesModal(context, 'Logistics & Cargo', items),
+          onSeeAll: () =>
+              _showSeeAllVehiclesModal(context, 'Logistics & Cargo', items),
         ),
         const SizedBox(height: 12),
         SizedBox(
@@ -1360,7 +1435,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Priority',
         icon: Icons.medical_services_rounded,
         category: VehicleCategoryType.emergency,
-        assetImagePath: 'assets/images/ambulance_visual.jpg',
+        assetImagePath: 'assets/images/ambulance_van.png',
       ),
       _VehicleCategoryItem(
         title: 'Towing Van',
@@ -1369,7 +1444,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Priority',
         icon: Icons.car_repair_rounded,
         category: VehicleCategoryType.emergency,
-        assetImagePath: 'assets/images/towing_van_green.png',
+        assetImagePath: 'assets/images/towing_van.jpg',
       ),
       _VehicleCategoryItem(
         title: 'JCB / Excavator',
@@ -1378,7 +1453,34 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Scheduled',
         icon: Icons.agriculture_rounded,
         category: VehicleCategoryType.logistics,
-        assetImagePath: 'assets/images/flatbed_towing_truck.png',
+        assetImagePath: 'assets/images/jcb_excavator.jpg',
+      ),
+      _VehicleCategoryItem(
+        title: 'Road Roller',
+        capacity: 'Road & Soil Compaction',
+        rate: 'Trip-Based',
+        eta: 'Scheduled',
+        icon: Icons.construction_rounded,
+        category: VehicleCategoryType.logistics,
+        assetImagePath: 'assets/images/road_roller.jpg',
+      ),
+      _VehicleCategoryItem(
+        title: 'Crane',
+        capacity: 'Heavy Lifting',
+        rate: 'Trip-Based',
+        eta: 'Scheduled',
+        icon: Icons.precision_manufacturing_rounded,
+        category: VehicleCategoryType.logistics,
+        assetImagePath: 'assets/images/crane_truck.png',
+      ),
+      _VehicleCategoryItem(
+        title: 'Garbage Truck',
+        capacity: 'Waste Collection',
+        rate: 'Trip-Based',
+        eta: 'Scheduled',
+        icon: Icons.delete_outline_rounded,
+        category: VehicleCategoryType.logistics,
+        assetImagePath: 'assets/images/garbage_dump_truck.png',
       ),
       _VehicleCategoryItem(
         title: 'Roadside Assist',
@@ -1387,7 +1489,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Priority',
         icon: Icons.build_rounded,
         category: VehicleCategoryType.emergency,
-        assetImagePath: 'assets/images/towing_van_green.png',
+        assetImagePath: 'assets/images/towing_van.jpg',
       ),
     ];
 
@@ -1428,32 +1530,39 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
   Widget _buildConciergeFleetSection(BuildContext context) {
     const luxuryVehicles = [
       _LuxuryVehicleItem(
-        title: 'Scorpio N',
-        badge: 'Rugged SUV',
-        subtitle: 'The Big Daddy of SUVs',
+        title: 'Innova Crysta',
+        badge: 'Executive',
+        subtitle: 'Flagship comfort & space',
         price: 'Chauffeur + Fuel',
-        assetImagePath: 'assets/images/scorpio_n_black.png',
+        assetImagePath: 'assets/images/innova_crysta.jpg',
       ),
       _LuxuryVehicleItem(
-        title: 'Mahindra Thar',
-        badge: 'Off-road',
-        subtitle: 'Iconic 4x4 legend',
+        title: 'Force Traveller',
+        badge: 'Luxury Van',
+        subtitle: 'VIP group executive transit',
         price: 'Chauffeur + Fuel',
-        assetImagePath: 'assets/images/thar_visual.webp',
+        assetImagePath: 'assets/images/force_urbania.jpg',
       ),
       _LuxuryVehicleItem(
         title: 'Toyota Fortuner',
-        badge: 'Executive',
-        subtitle: 'Commanding presence',
+        badge: 'Executive SUV',
+        subtitle: 'Commanding road presence',
         price: 'Chauffeur + Fuel',
         assetImagePath: 'assets/images/fortuner_visual.jpg',
       ),
       _LuxuryVehicleItem(
-        title: 'BMW / Mercedes SUV',
-        badge: 'VIP Luxury',
-        subtitle: 'Flagship luxury suite',
+        title: 'Scorpio N',
+        badge: 'Rugged SUV',
+        subtitle: 'The Big Daddy of SUVs',
         price: 'Chauffeur + Fuel',
-        assetImagePath: 'assets/images/bmw_visual.webp',
+        assetImagePath: 'assets/images/scorpio_n_white.png',
+      ),
+      _LuxuryVehicleItem(
+        title: 'Mahindra Thar',
+        badge: 'Off-road 4x4',
+        subtitle: 'Iconic all-terrain adventure',
+        price: 'Chauffeur + Fuel',
+        assetImagePath: 'assets/images/thar_visual.webp',
       ),
     ];
 
@@ -1567,7 +1676,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                         item.assetImagePath!,
                         width: 52,
                         height: 52,
-                        fit: BoxFit.cover,
+                        fit: BoxFit.contain,
                       )
                     : const VehicleCategoryVisual(
                         category: VehicleCategoryType.premium,
@@ -1751,6 +1860,8 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
             Text(
               item.capacity,
               style: const TextStyle(fontSize: 11, color: textSecondary),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),

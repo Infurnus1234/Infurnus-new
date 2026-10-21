@@ -56,6 +56,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
   int _selectedRating = 5;
   String _selectedPaymentMethod = 'wallet';
   bool _isProcessingPayment = false;
+  bool _isSubmittingBooking = false;
   // ignore: unused_field
   bool _isLoadingFleet = true;
   List<FleetVehicleModel> _fleetVehicles = [];
@@ -390,6 +391,8 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
   }
 
   void _handleBooking() async {
+    if (_isSubmittingBooking) return;
+
     final pickupText = _pickupController.text.trim();
     final destText = _destinationController.text.trim();
 
@@ -400,42 +403,50 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
       return;
     }
 
-    final rideState = ref.read(rideProvider);
-    if (rideState.pickupCoords == null) {
-      final success = await ref
-          .read(rideProvider.notifier)
-          .geocodeAndSetPickup(pickupText);
-      if (!success && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Could not locate pickup "$pickupText". Please check the address.',
+    setState(() => _isSubmittingBooking = true);
+
+    try {
+      final rideState = ref.read(rideProvider);
+      if (rideState.pickupCoords == null) {
+        final success = await ref
+            .read(rideProvider.notifier)
+            .geocodeAndSetPickup(pickupText);
+        if (!success && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Could not locate pickup "$pickupText". Please check the address.',
+              ),
+              backgroundColor: serviceRed,
             ),
-            backgroundColor: serviceRed,
-          ),
-        );
-        return;
+          );
+          return;
+        }
+      }
+
+      if (ref.read(rideProvider).destinationCoords == null) {
+        final success = await ref
+            .read(rideProvider.notifier)
+            .geocodeAndSetDestination(destText);
+        if (!success && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Could not locate destination "$destText". Please check the address.',
+              ),
+              backgroundColor: serviceRed,
+            ),
+          );
+          return;
+        }
+      }
+
+      await ref.read(rideProvider.notifier).requestRide();
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmittingBooking = false);
       }
     }
-
-    if (ref.read(rideProvider).destinationCoords == null) {
-      final success = await ref
-          .read(rideProvider.notifier)
-          .geocodeAndSetDestination(destText);
-      if (!success && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Could not locate destination "$destText". Please check the address.',
-            ),
-            backgroundColor: serviceRed,
-          ),
-        );
-        return;
-      }
-    }
-
-    ref.read(rideProvider.notifier).requestRide();
   }
 
   String _getFuelNoticeText(RideState state) {
@@ -662,7 +673,11 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
       appBar: AppBar(
         title: const Text(
           'Book a Ride',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
         ),
         backgroundColor: const Color(0xFF032213),
         foregroundColor: Colors.white,
@@ -790,6 +805,18 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Bottom Sheet Drag Handle
+        Center(
+          child: Container(
+            width: 38,
+            height: 4,
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFD1D5DB),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ),
         if (state.errorMessage != null) _buildErrorBanner(state.errorMessage!),
 
         // Route Inputs
@@ -798,37 +825,8 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
           RouteDistanceSummary(route: state.currentRoute!),
         const SizedBox(height: 12),
 
-        // Established Sector Fleet Display
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              '${state.selectedSector[0].toUpperCase()}${state.selectedSector.substring(1)} Fleet',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-                color: textWhite,
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: cardElevated,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: borderCard),
-              ),
-              child: Text(
-                state.selectedSector.toUpperCase(),
-                style: const TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.8,
-                  color: textGray,
-                ),
-              ),
-            ),
-          ],
-        ),
+        // Sector Switcher Tabs
+        _buildSectorPills(state),
         const SizedBox(height: 12),
 
         // Vehicle Category Cards
@@ -1026,7 +1024,11 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.payments_outlined, size: 16, color: Color(0xFF16A34A)),
+                  Icon(
+                    Icons.payments_outlined,
+                    size: 16,
+                    color: Color(0xFF16A34A),
+                  ),
                   SizedBox(width: 6),
                   Text(
                     'Cash',
@@ -1037,7 +1039,11 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                     ),
                   ),
                   SizedBox(width: 4),
-                  Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: Color(0xFF6B7280)),
+                  Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    size: 16,
+                    color: Color(0xFF6B7280),
+                  ),
                 ],
               ),
             ),
@@ -1052,7 +1058,11 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.local_offer_outlined, size: 16, color: Color(0xFF16A34A)),
+                  Icon(
+                    Icons.local_offer_outlined,
+                    size: 16,
+                    color: Color(0xFF16A34A),
+                  ),
                   SizedBox(width: 6),
                   Text(
                     'Apply Coupon',
@@ -1069,51 +1079,8 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
         ),
         const SizedBox(height: 16),
 
-        // Confirm CTA - Black Pill Button
-        if (state.errorMessage != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-              state.errorMessage!,
-              style: const TextStyle(color: textGray),
-            ),
-          ),
-        SizedBox(
-          width: double.infinity,
-          height: 52,
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.black,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(26),
-              ),
-            ),
-            onPressed: state.isEstimatingFare ? null : _handleBooking,
-            child: state.isEstimatingFare
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Confirm Booking',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      SizedBox(width: 8),
-                      Icon(Icons.arrow_forward_rounded, size: 18, color: Colors.white),
-                    ],
-                  ),
-          ),
-        ),
+        // Confirm CTA Button (Handles All Dynamic Route/Fare/Debounce States)
+        _buildConfirmButton(state),
       ],
     );
   }
@@ -1242,99 +1209,252 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
     );
   }
 
-  Widget _buildVehicleTierCards(RideState state) {
-    final tiers = [
-      {
-        'name': 'Bike',
-        'price': '₹35-60',
-        'icon': Icons.two_wheeler_rounded,
-        'category': 'bike',
-        'image': 'assets/images/bike_rider_green_white.png',
-      },
-      {
-        'name': 'Auto',
-        'price': '₹60-100',
-        'icon': Icons.electric_rickshaw_rounded,
-        'category': 'auto',
-        'image': 'assets/images/auto_green_white.png',
-      },
-      {
-        'name': 'Sedan',
-        'price': '₹120-200',
-        'icon': Icons.directions_car_rounded,
-        'category': 'sedan',
-        'image': 'assets/images/sedan_green_white.png',
-      },
-      {
-        'name': 'SUV',
-        'price': '₹200-350',
-        'icon': Icons.directions_car_filled_rounded,
-        'category': 'suv',
-        'image': 'assets/images/scorpio_n_black.png',
-      },
+  List<Map<String, dynamic>> _getVehiclesForSector(String sector) {
+    switch (sector.toLowerCase()) {
+      case 'logistics':
+        return [
+          {
+            'name': 'Piaggio Ape',
+            'category': 'three_wheeler',
+            'capacity': 'Up to 500 kg',
+            'icon': Icons.electric_rickshaw_rounded,
+            'image': 'assets/images/mini_commercial.jpg',
+          },
+          {
+            'name': 'Tata Magic',
+            'category': 'mini_truck',
+            'capacity': 'Up to 750 kg',
+            'icon': Icons.local_shipping_rounded,
+            'image': 'assets/images/tata_magic_cream.png',
+          },
+          {
+            'name': '207 Normal',
+            'category': 'cargo_207',
+            'capacity': 'Up to 1000 kg',
+            'icon': Icons.local_shipping_rounded,
+            'image': 'assets/images/cargo_207_normal.png',
+          },
+          {
+            'name': '207 Heavy',
+            'category': 'cargo_207_heavy',
+            'capacity': 'Up to 1200 kg',
+            'icon': Icons.local_shipping_rounded,
+            'image': 'assets/images/cargo_207_heavy.png',
+          },
+          {
+            'name': '407 Cargo',
+            'category': 'tata_407',
+            'capacity': 'Up to 2500 kg',
+            'icon': Icons.local_shipping_rounded,
+            'image': 'assets/images/cargo_407.jpg',
+          },
+          {
+            'name': 'Mini Truck',
+            'category': 'mini_truck',
+            'capacity': 'Up to 2000 kg',
+            'icon': Icons.local_shipping_rounded,
+            'image': 'assets/images/mini_truck.jpg',
+          },
+          {
+            'name': 'E-Rickshaw Cargo',
+            'category': 'e_rickshaw',
+            'capacity': 'Up to 400 kg',
+            'icon': Icons.electric_rickshaw_rounded,
+            'image': 'assets/images/e_rickshaw_green_white.png',
+          },
+        ];
+      case 'service':
+        return [
+          {
+            'name': 'Ambulance',
+            'category': 'ambulance',
+            'capacity': 'Emergency',
+            'icon': Icons.medical_services_rounded,
+            'image': 'assets/images/ambulance_van.png',
+          },
+          {
+            'name': 'Towing Van',
+            'category': 'towing',
+            'capacity': 'Breakdown',
+            'icon': Icons.car_repair_rounded,
+            'image': 'assets/images/towing_van.jpg',
+          },
+          {
+            'name': 'JCB Excavator',
+            'category': 'jcb',
+            'capacity': 'Construction',
+            'icon': Icons.construction_rounded,
+            'image': 'assets/images/jcb_excavator.jpg',
+          },
+          {
+            'name': 'Road Roller',
+            'category': 'road_roller',
+            'capacity': 'Compaction',
+            'icon': Icons.construction_rounded,
+            'image': 'assets/images/road_roller.jpg',
+          },
+          {
+            'name': 'Crane',
+            'category': 'crane',
+            'capacity': 'Heavy Lift',
+            'icon': Icons.precision_manufacturing_rounded,
+            'image': 'assets/images/crane_truck.png',
+          },
+          {
+            'name': 'Garbage Truck',
+            'category': 'garbage',
+            'capacity': 'Waste Disposal',
+            'icon': Icons.delete_outline_rounded,
+            'image': 'assets/images/garbage_dump_truck.png',
+          },
+        ];
+      case 'premium':
+      case 'rental':
+      case 'rentals':
+        return [
+          {
+            'name': 'Scorpio N',
+            'category': 'scorpio',
+            'capacity': 'Rugged SUV',
+            'icon': Icons.directions_car_filled_rounded,
+            'image': 'assets/images/scorpio_n_white.png',
+          },
+          {
+            'name': 'Mahindra Thar',
+            'category': 'thar',
+            'capacity': 'Off-road 4x4',
+            'icon': Icons.terrain_rounded,
+            'image': 'assets/images/thar_visual.webp',
+          },
+          {
+            'name': 'Innova Crysta',
+            'category': 'innova',
+            'capacity': 'Executive 7S',
+            'icon': Icons.airport_shuttle_rounded,
+            'image': 'assets/images/innova_crysta.jpg',
+          },
+          {
+            'name': 'Force Urbania',
+            'category': 'traveller',
+            'capacity': 'Executive Van',
+            'icon': Icons.airport_shuttle_rounded,
+            'image': 'assets/images/force_urbania.jpg',
+          },
+        ];
+      case 'passenger':
+      default:
+        return [
+          {
+            'name': 'Bike',
+            'category': 'bike',
+            'capacity': '1 rider',
+            'icon': Icons.two_wheeler_rounded,
+            'image': 'assets/images/bike_motorcycle.png',
+          },
+          {
+            'name': 'Auto',
+            'category': 'auto',
+            'capacity': '3 seats',
+            'icon': Icons.electric_rickshaw_rounded,
+            'image': 'assets/images/auto_rickshaw.png',
+          },
+          {
+            'name': 'Hatchback',
+            'category': 'hatchback',
+            'capacity': '4 seats',
+            'icon': Icons.directions_car_rounded,
+            'image': 'assets/images/hatchback.jpg',
+          },
+          {
+            'name': 'Sedan',
+            'category': 'sedan',
+            'capacity': '4 seats',
+            'icon': Icons.directions_car_rounded,
+            'image': 'assets/images/sedan.jpg',
+          },
+          {
+            'name': 'SUV',
+            'category': 'suv',
+            'capacity': '6 seats',
+            'icon': Icons.directions_car_filled_rounded,
+            'image': 'assets/images/scorpio_n_white.png',
+          },
+          {
+            'name': 'Innova Crysta',
+            'category': 'innova',
+            'capacity': '7 seats',
+            'icon': Icons.airport_shuttle_rounded,
+            'image': 'assets/images/innova_crysta.jpg',
+          },
+          {
+            'name': 'Winger',
+            'category': 'winger',
+            'capacity': '9-12 seats',
+            'icon': Icons.directions_bus_rounded,
+            'image': 'assets/images/winger.jpg',
+          },
+          {
+            'name': 'Mini Commercial',
+            'category': 'mini_commercial',
+            'capacity': '3-4 seats',
+            'icon': Icons.local_shipping_outlined,
+            'image': 'assets/images/mini_commercial.jpg',
+          },
+        ];
+    }
+  }
+
+  Widget _buildSectorPills(RideState state) {
+    final sectors = [
+      {'id': 'passenger', 'label': 'Rides', 'icon': Icons.directions_car_rounded},
+      {'id': 'logistics', 'label': 'Logistics', 'icon': Icons.local_shipping_rounded},
+      {'id': 'service', 'label': 'Emergency', 'icon': Icons.emergency_rounded},
+      {'id': 'premium', 'label': 'Rentals', 'icon': Icons.stars_rounded},
     ];
 
     return SizedBox(
-      height: 98,
+      height: 38,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        itemCount: tiers.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemCount: sectors.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
-          final tier = tiers[index];
-          final isSelected = state.selectedTier == tier['category'] ||
-              (state.selectedTier.isEmpty && tier['name'] == 'Auto');
-
+          final sec = sectors[index];
+          final isSelected = state.selectedSector == sec['id'];
           return GestureDetector(
             onTap: () {
-              ref
-                  .read(rideProvider.notifier)
-                  .selectTier(tier['category'] as String);
+              ref.read(rideProvider.notifier).selectSector(sec['id'] as String);
+              final sectorVehicles = _getVehiclesForSector(sec['id'] as String);
+              if (sectorVehicles.isNotEmpty) {
+                ref
+                    .read(rideProvider.notifier)
+                    .selectTier(sectorVehicles.first['category'] as String);
+              }
             },
             child: Container(
-              width: 82,
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color: isSelected ? const Color(0xFFF0FDF4) : Colors.white,
-                borderRadius: BorderRadius.circular(14),
+                color: isSelected ? const Color(0xFF111827) : Colors.white,
+                borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: isSelected
-                      ? const Color(0xFF16A34A)
-                      : const Color(0xFFE5E7EB),
-                  width: isSelected ? 1.5 : 1,
+                  color: isSelected ? const Color(0xFF111827) : const Color(0xFFE5E7EB),
                 ),
               ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Image.asset(
-                    tier['image'] as String,
-                    height: 28,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => Icon(
-                      tier['icon'] as IconData,
-                      size: 26,
-                      color: const Color(0xFF111827),
-                    ),
+                  Icon(
+                    sec['icon'] as IconData,
+                    size: 16,
+                    color: isSelected ? const Color(0xFF16A34A) : const Color(0xFF4B5563),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(width: 6),
                   Text(
-                    tier['name'] as String,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF111827),
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    tier['price'] as String,
+                    sec['label'] as String,
                     style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: isSelected
-                          ? const Color(0xFF16A34A)
-                          : const Color(0xFF6B7280),
+                      fontSize: 12,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                      color: isSelected ? Colors.white : const Color(0xFF111827),
                     ),
                   ),
                 ],
@@ -1346,22 +1466,400 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
     );
   }
 
+  Widget _buildVehicleTierCards(RideState state) {
+    final tiers = _getVehiclesForSector(state.selectedSector);
+    final hasLocations = state.pickupCoords != null &&
+        state.destinationCoords != null &&
+        _pickupController.text.trim().isNotEmpty &&
+        _destinationController.text.trim().isNotEmpty;
+
+    return SizedBox(
+      height: 104,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: tiers.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          final tier = tiers[index];
+          final category = tier['category'] as String;
+          final isSelected = state.selectedTier == category ||
+              (state.selectedTier.isEmpty && index == 0);
+
+          String badgeText;
+          if (!hasLocations) {
+            badgeText = tier['capacity'] as String;
+          } else if (isSelected) {
+            if (state.isEstimatingFare) {
+              badgeText = 'Calculating...';
+            } else if (state.fareEstimate != null) {
+              badgeText = state.fareEstimate!.displayFare;
+            } else if (state.errorMessage != null) {
+              badgeText = 'Retry';
+            } else {
+              badgeText = tier['capacity'] as String;
+            }
+          } else {
+            badgeText = tier['capacity'] as String;
+          }
+
+          return GestureDetector(
+            onTap: () {
+              ref.read(rideProvider.notifier).selectTier(category);
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 100,
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+              decoration: BoxDecoration(
+                color: isSelected ? const Color(0xFFF0FDF4) : Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: isSelected
+                      ? const Color(0xFF16A34A)
+                      : const Color(0xFFE5E7EB),
+                  width: isSelected ? 2 : 1,
+                ),
+                boxShadow: isSelected
+                    ? [
+                        BoxShadow(
+                          color: const Color(0xFF16A34A).withValues(alpha: 0.15),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: tier['image'] != null
+                        ? Image.asset(
+                            tier['image'] as String,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) => Icon(
+                              tier['icon'] as IconData,
+                              size: 26,
+                              color: const Color(0xFF111827),
+                            ),
+                          )
+                        : Icon(
+                            tier['icon'] as IconData,
+                            size: 26,
+                            color: const Color(0xFF111827),
+                          ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    tier['name'] as String,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF111827),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      badgeText,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: isSelected && state.fareEstimate != null
+                            ? FontWeight.bold
+                            : FontWeight.w600,
+                        color: isSelected && state.fareEstimate != null
+                            ? const Color(0xFF16A34A)
+                            : (isSelected ? const Color(0xFF111827) : const Color(0xFF6B7280)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildConfirmButton(RideState state) {
+    final hasLocations = state.pickupCoords != null &&
+        state.destinationCoords != null &&
+        _pickupController.text.trim().isNotEmpty &&
+        _destinationController.text.trim().isNotEmpty;
+
+    final vehicles = _getVehiclesForSector(state.selectedSector);
+    final selectedVehicle = vehicles.firstWhere(
+      (v) => v['category'] == state.selectedTier,
+      orElse: () => vehicles.isNotEmpty ? vehicles.first : {'name': 'Ride'},
+    );
+    final vehicleName = selectedVehicle['name'] as String;
+
+    if (!hasLocations) {
+      return SizedBox(
+        width: double.infinity,
+        height: 52,
+        child: ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFE5E7EB),
+            foregroundColor: const Color(0xFF9CA3AF),
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(26),
+            ),
+          ),
+          onPressed: null,
+          child: const Text(
+            'Select Destination to View Fares',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (state.isEstimatingFare) {
+      return SizedBox(
+        width: double.infinity,
+        height: 52,
+        child: ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF111827),
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(26),
+            ),
+          ),
+          onPressed: null,
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Color(0xFF16A34A),
+                ),
+              ),
+              SizedBox(width: 12),
+              Text(
+                'Calculating Live Route Fare...',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (state.errorMessage != null && state.fareEstimate == null) {
+      return SizedBox(
+        width: double.infinity,
+        height: 52,
+        child: ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFDC2626),
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(26),
+            ),
+          ),
+          icon: const Icon(Icons.refresh_rounded, size: 20),
+          label: const Text(
+            'Retry Fare Calculation',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          onPressed: () => ref.read(rideProvider.notifier).estimateRouteFare(),
+        ),
+      );
+    }
+
+    final fareText = state.fareEstimate?.displayFare ??
+        (state.fare != null ? '₹${state.fare!.toStringAsFixed(2)}' : '');
+    final buttonTitle = fareText.isNotEmpty
+        ? 'Book $vehicleName • $fareText'
+        : 'Book $vehicleName';
+
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _isSubmittingBooking
+              ? const Color(0xFF4B5563)
+              : const Color(0xFF111827),
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(26),
+          ),
+        ),
+        onPressed: _isSubmittingBooking ? null : _handleBooking,
+        child: _isSubmittingBooking
+            ? const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                  Text(
+                    'Confirming Booking...',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    buttonTitle,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 18,
+                    color: Color(0xFF16A34A),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
   // ignore: unused_element
   String _getVehicleImagePath(FleetVehicleModel vehicle) {
     final cat = vehicle.category.toLowerCase();
     final name = vehicle.displayName.toLowerCase();
-    if (cat.contains('bike') || name.contains('bike')) return 'assets/images/bike_rider_green_white.png';
-    if (cat.contains('auto') || name.contains('auto')) return 'assets/images/auto_green_white.png';
-    if (cat.contains('e_rickshaw') || name.contains('rickshaw') || name.contains('e-rickshaw')) return 'assets/images/e_rickshaw_green_white.png';
-    if (cat.contains('sedan') || name.contains('sedan')) return 'assets/images/sedan_green_white.png';
-    if (cat.contains('suv') || name.contains('suv') || name.contains('fortuner') || name.contains('thar')) return 'assets/images/suv_green_white.png';
-    if (cat.contains('scorpio')) return 'assets/images/scorpio_n_black.png';
-    if (cat.contains('towing') || name.contains('towing')) return 'assets/images/towing_van_green.png';
-    if (cat.contains('ambulance')) return 'assets/images/ambulance_visual.jpg';
-    if (cat.contains('ape') || name.contains('ape')) return 'assets/images/piaggio_ape_yellow.png';
-    if (cat.contains('tata') || cat.contains('407') || name.contains('407')) return 'assets/images/tata_407_beige.png';
-    if (cat.contains('207') || name.contains('207')) return 'assets/images/mahindra_207_white.png';
-    return 'assets/images/passenger_car_visual.jpg';
+    if (cat.contains('jcb') ||
+        name.contains('jcb') ||
+        cat.contains('excavator') ||
+        name.contains('excavator')) {
+      return 'assets/images/jcb_excavator.jpg';
+    }
+    if (cat.contains('roller') || name.contains('roller')) {
+      return 'assets/images/road_roller.jpg';
+    }
+    if (cat.contains('crane') || name.contains('crane')) {
+      return 'assets/images/crane_truck.png';
+    }
+    if (cat.contains('garbage') ||
+        name.contains('garbage') ||
+        cat.contains('dump') ||
+        name.contains('dump')) {
+      return 'assets/images/garbage_dump_truck.png';
+    }
+    if (cat.contains('tuk') || name.contains('tuk')) {
+      return 'assets/images/e_rickshaw_passenger.png';
+    }
+    if (cat.contains('e_rickshaw') ||
+        name.contains('rickshaw') ||
+        name.contains('e-rickshaw')) {
+      return 'assets/images/e_rickshaw_green_white.png';
+    }
+    if (cat.contains('bike') || name.contains('bike')) {
+      return 'assets/images/bike_motorcycle.png';
+    }
+    if (cat.contains('auto') || name.contains('auto')) {
+      return 'assets/images/auto_rickshaw.png';
+    }
+    if (cat.contains('hatchback') ||
+        name.contains('hatchback') ||
+        cat.contains('baleno') ||
+        name.contains('baleno')) {
+      return 'assets/images/hatchback.jpg';
+    }
+    if (cat.contains('sedan') || name.contains('sedan')) {
+      return 'assets/images/sedan.jpg';
+    }
+    if (cat.contains('innova') || name.contains('innova')) {
+      return 'assets/images/innova_crysta.jpg';
+    }
+    if (cat.contains('scorpio') || name.contains('scorpio')) {
+      return 'assets/images/scorpio_n_white.png';
+    }
+    if (cat.contains('thar') || name.contains('thar')) {
+      return 'assets/images/thar_visual.webp';
+    }
+    if (cat.contains('fortuner') || name.contains('fortuner')) {
+      return 'assets/images/fortuner_visual.jpg';
+    }
+    if (cat.contains('suv') || name.contains('suv')) {
+      return 'assets/images/scorpio_n_white.png';
+    }
+    if (cat.contains('winger') || name.contains('winger')) {
+      return 'assets/images/winger.jpg';
+    }
+    if (cat.contains('traveller') ||
+        name.contains('traveller') ||
+        cat.contains('urbania') ||
+        name.contains('urbania')) {
+      return 'assets/images/force_urbania.jpg';
+    }
+    if (cat.contains('towing') ||
+        name.contains('towing') ||
+        cat.contains('roadside') ||
+        name.contains('roadside')) {
+      return 'assets/images/towing_van.jpg';
+    }
+    if (cat.contains('ambulance') || name.contains('ambulance')) {
+      return 'assets/images/ambulance_van.png';
+    }
+    if (cat.contains('mini truck') ||
+        name.contains('mini truck') ||
+        cat.contains('mini_truck') ||
+        name.contains('mini_truck')) {
+      return 'assets/images/mini_truck.jpg';
+    }
+    if (cat.contains('ape') ||
+        name.contains('ape') ||
+        cat.contains('commercial') ||
+        name.contains('commercial')) {
+      return 'assets/images/mini_commercial.jpg';
+    }
+    if (cat.contains('magic') || name.contains('magic')) {
+      return 'assets/images/tata_magic_cream.png';
+    }
+    if ((cat.contains('207') || name.contains('207')) &&
+        (cat.contains('heavy') || name.contains('heavy'))) {
+      return 'assets/images/cargo_207_heavy.png';
+    }
+    if (cat.contains('207') || name.contains('207')) {
+      return 'assets/images/cargo_207_normal.png';
+    }
+    if (cat.contains('407') || name.contains('407')) {
+      return 'assets/images/cargo_407.jpg';
+    }
+    return 'assets/images/sedan.jpg';
   }
 
   // ignore: unused_element
@@ -1383,8 +1881,11 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
     if (cat.contains('towing') || name.contains('towing')) {
       return Icons.car_repair_rounded;
     }
-    if (cat.contains('jcb') || name.contains('jcb')) {
-      return Icons.agriculture_rounded;
+    if (cat.contains('jcb') ||
+        name.contains('jcb') ||
+        cat.contains('roller') ||
+        name.contains('roller')) {
+      return Icons.construction_rounded;
     }
     if (cat.contains('thar') || name.contains('thar')) {
       return Icons.terrain_rounded;
@@ -1535,7 +2036,8 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                     Text(
                       driver?.name.isNotEmpty == true
                           ? driver!.name
-                          : (state.driverName ?? 'Assigned Driver'),
+                          : (state.driverName ??
+                              'Matching driver details from fleet server...'),
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
@@ -1578,7 +2080,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                       vehicle != null && vehicle.make.isNotEmpty
                           ? '${vehicle.make} ${vehicle.model} • ${vehicle.plateNumber}'
                           : (state.vehicleInfo ??
-                                'Vehicle details pending assignment'),
+                                'Vehicle details pending assignment from fleet...'),
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 12,
@@ -1590,13 +2092,15 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
               ),
               IconButton(
                 icon: const Icon(Icons.phone_rounded, color: brandGreen),
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Calling ${driver?.name ?? "driver"}...'),
-                    ),
-                  );
-                },
+                onPressed: (driver?.phone != null && driver!.phone!.isNotEmpty)
+                    ? () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Calling ${driver.name}...'),
+                          ),
+                        );
+                      }
+                    : null,
               ),
             ],
           ),

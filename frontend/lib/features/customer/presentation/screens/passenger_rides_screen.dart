@@ -8,7 +8,8 @@ class PassengerRidesScreen extends ConsumerStatefulWidget {
   const PassengerRidesScreen({super.key});
 
   @override
-  ConsumerState<PassengerRidesScreen> createState() => _PassengerRidesScreenState();
+  ConsumerState<PassengerRidesScreen> createState() =>
+      _PassengerRidesScreenState();
 }
 
 class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
@@ -22,8 +23,9 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
       'category': 'bike',
       'filter': 'Bike',
       'subtitle': '1 rider • Fast & affordable',
-      'price': '₹35-60',
-      'image': 'assets/images/bike_rider_green_white.png',
+      'capacity': '1 rider',
+      'price': 'Route estimate',
+      'image': 'assets/images/bike_motorcycle.png',
       'fallbackIcon': Icons.two_wheeler_rounded,
     },
     {
@@ -31,8 +33,9 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
       'category': 'auto',
       'filter': 'Auto',
       'subtitle': '3 seater • Everyday travel',
-      'price': '₹60-100',
-      'image': 'assets/images/auto_green_white.png',
+      'capacity': '3 seats',
+      'price': 'Route estimate',
+      'image': 'assets/images/auto_rickshaw.png',
       'fallbackIcon': Icons.electric_rickshaw_rounded,
     },
     {
@@ -40,8 +43,9 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
       'category': 'e-rickshaw',
       'filter': 'E-Rickshaw',
       'subtitle': '4 seater • Eco-friendly',
-      'price': '₹50-90',
-      'image': 'assets/images/e_rickshaw_green_white.png',
+      'capacity': '4 seats',
+      'price': 'Route estimate',
+      'image': 'assets/images/e_rickshaw_passenger.png',
       'fallbackIcon': Icons.electric_rickshaw_rounded,
     },
     {
@@ -49,8 +53,9 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
       'category': 'hatchback',
       'filter': 'Car',
       'subtitle': '4 seater • Compact & comfortable',
-      'price': '₹120-180',
-      'image': 'assets/images/sedan_green_white.png',
+      'capacity': '4 seats',
+      'price': 'Route estimate',
+      'image': 'assets/images/hatchback.jpg',
       'fallbackIcon': Icons.directions_car_filled_rounded,
     },
     {
@@ -58,27 +63,50 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
       'category': 'sedan',
       'filter': 'Car',
       'subtitle': '4 seater • Premium comfort',
-      'price': '₹150-220',
-      'image': 'assets/images/sedan_green_white.png',
+      'capacity': '4 seats',
+      'price': 'Route estimate',
+      'image': 'assets/images/sedan.jpg',
       'fallbackIcon': Icons.directions_car_rounded,
     },
     {
-      'title': 'SUV / Scorpio N',
-      'category': 'suv',
+      'title': 'Innova Crysta',
+      'category': 'innova',
       'filter': 'Car',
-      'subtitle': '6-7 seater • Spacious & powerful',
-      'price': '₹200-350',
-      'image': 'assets/images/scorpio_n_black.png',
-      'fallbackIcon': Icons.directions_car_rounded,
+      'subtitle': '6-7 seater • Spacious & luxurious',
+      'capacity': '6-7 seats',
+      'price': 'Route estimate',
+      'image': 'assets/images/innova_crysta.jpg',
+      'fallbackIcon': Icons.directions_car_filled_rounded,
+    },
+    {
+      'title': 'Winger',
+      'category': 'winger',
+      'filter': 'Car',
+      'subtitle': '9-12 seater • Executive group transit',
+      'capacity': '9-12 seats',
+      'price': 'Route estimate',
+      'image': 'assets/images/winger.jpg',
+      'fallbackIcon': Icons.directions_bus_rounded,
     },
     {
       'title': 'Force Traveller',
       'category': 'traveller',
       'filter': 'Car',
       'subtitle': '12 seater • Group travel',
-      'price': '₹400-700',
-      'image': 'assets/images/rental_visual.jpg',
+      'capacity': '12 seats',
+      'price': 'Route estimate',
+      'image': 'assets/images/force_urbania.jpg',
       'fallbackIcon': Icons.airport_shuttle_rounded,
+    },
+    {
+      'title': 'Mini / Commercial',
+      'category': 'mini_commercial',
+      'filter': 'Car',
+      'subtitle': '3-4 seater • City passenger commercial',
+      'capacity': '3-4 seats',
+      'price': 'Route estimate',
+      'image': 'assets/images/mini_commercial.jpg',
+      'fallbackIcon': Icons.local_shipping_outlined,
     },
   ];
 
@@ -133,12 +161,19 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                   return GestureDetector(
                     onTap: () => setState(() => _selectedFilter = filter),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
-                        color: isSelected ? const Color(0xFF16A34A) : Colors.white,
+                        color: isSelected
+                            ? const Color(0xFF16A34A)
+                            : Colors.white,
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: isSelected ? const Color(0xFF16A34A) : const Color(0xFFE5E7EB),
+                          color: isSelected
+                              ? const Color(0xFF16A34A)
+                              : const Color(0xFFE5E7EB),
                         ),
                       ),
                       child: Center(
@@ -147,7 +182,9 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: isSelected ? Colors.white : const Color(0xFF374151),
+                            color: isSelected
+                                ? Colors.white
+                                : const Color(0xFF374151),
                           ),
                         ),
                       ),
@@ -172,10 +209,15 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                 return GestureDetector(
                   onTap: () {
                     ref.read(rideProvider.notifier).selectSector('passenger');
-                    ref.read(rideProvider.notifier).selectTier(vehicle['category']);
+                    ref
+                        .read(rideProvider.notifier)
+                        .selectTier(vehicle['category']);
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
                     decoration: BoxDecoration(
                       color: isSelected ? const Color(0xFFF0FDF4) : Colors.white,
                       borderRadius: BorderRadius.circular(16),
@@ -226,12 +268,16 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                             children: [
                               Row(
                                 children: [
-                                  Text(
-                                    vehicle['title'],
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.bold,
-                                      color: isSelected ? const Color(0xFF15803D) : const Color(0xFF111827),
+                                  Flexible(
+                                    child: Text(
+                                      vehicle['title'],
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                        color: isSelected ? const Color(0xFF15803D) : const Color(0xFF111827),
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                   if (isSelected) ...[
@@ -269,22 +315,27 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                         ),
                         const SizedBox(width: 8),
 
-                        // Price and Chevron with fixed width to prevent clipping
-                        SizedBox(
-                          width: 80,
+                        // Price and Selection / Chevron
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(minWidth: 70, maxWidth: 95),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(
-                                vehicle['price'],
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: isSelected ? const Color(0xFF16A34A) : const Color(0xFF111827),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerRight,
+                                child: Text(
+                                  isSelected && rideState.fareEstimate != null
+                                      ? rideState.fareEstimate!.displayFare
+                                      : (vehicle['price'] as String),
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
+                                    color: isSelected ? const Color(0xFF16A34A) : const Color(0xFF111827),
+                                    letterSpacing: -0.2,
+                                  ),
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.visible,
                               ),
                               const SizedBox(height: 4),
                               Icon(
@@ -338,7 +389,9 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        'Book ${selectedVehicle['title']} (${selectedVehicle['price']})',
+                        rideState.fareEstimate != null
+                            ? 'Book ${selectedVehicle['title']} • ${rideState.fareEstimate!.displayFare}'
+                            : 'Select ${selectedVehicle['title']} & Set Route',
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,

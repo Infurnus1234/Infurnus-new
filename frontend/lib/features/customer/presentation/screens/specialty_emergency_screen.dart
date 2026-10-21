@@ -8,10 +8,12 @@ class SpecialtyEmergencyScreen extends ConsumerStatefulWidget {
   const SpecialtyEmergencyScreen({super.key});
 
   @override
-  ConsumerState<SpecialtyEmergencyScreen> createState() => _SpecialtyEmergencyScreenState();
+  ConsumerState<SpecialtyEmergencyScreen> createState() =>
+      _SpecialtyEmergencyScreenState();
 }
 
-class _SpecialtyEmergencyScreenState extends ConsumerState<SpecialtyEmergencyScreen> {
+class _SpecialtyEmergencyScreenState
+    extends ConsumerState<SpecialtyEmergencyScreen> {
   String _selectedFilter = 'All';
 
   final List<String> _filters = ['All', 'Emergency', 'Construction', 'Support'];
@@ -22,7 +24,7 @@ class _SpecialtyEmergencyScreenState extends ConsumerState<SpecialtyEmergencyScr
       'category': 'ambulance',
       'filter': 'Emergency',
       'subtitle': 'Patient + Medical Triage • Trip-Based',
-      'image': 'assets/images/ambulance_visual.jpg',
+      'image': 'assets/images/ambulance_van.png',
       'fallbackIcon': Icons.medical_services_rounded,
     },
     {
@@ -30,15 +32,23 @@ class _SpecialtyEmergencyScreenState extends ConsumerState<SpecialtyEmergencyScr
       'category': 'towing',
       'filter': 'Emergency',
       'subtitle': 'Breakdown Assistance • Trip-Based',
-      'image': 'assets/images/towing_van_green.png',
-      'fallbackIcon': Icons.fire_truck_rounded,
+      'image': 'assets/images/towing_van.jpg',
+      'fallbackIcon': Icons.car_repair_rounded,
     },
     {
       'title': 'JCB / Excavator',
       'category': 'jcb',
       'filter': 'Construction',
       'subtitle': 'Specialty Excavation • Trip-Based',
-      'image': 'assets/images/flatbed_towing_truck.png',
+      'image': 'assets/images/jcb_excavator.jpg',
+      'fallbackIcon': Icons.construction_rounded,
+    },
+    {
+      'title': 'Road Roller',
+      'category': 'road_roller',
+      'filter': 'Construction',
+      'subtitle': 'Road & Soil Compaction • Shift-Based',
+      'image': 'assets/images/road_roller.jpg',
       'fallbackIcon': Icons.construction_rounded,
     },
     {
@@ -46,15 +56,31 @@ class _SpecialtyEmergencyScreenState extends ConsumerState<SpecialtyEmergencyScr
       'category': 'crane',
       'filter': 'Construction',
       'subtitle': 'Heavy Lifting • Trip-Based',
-      'image': 'assets/images/tata_407_beige.png',
+      'image': 'assets/images/crane_truck.png',
       'fallbackIcon': Icons.precision_manufacturing_rounded,
+    },
+    {
+      'title': 'Garbage Truck',
+      'category': 'garbage',
+      'filter': 'Support',
+      'subtitle': 'Waste Collection & Transport • Trip-Based',
+      'image': 'assets/images/garbage_dump_truck.png',
+      'fallbackIcon': Icons.delete_outline_rounded,
+    },
+    {
+      'title': 'Fire Truck',
+      'category': 'fire_truck',
+      'filter': 'Emergency',
+      'subtitle': 'Emergency Firefighting & Rescue • Priority',
+      'image': null,
+      'fallbackIcon': Icons.fire_truck_rounded,
     },
     {
       'title': 'Roadside Assist',
       'category': 'roadside_assist',
       'filter': 'Support',
       'subtitle': 'Tire / Battery Support • Trip-Based',
-      'image': 'assets/images/towing_van_green.png',
+      'image': 'assets/images/towing_van.jpg',
       'fallbackIcon': Icons.home_repair_service_rounded,
     },
   ];
@@ -102,12 +128,19 @@ class _SpecialtyEmergencyScreenState extends ConsumerState<SpecialtyEmergencyScr
                   return GestureDetector(
                     onTap: () => setState(() => _selectedFilter = filter),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
-                        color: isSelected ? const Color(0xFF16A34A) : Colors.white,
+                        color: isSelected
+                            ? const Color(0xFF16A34A)
+                            : Colors.white,
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: isSelected ? const Color(0xFF16A34A) : const Color(0xFFE5E7EB),
+                          color: isSelected
+                              ? const Color(0xFF16A34A)
+                              : const Color(0xFFE5E7EB),
                         ),
                       ),
                       child: Center(
@@ -116,7 +149,9 @@ class _SpecialtyEmergencyScreenState extends ConsumerState<SpecialtyEmergencyScr
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: isSelected ? Colors.white : const Color(0xFF374151),
+                            color: isSelected
+                                ? Colors.white
+                                : const Color(0xFF374151),
                           ),
                         ),
                       ),
@@ -139,11 +174,16 @@ class _SpecialtyEmergencyScreenState extends ConsumerState<SpecialtyEmergencyScr
                 return GestureDetector(
                   onTap: () {
                     ref.read(rideProvider.notifier).selectSector('service');
-                    ref.read(rideProvider.notifier).selectTier(item['category']);
+                    ref
+                        .read(rideProvider.notifier)
+                        .selectTier(item['category']);
                     context.push('/ride-booking');
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
@@ -168,15 +208,21 @@ class _SpecialtyEmergencyScreenState extends ConsumerState<SpecialtyEmergencyScr
                           ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(10),
-                            child: Image.asset(
-                              item['image'],
-                              fit: BoxFit.contain,
-                              errorBuilder: (_, __, ___) => Icon(
-                                item['fallbackIcon'] as IconData,
-                                size: 30,
-                                color: const Color(0xFFDC2626),
-                              ),
-                            ),
+                            child: item['image'] != null
+                                ? Image.asset(
+                                    item['image'] as String,
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (_, __, ___) => Icon(
+                                      item['fallbackIcon'] as IconData,
+                                      size: 30,
+                                      color: const Color(0xFFDC2626),
+                                    ),
+                                  )
+                                : Icon(
+                                    item['fallbackIcon'] as IconData,
+                                    size: 30,
+                                    color: const Color(0xFFDC2626),
+                                  ),
                           ),
                         ),
                         const SizedBox(width: 14),
@@ -193,6 +239,8 @@ class _SpecialtyEmergencyScreenState extends ConsumerState<SpecialtyEmergencyScr
                                   fontWeight: FontWeight.bold,
                                   color: Color(0xFF111827),
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: 4),
                               Text(
@@ -201,6 +249,8 @@ class _SpecialtyEmergencyScreenState extends ConsumerState<SpecialtyEmergencyScr
                                   fontSize: 12,
                                   color: Color(0xFF6B7280),
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ],
                           ),

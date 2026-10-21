@@ -18,52 +18,68 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
 
   final List<Map<String, dynamic>> _vehicles = [
     {
-      'title': 'Scorpio N',
-      'category': 'scorpio_n',
-      'filter': 'SUV',
-      'subtitle': 'Rugged SUV • Chauffeur + Fuel',
-      'image': 'assets/images/scorpio_n_black.png',
-      'fallbackIcon': Icons.directions_car_filled_rounded,
-    },
-    {
-      'title': 'Mahindra Thar',
-      'category': 'thar',
-      'filter': 'Off-road',
-      'subtitle': 'Off-road • Chauffeur + Fuel',
-      'image': 'assets/images/thar_visual.webp',
-      'fallbackIcon': Icons.directions_car_filled_rounded,
-    },
-    {
       'title': 'Innova Crysta',
       'category': 'innova',
       'filter': 'Luxury',
       'subtitle': 'Executive • Chauffeur + Fuel',
-      'image': 'assets/images/sedan_green_white.png',
+      'image': 'assets/images/innova_crysta.jpg',
       'fallbackIcon': Icons.directions_car_rounded,
+    },
+    {
+      'title': 'Toyota Fortuner',
+      'category': 'fortuner',
+      'filter': 'SUV',
+      'subtitle': 'Commanding SUV • Chauffeur + Fuel',
+      'image': 'assets/images/fortuner_visual.jpg',
+      'fallbackIcon': Icons.directions_car_filled_rounded,
     },
     {
       'title': 'Force Traveller',
       'category': 'traveller',
       'filter': 'Vans',
-      'subtitle': '12 seater • Chauffeur + Fuel',
-      'image': 'assets/images/tata_white_truck.png',
+      'subtitle': '12 seater luxury van • Chauffeur + Fuel',
+      'image': 'assets/images/force_urbania.jpg',
       'fallbackIcon': Icons.airport_shuttle_rounded,
     },
     {
-      'title': 'Mercedes V-Class',
-      'category': 'mercedes_v_class',
-      'filter': 'Luxury',
-      'subtitle': 'Luxury Van • Chauffeur + Fuel',
-      'image': 'assets/images/bmw_visual.webp',
-      'fallbackIcon': Icons.airport_shuttle_rounded,
+      'title': 'Off-road SUV (Thar)',
+      'category': 'thar',
+      'filter': 'Off-road',
+      'subtitle': 'Rugged 4x4 • Chauffeur + Fuel',
+      'image': 'assets/images/thar_visual.webp',
+      'fallbackIcon': Icons.directions_car_filled_rounded,
+    },
+    {
+      'title': 'Scorpio N',
+      'category': 'scorpio_n',
+      'filter': 'SUV',
+      'subtitle': 'Rugged SUV • Chauffeur + Fuel',
+      'image': 'assets/images/scorpio_n_white.png',
+      'fallbackIcon': Icons.directions_car_filled_rounded,
     },
     {
       'title': 'Helicopter',
       'category': 'helicopter',
       'filter': 'Luxury',
       'subtitle': 'On-demand • Chauffeur + Pilot',
-      'image': 'assets/images/vehicle_fleet_banner.png',
+      'image': null,
+      'fallbackIcon': Icons.flight_takeoff_rounded,
+    },
+    {
+      'title': 'Charter Flight',
+      'category': 'charter_flight',
+      'filter': 'Luxury',
+      'subtitle': 'Private Aircraft • Crew Included',
+      'image': null,
       'fallbackIcon': Icons.flight_rounded,
+    },
+    {
+      'title': 'Yacht',
+      'category': 'yacht',
+      'filter': 'Luxury',
+      'subtitle': 'Luxury Cruise • Captain Included',
+      'image': null,
+      'fallbackIcon': Icons.directions_boat_rounded,
     },
   ];
 
@@ -110,12 +126,19 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                   return GestureDetector(
                     onTap: () => setState(() => _selectedFilter = filter),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
-                        color: isSelected ? const Color(0xFF16A34A) : Colors.white,
+                        color: isSelected
+                            ? const Color(0xFF16A34A)
+                            : Colors.white,
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
-                          color: isSelected ? const Color(0xFF16A34A) : const Color(0xFFE5E7EB),
+                          color: isSelected
+                              ? const Color(0xFF16A34A)
+                              : const Color(0xFFE5E7EB),
                         ),
                       ),
                       child: Center(
@@ -124,7 +147,9 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: isSelected ? Colors.white : const Color(0xFF374151),
+                            color: isSelected
+                                ? Colors.white
+                                : const Color(0xFF374151),
                           ),
                         ),
                       ),
@@ -147,11 +172,16 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                 return GestureDetector(
                   onTap: () {
                     ref.read(rideProvider.notifier).selectSector('premium');
-                    ref.read(rideProvider.notifier).selectTier(item['category']);
+                    ref
+                        .read(rideProvider.notifier)
+                        .selectTier(item['category']);
                     context.push('/ride-booking');
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
@@ -176,15 +206,21 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                           ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(10),
-                            child: Image.asset(
-                              item['image'],
-                              fit: BoxFit.contain,
-                              errorBuilder: (_, __, ___) => Icon(
-                                item['fallbackIcon'] as IconData,
-                                size: 30,
-                                color: const Color(0xFFCA8A04),
-                              ),
-                            ),
+                            child: item['image'] != null
+                                ? Image.asset(
+                                    item['image'] as String,
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (_, __, ___) => Icon(
+                                      item['fallbackIcon'] as IconData,
+                                      size: 30,
+                                      color: const Color(0xFFCA8A04),
+                                    ),
+                                  )
+                                : Icon(
+                                    item['fallbackIcon'] as IconData,
+                                    size: 30,
+                                    color: const Color(0xFFCA8A04),
+                                  ),
                           ),
                         ),
                         const SizedBox(width: 14),
@@ -201,6 +237,8 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                                   fontWeight: FontWeight.bold,
                                   color: Color(0xFF111827),
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: 4),
                               Text(
@@ -209,6 +247,8 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                                   fontSize: 12,
                                   color: Color(0xFF6B7280),
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ],
                           ),
