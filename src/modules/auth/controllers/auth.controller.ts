@@ -657,6 +657,39 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
     }
   }
 
+  async function devToken(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (process.env.NODE_ENV === 'production') {
+        res.status(403).json({
+          success: false,
+          error: { code: 'FORBIDDEN', message: 'Not available in production' },
+        });
+        return;
+      }
+      let userResult = await pool.query(
+        `SELECT id, role FROM users WHERE email = $1 AND deleted_at IS NULL LIMIT 1`,
+        ['developer@infurnus.local'],
+      );
+      let userId: string;
+      let role = 'customer';
+      if (userResult.rows.length === 0) {
+        const insertResult = await pool.query(
+          `INSERT INTO users (first_name, last_name, email, role, status, email_verified)
+           VALUES ('Developer', 'User', 'developer@infurnus.local', 'customer', 'active', true)
+           RETURNING id, role`,
+        );
+        userId = insertResult.rows[0].id;
+        role = insertResult.rows[0].role;
+      } else {
+        userId = userResult.rows[0].id;
+        role = userResult.rows[0].role;
+      }
+      await issueAuthentication(req, res, userId, role);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async function issueAuthentication(
     req: Request,
     res: Response,
@@ -732,6 +765,7 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
     logoutAll,
     listSessions,
     revokeSession,
+    devToken,
   };
 }
 
@@ -778,3 +812,5 @@ export const logoutAll = defaultAuthHandlers.logoutAll;
 export const listSessions = defaultAuthHandlers.listSessions;
 
 export const revokeSession = defaultAuthHandlers.revokeSession;
+
+export const devToken = defaultAuthHandlers.devToken;

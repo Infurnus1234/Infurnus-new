@@ -84,7 +84,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ref.read(userProvider.notifier).setUser(User(
             id: data['id'] as String? ?? user.id,
             firstName: data['firstName'] as String? ?? user.firstName,
-            lastName: data['lastName'] as String?,
+            lastName: (data['lastName'] as String?) ?? '',
             email: data['email'] as String?,
             phone: data['phone'] as String?,
             role: user.role,
