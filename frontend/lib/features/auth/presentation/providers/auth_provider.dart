@@ -6,6 +6,7 @@ import '../../../../core/services/socket_service.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/storage/secure_storage.dart';
 import '../../data/models/auth_models.dart';
+import '../../domain/entities/user.dart';
 import 'auth_use_case_providers.dart';
 import 'user_provider.dart';
 
@@ -296,23 +297,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(
         status: AuthStatus.unauthenticated,
         errorMessage: message,
-      );
-    } finally {
-      _isProcessing = false;
-    }
-  }
-
-  Future<void> devBypassLogin() async {
-    if (_isProcessing) return;
-    _isProcessing = true;
-    state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
-    try {
-      final response = await ref.read(dioProvider).post('/auth/dev-token');
-      await _handleAuthSuccess(AuthResponse.fromJson(response.data['data']));
-    } catch (e) {
-      state = state.copyWith(
-        status: AuthStatus.unauthenticated,
-        errorMessage: _parseError(e),
       );
     } finally {
       _isProcessing = false;
