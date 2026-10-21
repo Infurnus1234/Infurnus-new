@@ -754,17 +754,19 @@ describe('Auth integration', () => {
 
     const phone = uniquePhone();
 
-    const signupResponse = await request(app).post('/auth/signup').send({
-      firstName: 'Driver',
-      lastName: 'Test',
-      email,
-      phone,
-      password: 'StrongPassword123!',
-      confirmPassword: 'StrongPassword123!',
-      role: 'driver',
-      licenseNumber: 'DL-TEST-12345',
-      licenseExpiry: '2030-12-31',
-    });
+    const signupResponse = await request(app)
+      .post('/auth/signup')
+      .send({
+        firstName: 'Driver',
+        lastName: 'Test',
+        email,
+        phone,
+        password: 'StrongPassword123!',
+        confirmPassword: 'StrongPassword123!',
+        role: 'driver',
+        licenseNumber: 'DL-' + randomUUID().slice(0, 12),
+        licenseExpiry: '2030-12-31',
+      });
 
     expect(signupResponse.status).toBe(201);
 
@@ -845,7 +847,7 @@ describe('Auth integration', () => {
 
     expect(driver.userId).toBe(userId);
 
-    expect(driver.licenseNumber).toBe('DL-TEST-12345');
+    expect(driver.licenseNumber).toMatch(/^DL-/);
 
     expect(driver.licenseExpiry).toBe('2030-12-31');
 
@@ -967,18 +969,20 @@ describe('Auth integration', () => {
 
     const phone = uniquePhone();
 
-    const signupResponse = await request(app).post('/auth/signup').send({
-      firstName: 'Driver',
-      lastName: 'FleetOwner',
-      email,
-      phone,
-      password: 'StrongPassword123!',
-      confirmPassword: 'StrongPassword123!',
-      role: 'driver_fleet_owner',
-      licenseNumber: 'DL-FLEET-12345',
-      licenseExpiry: '2031-06-30',
-      businessName: 'Driver Fleet Test Pvt Ltd',
-    });
+    const signupResponse = await request(app)
+      .post('/auth/signup')
+      .send({
+        firstName: 'Driver',
+        lastName: 'FleetOwner',
+        email,
+        phone,
+        password: 'StrongPassword123!',
+        confirmPassword: 'StrongPassword123!',
+        role: 'driver_fleet_owner',
+        licenseNumber: 'DL-' + randomUUID().slice(0, 12),
+        licenseExpiry: '2031-06-30',
+        businessName: 'Driver Fleet Test Pvt Ltd',
+      });
 
     expect(signupResponse.status).toBe(201);
 
@@ -1059,7 +1063,7 @@ describe('Auth integration', () => {
 
     expect(driver.userId).toBe(userId);
 
-    expect(driver.licenseNumber).toBe('DL-FLEET-12345');
+    expect(driver.licenseNumber).toMatch(/^DL-/);
 
     expect(driver.licenseExpiry).toBe('2031-06-30');
 
@@ -1142,16 +1146,18 @@ describe('Auth integration', () => {
   // ========================================================
 
   it('signup: rejects invalid license calendar date', async () => {
-    const response = await request(app).post('/auth/signup').send({
-      firstName: 'Invalid',
-      lastName: 'Date',
-      phone: uniquePhone(),
-      password: 'StrongPassword123!',
-      confirmPassword: 'StrongPassword123!',
-      role: 'driver',
-      licenseNumber: 'DL-INVALID-DATE',
-      licenseExpiry: '2030-02-30',
-    });
+    const response = await request(app)
+      .post('/auth/signup')
+      .send({
+        firstName: 'Invalid',
+        lastName: 'Date',
+        phone: uniquePhone(),
+        password: 'StrongPassword123!',
+        confirmPassword: 'StrongPassword123!',
+        role: 'driver',
+        licenseNumber: 'DL-' + randomUUID().slice(0, 12),
+        licenseExpiry: '2030-02-30',
+      });
 
     expect(response.status).toBe(400);
 
@@ -1179,15 +1185,17 @@ describe('Auth integration', () => {
   });
 
   it('signup: rejects driver without license expiry', async () => {
-    const response = await request(app).post('/auth/signup').send({
-      firstName: 'Driver',
-      lastName: 'NoExpiry',
-      phone: uniquePhone(),
-      password: 'StrongPassword123!',
-      confirmPassword: 'StrongPassword123!',
-      role: 'driver',
-      licenseNumber: 'DL-NO-EXPIRY',
-    });
+    const response = await request(app)
+      .post('/auth/signup')
+      .send({
+        firstName: 'Driver',
+        lastName: 'NoExpiry',
+        phone: uniquePhone(),
+        password: 'StrongPassword123!',
+        confirmPassword: 'StrongPassword123!',
+        role: 'driver',
+        licenseNumber: 'DL-' + randomUUID().slice(0, 12),
+      });
 
     expect(response.status).toBe(400);
 

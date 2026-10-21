@@ -46,6 +46,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://infurnus@localhost:5434/infurnus
       NODE_ENV: test
+      FCM_AUDIT_DB_TESTS: 'true'
       RIDE_DB_TESTS: 'true'
       MAP_REDIS_TESTS: 'true'
       REDIS_DISPATCH_TESTS: 'true'
@@ -149,3 +150,46 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Setup Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+          cache: true
+      - name: Resolve locked dependencies
+        run: flutter pub get --enforce-lockfile
+      - name: Format changed Dart files
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [[ -z "$base" || "$base" == "0000000000000000000000000000000000000000" ]]; then
+            dart format --output=none --set-exit-if-changed lib test
+          else
+            git diff --name-only --diff-filter=ACMRTUXB "$base" "${{ github.sha }}" -- '*.dart' > /tmp/changed-dart
+            mapfile -t files < <(sed 's|^frontend/||' /tmp/changed-dart)
+            if ((${#files[@]})); then
+              dart format --output=none --set-exit-if-changed "${files[@]}"
+            fi
+          fi
+      - name: Static analysis
+        run: flutter analyze --no-pub
+      - name: Tests
+        run: flutter test --no-pub
+      - name: Web production build
+        run: flutter build web --release --no-pub
+      - name: Android test build
+        env:
+          INFURNUS_TEST_RELEASE_SIGNING: 'true'
+        run: flutter build apk --release --no-pub

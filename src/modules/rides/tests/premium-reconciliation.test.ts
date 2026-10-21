@@ -758,7 +758,7 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
 
       await repo.transition(ride.id, 'driver_arrived', driverProfileId);
 
-      await repo.transition(ride.id, 'in_progress', driverProfileId);
+      expect(await repo.verifyPinAttempt(ride.id, driverProfileId, ride.pin!)).toBe('verified');
 
       // 5. First GPS point
       const firstPoint = await repo.recordBreadcrumbAndAccumulateDistance(
@@ -1020,7 +1020,7 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
 
       await repo.transition(ride.id, 'driver_arrived', driverProfileId2);
 
-      await repo.transition(ride.id, 'in_progress', driverProfileId2);
+      expect(await repo.verifyPinAttempt(ride.id, driverProfileId2, ride.pin!)).toBe('verified');
 
       await pool.query(
         `UPDATE rides

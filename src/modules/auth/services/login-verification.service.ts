@@ -89,7 +89,7 @@ export class LoginVerificationService {
 
     const now = Date.now();
 
-    if (providerSession.expiresAt.getTime() <= now) {
+    if (providerSession.databaseExpired === true || providerSession.expiresAt.getTime() <= now) {
       throw new AppError('OTP_EXPIRED', 'OTP has expired', 400);
     }
 

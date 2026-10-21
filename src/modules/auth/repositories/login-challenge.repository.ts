@@ -173,6 +173,7 @@ export class PostgresLoginChallengeRepository implements LoginChallengeRepositor
             provider_expires_at AS "providerExpiresAt",
             expires_at AS "expiresAt",
             verified_at AS "verifiedAt",
+              (expires_at<=NOW() OR provider_expires_at<=NOW()) AS "databaseExpired",
             consumed_at AS "consumedAt"
           FROM login_challenges
           WHERE id = $1

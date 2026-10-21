@@ -1,3 +1,6 @@
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { pinVerifier, sealRidePin } from '../repositories/ride-pin.js';
 import { rideEvents } from '../events/ride.events.js';
 import { syntheticDispatchCity, syntheticDispatchAreas } from './dispatch-test-city.js';
 import { createServer } from 'node:http';
@@ -306,7 +309,8 @@ describeDatabase('ride PostgreSQL integration', () => {
       expect(user.totalDistance).toEqual({ meters: distance, source: 'booking' });
       expect(driver.totalDistance).toEqual(user.totalDistance);
       expect(user.pickup).toEqual(driver.pickup);
-      expect(user.drop).toEqual(driver.drop);
+      expect(user.drop).not.toBeNull();
+      expect(driver.drop).toBeNull();
       expect(driver.rideType).toBe(sector);
       expect(user.driverLocation).not.toBeNull();
       expect(user.routeStatus).toBe('not_requested');
@@ -432,6 +436,125 @@ describeDatabase('ride PostgreSQL integration', () => {
       }),
     ).rejects.toMatchObject({ code: 'RIDE_LOCATION_CONFLICT' });
   });
+  it('tracked backfill encrypts a legacy active PIN without changing the passenger code', async () => {
+    const id = fixture.rideIds[0]!;
+    await promisify(execFile)(
+      process.execPath,
+      ['node_modules/tsx/dist/cli.mjs', 'scripts/backfill-ride-pin-secrets.ts'],
+      { env: process.env },
+    );
+    const stored = (
+      await pool.query(
+        'SELECT pin,pin_ciphertext,pin_verifier,route_metadata FROM rides WHERE id=$1',
+        [id],
+      )
+    ).rows[0];
+    expect(stored.pin).toBeNull();
+    expect(stored.route_metadata.pin).toBeUndefined();
+    expect(stored.pin_ciphertext).toBeTruthy();
+    expect(stored.pin_verifier).toHaveLength(64);
+    expect((await repository.findByIdForCustomer(id, fixture.customerId))?.pin).toBe('7391');
+    const encrypted = stored.pin_ciphertext;
+    await promisify(execFile)(
+      process.execPath,
+      ['node_modules/tsx/dist/cli.mjs', 'scripts/backfill-ride-pin-secrets.ts'],
+      { env: process.env },
+    );
+    expect(
+      (await pool.query('SELECT pin_ciphertext FROM rides WHERE id=$1', [id])).rows[0]
+        .pin_ciphertext,
+    ).toBe(encrypted);
+  });
+  it('encrypts generated booking PINs and returns them only through the owning customer query', async () => {
+    const booked = await repository.create(fixture.customerId, {
+      pickup: { latitude: 12.97, longitude: 77.59 },
+      destination: { latitude: 12.98, longitude: 77.6 },
+      sector: 'passenger',
+      vehicleCategory: 'sedan',
+    });
+    fixture.rideIds.push(booked.id);
+    expect(booked.pin).toMatch(/^\d{4}$/);
+    const stored = (
+      await pool.query(
+        'SELECT pin,pin_ciphertext,pin_verifier,route_metadata FROM rides WHERE id=$1',
+        [booked.id],
+      )
+    ).rows[0];
+    expect(stored.pin).toBeNull();
+    expect(stored.route_metadata.pin).toBeUndefined();
+    expect(stored.pin_ciphertext).toBeTruthy();
+    expect(stored.pin_verifier).toHaveLength(64);
+    expect((await repository.findById(booked.id))?.pin).toBeNull();
+    expect((await repository.findByIdForCustomer(booked.id, fixture.customerId))?.pin).toBe(
+      booked.pin,
+    );
+    expect(await repository.findByIdForCustomer(booked.id, fixture.driverUserId)).toBeNull();
+  });
+  it('starts once with a leading-zero PIN, rejects replay and never leaks destination before verification', async () => {
+    await prepareMap();
+    const id = fixture.rideIds[0]!;
+    await pool.query(`UPDATE rides SET pin=NULL,pin_ciphertext=$2,pin_verifier=$3 WHERE id=$1`, [
+      id,
+      sealRidePin(id, '0007'),
+      pinVerifier(id, '0007'),
+    ]);
+    await service.transitionRide(id, 'driver_arriving', fixture.driverProfileId);
+    await service.transitionRide(id, 'driver_arrived', fixture.driverProfileId);
+    const m = mapService();
+    expect((await m.service.getDriverMap(fixture.driverUserId, id, true)).drop).toBeNull();
+    await expect(
+      service.transitionRide(id, 'in_progress', fixture.driverProfileId),
+    ).rejects.toMatchObject({ code: 'PIN_VERIFICATION_REQUIRED' });
+    await expect(
+      repository.transition(id, 'in_progress', fixture.driverProfileId),
+    ).rejects.toThrow();
+    expect(await repository.verifyPinAttempt(id, randomUUID(), '0007')).toBe('forbidden');
+    expect(await repository.verifyPinAttempt(id, fixture.driverProfileId, '9999')).toBe('invalid');
+    const results = await Promise.all([
+      repository.verifyPinAttempt(id, fixture.driverProfileId, '0007'),
+      repository.verifyPinAttempt(id, fixture.driverProfileId, '0007'),
+    ]);
+    expect(results.sort()).toEqual(['invalid_state', 'verified']);
+    const active = await repository.findById(id);
+    expect(active).toMatchObject({ status: 'in_progress', pinVerified: true, pin: null });
+    expect((await m.service.getDriverMap(fixture.driverUserId, id, true)).drop).not.toBeNull();
+    const stored = (
+      await pool.query('SELECT pin,pin_ciphertext,pin_verifier FROM rides WHERE id=$1', [id])
+    ).rows[0];
+    expect(stored).toEqual({ pin: null, pin_ciphertext: null, pin_verifier: null });
+    expect(await repository.verifyPinAttempt(id, fixture.driverProfileId, '0007')).toBe(
+      'invalid_state',
+    );
+  });
+  it('rechecks licence and vehicle approval at ride start after acceptance', async () => {
+    const id = fixture.rideIds[0]!;
+    await service.acceptRide(fixture.driverProfileId, id);
+    await service.transitionRide(id, 'driver_arriving', fixture.driverProfileId);
+    await service.transitionRide(id, 'driver_arrived', fixture.driverProfileId);
+    await pool.query("UPDATE driver_profiles SET verification_status='pending' WHERE id=$1", [
+      fixture.driverProfileId,
+    ]);
+    expect(await repository.verifyPinAttempt(id, fixture.driverProfileId, '7391')).toBe(
+      'forbidden',
+    );
+    expect((await repository.findById(id))?.status).toBe('driver_arrived');
+  });
+  it('persists PIN lockout and rejects cancellation/terminal verification', async () => {
+    await prepareMap();
+    const id = fixture.rideIds[0]!;
+    await service.transitionRide(id, 'driver_arriving', fixture.driverProfileId);
+    await service.transitionRide(id, 'driver_arrived', fixture.driverProfileId);
+    for (let i = 0; i < 4; i++)
+      expect(await repository.verifyPinAttempt(id, fixture.driverProfileId, '0000')).toBe(
+        'invalid',
+      );
+    expect(await repository.verifyPinAttempt(id, fixture.driverProfileId, '0000')).toBe('locked');
+    expect(await repository.verifyPinAttempt(id, fixture.driverProfileId, '7391')).toBe('locked');
+    await service.cancelRide(fixture.customerId, id, { reason: 'fixture' });
+    expect(await repository.verifyPinAttempt(id, fixture.driverProfileId, '7391')).toBe(
+      'invalid_state',
+    );
+  });
   it('uses driver-to-pickup before pickup and pickup-to-drop in progress without altering fare', async () => {
     await prepareMap();
     const m = mapService(),
@@ -446,14 +569,16 @@ describeDatabase('ride PostgreSQL integration', () => {
     );
     await service.transitionRide(id, 'driver_arriving', fixture.driverProfileId);
     await service.transitionRide(id, 'driver_arrived', fixture.driverProfileId);
-    await service.verifyRidePin(id, fixture.driverProfileId, '7391');
-    await service.transitionRide(id, 'in_progress', fixture.driverProfileId);
+    await service.transitionRide(id, 'in_progress', fixture.driverProfileId, '7391');
     const active = await m.service.getUserMap(fixture.customerId, id, true);
     expect(active.segment).toBe('destination');
     expect(active.pickupEta).toBeNull();
     expect(m.calls[1]).toEqual({
-      origin: { latitude: active.pickup.latitude, longitude: active.pickup.longitude },
-      target: { latitude: active.drop.latitude, longitude: active.drop.longitude },
+      origin: {
+        latitude: active.driverLocation!.latitude,
+        longitude: active.driverLocation!.longitude,
+      },
+      target: { latitude: active.drop!.latitude, longitude: active.drop!.longitude },
     });
     expect(active.fare.amount).toBe(106);
   });
@@ -661,8 +786,7 @@ describeDatabase('ride PostgreSQL integration', () => {
     const id = fixture.rideIds[0]!;
     await service.transitionRide(id, 'driver_arriving', fixture.driverProfileId);
     await service.transitionRide(id, 'driver_arrived', fixture.driverProfileId);
-    await service.verifyRidePin(id, fixture.driverProfileId, '7391');
-    await service.transitionRide(id, 'in_progress', fixture.driverProfileId);
+    await service.transitionRide(id, 'in_progress', fixture.driverProfileId, '7391');
     await service.completeRide(id, fixture.driverProfileId);
     const result = await mapService().service.getDriverMap(fixture.driverUserId, id, true);
     expect(result.fare.authority).toBe('final');

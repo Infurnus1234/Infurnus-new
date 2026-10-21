@@ -87,8 +87,44 @@ export function createProviderOperationsRouter(repository: PostgresProviderOpera
       next(error);
     }
   });
+  router.get('/onboarding', requireDriver(), async (req, res, next) => {
+    try {
+      res.json({
+        success: true,
+        data: await repository.onboarding(req.auth!.userId, req.auth!.role),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+  router.patch('/onboarding', requireDriver(), async (req, res, next) => {
+    try {
+      const input = z
+        .union([
+          z.object({ defer: z.string().min(1).max(80) }).strict(),
+          z.object({ resume: z.string().min(1).max(80) }).strict(),
+        ])
+        .parse(req.body);
+      res.json({
+        success: true,
+        data: await repository.onboarding(req.auth!.userId, req.auth!.role, input),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
   router.post('/approval-requests', async (req, res, next) => {
     try {
+      if (req.body?.requestType === 'onboarding_submission') {
+        z.object({ requestType: z.literal('onboarding_submission') })
+          .strict()
+          .parse(req.body);
+        res.json({
+          success: true,
+          data: await repository.onboarding(req.auth!.userId, req.auth!.role, { submit: true }),
+        });
+        return;
+      }
       if (
         req.auth!.role === 'driver_fleet_owner' &&
         req.headers['x-provider-mode'] === 'driver' &&
@@ -283,6 +319,7 @@ export function createProviderApprovalRouter(repository: PostgresProviderOperati
           required: z.boolean(),
           requiresExpiry: z.boolean(),
           minimumPages: z.number().int().min(1).max(5),
+          onboardingDeferrable: z.boolean().optional(),
           active: z.boolean(),
         })
         .strict()

@@ -21,7 +21,14 @@ export function freshRideLocation(location: LiveRideLocation | null, now = Date.
     ? { latitude: location.latitude, longitude: location.longitude, timestamp: location.timestamp }
     : null;
 }
-export function rideInformation(ride: Ride): RideInformation {
+export function driverDestinationAllowed(ride: Ride): boolean {
+  return (
+    !!ride.assignedDriverId &&
+    ride.pinVerified === true &&
+    ['in_progress', 'completed', 'cancelled'].includes(ride.status)
+  );
+}
+export function rideInformation(ride: Ride, includeDestination = true): RideInformation {
   const amount = (n: number | null | undefined) =>
     typeof n === 'number' && Number.isFinite(n) && n >= 0 ? n : null;
   const bookedAmount = amount(ride.fareEstimate),
@@ -53,7 +60,7 @@ export function rideInformation(ride: Ride): RideInformation {
             : 'unavailable',
     },
     pickup: { ...ride.pickup, address: ride.pickupAddress },
-    drop: { ...ride.destination, address: ride.destinationAddress },
+    drop: includeDestination ? { ...ride.destination, address: ride.destinationAddress } : null,
     rideType: ride.sector ?? 'passenger',
     vehicleCategory: ride.vehicleCategory ?? null,
     rideStatus: ride.status,

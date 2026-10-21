@@ -1,11 +1,21 @@
-import { rideInformation } from './ride-map-mapper.js';
+import { rideInformation, driverDestinationAllowed } from './ride-map-mapper.js';
 import type { RideInformation } from '../types/ride-map.js';
 import type { Ride } from '../types/ride.js';
 
 export type DriverSafeRide = Omit<
   Ride,
-  'fareEstimate' | 'finalFare' | 'actualFuelCost' | 'billing' | 'pin'
-> & { rideInformation: RideInformation };
+  | 'fareEstimate'
+  | 'finalFare'
+  | 'actualFuelCost'
+  | 'billing'
+  | 'pin'
+  | 'destination'
+  | 'destinationAddress'
+> & {
+  destination: Ride['destination'] | null;
+  destinationAddress: string | null;
+  rideInformation: RideInformation;
+};
 
 export function sanitizeRideForDriver(ride: Ride): DriverSafeRide {
   const {
@@ -14,7 +24,18 @@ export function sanitizeRideForDriver(ride: Ride): DriverSafeRide {
     actualFuelCost: _actualFuelCost,
     billing: _billing,
     pin: _pin,
+    destination,
+    destinationAddress,
     ...driverSafe
   } = ride;
-  return { ...driverSafe, rideInformation: rideInformation(ride) };
+  const reveal = driverDestinationAllowed(ride);
+  return {
+    ...driverSafe,
+    destination: reveal ? destination : null,
+    destinationAddress: reveal ? destinationAddress : null,
+    goods: reveal ? (ride.goods ?? null) : null,
+    serviceDetails: reveal ? (ride.serviceDetails ?? null) : null,
+    rentalDetails: reveal ? (ride.rentalDetails ?? null) : null,
+    rideInformation: rideInformation(ride, reveal),
+  };
 }

@@ -144,12 +144,13 @@ export class DriverController {
         throw new AppError('INVALID_PIN', 'PIN must be exactly 4 digits', 400);
       }
 
-      const result = await this.rideService.verifyRidePin(id, profileId, pin);
+      const ride = await this.rideService.transitionRide(id, 'in_progress', profileId, pin);
+      rideEvents.emit('ride:lifecycle_updated', ride);
 
       res.json({
         success: true,
-        data: result,
-        message: 'PIN verified successfully',
+        data: { verified: true, ride: sanitizeRideForDriver(ride) },
+        message: 'PIN verified and trip started',
       });
     } catch (error) {
       next(error);

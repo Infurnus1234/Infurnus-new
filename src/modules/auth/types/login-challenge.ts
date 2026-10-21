@@ -27,6 +27,7 @@ export interface CreateLoginChallengeData {
 // ============================================================
 
 export interface LoginChallengeProviderSession {
+  databaseExpired?: boolean;
   id: string;
 
   userId: string;

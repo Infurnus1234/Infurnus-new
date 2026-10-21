@@ -146,7 +146,8 @@ live('map PostGIS discovery and route locks', () => {
     );
     await rides.transition(ride.id, 'driver_arriving', profileId);
     await rides.transition(ride.id, 'driver_arrived', profileId);
-    await rides.transition(ride.id, 'in_progress', profileId);
+    const pin = (await rides.findByIdForCustomer(ride.id, userId))!.pin!;
+    expect(await rides.verifyPinAttempt(ride.id, profileId, pin)).toBe('verified');
     expect(
       await rides.updateRouteMetadata(ride.id, {
         ...route,
@@ -363,7 +364,9 @@ live('map PostGIS discovery and route locks', () => {
     expect((await remediateRouteContent(pool, [ride.id], true, true)).changed).toBe(1);
     const saved = (await pool.query('SELECT route_metadata FROM rides WHERE id=$1', [ride.id]))
       .rows[0].route_metadata;
-    const { route: removedRoute, etaSeconds: removedEta, ...retained } = business;
+    const { route: removedRoute, etaSeconds: removedEta, pin: consumedPin, ...retained } = business;
+    expect(consumedPin).toBe('7391');
+    expect(saved).not.toHaveProperty('pin');
     expect(removedRoute).toBeDefined();
     expect(removedEta).toBeDefined();
     expect(saved).toEqual(retained);

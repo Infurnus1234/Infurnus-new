@@ -30,6 +30,7 @@ describe('live GPS backend Socket.IO integration', () => {
       id: rideId,
       assignedDriverId: 'profile',
       status: 'in_progress',
+      pinVerified: true,
       sector: 'passenger',
       pickup: { latitude: 0, longitude: 0 },
       destination: { latitude: 0, longitude: 0.01 },
@@ -169,7 +170,10 @@ describe('live GPS backend Socket.IO integration', () => {
 
 it('publishes HTTP lifecycle navigation phases to authorized ride members only', async () => {
   const rideId = '11111111-1111-4111-8111-111111111111';
-  const repository = { isParticipant: vi.fn(async (id: string) => id === rideId) };
+  const repository = {
+    isParticipant: vi.fn(async (id: string) => id === rideId),
+    isAssignedDriver: vi.fn(async (id: string) => id === rideId),
+  };
   const http = createServer();
   const server = createSocketServer(http, {
     driverService: {} as DriverService,
@@ -213,7 +217,13 @@ it('publishes HTTP lifecycle navigation phases to authorized ride members only',
     const pickup = { latitude: 25.59, longitude: 85.13 },
       destination = { latitude: 25.62, longitude: 85.04 };
     for (const status of ['driver_arriving', 'driver_arrived', 'in_progress', 'completed']) {
-      rideEvents.emit('ride:lifecycle_updated', { id: rideId, status, pickup, destination });
+      rideEvents.emit('ride:lifecycle_updated', {
+        id: rideId,
+        status,
+        pickup,
+        destination,
+        pinVerified: ['in_progress', 'completed'].includes(status),
+      });
     }
     await vi.waitFor(() => expect(events).toHaveLength(4));
     expect(events.map((event) => event.segment)).toEqual(['pickup', 'pickup', 'destination', null]);

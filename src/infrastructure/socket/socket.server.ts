@@ -24,6 +24,7 @@ import { sanitizeRideForDriver } from '../../modules/rides/utils/ride-sanitizer.
 import type { MatchingService } from '../../modules/rides/services/matching.service.js';
 import { RideDispatchService } from '../../modules/rides/services/ride-dispatch.service.js';
 import { startRideDispatchQueue } from '../queue/ride-dispatch.queue.js';
+import type { NotificationType } from '../../modules/notifications/types/notification.types.js';
 
 export interface RideSocketDependencies {
   driverService: DriverService;
@@ -33,6 +34,8 @@ export interface RideSocketDependencies {
   matchingService?: MatchingService;
   dispatchResponseTimeoutMs?: number;
   authorizeAccount?: (userId: string, role: string) => Promise<void>;
+  notifyRideOffer?: (userId: string, ride: Ride, expiresAt: Date) => Promise<void>;
+  notifyRideUpdate?: (ride: Ride, type: NotificationType) => Promise<void>;
 }
 
 interface SocketAck {
@@ -112,6 +115,12 @@ export function createSocketServer(
                 return;
               }
               if (['driver', 'driver_fleet_owner'].includes(auth.role)) {
+                if (
+                  !(await rideDependencies.rideRepository.isAssignedDriver(ride.id, auth.userId))
+                ) {
+                  socket.leave(rideRoom(ride.id));
+                  return;
+                }
                 const safe = { ...payload, ride: sanitizeRideForDriver(ride) };
                 for (const key of ['pin', 'billing', 'finalFare', 'fareEstimate', 'actualFuelCost'])
                   delete (safe as Record<string, unknown>)[key];
@@ -131,6 +140,9 @@ export function createSocketServer(
               ride: sanitizeRideForDriver(ride),
               expiresAt: expiresAt.toISOString(),
             });
+            void rideDependencies
+              .notifyRideOffer?.(candidate.userId, ride, expiresAt)
+              .catch(() => console.warn('Ride offer push could not be queued'));
           },
           rideDependencies.dispatchResponseTimeoutMs,
         )
@@ -161,6 +173,9 @@ export function createSocketServer(
       vehicleCategory?: string | null;
     }) => {
       emitRide('ride:driver_assigned', ride as Ride, { ride });
+      void rideDependencies
+        .notifyRideUpdate?.(ride as Ride, 'ride.accepted')
+        .catch(() => console.warn('Ride assignment push could not be queued'));
       const sector = ride.sector || 'passenger';
       const category = ride.vehicleCategory;
       if (category) {
@@ -174,14 +189,32 @@ export function createSocketServer(
       rideDependencies.routeRecalculationService.clear(rideId);
       io.to(rideRoom(rideId)).emit('ride:cancelled', { rideId });
       io.to('drivers:available').emit('ride:cancelled', { rideId });
+      if (rideDependencies.notifyRideUpdate) {
+        void rideDependencies.rideRepository
+          .findById(rideId)
+          .then(async (ride) => {
+            if (ride) await rideDependencies.notifyRideUpdate!(ride, 'ride.cancelled');
+          })
+          .catch(() => console.warn('Ride cancellation push could not be queued'));
+      }
     };
 
     const onRideLifecycle = (ride: Ride) => {
+      const notificationTypes: Partial<Record<Ride['status'], NotificationType>> = {
+        driver_arrived: 'ride.driver_arrived',
+        in_progress: 'ride.started',
+        completed: 'ride.completed',
+      };
+      const notificationType = notificationTypes[ride.status];
+      if (notificationType)
+        void rideDependencies
+          .notifyRideUpdate?.(ride, notificationType)
+          .catch(() => console.warn('Ride status push could not be queued'));
       if (['completed', 'cancelled'].includes(ride.status))
         rideDependencies.routeRecalculationService.clear(ride.id);
       const segment = ['driver_assigned', 'driver_arriving', 'driver_arrived'].includes(ride.status)
         ? 'pickup'
-        : ride.status === 'in_progress'
+        : ride.status === 'in_progress' && ride.pinVerified === true
           ? 'destination'
           : null;
       emitRide('ride:lifecycle_updated', ride, {
@@ -273,7 +306,10 @@ export function createSocketServer(
             ['completed', 'cancelled'].includes(active.status)
           )
             return;
-          const segment = active.status === 'in_progress' ? 'destination' : 'pickup';
+          const segment =
+            active.status === 'in_progress' && active.pinVerified === true
+              ? 'destination'
+              : 'pickup';
           const target = segment === 'destination' ? active.destination : active.pickup;
           const previous =
             rideDependencies.routeRecalculationService.transientMetadata(ride.id) ??
@@ -307,14 +343,14 @@ export function createSocketServer(
           )
             return;
           if (next && (next.routeVersion ?? 0) !== (previous?.routeVersion ?? 0))
-            io.to(rideRoom(ride.id)).emit('ride:route_updated', {
+            emitRide('ride:route_updated', current, {
               rideId: ride.id,
               route: next.route,
               segment,
               routeVersion: next.routeVersion,
             });
           if (next?.segment === segment && next.etaSeconds !== undefined)
-            io.to(rideRoom(ride.id)).emit('ride:eta_updated', {
+            emitRide('ride:eta_updated', current, {
               rideId: ride.id,
               etaSeconds: next.etaSeconds,
               source: 'route_progress_estimate',

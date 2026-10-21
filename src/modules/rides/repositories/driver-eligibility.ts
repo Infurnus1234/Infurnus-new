@@ -3,6 +3,8 @@
 export function driverOperationalEligibilitySql(selectOwned = false) {
   return `u.status = 'active' AND u.deleted_at IS NULL
     AND u.role IN ('driver','driver_fleet_owner')
+    AND (NOT EXISTS(SELECT 1 FROM provider_onboarding ob WHERE ob.user_id=dp.user_id AND ob.receipt_id IS NOT NULL) OR EXISTS (
+      SELECT 1 FROM driver_documents ld WHERE ld.driver_profile_id=dp.id AND ld.document_type='driver_license' AND ld.verification_status='approved'))
     AND dp.verification_status = 'approved' AND dp.license_expiry >= CURRENT_DATE
     AND ${selectOwned ? '(v.driver_profile_id=dp.id OR (v.owner_id=dp.user_id AND v.driver_profile_id IS NULL))' : 'dp.active_vehicle_id = v.id AND v.driver_profile_id = dp.id'}
     AND v.is_active = TRUE AND v.verification_status = 'approved'

@@ -61,6 +61,11 @@ export interface DriverRepository {
   findActiveVehicleByUserId?(userId: string): Promise<{
     sector: string;
     category: string;
+    verificationStatus?: string;
+    operationalStatus?: string;
+    isActive?: boolean;
+    photoStorage?:
+      import('../../partners/types/partner-document.js').PartnerDocumentStorageMetadata | null;
   } | null>;
 
   findNearbyEligible(
@@ -110,6 +115,11 @@ export interface DriverRepository {
     color: string | null;
     sector: string;
     category: string;
+    verificationStatus?: string;
+    operationalStatus?: string;
+    isActive?: boolean;
+    photoStorage?:
+      import('../../partners/types/partner-document.js').PartnerDocumentStorageMetadata | null;
   } | null>;
 }
 
@@ -427,6 +437,11 @@ export class PostgresDriverRepository implements DriverRepository {
   async findActiveVehicleByUserId(userId: string): Promise<{
     sector: string;
     category: string;
+    verificationStatus?: string;
+    operationalStatus?: string;
+    isActive?: boolean;
+    photoStorage?:
+      import('../../partners/types/partner-document.js').PartnerDocumentStorageMetadata | null;
   } | null> {
     const result = await this.pool.query<{
       sector: string;
@@ -950,6 +965,11 @@ export class PostgresDriverRepository implements DriverRepository {
     color: string | null;
     sector: string;
     category: string;
+    verificationStatus?: string;
+    operationalStatus?: string;
+    isActive?: boolean;
+    photoStorage?:
+      import('../../partners/types/partner-document.js').PartnerDocumentStorageMetadata | null;
   } | null> {
     const result = await this.pool.query<{
       id: string;
@@ -967,14 +987,21 @@ export class PostgresDriverRepository implements DriverRepository {
          v.plate_number AS "plateNumber",
          v.color,
          v.sector,
-         v.category
+         v.category,
+         v.verification_status AS "verificationStatus",
+         v.operational_status AS "operationalStatus", v.is_active AS "isActive",
+         (SELECT d.metadata->'storage' FROM partner_documents d
+           JOIN partners p ON p.id=d.partner_id AND p.user_id=v.owner_id
+           WHERE d.vehicle_id=v.id AND d.document_type='OTHER'
+             AND d.metadata->>'documentCode'='vehicle_front_photo'
+             AND d.metadata->'storage'->>'mimeType' IN ('image/jpeg','image/png','image/webp')
+             AND d.status NOT IN ('REJECTED','EXPIRED')
+           ORDER BY d.updated_at DESC LIMIT 1) AS "photoStorage"
        FROM vehicles v
        JOIN driver_profiles dp
          ON dp.active_vehicle_id = v.id
         AND v.driver_profile_id = dp.id
        WHERE dp.id = $1
-         AND v.is_active = TRUE
-         AND v.verification_status = 'approved'
        LIMIT 1`,
       [driverProfileId],
     );

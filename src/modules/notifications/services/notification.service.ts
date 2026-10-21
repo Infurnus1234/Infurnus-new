@@ -68,6 +68,16 @@ export class NotificationService {
       await this.notificationRepository.findByIdempotencyKey(idempotencyKey);
 
     if (existingNotification) {
+      if (existingNotification.processingStatus === 'PENDING') {
+        await enqueueNotification({
+          notificationId: existingNotification.id,
+          userId: input.userId,
+          type: input.type,
+          title: input.title,
+          body: input.body,
+          ...(input.data ? { data: input.data } : {}),
+        });
+      }
       return existingNotification.id;
     }
 

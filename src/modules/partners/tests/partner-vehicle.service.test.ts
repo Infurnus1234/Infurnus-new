@@ -128,7 +128,7 @@ describe('PartnerVehicleService authorization and ownership matrix', () => {
     expect(fleet.listVehicles).not.toHaveBeenCalled();
   });
 
-  it('rejects an unapproved partner from vehicle management', async () => {
+  it('allows draft vehicle collection before approval but keeps restricted management guarded', async () => {
     const pendingPartner: Partner = {
       ...partner,
       approvalStatus: 'pending',
@@ -139,12 +139,12 @@ describe('PartnerVehicleService authorization and ownership matrix', () => {
 
     const service = new PartnerVehicleService(partnerRepo, fleet);
 
-    await expect(service.listVehicles(actor)).rejects.toMatchObject({
+    await expect(service.listVehicles(actor)).resolves.toEqual([]);
+    expect(fleet.listVehicles).toHaveBeenCalledWith(partner.userId);
+    await expect(service.deactivateVehicle(actor, vehicleId)).rejects.toMatchObject({
       code: 'PARTNER_NOT_APPROVED',
       statusCode: 403,
     });
-
-    expect(fleet.listVehicles).not.toHaveBeenCalled();
   });
 
   it('returns not found when deactivation finds no active vehicle', async () => {
