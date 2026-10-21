@@ -19,8 +19,12 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _lastNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
 
   bool _isEmail = false;
+  bool _obscurePassword = true;
+  bool _obscureConfirm = true;
   final String _selectedRole = 'customer';
   String? _validationError;
 
@@ -30,6 +34,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     _lastNameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -54,6 +60,19 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       return;
     }
 
+    final password = _passwordController.text;
+    final confirmPassword = _confirmPasswordController.text;
+
+    if (password.length < 8 || password.length > 128) {
+      setState(() => _validationError = 'Password must be 8\u2013128 characters.');
+      return;
+    }
+
+    if (password != confirmPassword) {
+      setState(() => _validationError = 'Passwords do not match');
+      return;
+    }
+
     String? email;
     String? phone;
 
@@ -69,6 +88,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       lastName: lastName,
       email: email,
       phone: phone,
+      password: password,
+      confirmPassword: confirmPassword,
       role: _selectedRole,
     );
 
@@ -243,6 +264,39 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     ),
                   ),
 
+                  const SizedBox(height: 12),
+
+                  // Password Fields
+                  _buildInputBox(
+                    controller: _passwordController,
+                    hint: 'Password',
+                    icon: Icons.lock_outline_rounded,
+                    obscureText: _obscurePassword,
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                        color: const Color(0xFF6B7280),
+                        size: 20,
+                      ),
+                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildInputBox(
+                    controller: _confirmPasswordController,
+                    hint: 'Confirm Password',
+                    icon: Icons.lock_outline_rounded,
+                    obscureText: _obscureConfirm,
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                        color: const Color(0xFF6B7280),
+                        size: 20,
+                      ),
+                      onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                    ),
+                  ),
+
                   const SizedBox(height: 20),
 
                   if (_validationError != null)
@@ -286,21 +340,14 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                               height: 22,
                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                             )
-                          : const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  'Sign Up',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                                SizedBox(width: 8),
-                                Icon(Icons.arrow_forward_rounded, size: 20, color: Colors.white),
-                              ],
+                          : const Text(
+                              'Sign Up   \u2192',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                                letterSpacing: 0.5,
+                              ),
                             ),
                     ),
                   ),
