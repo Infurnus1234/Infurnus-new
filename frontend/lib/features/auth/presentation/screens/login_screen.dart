@@ -45,199 +45,187 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final h = constraints.maxHeight;
+        child: Column(
+          children: [
+            // ── TOP: Dedicated compact promotional banner (Non-overlapping) ──
+            const SizedBox(
+              height: 145,
+              child: AuthHeroBanner(),
+            ),
 
-            return Stack(
-              children: [
-                // ── TOP: Promotional background image via Stack/Positioned ──
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: h * 0.54,
-                  child: const AuthHeroBanner(),
-                ),
-
-                // ── BOTTOM: White rounded login panel with controlled overlap ──
-                Positioned(
-                  top: h * 0.48,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Color(0x33000000),
-                          blurRadius: 20,
-                          offset: Offset(0, -4),
-                        ),
-                      ],
+            // ── BOTTOM: White rounded login panel positioned directly below ──
+            Expanded(
+              child: Container(
+                width: double.infinity,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Color(0x33000000),
+                      blurRadius: 18,
+                      offset: Offset(0, -4),
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  ],
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── Heading ──
+                    const Center(
+                      child: Text(
+                        'Log in or sign up',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF111827),
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                    ),
+
+                    // ── Phone / Email Input ──
+                    if (!_isEmailLogin) _buildPhoneInput() else _buildEmailInput(),
+
+                    // ── Checkbox row ──
+                    Row(
                       children: [
-                        // ── Heading ──
-                        const Center(
+                        SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: Checkbox(
+                            value: _rememberMe,
+                            activeColor: _green,
+                            checkColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(4)),
+                            side: const BorderSide(
+                                color: Color(0xFF00A859), width: 2),
+                            onChanged: (val) =>
+                                setState(() => _rememberMe = val ?? true),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Expanded(
                           child: Text(
-                            'Log in or sign up',
+                            'Remember my login for faster sign-in',
                             style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w900,
-                              color: Color(0xFF111827),
-                              letterSpacing: -0.3,
+                              fontSize: 12,
+                              color: Color(0xFF374151),
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ),
-
-                        // ── Phone / Email Input ──
-                        if (!_isEmailLogin) _buildPhoneInput() else _buildEmailInput(),
-
-                        // ── Checkbox row ──
-                        Row(
-                          children: [
-                            SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: Checkbox(
-                                value: _rememberMe,
-                                activeColor: _green,
-                                checkColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(4)),
-                                side: const BorderSide(
-                                    color: Color(0xFF00A859), width: 2),
-                                onChanged: (val) =>
-                                    setState(() => _rememberMe = val ?? true),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            const Expanded(
-                              child: Text(
-                                'Remember my login for faster sign-in',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Color(0xFF374151),
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                            GestureDetector(
-                              onTap: () =>
-                                  setState(() => _isEmailLogin = !_isEmailLogin),
-                              child: Text(
-                                _isEmailLogin ? 'Use Phone' : 'Use Email',
-                                style: const TextStyle(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.bold,
-                                  color: _green,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        // ── Continue Button ──
-                        _ContinueButton(
-                          isLoading: authState.status == AuthStatus.loading,
-                          onPressed: _handleContinue,
-                        ),
-
-                        // ── OR divider ──
-                        Row(
-                          children: [
-                            const Expanded(
-                                child: Divider(
-                                    color: Color(0xFFD1D5DB), thickness: 1)),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 10),
-                              child: Text(
-                                'OR',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.grey.shade400,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 1.0,
-                                ),
-                              ),
-                            ),
-                            const Expanded(
-                                child: Divider(
-                                    color: Color(0xFFD1D5DB), thickness: 1)),
-                          ],
-                        ),
-
-                        // ── Google Sign-In Button ──
-                        _GoogleButton(
-                          onPressed: () {
-                            ref
-                                .read(authProvider.notifier)
-                                .signInWithGoogle('dummy-google-token');
-                          },
-                        ),
-
-                        if (authState.errorMessage != null)
-                          Center(
-                            child: Text(
-                              authState.errorMessage!,
-                              style: const TextStyle(
-                                color: Colors.red,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-
-                        // ── Create account link ──
-                        Center(
-                          child: GestureDetector(
-                            onTap: () => context.push('/signup'),
-                            child: RichText(
-                              text: const TextSpan(
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF111827),
-                                ),
-                                children: [
-                                  TextSpan(text: 'Create a '),
-                                  TextSpan(
-                                    text: 'Customer',
-                                    style: TextStyle(color: _green),
-                                  ),
-                                  TextSpan(text: ' account'),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        // ── Legal disclaimer ──
-                        Center(
+                        GestureDetector(
+                          onTap: () =>
+                              setState(() => _isEmailLogin = !_isEmailLogin),
                           child: Text(
-                            'By continuing, you agree to our Terms of Service,\nPrivacy Policy & Content Policy',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 10.5,
-                              color: Colors.grey.shade400,
-                              height: 1.3,
+                            _isEmailLogin ? 'Use Phone' : 'Use Email',
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.bold,
+                              color: _green,
                             ),
                           ),
                         ),
                       ],
                     ),
-                  ),
+
+                    // ── Continue Button ──
+                    _ContinueButton(
+                      isLoading: authState.status == AuthStatus.loading,
+                      onPressed: _handleContinue,
+                    ),
+
+                    // ── OR divider ──
+                    Row(
+                      children: [
+                        const Expanded(
+                            child: Divider(
+                                color: Color(0xFFD1D5DB), thickness: 1)),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          child: Text(
+                            'OR',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade400,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 1.0,
+                            ),
+                          ),
+                        ),
+                        const Expanded(
+                            child: Divider(
+                                color: Color(0xFFD1D5DB), thickness: 1)),
+                      ],
+                    ),
+
+                    // ── Google Sign-In Button ──
+                    _GoogleButton(
+                      onPressed: () {
+                        ref
+                            .read(authProvider.notifier)
+                            .signInWithGoogle('dummy-google-token');
+                      },
+                    ),
+
+                    if (authState.errorMessage != null)
+                      Center(
+                        child: Text(
+                          authState.errorMessage!,
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+
+                    // ── Create account link ──
+                    Center(
+                      child: GestureDetector(
+                        onTap: () => context.push('/signup'),
+                        child: RichText(
+                          text: const TextSpan(
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF111827),
+                            ),
+                            children: [
+                              TextSpan(text: 'Create a '),
+                              TextSpan(
+                                text: 'Customer',
+                                style: TextStyle(color: _green),
+                              ),
+                              TextSpan(text: ' account'),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // ── Legal disclaimer ──
+                    Center(
+                      child: Text(
+                        'By continuing, you agree to our Terms of Service,\nPrivacy Policy & Content Policy',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          color: Colors.grey.shade400,
+                          height: 1.3,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            );
-          },
+              ),
+            ),
+          ],
         ),
       ),
     );
