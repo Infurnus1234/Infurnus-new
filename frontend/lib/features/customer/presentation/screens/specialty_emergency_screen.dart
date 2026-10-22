@@ -59,14 +59,7 @@ class _SpecialtyEmergencyScreenState
       'image': 'assets/images/crane_truck.png',
       'fallbackIcon': Icons.precision_manufacturing_rounded,
     },
-    {
-      'title': 'Garbage Truck',
-      'category': 'garbage',
-      'filter': 'Support',
-      'subtitle': 'Waste Collection & Transport • Trip-Based',
-      'image': 'assets/images/garbage_dump_truck.png',
-      'fallbackIcon': Icons.delete_outline_rounded,
-    },
+
     {
       'title': 'Fire Truck',
       'category': 'fire_truck',

@@ -9,9 +9,11 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/services/places_autocomplete_service.dart';
 import '../../../../core/services/geocoding_service.dart';
+import '../../../../shared/widgets/infurnus_empty_state.dart';
 import '../../../../shared/widgets/infurnus_skeleton.dart';
 import '../../data/models/ride_model.dart' as model;
 import '../providers/ride_provider.dart';
+import '../widgets/animated_vehicle_hero.dart';
 import '../widgets/vehicle_category_visual.dart';
 import '../../../auth/presentation/providers/user_provider.dart';
 
@@ -40,39 +42,30 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
   CancelToken? _searchCancelToken;
   List<PlaceSuggestion> _suggestions = [];
 
-  // ── PREMIUM DESIGN SYSTEM ──────────────────────────────────────────────────
-  // Dark rich backgrounds
-  // ── CLEAN WHITE DESIGN SYSTEM ─────────────────────────────────────────────
-  // Clean White / Light backgrounds
-  static const Color bgDeep   = Color(0xFFF8FAFC); // clean light canvas
-  static const Color bgCard   = Color(0xFFFFFFFF); // crisp white cards
-  static const Color bgSurface= Color(0xFFF1F5F9); // soft light grey image well
+  // Visual Rule: Light / White background palette
+  static const Color mainBg = Color(0xFFF9FAFB);
+  static const Color surfaceWhite = Color(0xFFFFFFFF);
+  static const Color cardBorder = Color(0xFFE5E7EB);
+  static const Color searchBg = Color(0xFFF3F4F6);
+  static const Color searchBorder = Color(0xFFE5E7EB);
 
-  // Borders & dividers
-  static const Color borderDim  = Color(0xFFE2E8F0); // subtle border
+  // Normal UI: Text & buttons are BLACK / dark
+  static const Color textBlack = Color(0xFF111827);
+  static const Color textSecondary = Color(0xFF4B5563);
+  static const Color textMuted = Color(0xFF9CA3AF);
+  static const Color buttonBlack = Color(0xFF111827);
 
-  // Text
-  static const Color textWhite   = Color(0xFF0F172A); // dark slate primary text
-  static const Color textSilver  = Color(0xFF475569); // slate secondary text
-  static const Color textMuted   = Color(0xFF94A3B8); // muted grey text
-
-  // Brand green (primary CTA)
-  static const Color brandGreen  = Color(0xFF22C55E);
-  static const Color brandGreenDark = Color(0xFF16A34A);
-  static const Color brandGreenGlow = Color(0x3322C55E);
-
-  // Service category accent colours
-  static const Color accentRide  = Color(0xFF3B82F6); // blue
-  static const Color accentLogis = Color(0xFFF59E0B); // amber
-  static const Color accentEmerg = Color(0xFFEF4444); // red
-  static const Color accentRent  = Color(0xFFA855F7); // purple
+  // Green is strictly reserved for success states, confirmations, and active indicators
+  static const Color successGreen = Color(0xFF16A34A);
+  static const Color serviceRed = Color(0xFFDC2626);
+  static const Color goldAccent = Color(0xFFCA8A04);
 
   @override
   void initState() {
     super.initState();
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 700),
     );
 
     _headerFade = CurvedAnimation(
@@ -95,7 +88,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
 
     _servicesFade = CurvedAnimation(
       parent: _animController,
-      curve: const Interval(0.4, 0.85, curve: Curves.easeOut),
+      curve: const Interval(0.4, 0.8, curve: Curves.easeOut),
     );
     _servicesSlide = Tween<Offset>(
       begin: const Offset(0, 0.06),
@@ -106,7 +99,9 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await ref.read(rideProvider.notifier).fetchRideHistory();
-      if (mounted) setState(() => _isLoadingHistory = false);
+      if (mounted) {
+        setState(() => _isLoadingHistory = false);
+      }
     });
   }
 
@@ -131,7 +126,9 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Location lookup unavailable. Please retry.')),
+          const SnackBar(
+            content: Text('Location lookup unavailable. Please retry.'),
+          ),
         );
       }
       return;
@@ -142,14 +139,21 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     _searchFocusNode.unfocus();
     _searchController.clear();
     setState(() => _suggestions = []);
-    ref.read(rideProvider.notifier).setRoute('Current Location', suggestion.title);
-    ref.read(rideProvider.notifier).setDestinationCoords(coordinates, address: suggestion.toString());
+
+    ref
+        .read(rideProvider.notifier)
+        .setRoute('Current Location', suggestion.title);
+
+    ref
+        .read(rideProvider.notifier)
+        .setDestinationCoords(coordinates, address: suggestion.toString());
+
     context.push('/ride-booking');
   }
 
   @override
   Widget build(BuildContext context) {
-    final user      = ref.watch(userProvider);
+    final user = ref.watch(userProvider);
     final rideState = ref.watch(rideProvider);
     final currentRide = rideState.currentRide;
     final hasActiveTrip =
@@ -158,265 +162,224 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         currentRide.status != model.RideStatus.cancelled;
 
     return Scaffold(
-      backgroundColor: bgDeep,
-      body: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
-          // ── RICH DARK HEADER ──────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: SlideTransition(
-              position: _headerSlide,
-              child: FadeTransition(
-                opacity: _headerFade,
-                child: _buildRichHeader(context, user),
-              ),
+      backgroundColor: mainBg,
+      body: SafeArea(
+        child: RefreshIndicator(
+          color: buttonBlack,
+          backgroundColor: surfaceWhite,
+          onRefresh: () async {
+            setState(() => _isLoadingHistory = true);
+            await ref.read(rideProvider.notifier).fetchRideHistory();
+            if (mounted) {
+              setState(() => _isLoadingHistory = false);
+            }
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 20.0,
+              vertical: 16.0,
             ),
-          ),
-
-          // ── SEARCH BAR ────────────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: SlideTransition(
-              position: _heroSlide,
-              child: FadeTransition(
-                opacity: _heroFade,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: Column(
-                    children: [
-                      _buildPremiumSearchBar(context),
-                      if (_searchController.text.trim().length >= 2)
-                        _buildAutocompleteDropdown(context),
-                    ],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Stagger 1: Header (Light Theme)
+                SlideTransition(
+                  position: _headerSlide,
+                  child: FadeTransition(
+                    opacity: _headerFade,
+                    child: _buildHeader(context, user),
                   ),
                 ),
-              ),
-            ),
-          ),
+                const SizedBox(height: 20),
 
-          // ── ACTIVE TRIP (if any) ──────────────────────────────────────────
-          if (hasActiveTrip)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: _buildActiveTripBanner(currentRide),
-              ),
-            ),
-
-          // ── HERO PROMO CARD ───────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: SlideTransition(
-              position: _heroSlide,
-              child: FadeTransition(
-                opacity: _heroFade,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-                  child: _buildPromoHeroCard(context),
-                ),
-              ),
-            ),
-          ),
-
-          // ── SERVICE TILES ─────────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: SlideTransition(
-              position: _servicesSlide,
-              child: FadeTransition(
-                opacity: _servicesFade,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-                  child: _buildServiceGrid(context),
-                ),
-              ),
-            ),
-          ),
-
-          // ── FLEET HORIZONTAL SCROLL ───────────────────────────────────────
-          SliverToBoxAdapter(
-            child: FadeTransition(
-              opacity: _servicesFade,
-              child: _buildFleetSection(context),
-            ),
-          ),
-
-          // ── RECENT ACTIVITY ───────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: FadeTransition(
-              opacity: _servicesFade,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-                child: _buildRecentActivitySection(context, rideState),
-              ),
-            ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: _buildBottomBar(context),
-    );
-  }
-
-  // ── RICH DARK HEADER WITH GRADIENT ────────────────────────────────────────
-  Widget _buildRichHeader(BuildContext context, dynamic user) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Top row: greeting + icons
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
+                // Stagger 2: Search Bar & Hero Feature Card
+                SlideTransition(
+                  position: _heroSlide,
+                  child: FadeTransition(
+                    opacity: _heroFade,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Greeting pill
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFDCFCE7),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: const Color(0xFF86EFAC)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Text('👋', style: TextStyle(fontSize: 12)),
-                              const SizedBox(width: 5),
-                              Flexible(
-                                child: Text(
-                                  'Namaste, ${user?.firstName ?? "Abhishek"}',
-                                  style: const TextStyle(
-                                    color: Color(0xFF15803D),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.3,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        // Brand name
-                        const Text(
-                          'INFURNUS',
-                          style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 2,
-                            color: Color(0xFF0F172A),
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        const Text(
-                          'Move. Haul. Rise.',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: textSilver,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
+                        _buildDestinationSearchBar(context),
+                        if (_searchController.text.trim().length >= 2)
+                          _buildAutocompleteDropdown(context),
+                        const SizedBox(height: 20),
+                        _buildHeroFeatureCard(context),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Column(
-                    children: [
-                      _buildDarkIconBtn(
-                        icon: Icons.smart_toy_outlined,
-                        badge: '1',
-                        color: accentRide,
-                        onTap: () => context.push('/ai-assistant/customer'),
-                      ),
-                      const SizedBox(height: 10),
-                      _buildDarkIconBtn(
-                        icon: Icons.notifications_outlined,
-                        color: brandGreenDark,
-                        onTap: () => context.push('/support'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              // ── QUICK STATS STRIP (horizontally scrollable without overflow) ──
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                child: Row(
-                  children: [
-                    _buildStatChip(Icons.bolt_rounded, '4 Services', accentRide),
-                    const SizedBox(width: 8),
-                    _buildStatChip(Icons.local_shipping_outlined, 'Logistics', accentLogis),
-                    const SizedBox(width: 8),
-                    _buildStatChip(Icons.shield_outlined, 'Emergency', accentEmerg),
-                    const SizedBox(width: 8),
-                    _buildStatChip(Icons.stars_outlined, 'Rentals', accentRent),
-                    const SizedBox(width: 8),
-                    _buildStatChip(Icons.circle, 'Live', brandGreenDark, dot: true),
-                  ],
                 ),
-              ),
-            ],
+                const SizedBox(height: 24),
+
+                // Active Trip Banner (if any)
+                if (hasActiveTrip) ...[
+                  _buildActiveTripBanner(currentRide),
+                  const SizedBox(height: 24),
+                ],
+
+                // Stagger 3: Services & Recent Activity
+                SlideTransition(
+                  position: _servicesSlide,
+                  child: FadeTransition(
+                    opacity: _servicesFade,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Quick Services Direct Grid
+                        _buildQuickServicesGrid(context),
+                        const SizedBox(height: 28),
+
+                        // Popular Rides / Passenger Fleet
+                        _buildPassengerSection(context),
+                        const SizedBox(height: 28),
+
+                        // Logistics Section
+                        _buildLogisticsSection(context),
+                        const SizedBox(height: 28),
+
+                        // Service Fleet Section
+                        _buildServiceFleetSection(context),
+                        const SizedBox(height: 28),
+
+                        // Luxury Concierge Fleet Section
+                        _buildConciergeFleetSection(context),
+                        const SizedBox(height: 32),
+
+                        // Recent Activity Timeline Section
+                        _buildRecentActivitySection(context, rideState),
+                        const SizedBox(height: 24),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
+      bottomNavigationBar: _buildBottomNavigationBar(context),
     );
   }
 
-  Widget _buildDarkIconBtn({
+  Widget _buildHeader(BuildContext context, dynamic user) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'NAMASTE',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 2.0,
+                color: textSecondary,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Row(
+              children: [
+                const Text(
+                  'INFURNUS',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.5,
+                    color: textBlack,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '👋 ${user?.firstName ?? "User"}',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: textSecondary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 2),
+            const Text(
+              'Move. Haul. Rise.',
+              style: TextStyle(
+                fontSize: 12,
+                color: textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+        Row(
+          children: [
+            _buildHeaderIcon(
+              icon: Icons.chat_bubble_outline_rounded,
+              tooltip: 'Chat',
+              badgeText: '1',
+              onTap: () => context.push('/ai-assistant/customer'),
+            ),
+            const SizedBox(width: 10),
+            _buildHeaderIcon(
+              icon: Icons.notifications_none_rounded,
+              tooltip: 'Notifications',
+              onTap: () => context.push('/support'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHeaderIcon({
     required IconData icon,
+    required String tooltip,
     required VoidCallback onTap,
-    required Color color,
-    String? badge,
+    String? badgeText,
   }) {
-    return GestureDetector(
+    return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
       child: Stack(
         clipBehavior: Clip.none,
         children: [
           Container(
-            width: 44,
-            height: 44,
+            width: 42,
+            height: 42,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: surfaceWhite,
               shape: BoxShape.circle,
-              border: Border.all(color: borderDim),
+              border: Border.all(color: cardBorder),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 10,
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 6,
                   offset: const Offset(0, 2),
                 ),
               ],
             ),
-            child: Icon(icon, size: 20, color: color),
+            child: Icon(icon, size: 20, color: textBlack),
           ),
-          if (badge != null)
+          if (badgeText != null)
             Positioned(
               right: -2,
               top: -2,
               child: Container(
                 padding: const EdgeInsets.all(4),
                 decoration: const BoxDecoration(
-                  color: Color(0xFFEF4444),
+                  color: Color(0xFFDC2626),
                   shape: BoxShape.circle,
                 ),
                 constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
                 child: Center(
                   child: Text(
-                    badge,
-                    style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                    badgeText,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),
@@ -426,81 +389,424 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     );
   }
 
-  Widget _buildStatChip(IconData icon, String label, Color color, {bool dot = false}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.25)),
+  final List<Map<String, dynamic>> _quickDestinations = [
+    {
+      'label': 'Airport T1',
+      'icon': Icons.flight_rounded,
+      'address': 'Airport Terminal 1, International Hub',
+      'coords': const LatLng(25.5913, 85.0880),
+    },
+    {
+      'label': 'Railway Station',
+      'icon': Icons.train_rounded,
+      'address': 'Patna Junction Railway Station',
+      'coords': const LatLng(25.6022, 85.1376),
+    },
+    {
+      'label': 'Gandhi Maidan',
+      'icon': Icons.location_city_rounded,
+      'address': 'Gandhi Maidan, Patna',
+      'coords': const LatLng(25.6154, 85.1437),
+    },
+    {
+      'label': 'Boring Road',
+      'icon': Icons.business_rounded,
+      'address': 'Boring Road Chauraha, Patna',
+      'coords': const LatLng(25.6127, 85.1189),
+    },
+  ];
+
+  void _showSearchModal(BuildContext context) {
+    List<PlaceSuggestion> modalSuggestions = [];
+    String? modalSearchError;
+    Timer? modalDebounce;
+    CancelToken? modalCancelToken;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: surfaceWhite,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (dot)
-            Container(
-              width: 7,
-              height: 7,
-              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            )
-          else
-            Icon(icon, size: 11, color: color),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w700),
-          ),
-        ],
-      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Where to?',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            color: textBlack,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.close_rounded,
+                            color: textBlack,
+                          ),
+                          onPressed: () {
+                            modalDebounce?.cancel();
+                            modalCancelToken?.cancel();
+                            Navigator.pop(context);
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: searchBg,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: cardBorder),
+                      ),
+                      child: Column(
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(
+                                Icons.my_location_rounded,
+                                color: successGreen,
+                                size: 18,
+                              ),
+                              SizedBox(width: 12),
+                              Text(
+                                'Current Location (GPS Active)',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: textBlack,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.only(
+                              left: 8,
+                              top: 4,
+                              bottom: 4,
+                            ),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: SizedBox(
+                                height: 16,
+                                child: VerticalDivider(
+                                  color: textMuted,
+                                  thickness: 2,
+                                ),
+                              ),
+                            ),
+                          ),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.location_on_rounded,
+                                color: serviceRed,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: TextField(
+                                  autofocus: true,
+                                  style: const TextStyle(
+                                    color: textBlack,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  decoration: const InputDecoration(
+                                    hintText: 'Search destination (e.g. Airport, Mall...)',
+                                    hintStyle: TextStyle(color: textMuted),
+                                    border: InputBorder.none,
+                                    isDense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
+                                  onChanged: (val) {
+                                    modalDebounce?.cancel();
+                                    modalCancelToken?.cancel();
+                                    final trimmed = val.trim();
+                                    if (trimmed.isEmpty) {
+                                      setModalState(() {
+                                        modalSuggestions = [];
+                                        modalSearchError = null;
+                                      });
+                                      return;
+                                    }
+                                    modalDebounce = Timer(
+                                      const Duration(milliseconds: 200),
+                                      () async {
+                                        modalCancelToken = CancelToken();
+                                        try {
+                                          final service = ref.read(
+                                            placesAutocompleteServiceProvider,
+                                          );
+                                          final results = await service
+                                              .getSuggestions(
+                                                trimmed,
+                                                cancelToken: modalCancelToken,
+                                              );
+                                          if (context.mounted &&
+                                              !(modalCancelToken?.isCancelled ??
+                                                  false)) {
+                                            setModalState(() {
+                                              modalSuggestions = results;
+                                              modalSearchError = null;
+                                            });
+                                          }
+                                        } catch (e) {
+                                          if (e is DioException &&
+                                              CancelToken.isCancel(e)) {
+                                            return;
+                                          }
+                                          if (context.mounted) {
+                                            setModalState(() {
+                                              modalSuggestions = [];
+                                              modalSearchError =
+                                                  locationSearchErrorMessage(e);
+                                            });
+                                          }
+                                        }
+                                      },
+                                    );
+                                  },
+                                  onSubmitted: (val) {
+                                    if (val.trim().isNotEmpty) {
+                                      modalDebounce?.cancel();
+                                      modalCancelToken?.cancel();
+                                      Navigator.pop(context);
+                                      ref
+                                          .read(rideProvider.notifier)
+                                          .setRoute(
+                                            'Current Location',
+                                            val.trim(),
+                                          );
+                                      context.push('/ride-booking');
+                                    }
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (modalSearchError != null) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF2F2),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFFCA5A5)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.info_outline_rounded,
+                              color: Color(0xFFDC2626),
+                              size: 18,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                modalSearchError!,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF991B1B),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Quick Destinations',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      height: 38,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        children: _quickDestinations.map((dest) {
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: ActionChip(
+                              avatar: Icon(
+                                dest['icon'] as IconData,
+                                size: 16,
+                                color: successGreen,
+                              ),
+                              label: Text(
+                                dest['label'] as String,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: textBlack,
+                                ),
+                              ),
+                              backgroundColor: searchBg,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18),
+                                side: const BorderSide(color: cardBorder),
+                              ),
+                              onPressed: () {
+                                modalDebounce?.cancel();
+                                modalCancelToken?.cancel();
+                                Navigator.pop(context);
+                                ref
+                                    .read(rideProvider.notifier)
+                                    .setRoute(
+                                      'Current Location',
+                                      dest['address'] as String,
+                                    );
+                                if (dest['coords'] != null) {
+                                  ref
+                                      .read(rideProvider.notifier)
+                                      .setDestinationCoords(
+                                        dest['coords'] as LatLng,
+                                        address: dest['address'] as String,
+                                      );
+                                }
+                                context.push('/ride-booking');
+                              },
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                    if (modalSuggestions.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Suggestions',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ...modalSuggestions.map((s) {
+                        return InkWell(
+                          onTap: () {
+                            Navigator.pop(context);
+                            _selectSuggestion(s);
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.location_on_outlined,
+                                  size: 18,
+                                  color: textBlack,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        s.title,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                          color: textBlack,
+                                        ),
+                                      ),
+                                      Text(
+                                        s.subtitle,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: textSecondary,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
+                    ],
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
-  // ── PREMIUM SEARCH BAR ────────────────────────────────────────────────────
-  Widget _buildPremiumSearchBar(BuildContext context) {
+  Widget _buildDestinationSearchBar(BuildContext context) {
     return GestureDetector(
       onTap: () => _showSearchModal(context),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: bgCard,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: borderDim),
+          color: surfaceWhite,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: searchBorder),
           boxShadow: [
             BoxShadow(
-              color: brandGreen.withValues(alpha: 0.08),
-              blurRadius: 20,
-              offset: const Offset(0, 4),
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
             ),
           ],
         ),
         child: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(7),
-              decoration: const BoxDecoration(
-                color: brandGreenGlow,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.search_rounded, color: brandGreen, size: 17),
-            ),
+            const Icon(Icons.search_rounded, color: textBlack, size: 22),
             const SizedBox(width: 12),
             const Expanded(
               child: Text(
-                'Where to? Search a destination...',
-                style: TextStyle(color: textMuted, fontSize: 14, fontWeight: FontWeight.w500),
+                'Where to? Search destination...',
+                style: TextStyle(
+                  color: textMuted,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [brandGreenDark, brandGreen],
-                ),
-                borderRadius: BorderRadius.circular(10),
+              padding: const EdgeInsets.all(6),
+              decoration: const BoxDecoration(
+                color: searchBg,
+                shape: BoxShape.circle,
               ),
-              child: const Text(
-                'Go →',
-                style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800),
+              child: const Icon(
+                Icons.arrow_forward_rounded,
+                size: 16,
+                color: textBlack,
               ),
             ),
           ],
@@ -509,470 +815,1004 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     );
   }
 
-  // ── PROMO HERO CARD ───────────────────────────────────────────────────────
-  Widget _buildPromoHeroCard(BuildContext context) {
-    return GestureDetector(
-      onTap: () => context.push('/passenger-rides'),
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 140),
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          gradient: const LinearGradient(
-            colors: [Color(0xFF032213), Color(0xFF064228), Color(0xFF0E6B3A)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+  Widget _buildAutocompleteDropdown(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: surfaceWhite,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cardBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
           ),
-          boxShadow: [
-            BoxShadow(
-              color: brandGreen.withValues(alpha: 0.25),
-              blurRadius: 24,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            // Abstract circles decoration
-            Positioned(
-              right: -30,
-              top: -30,
-              child: Container(
-                width: 150,
-                height: 150,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: brandGreen.withValues(alpha: 0.08),
-                ),
-              ),
-            ),
-            Positioned(
-              right: 20,
-              bottom: -40,
-              child: Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: brandGreen.withValues(alpha: 0.05),
-                ),
-              ),
-            ),
-            // Content
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_suggestions.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: const Text(
-                            'ONE APP • EVERY WHEEL',
-                            style: TextStyle(
-                              fontSize: 8.5,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 1.2,
-                              color: Color(0xFF6EE7B7),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'From auto to\nhelicopter',
-                          style: TextStyle(
-                            fontSize: 19,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white,
-                            height: 1.15,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                          decoration: BoxDecoration(
-                            color: brandGreen,
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: brandGreen.withValues(alpha: 0.4),
-                                blurRadius: 10,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                'Explore Fleet',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 11,
-                                ),
-                              ),
-                              SizedBox(width: 4),
-                              Icon(Icons.arrow_forward_rounded, size: 13, color: Colors.white),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+                  Icon(Icons.info_outline_rounded, size: 16, color: textMuted),
+                  SizedBox(width: 8),
+                  Text(
+                    'No locations found.',
+                    style: TextStyle(fontSize: 13, color: textMuted),
                   ),
-                  const SizedBox(width: 12),
-                  // INFURNUS logo
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Image.asset(
-                      'assets/images/infurnus_hero_logo.png',
-                      width: 95,
-                      height: 95,
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => Container(
-                        width: 95,
-                        height: 95,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.07),
-                          borderRadius: BorderRadius.circular(16),
+                ],
+              ),
+            )
+          else
+            ...List.generate(_suggestions.length, (index) {
+              final suggestion = _suggestions[index];
+              return InkWell(
+                onTap: () => _selectSuggestion(suggestion),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: const BoxDecoration(
+                          color: searchBg,
+                          shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.directions_car_rounded, size: 48, color: Colors.white30),
+                        child: const Icon(
+                          Icons.location_on_outlined,
+                          size: 16,
+                          color: buttonBlack,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              suggestion.title,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                                color: textBlack,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              suggestion.subtitle,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: textSecondary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(
+                        Icons.north_west_rounded,
+                        size: 14,
+                        color: textMuted,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeroFeatureCard(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF032213), Color(0xFF063B23), Color(0xFF0A4F30)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF032213).withValues(alpha: 0.25),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'ONE APP • EVERY WHEEL',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.2,
+                          color: Color(0xFFA7F3D0),
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── SERVICE GRID ──────────────────────────────────────────────────────────
-  Widget _buildServiceGrid(BuildContext context) {
-    final services = [
-      _ServiceTile(
-        title: 'Rides',
-        subtitle: 'Bike, Auto, Cab',
-        icon: Icons.directions_car_filled_rounded,
-        assetImagePath: 'assets/images/passenger_car_visual.jpg',
-        color: accentRide,
-        category: VehicleCategoryType.rides,
-        action: () => context.push('/passenger-rides'),
-      ),
-      _ServiceTile(
-        title: 'Logistics',
-        subtitle: 'Parcels & Trucks',
-        icon: Icons.local_shipping_rounded,
-        assetImagePath: 'assets/images/logistics_visual.jpg',
-        color: accentLogis,
-        category: VehicleCategoryType.logistics,
-        action: () => context.push('/logistics'),
-      ),
-      _ServiceTile(
-        title: 'Emergency',
-        subtitle: 'Ambulance & Tow',
-        icon: Icons.emergency_rounded,
-        assetImagePath: 'assets/images/ambulance_van.png',
-        color: accentEmerg,
-        category: VehicleCategoryType.emergency,
-        action: () => context.push('/emergency'),
-      ),
-      _ServiceTile(
-        title: 'Rentals',
-        subtitle: 'Luxury & Chauffeur',
-        icon: Icons.stars_rounded,
-        assetImagePath: 'assets/images/rental_visual.jpg',
-        color: accentRent,
-        category: VehicleCategoryType.rental,
-        action: () => context.push('/rentals'),
-      ),
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Services',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: textWhite, letterSpacing: 0.3),
-        ),
-        const SizedBox(height: 12),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final bool canFitRow = constraints.maxWidth >= 320;
-            if (canFitRow) {
-              return Row(
-                children: services.map((s) {
-                  return Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.only(right: s == services.last ? 0 : 8),
-                      child: _buildServiceTile(s),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'From auto to\nhelicopter',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        height: 1.2,
+                      ),
                     ),
-                  );
-                }).toList(),
-              );
-            } else {
-              return SizedBox(
-                height: 120,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  itemCount: services.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (context, index) {
-                    return SizedBox(
-                      width: 84,
-                      child: _buildServiceTile(services[index]),
-                    );
-                  },
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () {
+                        context.push('/passenger-rides');
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF16A34A),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 9,
+                        ),
+                        elevation: 0,
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Explore fleet',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12,
+                            ),
+                          ),
+                          SizedBox(width: 4),
+                          Icon(Icons.arrow_forward_rounded, size: 14),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              );
-            }
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildServiceTile(_ServiceTile s) {
-    return _PressableScaleCard(
-      onTap: s.action,
-      child: Container(
-        height: 120,
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-        decoration: BoxDecoration(
-          color: bgCard,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: s.color.withValues(alpha: 0.2)),
-          boxShadow: [
-            BoxShadow(
-              color: s.color.withValues(alpha: 0.1),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.15),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
               ),
-              padding: const EdgeInsets.all(4),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(9),
-                child: s.assetImagePath != null
-                    ? Image.asset(
-                        s.assetImagePath!,
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) => Icon(s.icon ?? Icons.category_rounded, color: s.color, size: 22),
-                      )
-                    : Icon(s.icon, color: s.color, size: 22),
-              ),
-            ),
-            const SizedBox(height: 7),
-            Text(
-              s.title,
-              style: const TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w800,
-                color: textWhite,
-              ),
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 2),
-            Text(
-              s.subtitle,
-              style: TextStyle(
-                fontSize: 8.5,
-                fontWeight: FontWeight.w500,
-                color: s.color.withValues(alpha: 0.85),
-                height: 1.15,
-              ),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── FLEET SECTION ─────────────────────────────────────────────────────────
-  Widget _buildFleetSection(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Our Fleet',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: textWhite),
-              ),
-              GestureDetector(
-                onTap: () => context.push('/passenger-rides'),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: brandGreenGlow,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: brandGreen.withValues(alpha: 0.3)),
-                  ),
-                  child: const Text(
-                    'See all',
-                    style: TextStyle(color: brandGreen, fontSize: 11, fontWeight: FontWeight.w700),
+              const SizedBox(width: 10),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Image.asset(
+                  'assets/images/infurnus_hero_logo.png',
+                  width: 130,
+                  height: 105,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const AnimatedVehicleHero(
+                    height: 100,
+                    assetImagePath: 'assets/images/infurnus_3d_logo.png',
                   ),
                 ),
               ),
             ],
           ),
         ),
-        SizedBox(
-          height: 154,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            children: _allFleetItems().map((item) {
-              return Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: _buildPremiumVehicleCard(
-                  item: item,
-                  onTap: () {
-                    final sector = item.category == VehicleCategoryType.logistics
-                        ? 'logistics'
-                        : (item.category == VehicleCategoryType.emergency
-                            ? 'service'
-                            : (item.category == VehicleCategoryType.premium ||
-                                    item.category == VehicleCategoryType.rental
-                                ? 'premium'
-                                : 'passenger'));
-                    ref.read(rideProvider.notifier).selectSector(sector);
-                    ref.read(rideProvider.notifier).selectTier(item.title.toLowerCase());
-                    context.push('/ride-booking');
-                  },
-                ),
-              );
-            }).toList(),
-          ),
+        const SizedBox(height: 8),
+        // 3 Dots indicator
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 8,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFF16A34A),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Container(
+              width: 4,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFFD1D5DB),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Container(
+              width: 4,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFFD1D5DB),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 24),
       ],
     );
   }
 
-  Widget _buildPremiumVehicleCard({
-    required _VehicleCategoryItem item,
-    required VoidCallback onTap,
-  }) {
-    // Pick accent colour by category
-    final Color accent = item.category == VehicleCategoryType.logistics
-        ? accentLogis
-        : item.category == VehicleCategoryType.emergency
-            ? accentEmerg
-            : item.category == VehicleCategoryType.premium ||
-                    item.category == VehicleCategoryType.rental
-                ? accentRent
-                : accentRide;
+  Widget _buildQuickServicesGrid(BuildContext context) {
+    final services = [
+      {
+        'title': 'Rides',
+        'subtitle': 'Bike, Auto, Cab',
+        'category': VehicleCategoryType.rides,
+        'action': () => context.push('/passenger-rides'),
+      },
+      {
+        'title': 'Logistics',
+        'subtitle': 'Parcels & Trucks',
+        'category': VehicleCategoryType.logistics,
+        'action': () => context.push('/logistics'),
+      },
+      {
+        'title': 'Emergency',
+        'subtitle': 'Ambulance & Tow',
+        'category': VehicleCategoryType.emergency,
+        'action': () => context.push('/emergency'),
+      },
+      {
+        'title': 'Rentals',
+        'subtitle': 'Luxury & Chauffeur',
+        'category': VehicleCategoryType.rental,
+        'action': () => context.push('/rentals'),
+      },
+    ];
 
-    final bool isPng = item.assetImagePath?.endsWith('.png') ?? false;
-
-    return _PressableScaleCard(
-      onTap: onTap,
-      child: Container(
-        width: 124,
-        decoration: BoxDecoration(
-          color: bgCard,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: accent.withValues(alpha: 0.2)),
-          boxShadow: [
-            BoxShadow(
-              color: accent.withValues(alpha: 0.08),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
+    return GridView.builder(
+      physics: const NeverScrollableScrollPhysics(),
+      shrinkWrap: true,
+      itemCount: services.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        childAspectRatio: 2.1,
+      ),
+      itemBuilder: (context, index) {
+        final item = services[index];
+        final category = item['category'] as VehicleCategoryType;
+        return _PressableScaleCard(
+          onTap: item['action'] as VoidCallback,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            decoration: BoxDecoration(
+              color: surfaceWhite,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: cardBorder),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.03),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
-          ],
+            child: Row(
+              children: [
+                VehicleCategoryVisual(
+                  category: category,
+                  size: 38,
+                  borderRadius: 10,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        item['title'] as String,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: textBlack,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        item['subtitle'] as String,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: textSecondary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showSeeAllVehiclesModal(
+    BuildContext context,
+    String title,
+    List<_VehicleCategoryItem> vehicles,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: surfaceWhite,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: textBlack,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: textBlack),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Complete available vehicle list:',
+                style: TextStyle(fontSize: 13, color: textSecondary),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 380,
+                child: ListView.separated(
+                  itemCount: vehicles.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (context, index) {
+                    final item = vehicles[index];
+                    return ListTile(
+                      tileColor: searchBg,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: const BorderSide(color: cardBorder),
+                      ),
+                      leading: Container(
+                        width: 44,
+                        height: 44,
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: surfaceWhite,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: item.assetImagePath != null
+                            ? Image.asset(
+                                item.assetImagePath!,
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, __, ___) => Icon(
+                                  item.icon,
+                                  color: buttonBlack,
+                                  size: 22,
+                                ),
+                              )
+                            : Icon(item.icon, color: buttonBlack, size: 22),
+                      ),
+                      title: Text(
+                        item.title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: textBlack,
+                        ),
+                      ),
+                      subtitle: Text(
+                        '${item.capacity} • ${item.eta}',
+                        style: const TextStyle(
+                          color: textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                      trailing: const Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        size: 14,
+                        color: textBlack,
+                      ),
+                      onTap: () {
+                        Navigator.pop(context);
+                        final sector =
+                            item.category == VehicleCategoryType.logistics
+                            ? 'logistics'
+                            : (item.category == VehicleCategoryType.emergency
+                                  ? 'service'
+                                  : 'passenger');
+                        ref.read(rideProvider.notifier).selectSector(sector);
+                        ref
+                            .read(rideProvider.notifier)
+                            .selectTier(item.title.toLowerCase());
+                        context.push('/ride-booking');
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPassengerSection(BuildContext context) {
+    const items = [
+      _VehicleCategoryItem(
+        title: 'Bike',
+        capacity: '1 rider',
+        rate: 'Route Estimate',
+        eta: 'Instant',
+        icon: Icons.two_wheeler_rounded,
+        category: VehicleCategoryType.bike,
+        assetImagePath: 'assets/images/bike_motorcycle.png',
+      ),
+      _VehicleCategoryItem(
+        title: 'Auto',
+        capacity: '3 seater',
+        rate: 'Route Estimate',
+        eta: 'Instant',
+        icon: Icons.electric_rickshaw_rounded,
+        category: VehicleCategoryType.auto,
+        assetImagePath: 'assets/images/auto_rickshaw.png',
+      ),
+      _VehicleCategoryItem(
+        title: 'E-Rickshaw',
+        capacity: '4 seater',
+        rate: 'Route Estimate',
+        eta: 'Instant',
+        icon: Icons.electric_rickshaw_outlined,
+        category: VehicleCategoryType.auto,
+        assetImagePath: 'assets/images/e_rickshaw_passenger.png',
+      ),
+      _VehicleCategoryItem(
+        title: 'Hatchback',
+        capacity: '4 seater',
+        rate: 'Route Estimate',
+        eta: 'Instant',
+        icon: Icons.directions_car_rounded,
+        category: VehicleCategoryType.rides,
+        assetImagePath: 'assets/images/hatchback.jpg',
+      ),
+      _VehicleCategoryItem(
+        title: 'Sedan',
+        capacity: '4 seater',
+        rate: 'Route Estimate',
+        eta: 'Instant',
+        icon: Icons.directions_car_rounded,
+        category: VehicleCategoryType.rides,
+        assetImagePath: 'assets/images/sedan.jpg',
+      ),
+      _VehicleCategoryItem(
+        title: 'Innova Crysta',
+        capacity: '6-7 seater',
+        rate: 'Route Estimate',
+        eta: 'Instant',
+        icon: Icons.directions_car_filled_rounded,
+        category: VehicleCategoryType.premium,
+        assetImagePath: 'assets/images/innova_crysta.jpg',
+      ),
+      _VehicleCategoryItem(
+        title: 'Winger',
+        capacity: '9-12 seater',
+        rate: 'Route Estimate',
+        eta: 'Scheduled',
+        icon: Icons.directions_bus_rounded,
+        category: VehicleCategoryType.rides,
+        assetImagePath: 'assets/images/winger.jpg',
+      ),
+      _VehicleCategoryItem(
+        title: 'Force Traveller',
+        capacity: '12 seater',
+        rate: 'Route Estimate',
+        eta: 'Scheduled',
+        icon: Icons.airport_shuttle_rounded,
+        category: VehicleCategoryType.rides,
+        assetImagePath: 'assets/images/force_urbania.jpg',
+      ),
+      _VehicleCategoryItem(
+        title: 'Mini / Commercial',
+        capacity: '3-4 seater',
+        rate: 'Route Estimate',
+        eta: 'Instant',
+        icon: Icons.local_shipping_outlined,
+        category: VehicleCategoryType.rides,
+        assetImagePath: 'assets/images/mini_commercial.jpg',
+      ),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader(
+          title: 'Passenger Rides',
+          subtitle: 'Everyday rides across the city',
+          onSeeAll: () => context.push('/passenger-rides'),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 130,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: items.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (context, index) {
+              final item = items[index];
+              return _buildHorizontalVehicleCard(
+                item: item,
+                onTap: () {
+                  ref.read(rideProvider.notifier).selectSector('passenger');
+                  ref
+                      .read(rideProvider.notifier)
+                      .selectTier(item.title.toLowerCase());
+                  context.push('/ride-booking');
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLogisticsSection(BuildContext context) {
+    const items = [
+      _VehicleCategoryItem(
+        title: 'Mini / Commercial',
+        capacity: 'Up to 500 kg',
+        rate: 'Server Rate',
+        eta: 'On-demand',
+        icon: Icons.local_shipping_outlined,
+        category: VehicleCategoryType.logistics,
+        assetImagePath: 'assets/images/mini_commercial.jpg',
+      ),
+      _VehicleCategoryItem(
+        title: 'Tata Magic',
+        capacity: 'Up to 750 kg',
+        rate: 'Server Rate',
+        eta: 'On-demand',
+        icon: Icons.local_shipping_rounded,
+        category: VehicleCategoryType.logistics,
+        assetImagePath: 'assets/images/tata_magic_cream.png',
+      ),
+
+      _VehicleCategoryItem(
+        title: '207 Cargo Heavy',
+        capacity: 'Up to 1500 kg',
+        rate: 'Server Rate',
+        eta: 'On-demand',
+        icon: Icons.local_shipping_rounded,
+        category: VehicleCategoryType.logistics,
+        assetImagePath: 'assets/images/cargo_207_heavy.png',
+      ),
+      _VehicleCategoryItem(
+        title: '407 Cargo',
+        capacity: 'Up to 2500 kg',
+        rate: 'Server Rate',
+        eta: 'On-demand',
+        icon: Icons.directions_bus_outlined,
+        category: VehicleCategoryType.logistics,
+        assetImagePath: 'assets/images/cargo_407.jpg',
+      ),
+      _VehicleCategoryItem(
+        title: 'Mini Truck',
+        capacity: 'Up to 1000 kg',
+        rate: 'Server Rate',
+        eta: 'On-demand',
+        icon: Icons.local_shipping_rounded,
+        category: VehicleCategoryType.logistics,
+        assetImagePath: 'assets/images/mini_truck.jpg',
+      ),
+      _VehicleCategoryItem(
+        title: 'E-Rickshaw Cargo',
+        capacity: 'Up to 300 kg',
+        rate: 'Server Rate',
+        eta: 'On-demand',
+        icon: Icons.electric_rickshaw_rounded,
+        category: VehicleCategoryType.logistics,
+        assetImagePath: 'assets/images/e_rickshaw_green_white.png',
+      ),
+      _VehicleCategoryItem(
+        title: 'Electric Tuk-Tuk',
+        capacity: 'Up to 350 kg',
+        rate: 'Server Rate',
+        eta: 'On-demand',
+        icon: Icons.electric_rickshaw_outlined,
+        category: VehicleCategoryType.logistics,
+        assetImagePath: 'assets/images/e_rickshaw_passenger.png',
+      ),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader(
+          title: 'Logistics',
+          subtitle: 'Move goods with muscle',
+          onSeeAll: () =>
+              _showSeeAllVehiclesModal(context, 'Logistics & Cargo', items),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 130,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: items.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (context, index) {
+              final item = items[index];
+              return _buildHorizontalVehicleCard(
+                item: item,
+                onTap: () => context.push('/logistics'),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildServiceFleetSection(BuildContext context) {
+    const items = [
+      _VehicleCategoryItem(
+        title: 'Ambulance',
+        capacity: 'Patient + Medical Triage',
+        rate: 'Trip-Based',
+        eta: 'Priority',
+        icon: Icons.medical_services_rounded,
+        category: VehicleCategoryType.emergency,
+        assetImagePath: 'assets/images/ambulance_van.png',
+      ),
+      _VehicleCategoryItem(
+        title: 'Towing Van',
+        capacity: 'Breakdown Assist',
+        rate: 'Trip-Based',
+        eta: 'Priority',
+        icon: Icons.car_repair_rounded,
+        category: VehicleCategoryType.emergency,
+        assetImagePath: 'assets/images/towing_van.jpg',
+      ),
+      _VehicleCategoryItem(
+        title: 'JCB / Excavator',
+        capacity: 'Specialty Excavation',
+        rate: 'Trip-Based',
+        eta: 'Scheduled',
+        icon: Icons.agriculture_rounded,
+        category: VehicleCategoryType.logistics,
+        assetImagePath: 'assets/images/jcb_excavator.jpg',
+      ),
+      _VehicleCategoryItem(
+        title: 'Road Roller',
+        capacity: 'Road & Soil Compaction',
+        rate: 'Trip-Based',
+        eta: 'Scheduled',
+        icon: Icons.construction_rounded,
+        category: VehicleCategoryType.logistics,
+        assetImagePath: 'assets/images/road_roller.jpg',
+      ),
+      _VehicleCategoryItem(
+        title: 'Crane',
+        capacity: 'Heavy Lifting',
+        rate: 'Trip-Based',
+        eta: 'Scheduled',
+        icon: Icons.precision_manufacturing_rounded,
+        category: VehicleCategoryType.logistics,
+        assetImagePath: 'assets/images/crane_truck.png',
+      ),
+
+      _VehicleCategoryItem(
+        title: 'Roadside Assist',
+        capacity: 'Tire / Battery Support',
+        rate: 'Trip-Based',
+        eta: 'Priority',
+        icon: Icons.build_rounded,
+        category: VehicleCategoryType.emergency,
+        assetImagePath: 'assets/images/towing_van.jpg',
+      ),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader(
+          title: 'Specialty & Emergency',
+          subtitle: 'On-demand specialized fleet support',
+          onSeeAll: () {
+            ref.read(rideProvider.notifier).selectSector('service');
+            context.push('/ride-booking');
+          },
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 130,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: items.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (context, index) {
+              final item = items[index];
+              return _buildHorizontalVehicleCard(
+                item: item,
+                onTap: () {
+                  ref.read(rideProvider.notifier).selectSector('service');
+                  context.push('/ride-booking');
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildConciergeFleetSection(BuildContext context) {
+    const luxuryVehicles = [
+      _LuxuryVehicleItem(
+        title: 'Innova Crysta',
+        badge: 'Executive',
+        subtitle: 'Flagship comfort & space',
+        price: 'Chauffeur + Fuel',
+        assetImagePath: 'assets/images/innova_crysta.jpg',
+      ),
+      _LuxuryVehicleItem(
+        title: 'Force Traveller',
+        badge: 'Luxury Van',
+        subtitle: 'VIP group executive transit',
+        price: 'Chauffeur + Fuel',
+        assetImagePath: 'assets/images/force_urbania.jpg',
+      ),
+      _LuxuryVehicleItem(
+        title: 'Toyota Fortuner',
+        badge: 'Executive SUV',
+        subtitle: 'Commanding road presence',
+        price: 'Chauffeur + Fuel',
+        assetImagePath: 'assets/images/fortuner_visual.jpg',
+      ),
+      _LuxuryVehicleItem(
+        title: 'Scorpio N',
+        badge: 'Rugged SUV',
+        subtitle: 'The Big Daddy of SUVs',
+        price: 'Chauffeur + Fuel',
+        assetImagePath: 'assets/images/scorpio_n_white.png',
+      ),
+      _LuxuryVehicleItem(
+        title: 'Mahindra Thar',
+        badge: 'Off-road 4x4',
+        subtitle: 'Iconic all-terrain adventure',
+        price: 'Chauffeur + Fuel',
+        assetImagePath: 'assets/images/thar_visual.webp',
+      ),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            // Image area
-            Expanded(
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                child: Container(
-                  color: bgSurface,
-                  width: double.infinity,
-                  child: item.assetImagePath != null
-                      ? Padding(
-                          padding: isPng ? const EdgeInsets.all(6) : EdgeInsets.zero,
-                          child: Image.asset(
-                            item.assetImagePath!,
-                            width: double.infinity,
-                            fit: isPng ? BoxFit.contain : BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Center(
-                              child: Icon(item.icon, color: accent, size: 36),
-                            ),
-                          ),
-                        )
-                      : Center(child: Icon(item.icon, color: accent, size: 36)),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF9C3),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFFFDE047)),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('👑 ', style: TextStyle(fontSize: 10)),
+                      Text(
+                        'PREMIUM',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w900,
+                          color: goldAccent,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'The Concierge Fleet',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: textBlack,
+                  ),
+                ),
+                const Text(
+                  'Luxury on-demand • Sky, road, off-road',
+                  style: TextStyle(fontSize: 12, color: textSecondary),
+                ),
+              ],
+            ),
+            GestureDetector(
+              onTap: () => context.push('/rentals'),
+              child: const Text(
+                'See all →',
+                style: TextStyle(
+                  color: textBlack,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
                 ),
               ),
             ),
-            // Info
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Column(
+          children: luxuryVehicles
+              .map(
+                (item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _buildLuxuryVehicleCard(context, item),
+                ),
+              )
+              .toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLuxuryVehicleCard(
+    BuildContext context,
+    _LuxuryVehicleItem item,
+  ) {
+    return _PressableScaleCard(
+      onTap: () => context.push('/rentals'),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: surfaceWhite,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: cardBorder),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                width: 52,
+                height: 52,
+                color: searchBg,
+                child: item.assetImagePath != null
+                    ? Image.asset(
+                        item.assetImagePath!,
+                        width: 52,
+                        height: 52,
+                        fit: BoxFit.contain,
+                      )
+                    : const VehicleCategoryVisual(
+                        category: VehicleCategoryType.premium,
+                        size: 52,
+                        borderRadius: 12,
+                      ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: searchBg,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      item.badge,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: textBlack,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
                   Text(
                     item.title,
                     style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 11.5,
-                      color: textWhite,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: textBlack,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    item.capacity,
-                    style: TextStyle(
-                      fontSize: 9.5,
-                      fontWeight: FontWeight.w500,
-                      color: accent,
+                    item.subtitle,
+                    style: const TextStyle(fontSize: 12, color: textSecondary),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    item.price,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: textBlack,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => context.push('/rentals'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: buttonBlack,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                elevation: 0,
+              ),
+              child: const Text(
+                'Book →',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
               ),
             ),
           ],
@@ -981,135 +1821,281 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     );
   }
 
-  List<_VehicleCategoryItem> _allFleetItems() {
-    return const [
-      _VehicleCategoryItem(title: 'Bike', capacity: '1 rider', rate: 'Route', eta: 'Instant', icon: Icons.two_wheeler_rounded, category: VehicleCategoryType.bike, assetImagePath: 'assets/images/bike_motorcycle.png'),
-      _VehicleCategoryItem(title: 'Auto', capacity: '3 seater', rate: 'Route', eta: 'Instant', icon: Icons.electric_rickshaw_rounded, category: VehicleCategoryType.auto, assetImagePath: 'assets/images/auto_rickshaw.png'),
-      _VehicleCategoryItem(title: 'Hatchback', capacity: '4 seater', rate: 'Route', eta: 'Instant', icon: Icons.directions_car_rounded, category: VehicleCategoryType.rides, assetImagePath: 'assets/images/hatchback.jpg'),
-      _VehicleCategoryItem(title: 'Sedan', capacity: '4 seater', rate: 'Route', eta: 'Instant', icon: Icons.directions_car_rounded, category: VehicleCategoryType.rides, assetImagePath: 'assets/images/sedan.jpg'),
-      _VehicleCategoryItem(title: 'Innova Crysta', capacity: '6-7 seater', rate: 'Route', eta: 'Instant', icon: Icons.directions_car_filled_rounded, category: VehicleCategoryType.premium, assetImagePath: 'assets/images/innova_crysta.jpg'),
-      _VehicleCategoryItem(title: 'Piaggio Ape', capacity: 'Up to 700 kg', rate: 'Server', eta: 'On-demand', icon: Icons.electric_rickshaw_rounded, category: VehicleCategoryType.logistics, assetImagePath: 'assets/images/piaggio_ape_yellow.png'),
-      _VehicleCategoryItem(title: 'Tata Magic', capacity: 'Up to 1700 kg', rate: 'Server', eta: 'On-demand', icon: Icons.local_shipping_rounded, category: VehicleCategoryType.logistics, assetImagePath: 'assets/images/tata_magic_cream.png'),
-      _VehicleCategoryItem(title: 'Ambulance', capacity: 'Medical Triage', rate: 'Trip', eta: 'Priority', icon: Icons.medical_services_rounded, category: VehicleCategoryType.emergency, assetImagePath: 'assets/images/ambulance_van.png'),
-      _VehicleCategoryItem(title: 'Towing Van', capacity: 'Breakdown Assist', rate: 'Trip', eta: 'Priority', icon: Icons.car_repair_rounded, category: VehicleCategoryType.emergency, assetImagePath: 'assets/images/towing_van.jpg'),
-      _VehicleCategoryItem(title: 'Fortuner', capacity: 'Executive SUV', rate: 'Chauffeur', eta: 'Scheduled', icon: Icons.stars_rounded, category: VehicleCategoryType.premium, assetImagePath: 'assets/images/fortuner_visual.jpg'),
-      _VehicleCategoryItem(title: 'Scorpio N', capacity: 'Rugged SUV', rate: 'Chauffeur', eta: 'Scheduled', icon: Icons.stars_rounded, category: VehicleCategoryType.premium, assetImagePath: 'assets/images/scorpio_n_white.png'),
-    ];
+  Widget _buildSectionHeader({
+    required String title,
+    required String subtitle,
+    required VoidCallback onSeeAll,
+  }) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                color: textBlack,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: const TextStyle(fontSize: 12, color: textSecondary),
+            ),
+          ],
+        ),
+        GestureDetector(
+          onTap: onSeeAll,
+          child: const Text(
+            'See all →',
+            style: TextStyle(
+              color: Color(0xFF16A34A),
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
-  // ── RECENT ACTIVITY ───────────────────────────────────────────────────────
+  Widget _buildHorizontalVehicleCard({
+    required _VehicleCategoryItem item,
+    required VoidCallback onTap,
+  }) {
+    return _PressableScaleCard(
+      onTap: onTap,
+      child: Container(
+        width: 105,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+        decoration: BoxDecoration(
+          color: surfaceWhite,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: cardBorder),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              height: 48,
+              alignment: Alignment.center,
+              child: item.assetImagePath != null
+                  ? Image.asset(
+                      item.assetImagePath!,
+                      height: 44,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => VehicleCategoryVisual(
+                        category: item.category,
+                        size: 38,
+                        borderRadius: 10,
+                      ),
+                    )
+                  : VehicleCategoryVisual(
+                      category: item.category,
+                      size: 38,
+                      borderRadius: 10,
+                    ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              item.title,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+                color: textBlack,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              item.capacity,
+              style: const TextStyle(fontSize: 11, color: textSecondary),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActiveTripBanner(model.RideModel currentRide) {
+    return GestureDetector(
+      onTap: () => context.push('/ride-booking'),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: surfaceWhite,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: successGreen.withValues(alpha: 0.5)),
+          boxShadow: [
+            BoxShadow(
+              color: successGreen.withValues(alpha: 0.1),
+              blurRadius: 14,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: successGreen.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.navigation_rounded,
+                color: successGreen,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: successGreen,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          'ACTIVE TRIP',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _formatStatus(currentRide.status),
+                        style: const TextStyle(
+                          color: textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    currentRide.destinationAddress ?? 'Heading to Destination',
+                    style: const TextStyle(
+                      color: textBlack,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.arrow_forward_ios_rounded,
+              color: textBlack,
+              size: 16,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildRecentActivitySection(BuildContext context, dynamic rideState) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             const Text(
               'Recent Activity',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: textWhite),
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: textBlack,
+              ),
             ),
             if (rideState.history.isNotEmpty)
               GestureDetector(
                 onTap: () => context.push('/booking-history'),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: bgCard,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: borderDim),
-                  ),
-                  child: const Text(
-                    'View All',
-                    style: TextStyle(color: textSilver, fontSize: 11, fontWeight: FontWeight.w600),
+                child: const Text(
+                  'View All →',
+                  style: TextStyle(
+                    color: textBlack,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
                   ),
                 ),
               ),
           ],
         ),
-        const SizedBox(height: 12),
-        if (_isLoadingHistory && rideState.history.isEmpty)
-          const InfurnusSkeletonCard()
-        else if (rideState.history.isNotEmpty)
-          _buildActivityCard(rideState.history.first)
+        const SizedBox(height: 14),
+        if (_isLoadingHistory && rideState.history.isEmpty) ...[
+          const InfurnusSkeletonCard(),
+          const InfurnusSkeletonCard(),
+        ] else if (rideState.history.isNotEmpty)
+          ...rideState.history.take(3).map((ride) => _buildActivityCard(ride))
         else
-          _buildNoTripsCard(context),
+          InfurnusEmptyState(
+            icon: Icons.route_outlined,
+            title: 'No trips yet',
+            description:
+                'Your completed rides and deliveries will appear here.',
+            actionLabel: 'Book a Ride',
+            onAction: () {
+              ref.read(rideProvider.notifier).selectSector('passenger');
+              context.push('/ride-booking');
+            },
+          ),
       ],
-    );
-  }
-
-  Widget _buildNoTripsCard(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        ref.read(rideProvider.notifier).selectSector('passenger');
-        context.push('/ride-booking');
-      },
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: bgCard,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: borderDim),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: accentRide.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Icon(Icons.route_rounded, color: accentRide, size: 22),
-            ),
-            const SizedBox(width: 14),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'No trips yet',
-                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: textWhite),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    'Book your first ride now →',
-                    style: TextStyle(fontSize: 12, color: textSilver),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: const BoxDecoration(
-                color: brandGreenGlow,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.arrow_forward_rounded, color: brandGreen, size: 16),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
   Widget _buildActivityCard(model.RideModel ride) {
     final formattedDate = DateFormat('MMM d, h:mm a').format(ride.createdAt);
-    final isCancelled   = ride.status == model.RideStatus.cancelled;
-    final isCompleted   = ride.status == model.RideStatus.completed;
-    final statusColor   = isCancelled ? accentEmerg : isCompleted ? brandGreen : accentRide;
+    final isCancelled = ride.status == model.RideStatus.cancelled;
 
     return Container(
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: bgCard,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: statusColor.withValues(alpha: 0.2)),
+        color: surfaceWhite,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: cardBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(18),
         child: InkWell(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(18),
           onTap: () {
             ref.read(rideProvider.notifier).getRideDetails(ride.id);
             context.push('/ride-booking');
@@ -1121,18 +2107,20 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(14),
+                    color: isCancelled
+                        ? serviceRed.withValues(alpha: 0.12)
+                        : searchBg,
+                    shape: BoxShape.circle,
                   ),
                   child: Icon(
                     ride.sector == 'logistics'
                         ? Icons.local_shipping_rounded
-                        : ride.sector == 'service'
-                            ? Icons.emergency_rounded
-                            : ride.sector == 'premium'
-                                ? Icons.stars_rounded
-                                : Icons.directions_car_rounded,
-                    color: statusColor,
+                        : (ride.sector == 'service'
+                              ? Icons.emergency_rounded
+                              : (ride.sector == 'premium'
+                                    ? Icons.stars_rounded
+                                    : Icons.directions_car_rounded)),
+                    color: isCancelled ? serviceRed : buttonBlack,
                     size: 20,
                   ),
                 ),
@@ -1144,29 +2132,50 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                       Text(
                         ride.destinationAddress ?? 'Ride destination',
                         style: const TextStyle(
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.bold,
                           fontSize: 14,
-                          color: textWhite,
+                          color: textBlack,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 3),
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 1,
+                            ),
                             decoration: BoxDecoration(
-                              color: statusColor.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(5),
+                              color: isCancelled
+                                  ? serviceRed.withValues(alpha: 0.1)
+                                  : (ride.status == model.RideStatus.completed
+                                        ? successGreen.withValues(alpha: 0.15)
+                                        : searchBg),
+                              borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
                               _formatStatus(ride.status).toUpperCase(),
-                              style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: statusColor),
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: isCancelled
+                                    ? serviceRed
+                                    : (ride.status == model.RideStatus.completed
+                                          ? successGreen
+                                          : textBlack),
+                              ),
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Text(formattedDate, style: const TextStyle(color: textMuted, fontSize: 11)),
+                          Text(
+                            formattedDate,
+                            style: const TextStyle(
+                              color: textSecondary,
+                              fontSize: 11,
+                            ),
+                          ),
                         ],
                       ),
                     ],
@@ -1176,7 +2185,11 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                   const SizedBox(width: 8),
                   Text(
                     '₹${ride.displayFare.toStringAsFixed(0)}',
-                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: textWhite),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                      color: textBlack,
+                    ),
                   ),
                 ],
               ],
@@ -1187,318 +2200,73 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     );
   }
 
-  // ── ACTIVE TRIP BANNER ────────────────────────────────────────────────────
-  Widget _buildActiveTripBanner(model.RideModel currentRide) {
-    return GestureDetector(
-      onTap: () => context.push('/ride-booking'),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [brandGreenDark, brandGreen.withValues(alpha: 0.8)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+  Widget _buildBottomNavigationBar(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: surfaceWhite,
+        border: Border(top: BorderSide(color: cardBorder, width: 1.0)),
+      ),
+      child: BottomNavigationBar(
+        selectedItemColor: const Color(0xFF16A34A),
+        unselectedItemColor: textMuted,
+        currentIndex: 0,
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: surfaceWhite,
+        elevation: 0,
+        showSelectedLabels: true,
+        showUnselectedLabels: true,
+        selectedFontSize: 11,
+        unselectedFontSize: 11,
+        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold),
+        onTap: (index) {
+          if (index == 1) context.push('/booking-history');
+          if (index == 2) context.push('/wallet');
+          if (index == 3) context.push('/profile');
+        },
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: 'Home'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.receipt_long_outlined),
+            activeIcon: Icon(Icons.receipt_long_rounded),
+            label: 'Activity',
           ),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(color: brandGreen.withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 4)),
-          ],
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.navigation_rounded, color: Colors.white, size: 26),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('ACTIVE TRIP', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
-                  const SizedBox(height: 2),
-                  Text(
-                    currentRide.destinationAddress ?? 'Heading to Destination',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 16),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── BOTTOM NAVIGATION BAR ─────────────────────────────────────────────────
-  Widget _buildBottomBar(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: const Border(top: BorderSide(color: borderDim, width: 1)),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 16, offset: const Offset(0, -3)),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.account_balance_wallet_outlined),
+            activeIcon: Icon(Icons.account_balance_wallet_rounded),
+            label: 'Wallet',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline_rounded),
+            activeIcon: Icon(Icons.person_rounded),
+            label: 'Profile',
+          ),
         ],
-      ),
-      child: SafeArea(
-        top: false,
-        child: BottomNavigationBar(
-          selectedItemColor: brandGreenDark,
-          unselectedItemColor: const Color(0xFF64748B),
-          currentIndex: 0,
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          showSelectedLabels: true,
-          showUnselectedLabels: true,
-          selectedFontSize: 11,
-          unselectedFontSize: 11,
-          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold),
-          onTap: (index) {
-            if (index == 1) context.push('/booking-history');
-            if (index == 2) context.push('/wallet');
-            if (index == 3) context.push('/profile');
-          },
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home_filled),
-              label: 'Home',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.receipt_long_outlined),
-              activeIcon: Icon(Icons.receipt_long_rounded),
-              label: 'Activity',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.account_balance_wallet_outlined),
-              activeIcon: Icon(Icons.account_balance_wallet_rounded),
-              label: 'Wallet',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_outline_rounded),
-              activeIcon: Icon(Icons.person_rounded),
-              label: 'Profile',
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── SEARCH MODAL ──────────────────────────────────────────────────────────
-  final List<Map<String, dynamic>> _quickDestinations = [
-    {'label': 'Airport T1',       'icon': Icons.flight_rounded,        'address': 'Airport Terminal 1, International Hub', 'coords': const LatLng(25.5913, 85.0880)},
-    {'label': 'Railway Station',  'icon': Icons.train_rounded,         'address': 'Patna Junction Railway Station',        'coords': const LatLng(25.6022, 85.1376)},
-    {'label': 'Gandhi Maidan',    'icon': Icons.location_city_rounded, 'address': 'Gandhi Maidan, Patna',                 'coords': const LatLng(25.6154, 85.1437)},
-    {'label': 'Boring Road',      'icon': Icons.business_rounded,      'address': 'Boring Road Chauraha, Patna',          'coords': const LatLng(25.6127, 85.1189)},
-  ];
-
-  void _showSearchModal(BuildContext context) {
-    List<PlaceSuggestion> modalSuggestions = [];
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: bgCard,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (context) {
-        return StatefulBuilder(builder: (context, setModalState) {
-          return Padding(
-            padding: EdgeInsets.only(
-              left: 20, right: 20, top: 20,
-              bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Where to?', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: textWhite)),
-                      IconButton(
-                        icon: const Icon(Icons.close_rounded, color: textSilver),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: bgSurface,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: borderDim),
-                    ),
-                    child: Column(children: [
-                      const Row(children: [
-                        Icon(Icons.my_location_rounded, color: brandGreen, size: 18),
-                        SizedBox(width: 12),
-                        Text('Current Location (GPS Active)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textWhite)),
-                      ]),
-                      const Padding(
-                        padding: EdgeInsets.only(left: 8, top: 4, bottom: 4),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: SizedBox(height: 16, child: VerticalDivider(color: textMuted, thickness: 2)),
-                        ),
-                      ),
-                      Row(children: [
-                        const Icon(Icons.location_on_rounded, color: accentEmerg, size: 18),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextField(
-                            autofocus: true,
-                            style: const TextStyle(color: textWhite, fontWeight: FontWeight.w600),
-                            cursorColor: brandGreen,
-                            decoration: const InputDecoration(
-                              hintText: 'Search destination...',
-                              hintStyle: TextStyle(color: textMuted),
-                              border: InputBorder.none,
-                              isDense: true,
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                            onChanged: (val) async {
-                              if (val.trim().isNotEmpty) {
-                                final service = ref.read(placesAutocompleteServiceProvider);
-                                final results = await service.getSuggestions(val);
-                                setModalState(() => modalSuggestions = results);
-                              } else {
-                                setModalState(() => modalSuggestions = []);
-                              }
-                            },
-                            onSubmitted: (val) {
-                              if (val.trim().isNotEmpty) {
-                                Navigator.pop(context);
-                                ref.read(rideProvider.notifier).setRoute('Current Location', val.trim());
-                                context.push('/ride-booking');
-                              }
-                            },
-                          ),
-                        ),
-                      ]),
-                    ]),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text('Quick Destinations', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: textSilver)),
-                  const SizedBox(height: 10),
-                  SizedBox(
-                    height: 36,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      children: _quickDestinations.map((dest) {
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: ActionChip(
-                            avatar: Icon(dest['icon'] as IconData, size: 14, color: brandGreen),
-                            label: Text(dest['label'] as String, style: const TextStyle(fontSize: 11, color: textWhite)),
-                            backgroundColor: bgSurface,
-                            shape: const RoundedRectangleBorder(
-                              borderRadius: BorderRadius.all(Radius.circular(18)),
-                              side: BorderSide(color: borderDim),
-                            ),
-                            onPressed: () {
-                              Navigator.pop(context);
-                              ref.read(rideProvider.notifier).setRoute('Current Location', dest['address'] as String);
-                              if (dest['coords'] != null) {
-                                ref.read(rideProvider.notifier).setDestinationCoords(dest['coords'] as LatLng, address: dest['address'] as String);
-                              }
-                              context.push('/ride-booking');
-                            },
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                  if (modalSuggestions.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    const Text('Suggestions', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: textSilver)),
-                    const SizedBox(height: 8),
-                    ...modalSuggestions.map((s) {
-                      return InkWell(
-                        onTap: () { Navigator.pop(context); _selectSuggestion(s); },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.location_on_outlined, size: 18, color: textSilver),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(s.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textWhite), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                    Text(s.subtitle, style: const TextStyle(fontSize: 12, color: textSilver), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }),
-                  ],
-                ],
-              ),
-            ),
-          );
-        });
-      },
-    );
-  }
-
-  Widget _buildAutocompleteDropdown(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        color: bgCard,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: borderDim),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 16, offset: const Offset(0, 4))],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: _suggestions.isEmpty
-            ? [const Padding(padding: EdgeInsets.all(12), child: Text('No locations found.', style: TextStyle(color: textMuted)))]
-            : _suggestions.map((s) => InkWell(
-                onTap: () => _selectSuggestion(s),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.location_on_outlined, size: 16, color: textSilver),
-                      const SizedBox(width: 12),
-                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(s.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textWhite), maxLines: 1, overflow: TextOverflow.ellipsis),
-                        Text(s.subtitle, style: const TextStyle(fontSize: 11, color: textSilver), maxLines: 1, overflow: TextOverflow.ellipsis),
-                      ])),
-                      const Icon(Icons.north_west_rounded, size: 13, color: textMuted),
-                    ],
-                  ),
-                ),
-              )).toList(),
       ),
     );
   }
 
   String _formatStatus(model.RideStatus status) {
     switch (status) {
-      case model.RideStatus.requested:      return 'Requested';
-      case model.RideStatus.searching:      return 'Searching';
-      case model.RideStatus.driverAssigned: return 'Driver Assigned';
-      case model.RideStatus.driverArriving: return 'Driver Arriving';
-      case model.RideStatus.driverArrived:  return 'Driver Arrived';
-      case model.RideStatus.inProgress:     return 'In Progress';
-      case model.RideStatus.completed:      return 'Completed';
-      case model.RideStatus.cancelled:      return 'Cancelled';
+      case model.RideStatus.requested:
+        return 'Requested';
+      case model.RideStatus.searching:
+        return 'Searching';
+      case model.RideStatus.driverAssigned:
+        return 'Driver Assigned';
+      case model.RideStatus.driverArriving:
+        return 'Driver Arriving';
+      case model.RideStatus.driverArrived:
+        return 'Driver Arrived';
+      case model.RideStatus.inProgress:
+        return 'In Progress';
+      case model.RideStatus.completed:
+        return 'Completed';
+      case model.RideStatus.cancelled:
+        return 'Cancelled';
     }
   }
 }
 
-// ── DATA MODELS ───────────────────────────────────────────────────────────────
 class _VehicleCategoryItem {
   final String title;
   final String capacity;
@@ -1519,26 +2287,22 @@ class _VehicleCategoryItem {
   });
 }
 
-class _ServiceTile {
+class _LuxuryVehicleItem {
   final String title;
+  final String badge;
   final String subtitle;
-  final IconData? icon;
+  final String price;
   final String? assetImagePath;
-  final Color color;
-  final VehicleCategoryType category;
-  final VoidCallback action;
-  const _ServiceTile({
+
+  const _LuxuryVehicleItem({
     required this.title,
+    required this.badge,
     required this.subtitle,
-    this.icon,
+    required this.price,
     this.assetImagePath,
-    required this.color,
-    required this.category,
-    required this.action,
   });
 }
 
-// ── PRESSABLE SCALE CARD ──────────────────────────────────────────────────────
 class _PressableScaleCard extends StatefulWidget {
   final Widget child;
   final VoidCallback onTap;
@@ -1549,28 +2313,22 @@ class _PressableScaleCard extends StatefulWidget {
   State<_PressableScaleCard> createState() => _PressableScaleCardState();
 }
 
-class _PressableScaleCardState extends State<_PressableScaleCard>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double> _scale;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 100), lowerBound: 0.0, upperBound: 1.0);
-    _scale = Tween<double>(begin: 1.0, end: 0.95).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
-  }
-
-  @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
+class _PressableScaleCardState extends State<_PressableScaleCard> {
+  bool _isPressed = false;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => _ctrl.forward(),
-      onTapUp: (_) { _ctrl.reverse(); widget.onTap(); },
-      onTapCancel: () => _ctrl.reverse(),
-      child: ScaleTransition(scale: _scale, child: widget.child),
+    return AnimatedScale(
+      scale: _isPressed ? 0.97 : 1.0,
+      duration: const Duration(milliseconds: 120),
+      curve: Curves.easeInOut,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        onTapDown: (_) => setState(() => _isPressed = true),
+        onTapUp: (_) => setState(() => _isPressed = false),
+        onTapCancel: () => setState(() => _isPressed = false),
+        child: widget.child,
+      ),
     );
   }
 }

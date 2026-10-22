@@ -144,19 +144,21 @@ Future<void> _addCsrfHeader(Dio dio, RequestOptions options, Ref ref) async {
   final authUri = Uri.parse(dio.options.baseUrl).replace(path: '/auth');
 
   final cookies = await _getCookiesForRequest(dio, authUri);
-  if (cookies == null) {
-    final csrf = await ref
-        .read(secureStorageProvider)
-        .read(key: 'auth_csrf_token');
-    if (csrf != null && csrf.isNotEmpty) options.headers['X-CSRF-Token'] = csrf;
-    return;
+  if (cookies != null) {
+    for (var cookie in cookies) {
+      if (cookie.name == _csrfCookieName && cookie.value.isNotEmpty) {
+        options.headers['X-CSRF-Token'] = cookie.value;
+        return;
+      }
+    }
   }
 
-  for (var cookie in cookies) {
-    if (cookie.name == _csrfCookieName && cookie.value.isNotEmpty) {
-      options.headers['X-CSRF-Token'] = cookie.value;
-      break;
-    }
+  // Fallback to persisted CSRF token if cookie is not yet in cookieJar or empty
+  final csrf = await ref
+      .read(secureStorageProvider)
+      .read(key: 'auth_csrf_token');
+  if (csrf != null && csrf.isNotEmpty) {
+    options.headers['X-CSRF-Token'] = csrf;
   }
 }
 

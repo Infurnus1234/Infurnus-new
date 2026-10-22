@@ -1227,13 +1227,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
             'icon': Icons.local_shipping_rounded,
             'image': 'assets/images/tata_magic_cream.png',
           },
-          {
-            'name': '207 Normal',
-            'category': 'cargo_207',
-            'capacity': 'Up to 1000 kg',
-            'icon': Icons.local_shipping_rounded,
-            'image': 'assets/images/cargo_207_normal.png',
-          },
+
           {
             'name': '207 Heavy',
             'category': 'cargo_207_heavy',
@@ -1300,13 +1294,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
             'icon': Icons.precision_manufacturing_rounded,
             'image': 'assets/images/crane_truck.png',
           },
-          {
-            'name': 'Garbage Truck',
-            'category': 'garbage',
-            'capacity': 'Waste Disposal',
-            'icon': Icons.delete_outline_rounded,
-            'image': 'assets/images/garbage_dump_truck.png',
-          },
+
         ];
       case 'premium':
       case 'rental':
