@@ -9,7 +9,8 @@ import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/password_recovery_screen.dart';
 import '../../features/auth/presentation/providers/user_provider.dart';
 import '../../features/auth/data/models/auth_models.dart';
-import '../../features/auth/presentation/screens/signup_screen.dart';
+// SignupScreen is no longer needed — /signup redirects to /login combined screen
+
 import '../../features/auth/presentation/screens/otp_screen.dart';
 import '../../features/auth/presentation/screens/location_permission_screen.dart';
 import '../../features/auth/presentation/screens/notifications_permission_screen.dart';
@@ -89,7 +90,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/signup',
-        builder: (context, state) => const SignupScreen(),
+        redirect: (context, state) => '/login',
       ),
       GoRoute(path: '/otp', builder: (context, state) => const OtpScreen()),
       GoRoute(
