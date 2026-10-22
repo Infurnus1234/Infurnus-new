@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
 
 /// Photo-realistic Auth Hero Banner displaying the original INFURNUS
-/// promotional poster asset (`login_hero_banner.jpg`).
+/// promotional poster asset (`login_hero_banner.jpg`) using BoxFit.contain
+/// to ensure 100% of the artwork (heading, tagline, 4 category cards, woman, vehicles)
+/// is fully visible without cropping or being hidden.
 class AuthHeroBanner extends StatelessWidget {
   const AuthHeroBanner({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    return Container(
       width: double.infinity,
-      height: double.infinity,
+      color: Colors.black,
       child: Image.asset(
         'assets/images/login_hero_banner.jpg',
-        fit: BoxFit.cover,
+        fit: BoxFit.contain,
         alignment: Alignment.topCenter,
         errorBuilder: (_, __, ___) => Container(
           decoration: const BoxDecoration(
@@ -25,22 +27,6 @@ class AuthHeroBanner extends StatelessWidget {
               ],
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-            ),
-          ),
-          child: Center(
-            child: Image.asset(
-              'assets/images/infurnus_3d_logo.png',
-              height: 48,
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => const Text(
-                'INFURNUS',
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 2.5,
-                  color: Colors.white,
-                ),
-              ),
             ),
           ),
         ),
