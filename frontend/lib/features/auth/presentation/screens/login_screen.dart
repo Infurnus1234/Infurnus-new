@@ -48,21 +48,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final totalHeight = constraints.maxHeight;
-            // Proportional layout to ensure the entire promotional poster
-            // is fully visible at the top without being cropped or hidden,
-            // while the login panel sits directly below.
-            final bannerHeight = totalHeight * 0.45;
+            // Responsive height allocation: 48% for the promotional poster banner,
+            // 52% for the compact login form panel.
+            final bannerHeight = totalHeight * 0.48;
             final panelHeight = totalHeight - bannerHeight;
 
             return Column(
               children: [
-                // ── TOP: Original promotional poster (100% visible via BoxFit.contain) ──
+                // ── TOP: Original promotional poster header (AuthHeroBanner) ──
                 SizedBox(
                   height: bannerHeight,
                   child: const AuthHeroBanner(),
                 ),
 
-                // ── BOTTOM: White rounded login panel (Non-overlapping, positioned directly below) ──
+                // ── BOTTOM: White rounded login panel positioned directly below ──
                 SizedBox(
                   height: panelHeight,
                   child: Container(
