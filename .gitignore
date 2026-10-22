@@ -48,3 +48,20 @@ temp/
 **/key.properties
 **/local.properties
 frontend/android/debug-dependencies.txt
+
+# Operator-provided credentials and local configuration
+.env
+.env.*
+!.env.example
+**/google-services.json
+**/GoogleService-Info.plist
+**/local.properties
+**/key.properties
+*.jks
+*.keystore
+*.p12
+*.key
+*.pem
+*.apk
+*.aab
+*.log

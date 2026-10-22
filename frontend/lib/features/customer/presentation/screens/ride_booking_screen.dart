@@ -1294,7 +1294,6 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
             'icon': Icons.precision_manufacturing_rounded,
             'image': 'assets/images/crane_truck.png',
           },
-
         ];
       case 'premium':
       case 'rental':
@@ -1394,8 +1393,16 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
 
   Widget _buildSectorPills(RideState state) {
     final sectors = [
-      {'id': 'passenger', 'label': 'Rides', 'icon': Icons.directions_car_rounded},
-      {'id': 'logistics', 'label': 'Logistics', 'icon': Icons.local_shipping_rounded},
+      {
+        'id': 'passenger',
+        'label': 'Rides',
+        'icon': Icons.directions_car_rounded,
+      },
+      {
+        'id': 'logistics',
+        'label': 'Logistics',
+        'icon': Icons.local_shipping_rounded,
+      },
       {'id': 'service', 'label': 'Emergency', 'icon': Icons.emergency_rounded},
       {'id': 'premium', 'label': 'Rentals', 'icon': Icons.stars_rounded},
     ];
@@ -1425,7 +1432,9 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                 color: isSelected ? const Color(0xFF111827) : Colors.white,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: isSelected ? const Color(0xFF111827) : const Color(0xFFE5E7EB),
+                  color: isSelected
+                      ? const Color(0xFF111827)
+                      : const Color(0xFFE5E7EB),
                 ),
               ),
               child: Row(
@@ -1434,15 +1443,21 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                   Icon(
                     sec['icon'] as IconData,
                     size: 16,
-                    color: isSelected ? const Color(0xFF16A34A) : const Color(0xFF4B5563),
+                    color: isSelected
+                        ? const Color(0xFF16A34A)
+                        : const Color(0xFF4B5563),
                   ),
                   const SizedBox(width: 6),
                   Text(
                     sec['label'] as String,
                     style: TextStyle(
                       fontSize: 12,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                      color: isSelected ? Colors.white : const Color(0xFF111827),
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.w600,
+                      color: isSelected
+                          ? Colors.white
+                          : const Color(0xFF111827),
                     ),
                   ),
                 ],
@@ -1456,7 +1471,8 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
 
   Widget _buildVehicleTierCards(RideState state) {
     final tiers = _getVehiclesForSector(state.selectedSector);
-    final hasLocations = state.pickupCoords != null &&
+    final hasLocations =
+        state.pickupCoords != null &&
         state.destinationCoords != null &&
         _pickupController.text.trim().isNotEmpty &&
         _destinationController.text.trim().isNotEmpty;
@@ -1470,7 +1486,8 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
         itemBuilder: (context, index) {
           final tier = tiers[index];
           final category = tier['category'] as String;
-          final isSelected = state.selectedTier == category ||
+          final isSelected =
+              state.selectedTier == category ||
               (state.selectedTier.isEmpty && index == 0);
 
           String badgeText;
@@ -1510,7 +1527,8 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                 boxShadow: isSelected
                     ? [
                         BoxShadow(
-                          color: const Color(0xFF16A34A).withValues(alpha: 0.15),
+                          color: const Color(0xFF16A34A)
+                              .withValues(alpha: 0.15),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
                         ),
@@ -1560,7 +1578,9 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                             : FontWeight.w600,
                         color: isSelected && state.fareEstimate != null
                             ? const Color(0xFF16A34A)
-                            : (isSelected ? const Color(0xFF111827) : const Color(0xFF6B7280)),
+                            : (isSelected
+                                  ? const Color(0xFF111827)
+                                  : const Color(0xFF6B7280)),
                       ),
                     ),
                   ),
@@ -1574,7 +1594,8 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
   }
 
   Widget _buildConfirmButton(RideState state) {
-    final hasLocations = state.pickupCoords != null &&
+    final hasLocations =
+        state.pickupCoords != null &&
         state.destinationCoords != null &&
         _pickupController.text.trim().isNotEmpty &&
         _destinationController.text.trim().isNotEmpty;
@@ -1602,10 +1623,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
           onPressed: null,
           child: const Text(
             'Select Destination to View Fares',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
           ),
         ),
       );
@@ -1667,17 +1685,15 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
           icon: const Icon(Icons.refresh_rounded, size: 20),
           label: const Text(
             'Retry Fare Calculation',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
           ),
           onPressed: () => ref.read(rideProvider.notifier).estimateRouteFare(),
         ),
       );
     }
 
-    final fareText = state.fareEstimate?.displayFare ??
+    final fareText =
+        state.fareEstimate?.displayFare ??
         (state.fare != null ? '₹${state.fare!.toStringAsFixed(2)}' : '');
     final buttonTitle = fareText.isNotEmpty
         ? 'Book $vehicleName • $fareText'
@@ -2025,7 +2041,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                       driver?.name.isNotEmpty == true
                           ? driver!.name
                           : (state.driverName ??
-                              'Matching driver details from fleet server...'),
+                                'Matching driver details from fleet server...'),
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
@@ -2083,9 +2099,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                 onPressed: (driver?.phone != null && driver!.phone!.isNotEmpty)
                     ? () {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Calling ${driver.name}...'),
-                          ),
+                          SnackBar(content: Text('Calling ${driver.name}...')),
                         );
                       }
                     : null,

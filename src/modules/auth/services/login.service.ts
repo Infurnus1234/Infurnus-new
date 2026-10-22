@@ -109,7 +109,9 @@ export class LoginService {
     // --------------------------------------------------------
 
     if (email) {
-      identity = await this.repository.findByEmail(email);
+      identity = await (input.role
+        ? this.repository.findByEmail(email, input.role)
+        : this.repository.findByEmail(email));
 
       // ------------------------------------------------------
       // If both email and phone are supplied, make sure they
@@ -117,7 +119,9 @@ export class LoginService {
       // ------------------------------------------------------
 
       if (identity && phone) {
-        const phoneIdentity = await this.repository.findByPhone(phone);
+        const phoneIdentity = await (input.role
+          ? this.repository.findByPhone(phone, input.role)
+          : this.repository.findByPhone(phone));
 
         if (!phoneIdentity || phoneIdentity.id !== identity.id) {
           throw new AppError('INVALID_CREDENTIALS', 'Invalid email/phone or password', 401);
@@ -130,7 +134,9 @@ export class LoginService {
     // --------------------------------------------------------
 
     if (!email) {
-      identity = await this.repository.findByPhone(phone!);
+      identity = await (input.role
+        ? this.repository.findByPhone(phone!, input.role)
+        : this.repository.findByPhone(phone!));
     }
 
     // --------------------------------------------------------

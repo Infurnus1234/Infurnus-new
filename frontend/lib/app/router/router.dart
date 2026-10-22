@@ -86,10 +86,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           initialEmail: state.extra is String ? state.extra as String : '',
         ),
       ),
-      GoRoute(
-        path: '/signup',
-        redirect: (context, state) => '/login',
-      ),
+      GoRoute(path: '/signup', redirect: (context, state) => '/login'),
       GoRoute(path: '/otp', builder: (context, state) => const OtpScreen()),
       GoRoute(
         path: '/location-permission',

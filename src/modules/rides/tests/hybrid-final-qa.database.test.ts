@@ -1224,7 +1224,13 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
         (await pool.query('SELECT status FROM ride_dispatch_attempts WHERE ride_id=$1', [r.id]))
           .rows[0].status,
       ).toBe('timed_out');
-      expect(await (await queue.getJob('owned-crash-job'))?.getState()).toBe('completed');
+      // The dispatch callback runs before BullMQ acknowledges job completion.
+      await vi.waitFor(
+        async () => {
+          expect(await (await queue.getJob('owned-crash-job'))?.getState()).toBe('completed');
+        },
+        { timeout: 5000 },
+      );
       record('OPS-WORKER-CRASH', {
         realProcessTermination: true,
         recoveredJobs: 1,
@@ -1325,7 +1331,12 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
       await new Promise((resolve) => setTimeout(resolve, 700));
       available = true;
       await vi.waitFor(async () => expect(await redis.ping()).toBe('PONG'), { timeout: 5000 });
-      await vi.waitFor(() => expect(progress.dispatch).toHaveBeenCalledTimes(1), { timeout: 5000 });
+      // BullMQ uses a 15s run-loop retry and 30s lock/stalled intervals. A real
+      // dropped worker connection may need lock recovery after Redis itself is ready.
+      await vi.waitFor(() => expect(progress.dispatch).toHaveBeenCalledTimes(1), {
+        timeout: 75000,
+        interval: 100,
+      });
       const history = await pool.query(
         'SELECT status FROM ride_dispatch_attempts WHERE ride_id=$1',
         [expiringRide.id],
@@ -1345,7 +1356,7 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
       for (const socket of sockets) socket.destroy();
       await new Promise<void>((resolve) => proxy.close(() => resolve()));
     }
-  });
+  }, 90000);
   it('OPS-SOAK: twenty pending premium offers survive sixty seconds with resource sampling', async () => {
     const pending = [],
       ds = [],

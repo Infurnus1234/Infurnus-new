@@ -105,6 +105,7 @@ class LoginRequest {
   LoginRequest({this.email, this.phone, this.password});
 
   Map<String, dynamic> toJson() => {
+    'role': 'customer',
     if (email != null) 'email': email,
     if (phone != null) 'phone': phone,
     if (password != null) 'password': password,

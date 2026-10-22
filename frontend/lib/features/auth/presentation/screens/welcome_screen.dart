@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_button.dart';
 
@@ -27,12 +28,13 @@ class WelcomeScreen extends StatelessWidget {
                 child: Image.network(
                   'https://images.unsplash.com/photo-1514316454349-750a7fd3da3a?q=80&w=1000&auto=format&fit=crop',
                   fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(color: Colors.black),
+                  errorBuilder: (context, error, stackTrace) =>
+                      Container(color: Colors.black),
                 ),
               ),
             ),
           ),
-          
+
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24.0),
@@ -52,7 +54,9 @@ class WelcomeScreen extends StatelessWidget {
                             borderRadius: BorderRadius.circular(18),
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.emeraldNeon.withValues(alpha: 0.45),
+                                color: AppColors.emeraldNeon.withValues(
+                                  alpha: 0.45,
+                                ),
                                 blurRadius: 28,
                                 spreadRadius: 2,
                               ),
@@ -64,8 +68,11 @@ class WelcomeScreen extends StatelessWidget {
                               'assets/images/infurnus_logo.png',
                               fit: BoxFit.contain,
                               errorBuilder: (context, error, stackTrace) =>
-                                  const Icon(Icons.flash_on,
-                                      color: AppColors.emeraldNeon, size: 36),
+                                  const Icon(
+                                    Icons.flash_on,
+                                    color: AppColors.emeraldNeon,
+                                    size: 36,
+                                  ),
                             ),
                           ),
                         ),
@@ -83,7 +90,9 @@ class WelcomeScreen extends StatelessWidget {
                         Text(
                           'Move • Rent • Deliver',
                           style: TextStyle(
-                            color: AppColors.emeraldNeon.withValues(alpha: 0.85),
+                            color: AppColors.emeraldNeon.withValues(
+                              alpha: 0.85,
+                            ),
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                             letterSpacing: 1.5,
@@ -92,9 +101,9 @@ class WelcomeScreen extends StatelessWidget {
                       ],
                     ),
                   ),
-                  
+
                   const Spacer(),
-                  
+
                   // Text
                   const Text(
                     'Your\nCity. Your\nWay.',
@@ -108,22 +117,19 @@ class WelcomeScreen extends StatelessWidget {
                   const SizedBox(height: 16),
                   const Text(
                     'Rides • Rentals • Logistics\nAll in one app',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 18,
-                    ),
+                    style: TextStyle(color: Colors.white70, fontSize: 18),
                   ),
-                  
+
                   const SizedBox(height: 40),
-                  
+
                   // Button
                   InfurnusButton(
                     text: 'Get Started   →',
                     onPressed: () => context.push('/login'),
                   ),
-                  
+
                   const SizedBox(height: 16),
-                  
+
                   // Footer
                   Center(
                     child: Row(

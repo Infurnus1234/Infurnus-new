@@ -31,8 +31,8 @@ void main() {
         const ProviderScope(child: MaterialApp(home: ProfileScreen())),
       );
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Privacy Settings'));
-      await tester.tap(find.text('Privacy Settings'));
+      await tester.ensureVisible(find.text('Privacy & App Permissions'));
+      await tester.tap(find.text('Privacy & App Permissions'));
       await tester.pumpAndSettle();
       expect(calls, 1);
       expect(

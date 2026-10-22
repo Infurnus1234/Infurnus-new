@@ -21,21 +21,19 @@ class EnvConfig {
   // flutter run --dart-define=API_URL=http://192.168.1.19:3001
   // flutter build apk --release   (uses the Cloud Run URL by default)
   // flutter build apk --release --dart-define=API_URL=https://other-url
-  static const String _definedApiUrl =
-      String.fromEnvironment('API_URL');
+  static const String _definedApiUrl = String.fromEnvironment('API_URL');
 
-  static const String _definedSocketUrl =
-      String.fromEnvironment('SOCKET_URL');
+  static const String _definedSocketUrl = String.fromEnvironment('SOCKET_URL');
 
-  static const String _definedEnv =
-      String.fromEnvironment('ENVIRONMENT', defaultValue: '');
+  static const String _definedEnv = String.fromEnvironment(
+    'ENVIRONMENT',
+    defaultValue: '',
+  );
 
   static EnvConfig get active {
     // 1. Production defaults in release mode when no explicit flag is passed
     if (_definedEnv == 'prod' ||
-        (kReleaseMode &&
-            _definedEnv.isEmpty &&
-            _definedApiUrl.isEmpty)) {
+        (kReleaseMode && _definedEnv.isEmpty && _definedApiUrl.isEmpty)) {
       return prod;
     }
 
@@ -56,19 +54,19 @@ class EnvConfig {
       return EnvConfig(
         baseUrl: _definedApiUrl,
         socketUrl: socket,
-        environment:
-            kReleaseMode ? Environment.prod : Environment.dev,
+        environment: kReleaseMode ? Environment.prod : Environment.dev,
       );
     }
 
-    // 3. Local development default
-    return dev;
+    // A fresh checkout must not silently target another developer's LAN.
+    // Local servers require an explicit API_URL or ENVIRONMENT=emulator.
+    return prod;
   }
 
   // Local development for physical Android device via USB adb reverse or LAN
   static const EnvConfig dev = EnvConfig(
-    baseUrl: 'http://192.168.0.163:3000',
-    socketUrl: 'http://192.168.0.163:3000',
+    baseUrl: 'http://127.0.0.1:3000',
+    socketUrl: 'http://127.0.0.1:3000',
     environment: Environment.dev,
   );
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../core/theme/app_colors.dart';
 
 class InfurnusOutlinedButton extends StatelessWidget {
@@ -21,16 +22,11 @@ class InfurnusOutlinedButton extends StatelessWidget {
         foregroundColor: AppColors.primaryGreen,
         side: const BorderSide(color: AppColors.primaryGreen),
         padding: const EdgeInsets.symmetric(vertical: 16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
       child: Text(
         text,
-        style: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-        ),
+        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
       ),
     );
 

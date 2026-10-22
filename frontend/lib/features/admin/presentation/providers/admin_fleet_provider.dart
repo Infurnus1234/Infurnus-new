@@ -55,9 +55,15 @@ class AdminFleetState {
       states: states ?? this.states,
       cities: cities ?? this.cities,
       vehicles: vehicles ?? this.vehicles,
-      selectedVehicle: clearSelectedVehicle ? null : (selectedVehicle ?? this.selectedVehicle),
-      selectedState: clearSelectedState ? null : (selectedState ?? this.selectedState),
-      selectedCity: clearSelectedCity ? null : (selectedCity ?? this.selectedCity),
+      selectedVehicle: clearSelectedVehicle
+          ? null
+          : (selectedVehicle ?? this.selectedVehicle),
+      selectedState: clearSelectedState
+          ? null
+          : (selectedState ?? this.selectedState),
+      selectedCity: clearSelectedCity
+          ? null
+          : (selectedCity ?? this.selectedCity),
       selectedSector: selectedSector ?? this.selectedSector,
       selectedStatus: selectedStatus ?? this.selectedStatus,
       searchQuery: searchQuery ?? this.searchQuery,
@@ -67,9 +73,10 @@ class AdminFleetState {
   }
 }
 
-final adminFleetNotifierProvider = StateNotifierProvider<AdminFleetNotifier, AdminFleetState>((ref) {
-  return AdminFleetNotifier(ref.read(adminFleetRemoteDataSourceProvider));
-});
+final adminFleetNotifierProvider =
+    StateNotifierProvider<AdminFleetNotifier, AdminFleetState>((ref) {
+      return AdminFleetNotifier(ref.read(adminFleetRemoteDataSourceProvider));
+    });
 
 class AdminFleetNotifier extends StateNotifier<AdminFleetState> {
   final AdminFleetRemoteDataSource _dataSource;
@@ -132,10 +139,7 @@ class AdminFleetNotifier extends StateNotifier<AdminFleetState> {
         cities: [],
       );
     } else {
-      state = state.copyWith(
-        selectedState: newState,
-        clearSelectedCity: true,
-      );
+      state = state.copyWith(selectedState: newState, clearSelectedCity: true);
     }
     loadDashboardData();
   }

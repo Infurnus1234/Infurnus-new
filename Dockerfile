@@ -26,26 +26,8 @@ RUN npm run build
 # ----------------------------------------------------------------------
 # Stage 2: Production runner
 # ----------------------------------------------------------------------
-FROM node:22-bookworm-slim AS runner
-
+# Preserve the exact serving runtime and its approved boundary asset.
+FROM asia-south2-docker.pkg.dev/infurnus-5c47c/cloud-run-source-deploy/infurnus-api:github-db9cfb0-boundary-20261019 AS runner
 WORKDIR /app
-
-ENV NODE_ENV=production
-ENV PORT=3000
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY package*.json ./
-RUN npm install --global npm@11.3.0 && npm ci --omit=dev --ignore-scripts && npm rebuild argon2
-
 COPY --from=builder /app/dist ./dist
 COPY migrations/ ./migrations/
-COPY config/service-area/ ./config/service-area/
-
-EXPOSE 3000
-
-USER node
-
-CMD ["node", "dist/server.js"]

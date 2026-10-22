@@ -1,7 +1,9 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../../core/storage/secure_storage.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_brand_mark.dart';
@@ -31,9 +33,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       duration: const Duration(milliseconds: 900),
     );
 
-    _scaleAnimation = Tween<double>(begin: 0.82, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
-    );
+    _scaleAnimation = Tween<double>(
+      begin: 0.82,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
 
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
@@ -116,7 +119,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
             center: Alignment(0, -0.1),
             radius: 0.95,
             colors: [
-              Color(0xFF091A10), // subtle ambient emerald halo matching logo glow
+              Color(
+                0xFF091A10,
+              ), // subtle ambient emerald halo matching logo glow
               Color(0xFF000000), // deep pitch black matching logo canvas
             ],
           ),
@@ -142,7 +147,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.emeraldNeon.withValues(alpha: 0.4),
+                                color: AppColors.emeraldNeon.withValues(
+                                  alpha: 0.4,
+                                ),
                                 blurRadius: 40,
                                 spreadRadius: 4,
                               ),
@@ -155,9 +162,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                               fit: BoxFit.contain,
                               errorBuilder: (context, error, stackTrace) =>
                                   const InfurnusBrandMark(
-                                iconSize: 84,
-                                showText: false,
-                              ),
+                                    iconSize: 84,
+                                    showText: false,
+                                  ),
                             ),
                           ),
                         ),

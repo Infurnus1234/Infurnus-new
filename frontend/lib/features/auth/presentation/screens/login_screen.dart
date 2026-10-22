@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../data/models/auth_models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
+import '../widgets/google_sign_in_button.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -352,11 +353,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             size: 20,
           ),
           const SizedBox(width: 10),
-          Container(
-            width: 1,
-            height: 24,
-            color: const Color(0xFFE5E7EB),
-          ),
+          Container(width: 1, height: 24, color: const Color(0xFFE5E7EB)),
           const SizedBox(width: 12),
           Expanded(
             child: TextField(
@@ -437,11 +434,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         borderRadius: BorderRadius.circular(26),
         border: Border.all(color: _neonGreen, width: 1.3),
         boxShadow: const [
-          BoxShadow(
-            color: Color(0x6600E676),
-            blurRadius: 18,
-            spreadRadius: 1,
-          ),
+          BoxShadow(color: Color(0x6600E676), blurRadius: 18, spreadRadius: 1),
         ],
       ),
       child: ElevatedButton(
@@ -488,7 +481,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFD1D5DB), width: 1.2),
       ),
-      child: OutlinedButton(
+      child: GoogleSignInButton(
         style: OutlinedButton.styleFrom(
           side: BorderSide.none,
           shape: RoundedRectangleBorder(
@@ -496,13 +489,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
           padding: const EdgeInsets.symmetric(horizontal: 16),
         ),
-        onPressed: isLoading
-            ? null
-            : () {
-                ref
-                    .read(authProvider.notifier)
-                    .signInWithGoogle('dummy-google-token');
-              },
+        enabled: !isLoading,
+        onIdToken: ref.read(authProvider.notifier).signInWithGoogle,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -631,10 +619,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     const Text(
                       'Join Infurnus — Your all-in-one mobility partner',
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF6B7280),
-                      ),
+                      style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
                     ),
                     const SizedBox(height: 16),
 
@@ -801,7 +786,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final isSelected = _selectedRole == role;
     return Expanded(
       child: GestureDetector(
-        onTap: () => setModalState(() => _selectedRole = role),
+        onTap: () => setModalState(() {
+          if (role != 'customer') {
+            _modalError = 'Use the INFURNUS Driver app to register a Driver or Fleet Owner account.';
+            return;
+          }
+          _selectedRole = role;
+          _modalError = null;
+        }),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 8),
@@ -879,7 +871,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       return;
     }
     if (phone.isEmpty && email.isEmpty) {
-      setModalState(() => _modalError = 'Please provide either phone or email.');
+      setModalState(
+        () => _modalError = 'Please provide either phone or email.',
+      );
       return;
     }
     if (password.length < 8) {
@@ -901,7 +895,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     Navigator.of(context).pop(); // close sheet
 
-    ref.read(authProvider.notifier).signup(
+    ref
+        .read(authProvider.notifier)
+        .signup(
           SignupRequest(
             firstName: firstName,
             lastName: lastName,

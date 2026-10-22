@@ -157,7 +157,10 @@ void main() {
   ) async {
     await mount(tester);
     await send(tester);
-    expect(adapter.calls.single.data, {'email': 'person@example.com'});
+    expect(adapter.calls.single.data, {
+      'email': 'person@example.com',
+      'role': 'customer',
+    });
     expect(find.byKey(const Key('recovery-password')), findsNothing);
     await tester.enterText(find.byKey(const Key('recovery-otp')), '123456');
     await tester.tap(find.text('Verify code'));
@@ -289,7 +292,7 @@ void main() {
     expect(authHomeRoute('admin'), '/customer-home');
   });
   testWidgets(
-    'customer-only signup validates password and submits customer role',
+    'customer-only passwordless signup validates identity and submits customer role',
     (tester) async {
       final router = GoRouter(
         initialLocation: '/signup',
@@ -314,12 +317,13 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Use Email'));
+      await tester.tap(find.text('Use Email'));
+      await tester.pumpAndSettle();
       for (final entry in {
         'First Name': 'Driver',
         'Last Name': 'Test',
-        'name@example.com': 'driver@example.com',
-        'Password': 'short',
-        'Confirm Password': 'short',
+        'Enter Email Address': 'driver@example.com',
       }.entries) {
         await tester.enterText(
           find.byWidgetPredicate(
@@ -333,24 +337,23 @@ void main() {
         findsNothing,
       );
       expect(find.text('Driving licence number'), findsNothing);
-      await tester.ensureVisible(find.text('Sign Up   →'));
-      await tester.tap(find.text('Sign Up   →'));
-      await tester.pumpAndSettle();
-      expect(find.text('Password must be 8–128 characters.'), findsOneWidget);
       expect(adapter.calls, isEmpty);
-      for (final hint in ['Password', 'Confirm Password']) {
-        await tester.enterText(
-          find.byWidgetPredicate(
-            (w) => w is TextField && w.decoration?.hintText == hint,
-          ),
-          'Password123!',
-        );
-      }
-
-      await tester.ensureVisible(find.text('Sign Up   →'));
-      await tester.tap(find.text('Sign Up   →'));
+      expect(
+        find.byWidgetPredicate((w) => w is TextField && w.obscureText),
+        findsNothing,
+      );
+      await tester.ensureVisible(find.text('Sign Up'));
+      await tester.tap(find.text('Sign Up'));
       await tester.pumpAndSettle();
       expect(adapter.calls.single.data, containsPair('role', 'customer'));
+      expect(
+        (adapter.calls.single.data as Map).containsKey('password'),
+        isFalse,
+      );
+      expect(
+        adapter.calls.single.data,
+        containsPair('email', 'driver@example.com'),
+      );
       expect(
         (adapter.calls.single.data as Map).containsKey('licenseNumber'),
         isFalse,

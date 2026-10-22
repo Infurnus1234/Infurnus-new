@@ -110,8 +110,12 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
 
     // 5. Loaded List with Filters
     final filtered = state.history.where((ride) {
-      if (_filter == 'completed') return ride.status == model.RideStatus.completed;
-      if (_filter == 'cancelled') return ride.status == model.RideStatus.cancelled;
+      if (_filter == 'completed') {
+        return ride.status == model.RideStatus.completed;
+      }
+      if (_filter == 'cancelled') {
+        return ride.status == model.RideStatus.cancelled;
+      }
       return true;
     }).toList();
 
@@ -166,9 +170,7 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
         decoration: BoxDecoration(
           color: isSelected ? darkGreen : cardBg,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isSelected ? darkGreen : borderCard,
-          ),
+          border: Border.all(color: isSelected ? darkGreen : borderCard),
           boxShadow: isSelected
               ? [
                   BoxShadow(
@@ -360,7 +362,8 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
                                 Text(
                                   ride.driverDetails?.name.isNotEmpty == true
                                       ? ride.driverDetails!.name
-                                      : (ride.vehicleCategory?.toUpperCase() ?? 'INFURNUS RIDE'),
+                                      : (ride.vehicleCategory?.toUpperCase() ??
+                                            'INFURNUS RIDE'),
                                   style: const TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.bold,
@@ -477,11 +480,7 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
       ),
       child: Text(
         label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-          color: fg,
-        ),
+        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: fg),
       ),
     );
   }
@@ -750,7 +749,8 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
                 const SizedBox(height: 12),
 
                 // Driver & Vehicle
-                if (ride.driverDetails != null || ride.vehicleDetails != null) ...[
+                if (ride.driverDetails != null ||
+                    ride.vehicleDetails != null) ...[
                   const Text(
                     'Assigned Driver & Fleet',
                     style: TextStyle(
@@ -794,7 +794,10 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Total Fare Settled', style: TextStyle(color: textGray)),
+                    const Text(
+                      'Total Fare Settled',
+                      style: TextStyle(color: textGray),
+                    ),
                     Text(
                       '₹${ride.displayFare.toStringAsFixed(2)}',
                       style: const TextStyle(
@@ -810,7 +813,10 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Total Distance', style: TextStyle(color: textGray)),
+                      const Text(
+                        'Total Distance',
+                        style: TextStyle(color: textGray),
+                      ),
                       Text(
                         '${((ride.actualDistanceMeters ?? 0) / 1000.0).toStringAsFixed(2)} km',
                         style: const TextStyle(color: textBlack),
@@ -862,7 +868,10 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: const TextStyle(color: textGray, fontSize: 11)),
+              Text(
+                label,
+                style: const TextStyle(color: textGray, fontSize: 11),
+              ),
               const SizedBox(height: 2),
               Text(
                 value,

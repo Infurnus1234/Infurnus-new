@@ -53,6 +53,7 @@ export interface PendingSignup {
    *   - driver
    *   - driver_fleet_owner
    */
+  onboardingLicencePending?: boolean;
   licenseNumber: string | null;
   licenseExpiry: Date | null;
 
@@ -130,6 +131,7 @@ export interface CreatePendingSignupData {
    *   - driver
    *   - driver_fleet_owner
    */
+  onboardingLicencePending?: boolean;
   licenseNumber: string | null;
   licenseExpiry: Date | null;
 

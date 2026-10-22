@@ -1,3 +1,7 @@
+import { PostgresFleetRepository } from '../../fleet/repositories/fleet.repository.js';
+import { pool } from '../../../infrastructure/database/postgres.js';
+import { createManagedDriverRouter } from './managed-driver.routes.js';
+import { createRoleEnrolmentRouter } from './role-enrolment.routes.js';
 import rateLimit from 'express-rate-limit';
 import { Router } from 'express';
 import { z } from 'zod';
@@ -5,6 +9,7 @@ import { requireAuth } from '../../auth/middleware/auth.middleware.js';
 import {
   requireProvider,
   requireFleetOwner,
+  requireFleetFinancialContext,
   requireDriver,
   requireAdminOrSuperAdmin,
 } from '../../auth/middleware/authorization.middleware.js';
@@ -24,6 +29,15 @@ export function createProviderOperationsRouter(repository: PostgresProviderOpera
       keyGenerator: (req) => req.auth!.userId,
     }),
   );
+  router.get('/vehicle-catalog', async (_req, res, next) => {
+    try {
+      res.json({ success: true, data: await new PostgresFleetRepository(pool).catalog() });
+    } catch (e) {
+      next(e);
+    }
+  });
+  router.use(createRoleEnrolmentRouter(repository.enrolment));
+  router.use(createManagedDriverRouter(repository.managedDrivers));
   router.patch('/drivers/:id/membership', requireFleetOwner(), async (req, res, next) => {
     try {
       z.object({ status: z.literal('INACTIVE') })
@@ -87,8 +101,44 @@ export function createProviderOperationsRouter(repository: PostgresProviderOpera
       next(error);
     }
   });
+  router.get('/onboarding', requireDriver(), async (req, res, next) => {
+    try {
+      res.json({
+        success: true,
+        data: await repository.onboarding(req.auth!.userId, req.auth!.role),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+  router.patch('/onboarding', requireDriver(), async (req, res, next) => {
+    try {
+      const input = z
+        .union([
+          z.object({ defer: z.string().min(1).max(80) }).strict(),
+          z.object({ resume: z.string().min(1).max(80) }).strict(),
+        ])
+        .parse(req.body);
+      res.json({
+        success: true,
+        data: await repository.onboarding(req.auth!.userId, req.auth!.role, input),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
   router.post('/approval-requests', async (req, res, next) => {
     try {
+      if (req.body?.requestType === 'onboarding_submission') {
+        z.object({ requestType: z.literal('onboarding_submission') })
+          .strict()
+          .parse(req.body);
+        res.json({
+          success: true,
+          data: await repository.onboarding(req.auth!.userId, req.auth!.role, { submit: true }),
+        });
+        return;
+      }
       if (
         req.auth!.role === 'driver_fleet_owner' &&
         req.headers['x-provider-mode'] === 'driver' &&
@@ -240,7 +290,7 @@ export function createProviderOperationsRouter(repository: PostgresProviderOpera
       next(error);
     }
   });
-  router.get('/earnings', async (req, res, next) => {
+  router.get('/earnings', requireFleetFinancialContext(), async (req, res, next) => {
     try {
       res.json({
         success: true,
@@ -283,6 +333,7 @@ export function createProviderApprovalRouter(repository: PostgresProviderOperati
           required: z.boolean(),
           requiresExpiry: z.boolean(),
           minimumPages: z.number().int().min(1).max(5),
+          onboardingDeferrable: z.boolean().optional(),
           active: z.boolean(),
         })
         .strict()

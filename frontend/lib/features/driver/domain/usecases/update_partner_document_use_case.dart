@@ -6,7 +6,11 @@ class UpdatePartnerDocumentUseCase {
 
   UpdatePartnerDocumentUseCase(this.repository);
 
-  Future<PartnerDocumentModel> execute(String partnerId, String documentId, Map<String, dynamic> data) {
+  Future<PartnerDocumentModel> execute(
+    String partnerId,
+    String documentId,
+    Map<String, dynamic> data,
+  ) {
     return repository.updateDocument(partnerId, documentId, data);
   }
 }

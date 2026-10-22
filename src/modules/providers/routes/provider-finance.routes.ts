@@ -2,7 +2,10 @@ import rateLimit from 'express-rate-limit';
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../../auth/middleware/auth.middleware.js';
-import { requireProvider } from '../../auth/middleware/authorization.middleware.js';
+import {
+  requireProvider,
+  requireFleetFinancialContext,
+} from '../../auth/middleware/authorization.middleware.js';
 import type { PostgresProviderFinanceRepository } from '../repositories/provider-finance.repository.js';
 
 const payoutSchema = z
@@ -17,6 +20,7 @@ export function createProviderFinanceRouter(repository: PostgresProviderFinanceR
   router.use(
     requireAuth,
     requireProvider(),
+    requireFleetFinancialContext(),
     rateLimit({
       windowMs: 60000,
       limit: 60,

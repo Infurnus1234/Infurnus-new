@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../core/theme/app_colors.dart';
 import 'infurnus_button.dart';
 
@@ -39,11 +40,7 @@ class InfurnusEmptyState extends StatelessWidget {
                 shape: BoxShape.circle,
               ),
               alignment: Alignment.center,
-              child: Icon(
-                icon,
-                size: 38,
-                color: iconColor ?? Colors.grey[500],
-              ),
+              child: Icon(icon, size: 38, color: iconColor ?? Colors.grey[500]),
             ),
             const SizedBox(height: 18),
             Text(

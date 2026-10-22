@@ -1,6 +1,8 @@
 import 'dart:async';
+
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../config/env_config.dart';
 
 enum SocketConnectionState { connecting, connected, disconnected, error }
@@ -14,7 +16,7 @@ class SocketServerEvent {
 
 class SocketService {
   io.Socket? _socket;
-  
+
   // Stream controllers for broadcasting state and events
   final _stateController = StreamController<SocketConnectionState>.broadcast();
   final _eventController = StreamController<SocketServerEvent>.broadcast();
@@ -120,10 +122,7 @@ class SocketService {
   }
 
   void updateRideStatus(String rideId, String status) {
-    _socket?.emit('ride:status', {
-      'rideId': rideId,
-      'status': status,
-    });
+    _socket?.emit('ride:status', {'rideId': rideId, 'status': status});
   }
 
   /// Called when the provider is disposed.

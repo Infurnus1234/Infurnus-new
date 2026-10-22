@@ -9,7 +9,8 @@ import { hashPassword } from '../src/modules/auth/utils/password.js';
 const evidence = process.argv[2];
 if (!evidence || new URL(process.env.DATABASE_URL!).port !== '5434')
   throw new Error('Disposable database and evidence path required');
-const email = 'niranjankumarnb45@gmail.com';
+const email = process.env.AUTH_AUDIT_EMAIL;
+if (!email) throw new Error('Explicit AUTH_AUDIT_EMAIL is required');
 const id = randomUUID();
 const originalError = console.error,
   originalInfo = console.info;
@@ -43,7 +44,6 @@ try {
     [id],
   );
   const result = {
-    email,
     httpStatus: response.status,
     errorCode: response.body.error?.code,
     providerDiagnostic,

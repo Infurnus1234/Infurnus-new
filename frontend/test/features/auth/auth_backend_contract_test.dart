@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
@@ -9,7 +10,7 @@ void main() {
   const url = String.fromEnvironment('AUTH_BACKEND_TEST_URL');
   const email = String.fromEnvironment('AUTH_TEST_EMAIL');
   test(
-    'actual backend signup, resend, login, recovery, refresh and logout',
+    'actual Customer backend signup, OTP login, recovery policy, refresh and logout',
     () async {
       final cookies = CookieJar();
       String? token;
@@ -17,6 +18,13 @@ void main() {
       dio.interceptors.add(CookieManager(cookies));
       dio.interceptors.add(
         InterceptorsWrapper(
+          onError: (error, handler) {
+            // Endpoint and public error code only; never log a session token.
+            debugPrint(
+              'Contract response: ${error.requestOptions.path} ${error.response?.statusCode} ${(error.response?.data as Map?)?['error']?['code']}',
+            );
+            handler.next(error);
+          },
           onRequest: (options, handler) async {
             if (token != null) {
               options.headers['Authorization'] = 'Bearer $token';
@@ -57,10 +65,50 @@ void main() {
         token = auth.accessToken;
         expect(authRoleFromToken(token), 'customer');
         await source.getUserProfile(auth.userId);
+        // Customer login is OTP-based in the existing backend. A password
+        // string can request a challenge, but cannot grant an access token.
+        final anonymousDio = Dio(BaseOptions(baseUrl: url));
+        Map? challengeData;
+        anonymousDio.interceptors.add(
+          InterceptorsWrapper(
+            onResponse: (response, handler) {
+              if (response.requestOptions.path == '/auth/login') {
+                challengeData = Map.from(response.data['data'] as Map);
+              }
+              handler.next(response);
+            },
+          ),
+        );
+        final anonymous = AuthRemoteDataSourceImpl(anonymousDio);
+        final challenge = await anonymous.login(
+          LoginRequest(email: email, password: 'wrong-password'),
+        );
+        expect(challenge.challengeId, isNotEmpty);
+        expect(challengeData, isNot(contains('accessToken')));
         await expectLater(
-          source.login(LoginRequest(email: email, password: 'wrong-password')),
+          anonymous.verifyLogin(
+            VerifyLoginRequest(
+              challengeId: challenge.challengeId,
+              otp: '000000',
+            ),
+          ),
           throwsA(isA<DioException>()),
         );
+        await expectLater(
+          anonymous.getUserProfile(auth.userId),
+          throwsA(
+            isA<DioException>().having(
+              (e) => e.response?.statusCode,
+              'unauthenticated status',
+              401,
+            ),
+          ),
+        );
+        final anonymousVerified = await anonymous.verifyLogin(
+          VerifyLoginRequest(challengeId: challenge.challengeId, otp: '123456'),
+        );
+        expect(anonymousVerified.userId, auth.userId);
+        expect(authRoleFromToken(anonymousVerified.accessToken), 'customer');
         final login = await source.loginEmail(
           LoginRequest(email: email, password: original),
         );
@@ -79,22 +127,33 @@ void main() {
           source.verifyPasswordResetOtp(recovery.token, '000000'),
           throwsA(isA<DioException>()),
         );
-        final verified = await source.verifyPasswordResetOtp(
-          recovery.token,
-          '123456',
-        );
-        const password = 'NewFrontendPassword123!';
-        await source.resetPassword(verified.token, password, password);
+        // The existing role-scoped backend intentionally disallows password
+        // recovery for OTP-only Customer/Driver roles. Its opaque response
+        // must not turn a correct-looking code into a usable reset session.
         await expectLater(
-          source.loginEmail(LoginRequest(email: email, password: original)),
+          source.verifyPasswordResetOtp(recovery.token, '123456'),
+          throwsA(
+            isA<DioException>().having(
+              (e) => (e.response?.data as Map?)?['error']?['code'],
+              'recovery policy',
+              'INVALID_PASSWORD_RESET_SESSION',
+            ),
+          ),
+        );
+        await expectLater(
+          source.resetPassword(
+            recovery.token,
+            'NewFrontendPassword123!',
+            'NewFrontendPassword123!',
+          ),
           throwsA(isA<DioException>()),
         );
-        final updated = await source.loginEmail(
-          LoginRequest(email: email, password: password),
-        );
+        anonymousDio.close();
+        final updated = await source.loginEmail(LoginRequest(email: email));
         token = (await source.verifyLoginEmail(
           VerifyLoginRequest(challengeId: updated.challengeId, otp: '123456'),
         )).accessToken;
+        expect(authRoleFromToken(token), 'customer');
         await source.logout();
         await expectLater(source.refreshToken(), throwsA(isA<DioException>()));
       } finally {

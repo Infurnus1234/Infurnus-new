@@ -1,7 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:infurnus/core/services/cashfree_checkout_service.dart';
-import 'package:infurnus/features/customer/data/models/ride_model.dart' as model;
+import 'package:infurnus/features/customer/data/models/ride_model.dart'
+    as model;
 import 'package:infurnus/features/customer/domain/usecases/capture_payment_use_case.dart';
 import 'package:infurnus/features/customer/domain/usecases/initiate_payment_use_case.dart';
 import 'package:infurnus/features/customer/domain/usecases/list_payments_use_case.dart';
@@ -119,7 +120,9 @@ void main() {
           initiatePaymentUseCaseProvider.overrideWithValue(mockInitiate),
           capturePaymentUseCaseProvider.overrideWithValue(mockCapture),
           listPaymentsUseCaseProvider.overrideWithValue(mockListPayments),
-          cashfreeCheckoutServiceProvider.overrideWithValue(mockCheckoutService),
+          cashfreeCheckoutServiceProvider.overrideWithValue(
+            mockCheckoutService,
+          ),
         ],
       );
     });
@@ -149,19 +152,22 @@ void main() {
       );
     }
 
-    test('Payment initiation passes rideId and paymentMethod correctly', () async {
-      setCompletedRide();
+    test(
+      'Payment initiation passes rideId and paymentMethod correctly',
+      () async {
+        setCompletedRide();
 
-      final notifier = container.read(rideProvider.notifier);
-      final success = await notifier.initiateTripPayment(
-        amount: 450.0,
-        paymentMethod: 'cashfree',
-      );
+        final notifier = container.read(rideProvider.notifier);
+        final success = await notifier.initiateTripPayment(
+          amount: 450.0,
+          paymentMethod: 'cashfree',
+        );
 
-      expect(success, isTrue);
-      expect(mockInitiate.lastParams?['rideId'], 'ride-abc-123');
-      expect(mockInitiate.lastParams?['paymentMethod'], 'cashfree');
-    });
+        expect(success, isTrue);
+        expect(mockInitiate.lastParams?['rideId'], 'ride-abc-123');
+        expect(mockInitiate.lastParams?['paymentMethod'], 'cashfree');
+      },
+    );
 
     test('Payment session handling: extracts paymentSessionId and opens Cashfree checkout', () async {
       setCompletedRide();
@@ -217,26 +223,29 @@ void main() {
       expect(notifier.state.errorMessage, isNull);
     });
 
-    test('User cancellation: does not call backend capture, sets status unpaid', () async {
-      setCompletedRide();
+    test(
+      'User cancellation: does not call backend capture, sets status unpaid',
+      () async {
+        setCompletedRide();
 
-      mockCheckoutService.resultToReturn = const CashfreeCheckoutResult(
-        status: CashfreeCheckoutStatus.cancelled,
-        orderId: 'order_pay-12345',
-        errorMessage: 'User dismissed checkout',
-      );
+        mockCheckoutService.resultToReturn = const CashfreeCheckoutResult(
+          status: CashfreeCheckoutStatus.cancelled,
+          orderId: 'order_pay-12345',
+          errorMessage: 'User dismissed checkout',
+        );
 
-      final notifier = container.read(rideProvider.notifier);
-      final success = await notifier.initiateTripPayment(
-        amount: 450.0,
-        paymentMethod: 'cashfree',
-      );
+        final notifier = container.read(rideProvider.notifier);
+        final success = await notifier.initiateTripPayment(
+          amount: 450.0,
+          paymentMethod: 'cashfree',
+        );
 
-      expect(success, isFalse);
-      expect(mockCapture.callCount, 0); // Must NOT call capture
-      expect(notifier.state.paymentStatus, 'unpaid');
-      expect(notifier.state.errorMessage, contains('cancelled by user'));
-    });
+        expect(success, isFalse);
+        expect(mockCapture.callCount, 0); // Must NOT call capture
+        expect(notifier.state.paymentStatus, 'unpaid');
+        expect(notifier.state.errorMessage, contains('cancelled by user'));
+      },
+    );
 
     test('Gateway failure: does not call backend capture, exposes gateway error message', () async {
       setCompletedRide();
@@ -256,23 +265,29 @@ void main() {
       expect(success, isFalse);
       expect(mockCapture.callCount, 0);
       expect(notifier.state.paymentStatus, 'unpaid');
-      expect(notifier.state.errorMessage, 'Card authentication failed with 3DS');
-    });
-
-    test('Network error during backend verification leaves state unpaid', () async {
-      setCompletedRide();
-
-      mockCapture.shouldThrow = true;
-
-      final notifier = container.read(rideProvider.notifier);
-      final success = await notifier.initiateTripPayment(
-        amount: 450.0,
-        paymentMethod: 'cashfree',
+      expect(
+        notifier.state.errorMessage,
+        'Card authentication failed with 3DS',
       );
-
-      expect(success, isFalse);
-      expect(notifier.state.paymentStatus, 'unpaid');
-      expect(notifier.state.errorMessage, contains('network error'));
     });
+
+    test(
+      'Network error during backend verification leaves state unpaid',
+      () async {
+        setCompletedRide();
+
+        mockCapture.shouldThrow = true;
+
+        final notifier = container.read(rideProvider.notifier);
+        final success = await notifier.initiateTripPayment(
+          amount: 450.0,
+          paymentMethod: 'cashfree',
+        );
+
+        expect(success, isFalse);
+        expect(notifier.state.paymentStatus, 'unpaid');
+        expect(notifier.state.errorMessage, contains('network error'));
+      },
+    );
   });
 }

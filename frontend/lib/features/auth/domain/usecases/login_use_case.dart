@@ -6,7 +6,10 @@ class LoginUseCase {
 
   LoginUseCase(this.repository);
 
-  Future<LoginChallengeResponse> execute(LoginRequest request, [String channel = 'phone']) {
+  Future<LoginChallengeResponse> execute(
+    LoginRequest request, [
+    String channel = 'phone',
+  ]) {
     if (channel == 'email') {
       return repository.loginEmail(request);
     }

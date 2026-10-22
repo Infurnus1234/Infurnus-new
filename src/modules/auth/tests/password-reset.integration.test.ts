@@ -323,6 +323,7 @@ describe('Password reset integration', () => {
       [userId],
     );
 
+    await pool.query('DELETE FROM provider_onboarding WHERE user_id=$1', [userId]);
     await pool.query(
       `
         DELETE FROM users

@@ -16,10 +16,12 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 class NotificationService {
   final Dio _dio;
-  final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _notificationsPlugin =
+      FlutterLocalNotificationsPlugin();
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
   NotificationService(this._dio);
+  String? _registeredId;
 
   Future<void> init() async {
     try {
@@ -28,12 +30,14 @@ class NotificationService {
 
       const AndroidInitializationSettings initializationSettingsAndroid =
           AndroidInitializationSettings('@mipmap/ic_launcher');
-      const DarwinInitializationSettings initializationSettingsIOS = DarwinInitializationSettings();
+      const DarwinInitializationSettings initializationSettingsIOS =
+          DarwinInitializationSettings();
 
-      const InitializationSettings initializationSettings = InitializationSettings(
-        android: initializationSettingsAndroid,
-        iOS: initializationSettingsIOS,
-      );
+      const InitializationSettings initializationSettings =
+          InitializationSettings(
+            android: initializationSettingsAndroid,
+            iOS: initializationSettingsIOS,
+          );
 
       await _notificationsPlugin.initialize(
         initializationSettings,
@@ -62,7 +66,9 @@ class NotificationService {
         });
 
         FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-          debugPrint('Received foreground message: ${message.notification?.title}');
+          debugPrint(
+            'Received foreground message: ${message.notification?.title}',
+          );
           final notification = message.notification;
           if (notification != null) {
             showNotification(
@@ -74,28 +80,80 @@ class NotificationService {
           }
         });
       } else {
-        debugPrint('User declined or has not accepted push notification permission');
+        debugPrint(
+          'User declined or has not accepted push notification permission',
+        );
       }
     } catch (e) {
       debugPrint('Notification initialization error: $e');
     }
   }
 
+  Future<void> syncAuthenticatedDevice() async {
+    try {
+      if (kIsWeb || Firebase.apps.isEmpty) return;
+      final settings = await FirebaseMessaging.instance
+          .getNotificationSettings();
+      if (settings.authorizationStatus != AuthorizationStatus.authorized &&
+          settings.authorizationStatus != AuthorizationStatus.provisional) {
+        return;
+      }
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token != null && token.isNotEmpty) await registerDeviceToken(token);
+    } catch (e) {
+      debugPrint('Push registration unavailable: ${e.runtimeType}');
+    }
+  }
+
+  Future<void> unregisterDevice() async {
+    final id =
+        _registeredId ?? await _storage.read(key: 'push_device_record_id');
+    try {
+      if (id != null) {
+        await _dio
+            .delete('/notifications/devices/$id')
+            .timeout(const Duration(seconds: 5));
+      }
+    } catch (e) {
+      debugPrint('Push cleanup unavailable: ${e.runtimeType}');
+    } finally {
+      _registeredId = null;
+      await _storage.delete(key: 'push_device_record_id');
+    }
+  }
+
   Future<void> registerDeviceToken(String fcmToken) async {
     try {
+      if (fcmToken.isEmpty || await _storage.read(key: 'auth_token') == null) {
+        return;
+      }
       String? deviceId = await _storage.read(key: 'device_id');
       if (deviceId == null) {
-        deviceId = 'device_${DateTime.now().millisecondsSinceEpoch}_${defaultTargetPlatform.name}';
+        deviceId =
+            'device_${DateTime.now().millisecondsSinceEpoch}_${defaultTargetPlatform.name}';
         await _storage.write(key: 'device_id', value: deviceId);
       }
 
-      final platform = defaultTargetPlatform == TargetPlatform.iOS ? 'IOS' : 'ANDROID';
+      final platform = defaultTargetPlatform == TargetPlatform.iOS
+          ? 'IOS'
+          : 'ANDROID';
 
-      await _dio.post('/notifications/devices', data: {
-        'fcmToken': fcmToken,
-        'platform': platform,
-        'deviceId': deviceId,
-      });
+      final response = await _dio.post(
+        '/notifications/devices',
+        data: {
+          'fcmToken': fcmToken,
+          'platform': platform,
+          'deviceId': deviceId,
+        },
+      );
+      final data = response.data;
+      if (data is Map && data['data'] is Map && data['data']['id'] is String) {
+        _registeredId = data['data']['id'] as String;
+        await _storage.write(
+          key: 'push_device_record_id',
+          value: _registeredId,
+        );
+      }
       debugPrint('Device token successfully registered with backend');
     } catch (e) {
       debugPrint('Failed to register device token with backend: $e');
@@ -108,20 +166,29 @@ class NotificationService {
     required String body,
     String? payload,
   }) async {
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'infurnus_channel',
-      'Infurnus Notifications',
-      importance: Importance.max,
-      priority: Priority.high,
-    );
+    const AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+          'infurnus_channel',
+          'Infurnus Notifications',
+          importance: Importance.max,
+          priority: Priority.high,
+        );
 
     const NotificationDetails platformDetails = NotificationDetails(
       android: androidDetails,
       iOS: DarwinNotificationDetails(),
     );
 
-    await _notificationsPlugin.show(id, title, body, platformDetails, payload: payload);
+    await _notificationsPlugin.show(
+      id,
+      title,
+      body,
+      platformDetails,
+      payload: payload,
+    );
   }
 }
 
-final notificationServiceProvider = Provider((ref) => NotificationService(ref.read(dioProvider)));
+final notificationServiceProvider = Provider(
+  (ref) => NotificationService(ref.read(dioProvider)),
+);

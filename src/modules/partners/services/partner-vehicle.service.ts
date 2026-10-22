@@ -13,14 +13,14 @@ export class PartnerVehicleService {
     private readonly fleetService: FleetService,
   ) {}
 
-  private async getApprovedPartnerUserId(actor: AuthenticatedUser): Promise<string> {
+  private async getApprovedPartnerUserId(actor: AuthenticatedUser, draft = false): Promise<string> {
     const partner = await this.partnerRepository.findByUserId(actor.userId);
 
     if (!partner) {
       throw new AppError('PARTNER_NOT_FOUND', 'Partner profile not found for current user', 404);
     }
 
-    if (partner.approvalStatus !== 'approved') {
+    if (!draft && partner.approvalStatus !== 'approved') {
       throw new AppError(
         'PARTNER_NOT_APPROVED',
         'Partner must be approved before managing vehicles',
@@ -32,19 +32,19 @@ export class PartnerVehicleService {
   }
 
   async listVehicles(actor: AuthenticatedUser) {
-    const ownerId = await this.getApprovedPartnerUserId(actor);
+    const ownerId = await this.getApprovedPartnerUserId(actor, true);
 
     return this.fleetService.listVehicles(ownerId);
   }
 
   async createVehicle(actor: AuthenticatedUser, input: CreateFleetVehicleInput) {
-    const ownerId = await this.getApprovedPartnerUserId(actor);
+    const ownerId = await this.getApprovedPartnerUserId(actor, true);
 
     return this.fleetService.createVehicle(ownerId, input);
   }
 
   async updateVehicle(actor: AuthenticatedUser, vehicleId: string, input: UpdateFleetVehicleInput) {
-    const ownerId = await this.getApprovedPartnerUserId(actor);
+    const ownerId = await this.getApprovedPartnerUserId(actor, true);
 
     return this.fleetService.updateVehicle(ownerId, vehicleId, input);
   }

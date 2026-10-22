@@ -2,7 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:infurnus/features/customer/data/models/fare_estimate_model.dart';
 import 'package:infurnus/features/customer/data/models/fleet_vehicle_model.dart';
 import 'package:infurnus/features/customer/data/models/ride_model.dart';
-import 'package:infurnus/features/customer/presentation/providers/ride_provider.dart' hide RideStatus;
+import 'package:infurnus/features/customer/presentation/providers/ride_provider.dart'
+    hide RideStatus;
 
 void main() {
   group('Phase 4 Step 9: Frontend Dynamic Fleet & Financials Test Suite', () {
@@ -11,7 +12,10 @@ void main() {
     // ----------------------------------------------------
     test('Canonical passenger vehicle categories are correctly modeled and supported', () {
       const canonicalCategories = ['bike', 'auto', 'mini', 'sedan', 'suv'];
-      final state = RideState(selectedSector: 'passenger', selectedTier: 'mini');
+      final state = RideState(
+        selectedSector: 'passenger',
+        selectedTier: 'mini',
+      );
 
       expect(state.selectedSector, 'passenger');
       expect(state.selectedTier, 'mini');
@@ -104,27 +108,30 @@ void main() {
     // ----------------------------------------------------
     // 4. Premium Booking Hours & Advance Estimate
     // ----------------------------------------------------
-    test('Premium booking captures hourly standby duration and vehicle details', () {
-      final rentalDetails = {
-        'hours': 4,
-        'startDate': '2026-09-20',
-        'startTime': '10:00',
-        'fuelRatePerKm': 16.0,
-        'vehicleModel': 'Toyota Fortuner',
-      };
+    test(
+      'Premium booking captures hourly standby duration and vehicle details',
+      () {
+        final rentalDetails = {
+          'hours': 4,
+          'startDate': '2026-09-20',
+          'startTime': '10:00',
+          'fuelRatePerKm': 16.0,
+          'vehicleModel': 'Toyota Fortuner',
+        };
 
-      final state = RideState(
-        selectedSector: 'premium',
-        selectedTier: 'fortuner',
-        rentalDetails: rentalDetails,
-      );
+        final state = RideState(
+          selectedSector: 'premium',
+          selectedTier: 'fortuner',
+          rentalDetails: rentalDetails,
+        );
 
-      expect(state.selectedSector, 'premium');
-      expect(state.selectedTier, 'fortuner');
-      expect(state.rentalDetails?['hours'], 4);
-      expect(state.rentalDetails?['fuelRatePerKm'], 16.0);
-      expect(state.rentalDetails?['vehicleModel'], 'Toyota Fortuner');
-    });
+        expect(state.selectedSector, 'premium');
+        expect(state.selectedTier, 'fortuner');
+        expect(state.rentalDetails?['hours'], 4);
+        expect(state.rentalDetails?['fuelRatePerKm'], 16.0);
+        expect(state.rentalDetails?['vehicleModel'], 'Toyota Fortuner');
+      },
+    );
 
     // ----------------------------------------------------
     // 5. Premium Completed Ride Reconciliation
@@ -159,22 +166,25 @@ void main() {
     // ----------------------------------------------------
     // 6. Server finalFare Overrides Local Calculations
     // ----------------------------------------------------
-    test('Server finalFare is authoritative over fareEstimate or client defaults', () {
-      final ride = RideModel.fromJson({
-        'id': 'ride-override-test',
-        'customerId': 'cust-1',
-        'pickup': {'latitude': 12.9716, 'longitude': 77.5946},
-        'destination': {'latitude': 12.9352, 'longitude': 77.6245},
-        'fareEstimate': 150.0,
-        'finalFare': 187.50,
-        'status': 'completed',
-        'createdAt': '2026-09-19T10:00:00.000Z',
-        'updatedAt': '2026-09-19T10:30:00.000Z',
-      });
+    test(
+      'Server finalFare is authoritative over fareEstimate or client defaults',
+      () {
+        final ride = RideModel.fromJson({
+          'id': 'ride-override-test',
+          'customerId': 'cust-1',
+          'pickup': {'latitude': 12.9716, 'longitude': 77.5946},
+          'destination': {'latitude': 12.9352, 'longitude': 77.6245},
+          'fareEstimate': 150.0,
+          'finalFare': 187.50,
+          'status': 'completed',
+          'createdAt': '2026-09-19T10:00:00.000Z',
+          'updatedAt': '2026-09-19T10:30:00.000Z',
+        });
 
-      expect(ride.displayFare, 187.50);
-      expect(ride.displayFare, isNot(150.0));
-    });
+        expect(ride.displayFare, 187.50);
+        expect(ride.displayFare, isNot(150.0));
+      },
+    );
 
     // ----------------------------------------------------
     // 7. Server actualFuelCost Overrides Client Fuel
@@ -264,7 +274,8 @@ void main() {
       });
 
       // Verification logic: PIN is only active when pinVerified != true and status is pending pickup
-      final shouldShowPin = completedRide.pin != null &&
+      final shouldShowPin =
+          completedRide.pin != null &&
           completedRide.pinVerified != true &&
           completedRide.status != RideStatus.completed &&
           completedRide.status != RideStatus.inProgress;
@@ -275,28 +286,32 @@ void main() {
     // ----------------------------------------------------
     // 12. Step 8 PIN Flow Remains Intact
     // ----------------------------------------------------
-    test('Step 8 PIN flow correctly displays PIN when matched and driver arriving', () {
-      final activePickupRide = RideModel.fromJson({
-        'id': 'active-pickup-ride',
-        'customerId': 'cust-pin',
-        'pickup': {'latitude': 12.9716, 'longitude': 77.5946},
-        'destination': {'latitude': 12.9352, 'longitude': 77.6245},
-        'status': 'driver_assigned',
-        'pin': '7241',
-        'pinVerified': false,
-        'createdAt': '2026-09-19T10:00:00.000Z',
-        'updatedAt': '2026-09-19T10:05:00.000Z',
-      });
+    test(
+      'Step 8 PIN flow correctly displays PIN when matched and driver arriving',
+      () {
+        final activePickupRide = RideModel.fromJson({
+          'id': 'active-pickup-ride',
+          'customerId': 'cust-pin',
+          'pickup': {'latitude': 12.9716, 'longitude': 77.5946},
+          'destination': {'latitude': 12.9352, 'longitude': 77.6245},
+          'status': 'driver_assigned',
+          'pin': '7241',
+          'pinVerified': false,
+          'createdAt': '2026-09-19T10:00:00.000Z',
+          'updatedAt': '2026-09-19T10:05:00.000Z',
+        });
 
-      final shouldShowPin = activePickupRide.pin != null &&
-          activePickupRide.pinVerified != true &&
-          (activePickupRide.status == RideStatus.driverAssigned ||
-              activePickupRide.status == RideStatus.driverArriving ||
-              activePickupRide.status == RideStatus.driverArrived);
+        final shouldShowPin =
+            activePickupRide.pin != null &&
+            activePickupRide.pinVerified != true &&
+            (activePickupRide.status == RideStatus.driverAssigned ||
+                activePickupRide.status == RideStatus.driverArriving ||
+                activePickupRide.status == RideStatus.driverArrived);
 
-      expect(shouldShowPin, isTrue);
-      expect(activePickupRide.pin, '7241');
-    });
+        expect(shouldShowPin, isTrue);
+        expect(activePickupRide.pin, '7241');
+      },
+    );
 
     // ----------------------------------------------------
     // 13. Fare Estimate Breakdown Components

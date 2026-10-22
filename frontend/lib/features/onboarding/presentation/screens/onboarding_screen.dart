@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../../core/storage/secure_storage.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_button.dart';
@@ -26,15 +27,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     ),
     _OnboardingPageData(
       title: 'Move anything with ease',
-      description: 'Send your goods safely with the right vehicle for your delivery.',
+      description:
+          'Send your goods safely with the right vehicle for your delivery.',
       icon: Icons.local_shipping_rounded,
       accentColor: Color(0xFFFF9800),
       badgeText: 'LOGISTICS & FREIGHT',
     ),
     _OnboardingPageData(
       title: 'More than just a ride',
-      description:
-          'Premium vehicles, towing, ambulance, JCB and roadside services — all in one place.',
+      description: 'Premium vehicles, towing, ambulance, JCB and roadside services — all in one place.',
       icon: Icons.stars_rounded,
       accentColor: Color(0xFFE91E63),
       badgeText: 'SERVICE & PREMIUM',
@@ -136,7 +137,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                         // Badge
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 4),
+                            horizontal: 12,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: page.accentColor.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(20),
@@ -239,7 +242,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                             backgroundColor: AppColors.primaryGreen,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 28, vertical: 14),
+                              horizontal: 28,
+                              vertical: 14,
+                            ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),

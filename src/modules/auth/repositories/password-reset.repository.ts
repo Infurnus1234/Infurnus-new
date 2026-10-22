@@ -1,3 +1,4 @@
+import { AppError } from '../../../common/errors/app-error.js';
 import type { Pool } from 'pg';
 
 export interface PasswordResetUser {
@@ -32,7 +33,7 @@ export interface PasswordResetChallenge {
 
 export interface PasswordResetRepository {
   completeReset(sessionTokenHash: string, passwordHash: string): Promise<boolean>;
-  findActiveUserByEmail(email: string): Promise<PasswordResetUser | null>;
+  findActiveUserByEmail(email: string, role?: string): Promise<PasswordResetUser | null>;
 
   create(data: CreatePasswordResetChallengeData): Promise<{ id: string }>;
 
@@ -61,7 +62,7 @@ export class PostgresPasswordResetRepository implements PasswordResetRepository 
       const challenge = await client.query<{ user_id: string }>(
         `SELECT c.user_id FROM password_reset_challenges c JOIN users u ON u.id=c.user_id
          WHERE c.session_token_hash=$1 AND c.verified_at IS NOT NULL AND c.consumed_at IS NULL
-         AND u.role NOT IN ('customer', 'driver') AND c.expires_at>NOW() AND u.status='active' AND u.deleted_at IS NULL FOR UPDATE OF u,c`,
+         AND u.role NOT IN ('customer', 'driver') AND u.email_verified=TRUE AND c.expires_at>NOW() AND u.status='active' AND u.deleted_at IS NULL FOR UPDATE OF u,c`,
         [sessionTokenHash],
       );
       const userId = challenge.rows[0]?.user_id;
@@ -95,23 +96,31 @@ export class PostgresPasswordResetRepository implements PasswordResetRepository 
     }
   }
 
-  async findActiveUserByEmail(email: string): Promise<PasswordResetUser | null> {
+  async findActiveUserByEmail(email: string, role?: string): Promise<PasswordResetUser | null> {
     const result = await this.pool.query<PasswordResetUser>(
       `
         SELECT
           id,
-          email
+          email, role, status, email_verified
         FROM users
-        WHERE email = $1
+        WHERE lower(btrim(email)) = lower(btrim($1))
+          AND ($2::text IS NULL OR role::text=$2)
           AND deleted_at IS NULL
-          AND status = 'active'
-          AND role NOT IN ('customer', 'driver')
-        LIMIT 1
+        LIMIT 2
       `,
-      [email],
+      [email, role ?? null],
     );
 
-    return result.rows[0] ?? null;
+    if (result.rows.length > 1)
+      throw new AppError('ACCOUNT_ROLE_REQUIRED', 'Specify the account role for recovery', 409);
+    const row = result.rows[0] as
+      (PasswordResetUser & { role: string; status: string; email_verified: boolean }) | undefined;
+    return row &&
+      row.status === 'active' &&
+      row.email_verified &&
+      !['customer', 'driver'].includes(row.role)
+      ? row
+      : null;
   }
 
   async create(data: CreatePasswordResetChallengeData): Promise<{ id: string }> {

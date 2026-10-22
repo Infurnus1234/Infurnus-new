@@ -14,18 +14,20 @@ class UserPreferencesModel {
   factory UserPreferencesModel.fromJson(Map<String, dynamic> json) {
     return UserPreferencesModel(
       userId: json['userId'] as String,
-      pushNotificationsEnabled: json['pushNotificationsEnabled'] as bool? ?? true,
-      emailNotificationsEnabled: json['emailNotificationsEnabled'] as bool? ?? true,
+      pushNotificationsEnabled:
+          json['pushNotificationsEnabled'] as bool? ?? true,
+      emailNotificationsEnabled:
+          json['emailNotificationsEnabled'] as bool? ?? true,
       smsNotificationsEnabled: json['smsNotificationsEnabled'] as bool? ?? true,
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'userId': userId,
-        'pushNotificationsEnabled': pushNotificationsEnabled,
-        'emailNotificationsEnabled': emailNotificationsEnabled,
-        'smsNotificationsEnabled': smsNotificationsEnabled,
-      };
+    'userId': userId,
+    'pushNotificationsEnabled': pushNotificationsEnabled,
+    'emailNotificationsEnabled': emailNotificationsEnabled,
+    'smsNotificationsEnabled': smsNotificationsEnabled,
+  };
 }
 
 class UserHistoryModel {

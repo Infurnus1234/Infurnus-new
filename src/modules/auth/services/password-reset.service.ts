@@ -62,7 +62,7 @@ export class PasswordResetService {
   // Forgot Password
   // ==========================================================
 
-  async forgotPassword(email: string): Promise<ForgotPasswordResult> {
+  async forgotPassword(email: string, role?: string): Promise<ForgotPasswordResult> {
     const normalizedEmail = email.trim().toLowerCase();
 
     // --------------------------------------------------------
@@ -81,7 +81,7 @@ export class PasswordResetService {
     // Resolve account
     // --------------------------------------------------------
 
-    const user = await this.passwordResetRepository.findActiveUserByEmail(normalizedEmail);
+    const user = await this.passwordResetRepository.findActiveUserByEmail(normalizedEmail, role);
 
     // --------------------------------------------------------
     // Unknown account

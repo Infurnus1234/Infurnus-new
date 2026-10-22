@@ -6,6 +6,21 @@ import type { FleetRepository } from '../repositories/fleet.repository.js';
 import type { FleetDashboardMetrics } from '../types/fleet.js';
 
 class MockFleetRepository implements FleetRepository {
+  async catalog() {
+    return { sectors: ['passenger'], types: [] };
+  }
+  async revenue() {
+    return {
+      currency: 'INR',
+      timeZone: 'Asia/Kolkata',
+      period: { from: null, to: null },
+      summary: {},
+      vehicles: [],
+      history: [],
+      accountingBasis: 'fixture',
+      coverage: 'fixture',
+    };
+  }
   getDashboard = vi.fn().mockResolvedValue({
     totalVehicles: 2,
     activeVehicles: 2,

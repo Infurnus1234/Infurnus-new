@@ -40,6 +40,7 @@ export interface SignupInput {
    *   - driver_fleet_owner
    */
   licenseNumber?: string;
+  onboardingLicencePending?: boolean;
 
   /**
    * Required for:
@@ -106,7 +107,17 @@ export class SignupService {
     let licenseNumber: string | null = null;
     let licenseExpiry: Date | null = null;
 
-    if (isDriver) {
+    if (
+      input.onboardingLicencePending &&
+      (!isDriver || input.licenseNumber || input.licenseExpiry)
+    ) {
+      throw new AppError(
+        'INVALID_SIGNUP_DATA',
+        'Complete licence details in onboarding without duplicate registration fields',
+        400,
+      );
+    }
+    if (isDriver && !input.onboardingLicencePending) {
       if (typeof input.licenseNumber !== 'string' || input.licenseNumber.trim().length === 0) {
         throw new AppError(
           'INVALID_SIGNUP_DATA',
@@ -243,9 +254,9 @@ export class SignupService {
     // ========================================================
 
     const [existingPhone, existingEmail] = await Promise.all([
-      phone ? this.userRepository.existsByPhone(phone) : Promise.resolve(false),
+      phone ? this.userRepository.existsByPhone(phone, input.role) : Promise.resolve(false),
 
-      email ? this.userRepository.existsByEmail(email) : Promise.resolve(false),
+      email ? this.userRepository.existsByEmail(email, input.role) : Promise.resolve(false),
     ]);
 
     // --------------------------------------------------------
@@ -282,7 +293,11 @@ export class SignupService {
     // Prevent duplicate pending signup
     // ========================================================
 
-    let existingPendingSignup = await this.repository.findByContact(contactType, contactValue);
+    let existingPendingSignup = await this.repository.findByContact(
+      contactType,
+      contactValue,
+      input.role,
+    );
     if (
       existingPendingSignup &&
       (input.role === 'customer' || input.role === 'driver') &&
@@ -406,10 +421,9 @@ export class SignupService {
       firstName: input.firstName.trim(),
       lastName: input.lastName.trim(),
 
-      email:
-        (input.role === 'customer' || input.role === 'driver') && contactType === 'phone'
-          ? null
-          : email,
+      // Keep the supplied secondary contact as unverified account data.
+      // Only the delivered OTP channel is marked verified at completion.
+      email,
 
       contactType,
       contactValue,
@@ -420,6 +434,7 @@ export class SignupService {
 
       licenseNumber,
       licenseExpiry,
+      onboardingLicencePending: input.onboardingLicencePending === true,
 
       businessName,
 

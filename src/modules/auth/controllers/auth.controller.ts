@@ -239,6 +239,9 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
         role: input.role,
 
         ...(input.licenseNumber !== undefined ? { licenseNumber: input.licenseNumber } : {}),
+        ...(input.onboardingLicencePending !== undefined
+          ? { onboardingLicencePending: input.onboardingLicencePending }
+          : {}),
 
         ...(input.licenseExpiry !== undefined ? { licenseExpiry: input.licenseExpiry } : {}),
 
@@ -306,6 +309,7 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
       const input = loginSchema.parse(req.body);
 
       const credentials = {
+        ...(input.role !== undefined ? { role: input.role } : {}),
         ...(input.email !== undefined ? { email: input.email } : {}),
 
         ...(input.phone !== undefined ? { phone: input.phone } : {}),
@@ -380,7 +384,7 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
     try {
       const input = forgotPasswordSchema.parse(req.body);
 
-      const result = await passwordResetService.forgotPassword(input.email);
+      const result = await passwordResetService.forgotPassword(input.email, input.role);
 
       res.status(200).json({
         success: true,
@@ -680,14 +684,13 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
   async function google(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const input = googleAuthSchema.parse(req.body);
-      const identity = input.driverFlow
-        ? await googleAuthService.authenticate(
-            input.idToken,
-            undefined,
-            input.driverFlow,
-            input.providerRole,
-          )
-        : await googleAuthService.authenticate(input.idToken);
+      const identity = await googleAuthService.authenticate(
+        input.idToken,
+        undefined,
+        input.driverFlow,
+        input.providerRole,
+        input.accountRole,
+      );
       await issueAuthentication(req, res, identity.id, identity.role);
     } catch (error) {
       next(error);

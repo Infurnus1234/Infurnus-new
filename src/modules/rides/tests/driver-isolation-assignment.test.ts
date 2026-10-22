@@ -68,7 +68,7 @@ describe('Driver booked-fare information and sensitive-field sanitization', () =
 
     const history = await service.getDriverHistory('user-1', 20, true);
 
-    expect(history.totalEarnings).toBe(0);
+    expect(history).not.toHaveProperty('totalEarnings');
     const ride = history.rides[0] as Record<string, unknown> | undefined;
     expect(ride?.finalFare).toBeUndefined();
     expect(ride?.fareEstimate).toBeUndefined();

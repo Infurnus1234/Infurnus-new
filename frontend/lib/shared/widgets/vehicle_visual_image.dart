@@ -73,7 +73,9 @@ class VehicleVisualImage extends StatelessWidget {
     if (key.contains('garbage') || key.contains('dump')) {
       return 'assets/images/garbage_dump_truck.png';
     }
-    if (key.contains('towing') || key.contains('roadside') || key.contains('tow')) {
+    if (key.contains('towing') ||
+        key.contains('roadside') ||
+        key.contains('tow')) {
       return 'assets/images/towing_van.jpg';
     }
     if (key.contains('mini truck') || key.contains('mini_truck')) {

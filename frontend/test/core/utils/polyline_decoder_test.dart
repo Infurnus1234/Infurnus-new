@@ -26,10 +26,10 @@ void main() {
       // _p~iG~psuP_@vL_@_P
       final points = PolylineDecoder.decode('_p~iG~psuP_@vL_@_P');
       expect(points.length, 3);
-      
+
       expect(points[0].latitude, closeTo(43.74288, 0.00001));
       expect(points[0].longitude, closeTo(-92.83872, 0.00001));
-      
+
       expect(points[1].latitude, closeTo(43.74304, 0.00001));
       expect(points[1].longitude, closeTo(-92.84092, 0.00001));
 

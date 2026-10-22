@@ -6,7 +6,10 @@ class ResendLoginOtpUseCase {
 
   ResendLoginOtpUseCase(this.repository);
 
-  Future<LoginChallengeResponse> execute(ResendLoginRequest request, [String channel = 'phone']) {
+  Future<LoginChallengeResponse> execute(
+    ResendLoginRequest request, [
+    String channel = 'phone',
+  ]) {
     if (channel == 'email') {
       return repository.resendLoginEmailOtp(request);
     }

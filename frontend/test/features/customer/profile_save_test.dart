@@ -80,11 +80,13 @@ void main() {
         );
         await tester.tap(find.text('Personal Information'));
         await tester.pumpAndSettle();
+        await tester.tap(find.text('Edit'));
+        await tester.pumpAndSettle();
         await tester.enterText(
           find.widgetWithText(TextField, 'First Name'),
           'Updated',
         );
-        await tester.tap(find.text('Save Details'));
+        await tester.tap(find.text('Save Information'));
         await tester.pumpAndSettle();
         expect(calls, 1);
         expect(notifier.state?.firstName, success ? 'Updated' : 'Before');
@@ -95,7 +97,7 @@ void main() {
           );
         } else {
           expect(find.text('Profile unavailable'), findsOneWidget);
-          expect(find.text('Save Details'), findsOneWidget);
+          expect(find.text('Save Information'), findsOneWidget);
         }
       },
     );

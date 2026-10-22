@@ -1,0 +1,7 @@
+# Copy only the relevant public configuration into ignored local.properties.
+# Flutter/Android tooling generates sdk.dir and flutter.sdk for this machine.
+# Obtain a restricted Android Maps SDK key from the authorized Cloud project.
+MAPS_API_KEY=replace-with-your-restricted-android-maps-key
+# Native Google audience normally comes from app-specific google-services.json.
+# An override for Dart must be passed explicitly using --dart-define;
+# GOOGLE_WEB_CLIENT_ID in this file alone does not configure Dart code.

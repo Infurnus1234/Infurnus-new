@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'vehicle_category_visual.dart';
 
 class VehicleCategoryCard extends StatelessWidget {

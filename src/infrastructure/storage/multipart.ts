@@ -1,5 +1,5 @@
 import multer from 'multer';
-import type { NextFunction, Request, Response } from 'express';
+import type { NextFunction, Request, Response, RequestHandler } from 'express';
 
 import type { StorageFile } from './types.js';
 
@@ -58,13 +58,13 @@ function toStorageFile(file: Express.Multer.File): UploadedStorageFile {
   };
 }
 
-export function uploadSingleFile(options: MultipartOptions = {}) {
+export function uploadSingleFile(options: MultipartOptions = {}): RequestHandler {
   const fieldName = options.fieldName ?? DEFAULT_FIELD_NAME;
 
   return createMulter(options).single(fieldName);
 }
 
-export function uploadMultipleFiles(options: MultipartOptions = {}) {
+export function uploadMultipleFiles(options: MultipartOptions = {}): RequestHandler {
   const fieldName = options.fieldName ?? DEFAULT_FIELD_NAME;
 
   return createMulter(options).array(fieldName, options.maxFiles ?? 10);
@@ -73,7 +73,7 @@ export function uploadMultipleFiles(options: MultipartOptions = {}) {
 export function uploadFields(
   fields: multer.Field[],
   options: Omit<MultipartOptions, 'fieldName'> = {},
-) {
+): RequestHandler {
   return createMulter(options).fields(fields);
 }
 

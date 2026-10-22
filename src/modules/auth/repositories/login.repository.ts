@@ -1,3 +1,4 @@
+import { AppError } from '../../../common/errors/app-error.js';
 import { pool } from '../../../infrastructure/database/postgres.js';
 
 // ============================================================
@@ -27,8 +28,8 @@ export interface LoginIdentity {
 // ============================================================
 
 export interface LoginRepository {
-  findByEmail(email: string): Promise<LoginIdentity | null>;
-  findByPhone(phone: string): Promise<LoginIdentity | null>;
+  findByEmail(email: string, role?: string): Promise<LoginIdentity | null>;
+  findByPhone(phone: string, role?: string): Promise<LoginIdentity | null>;
 }
 
 // ============================================================
@@ -40,7 +41,7 @@ export class PostgresLoginRepository implements LoginRepository {
   // Find user by email
   // ==========================================================
 
-  async findByEmail(email: string): Promise<LoginIdentity | null> {
+  async findByEmail(email: string, role?: string): Promise<LoginIdentity | null> {
     const result = await pool.query<LoginIdentity>(
       `
         SELECT
@@ -57,14 +58,17 @@ export class PostgresLoginRepository implements LoginRepository {
         LEFT JOIN user_credentials uc
           ON uc.user_id = u.id
         LEFT JOIN admin_credentials ac ON ac.user_id = u.id
-        WHERE u.email = $1
+        WHERE lower(btrim(u.email)) = lower(btrim($1))
+          AND ($2::text IS NULL OR u.role::text=$2)
           AND u.deleted_at IS NULL
-          AND (u.role IN ('customer', 'driver') OR uc.password_hash IS NOT NULL OR (u.role IN ('admin', 'super_admin') AND ac.password_hash IS NOT NULL))
-        LIMIT 1
+
+        LIMIT 2
       `,
-      [email],
+      [email, role ?? null],
     );
 
+    if (result.rows.length > 1)
+      throw new AppError('ACCOUNT_ROLE_REQUIRED', 'Specify the account role to sign in', 409);
     return result.rows[0] ?? null;
   }
 
@@ -72,7 +76,7 @@ export class PostgresLoginRepository implements LoginRepository {
   // Find user by phone
   // ==========================================================
 
-  async findByPhone(phone: string): Promise<LoginIdentity | null> {
+  async findByPhone(phone: string, role?: string): Promise<LoginIdentity | null> {
     const result = await pool.query<LoginIdentity>(
       `
         SELECT
@@ -89,15 +93,18 @@ export class PostgresLoginRepository implements LoginRepository {
         LEFT JOIN user_credentials uc
           ON uc.user_id = u.id
         LEFT JOIN admin_credentials ac ON ac.user_id = u.id
-        WHERE ltrim(u.phone, '+') = ltrim($1, '+')
+        WHERE ltrim(btrim(u.phone), '+') = ltrim(btrim($1), '+')
+          AND ($2::text IS NULL OR u.role::text=$2)
           AND u.deleted_at IS NULL
-          AND (u.role IN ('customer', 'driver') OR uc.password_hash IS NOT NULL OR (u.role IN ('admin', 'super_admin') AND ac.password_hash IS NOT NULL))
+
         LIMIT 2
       `,
-      [phone],
+      [phone, role ?? null],
     );
 
     // Legacy aliases must never silently select or link different accounts.
-    return result.rows.length === 1 ? result.rows[0]! : null;
+    if (result.rows.length > 1)
+      throw new AppError('ACCOUNT_ROLE_REQUIRED', 'Specify the account role to sign in', 409);
+    return result.rows[0] ?? null;
   }
 }

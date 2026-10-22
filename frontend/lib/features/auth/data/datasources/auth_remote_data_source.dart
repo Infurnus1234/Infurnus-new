@@ -38,7 +38,7 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   Future<PasswordRecoverySession> forgotPassword(String email) async {
     final response = await _dio.post(
       '/auth/forgot-password',
-      data: {'email': email},
+      data: {'email': email, 'role': 'customer'},
     );
     return PasswordRecoverySession.fromJson(response.data['data']);
   }

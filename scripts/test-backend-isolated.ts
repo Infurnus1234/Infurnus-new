@@ -27,6 +27,7 @@ await mkdir(tempDir, { recursive: true });
 const childEnv = {
   ...process.env,
   DATABASE_URL: testUrl.toString(),
+  DISPATCH_QA_REDIS_URL: process.env.DISPATCH_QA_REDIS_URL ?? 'redis://127.0.0.1:6379',
   // Automated suites must never inherit live delivery credentials from dotenv.
   DOTENV_CONFIG_PATH: resolve(tempDir, 'isolated-tests.env'),
   MSG91_AUTH_KEY: undefined,
@@ -53,6 +54,10 @@ try {
     [
       'isolated-migration-validation',
       ['node_modules/tsx/dist/cli.mjs', 'scripts/test-migrations.ts'],
+    ],
+    [
+      'isolated-role-migration-rollback',
+      ['node_modules/tsx/dist/cli.mjs', 'scripts/test-role-identity-migration.ts'],
     ],
     [
       'isolated-auth',

@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/services/socket_service.dart';
+import '../../../../core/services/notification_service.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/storage/secure_storage.dart';
 import '../../data/models/auth_models.dart';
@@ -119,7 +122,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
             'AuthNotifier: Profile fetched, role: $role. Authenticating...',
           );
           ref.read(userProvider.notifier).setUser(publicUser.toEntity(role));
-          ref.read(socketServiceProvider).connect(token);
+          ref.read(socketServiceProvider).connect(currentToken ?? token);
+          unawaited(
+            ref.read(notificationServiceProvider).syncAuthenticatedDevice(),
+          );
           state = state.copyWith(status: AuthStatus.authenticated);
           debugPrint('AuthNotifier: Authenticated successfully');
         } catch (e) {
@@ -266,7 +272,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
           .read(dioProvider)
           .post(
             '/auth/google',
-            data: {'idToken': idToken},
+            data: {'idToken': idToken, 'accountRole': 'customer'},
             options: Options(extra: {'withCredentials': true}),
           );
       debugPrint('Google auth: API HTTP ${response.statusCode}');
@@ -346,6 +352,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> _handleAuthSuccess(AuthResponse response) async {
     final role = authRoleFromToken(response.accessToken);
+    if (role != 'customer') {
+      throw StateError(
+        'Choose a Customer account to sign in to the Customer app.',
+      );
+    }
     await ref
         .read(secureStorageProvider)
         .write(key: 'auth_token', value: response.accessToken);
@@ -362,14 +373,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     ref.read(userProvider.notifier).setUser(publicUser.toEntity(role));
     ref.read(socketServiceProvider).connect(response.accessToken);
 
-    try {
-      final dio = ref.read(dioProvider);
-      await dio.post('/notifications/device-tokens', data: {
-        'fcmToken': 'fcm_token_${response.userId}_${DateTime.now().millisecondsSinceEpoch}',
-        'platform': 'android',
-        'deviceId': 'device_${response.userId}',
-      });
-    } catch (_) {}
+    unawaited(ref.read(notificationServiceProvider).syncAuthenticatedDevice());
 
     state = state.copyWith(status: AuthStatus.authenticated);
   }
@@ -377,6 +381,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> logout() async {
     String? logoutError;
     try {
+      await ref.read(notificationServiceProvider).unregisterDevice();
       await ref.read(logoutUseCaseProvider).execute();
     } catch (_) {
       logoutError =

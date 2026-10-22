@@ -18,12 +18,15 @@ export class GoogleAuthService {
     linkUserId?: string,
     driverFlow?: 'signup' | 'signin',
     providerRole?: 'driver' | 'fleet_owner' | 'driver_fleet_owner',
+    accountRole?:
+      'customer' | 'driver' | 'fleet_owner' | 'driver_fleet_owner' | 'admin' | 'super_admin',
   ) {
     return this.repository.resolve(
       await this.provider.verify(idToken),
       linkUserId,
       driverFlow,
       providerRole,
+      accountRole,
     );
   }
 }

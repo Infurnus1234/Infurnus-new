@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../core/theme/app_colors.dart';
 import 'infurnus_card.dart';
 
@@ -27,7 +28,9 @@ class InfurnusVehicleCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Container(
         decoration: BoxDecoration(
-          border: isSelected ? Border.all(color: AppColors.primaryGreen, width: 2) : null,
+          border: isSelected
+              ? Border.all(color: AppColors.primaryGreen, width: 2)
+              : null,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Row(
@@ -43,12 +46,24 @@ class InfurnusVehicleCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
                 ],
               ),
             ),
-            Text(price, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            Text(
+              price,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
           ],
         ),
       ),

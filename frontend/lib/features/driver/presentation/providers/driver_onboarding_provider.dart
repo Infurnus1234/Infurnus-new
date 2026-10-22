@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../../core/storage/secure_storage.dart';
 import '../../../auth/presentation/providers/user_provider.dart';
 import '../../data/models/driver_profile_model.dart';
@@ -60,7 +61,9 @@ class DriverOnboardingNotifier extends StateNotifier<DriverOnboardingState> {
       try {
         partner = await ref.read(getMyPartnerUseCaseProvider).execute();
         if (partner != null) {
-          await ref.read(secureStorageProvider).write(key: 'partner_id', value: partner.id);
+          await ref
+              .read(secureStorageProvider)
+              .write(key: 'partner_id', value: partner.id);
         }
       } catch (_) {
         // Fallback to reading partner_id from storage if available
@@ -68,7 +71,9 @@ class DriverOnboardingNotifier extends StateNotifier<DriverOnboardingState> {
         final partnerId = await storage.read(key: 'partner_id');
         if (partnerId != null && partnerId.isNotEmpty) {
           try {
-            partner = await ref.read(getPartnerUseCaseProvider).execute(partnerId);
+            partner = await ref
+                .read(getPartnerUseCaseProvider)
+                .execute(partnerId);
           } catch (_) {}
         }
       }
@@ -76,14 +81,18 @@ class DriverOnboardingNotifier extends StateNotifier<DriverOnboardingState> {
       // 2. Try to load driver profile
       DriverProfileModel? driverProfile;
       try {
-        driverProfile = await ref.read(getDriverProfileUseCaseProvider).execute();
+        driverProfile = await ref
+            .read(getDriverProfileUseCaseProvider)
+            .execute();
       } catch (_) {}
 
       // 3. Load partner documents if partner exists
       List<PartnerDocumentModel> docs = [];
       if (partner != null) {
         try {
-          docs = await ref.read(listPartnerDocumentsUseCaseProvider).execute(partner.id);
+          docs = await ref
+              .read(listPartnerDocumentsUseCaseProvider)
+              .execute(partner.id);
         } catch (_) {}
       }
 
@@ -94,10 +103,7 @@ class DriverOnboardingNotifier extends StateNotifier<DriverOnboardingState> {
         documents: docs,
       );
     } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        errorMessage: e.toString(),
-      );
+      state = state.copyWith(isLoading: false, errorMessage: e.toString());
     }
   }
 
@@ -111,7 +117,11 @@ class DriverOnboardingNotifier extends StateNotifier<DriverOnboardingState> {
       return false;
     }
 
-    state = state.copyWith(isSubmitting: true, errorMessage: null, successMessage: null);
+    state = state.copyWith(
+      isSubmitting: true,
+      errorMessage: null,
+      successMessage: null,
+    );
 
     try {
       final requestData = {
@@ -121,10 +131,14 @@ class DriverOnboardingNotifier extends StateNotifier<DriverOnboardingState> {
           'businessDescription': businessDescription.trim(),
       };
 
-      final partner = await ref.read(becomePartnerUseCaseProvider).execute(requestData);
+      final partner = await ref
+          .read(becomePartnerUseCaseProvider)
+          .execute(requestData);
 
       // Persist partner_id in secure storage
-      await ref.read(secureStorageProvider).write(key: 'partner_id', value: partner.id);
+      await ref
+          .read(secureStorageProvider)
+          .write(key: 'partner_id', value: partner.id);
 
       state = state.copyWith(
         isSubmitting: false,
@@ -133,10 +147,7 @@ class DriverOnboardingNotifier extends StateNotifier<DriverOnboardingState> {
       );
       return true;
     } catch (e) {
-      state = state.copyWith(
-        isSubmitting: false,
-        errorMessage: e.toString(),
-      );
+      state = state.copyWith(isSubmitting: false, errorMessage: e.toString());
       return false;
     }
   }
@@ -153,7 +164,11 @@ class DriverOnboardingNotifier extends StateNotifier<DriverOnboardingState> {
     String? emergencyContactName,
     String? emergencyContactPhone,
   }) async {
-    state = state.copyWith(isSubmitting: true, errorMessage: null, successMessage: null);
+    state = state.copyWith(
+      isSubmitting: true,
+      errorMessage: null,
+      successMessage: null,
+    );
 
     try {
       final profileData = {
@@ -163,7 +178,8 @@ class DriverOnboardingNotifier extends StateNotifier<DriverOnboardingState> {
         if (gender != null && gender.isNotEmpty) 'gender': gender.trim(),
         if (address != null && address.isNotEmpty) 'address': address.trim(),
         if (city != null && city.isNotEmpty) 'city': city.trim(),
-        if (stateName != null && stateName.isNotEmpty) 'state': stateName.trim(),
+        if (stateName != null && stateName.isNotEmpty)
+          'state': stateName.trim(),
         if (pinCode != null && pinCode.isNotEmpty) 'pinCode': pinCode.trim(),
         if (emergencyContactName != null && emergencyContactName.isNotEmpty)
           'emergencyContactName': emergencyContactName.trim(),
@@ -171,7 +187,9 @@ class DriverOnboardingNotifier extends StateNotifier<DriverOnboardingState> {
           'emergencyContactPhone': emergencyContactPhone.trim(),
       };
 
-      final profile = await ref.read(upsertDriverProfileUseCaseProvider).execute(profileData);
+      final profile = await ref
+          .read(upsertDriverProfileUseCaseProvider)
+          .execute(profileData);
 
       state = state.copyWith(
         isSubmitting: false,
@@ -180,10 +198,7 @@ class DriverOnboardingNotifier extends StateNotifier<DriverOnboardingState> {
       );
       return true;
     } catch (e) {
-      state = state.copyWith(
-        isSubmitting: false,
-        errorMessage: e.toString(),
-      );
+      state = state.copyWith(isSubmitting: false, errorMessage: e.toString());
       return false;
     }
   }
@@ -194,11 +209,17 @@ class DriverOnboardingNotifier extends StateNotifier<DriverOnboardingState> {
     String? expiresAt,
   }) async {
     if (state.partner == null) {
-      state = state.copyWith(errorMessage: 'Partner profile required before adding documents');
+      state = state.copyWith(
+        errorMessage: 'Partner profile required before adding documents',
+      );
       return false;
     }
 
-    state = state.copyWith(isSubmitting: true, errorMessage: null, successMessage: null);
+    state = state.copyWith(
+      isSubmitting: true,
+      errorMessage: null,
+      successMessage: null,
+    );
 
     try {
       final docData = <String, dynamic>{
@@ -220,10 +241,7 @@ class DriverOnboardingNotifier extends StateNotifier<DriverOnboardingState> {
       );
       return true;
     } catch (e) {
-      state = state.copyWith(
-        isSubmitting: false,
-        errorMessage: e.toString(),
-      );
+      state = state.copyWith(isSubmitting: false, errorMessage: e.toString());
       return false;
     }
   }
@@ -235,18 +253,24 @@ class DriverOnboardingNotifier extends StateNotifier<DriverOnboardingState> {
     String? color,
     required String plateNumber,
   }) async {
-    final resolvedProfileId = (driverProfileId != null && driverProfileId.isNotEmpty)
+    final resolvedProfileId =
+        (driverProfileId != null && driverProfileId.isNotEmpty)
         ? driverProfileId
         : state.driverProfile?.id;
 
     if (resolvedProfileId == null || resolvedProfileId.isEmpty) {
       state = state.copyWith(
-        errorMessage: 'Driver profile required. Please enter driver details first.',
+        errorMessage:
+            'Driver profile required. Please enter driver details first.',
       );
       return false;
     }
 
-    state = state.copyWith(isSubmitting: true, errorMessage: null, successMessage: null);
+    state = state.copyWith(
+      isSubmitting: true,
+      errorMessage: null,
+      successMessage: null,
+    );
 
     try {
       final vehicleData = {
@@ -265,16 +289,15 @@ class DriverOnboardingNotifier extends StateNotifier<DriverOnboardingState> {
       );
       return true;
     } catch (e) {
-      state = state.copyWith(
-        isSubmitting: false,
-        errorMessage: e.toString(),
-      );
+      state = state.copyWith(isSubmitting: false, errorMessage: e.toString());
       return false;
     }
   }
 }
 
 final driverOnboardingProvider =
-    StateNotifierProvider<DriverOnboardingNotifier, DriverOnboardingState>((ref) {
-  return DriverOnboardingNotifier(ref);
-});
+    StateNotifierProvider<DriverOnboardingNotifier, DriverOnboardingState>((
+      ref,
+    ) {
+      return DriverOnboardingNotifier(ref);
+    });

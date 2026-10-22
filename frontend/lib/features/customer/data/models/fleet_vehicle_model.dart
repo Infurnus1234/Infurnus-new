@@ -37,7 +37,8 @@ class FleetVehicleModel {
     this.attributes,
   });
 
-  String get displayName => (name != null && name!.isNotEmpty) ? name! : '$make $model'.trim();
+  String get displayName =>
+      (name != null && name!.isNotEmpty) ? name! : '$make $model'.trim();
   double get effectivePerKmCost => perKmCost ?? fuelRatePerKm;
 
   factory FleetVehicleModel.fromJson(Map<String, dynamic> json) {
@@ -55,7 +56,9 @@ class FleetVehicleModel {
       fuelType: json['fuelType'] as String?,
       mileage: json['mileage'] as String?,
       range: json['range'] as String?,
-      pricing: (json['pricing'] as num?)?.toDouble() ?? (json['basePrice'] as num?)?.toDouble(),
+      pricing:
+          (json['pricing'] as num?)?.toDouble() ??
+          (json['basePrice'] as num?)?.toDouble(),
       perKmCost: (json['perKmCost'] as num?)?.toDouble(),
       attributes: json['attributes'] as Map<String, dynamic>?,
     );

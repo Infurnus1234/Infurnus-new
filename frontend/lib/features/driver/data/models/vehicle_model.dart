@@ -65,33 +65,39 @@ class VehicleModel {
       verificationStatus: json['verificationStatus'] as String? ?? 'approved',
       isActive: json['isActive'] as bool? ?? true,
       activeAssignmentCode: json['activeAssignmentCode'] as String?,
-      retiredAt: json['retiredAt'] != null ? DateTime.parse(json['retiredAt'] as String) : null,
-      createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt'] as String) : null,
-      updatedAt: json['updatedAt'] != null ? DateTime.parse(json['updatedAt'] as String) : null,
+      retiredAt: json['retiredAt'] != null
+          ? DateTime.parse(json['retiredAt'] as String)
+          : null,
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'] as String)
+          : null,
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.parse(json['updatedAt'] as String)
+          : null,
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'ownerId': ownerId,
-        'driverProfileId': driverProfileId,
-        'make': make,
-        'model': model,
-        'color': color,
-        'plateNumber': plateNumber,
-        'sector': sector,
-        'category': category,
-        'fuelRatePerKm': fuelRatePerKm,
-        'loadCapacityKg': loadCapacityKg,
-        'year': year,
-        'fuelType': fuelType,
-        'seatingCapacity': seatingCapacity,
-        'isCommercial': isCommercial,
-        'verificationStatus': verificationStatus,
-        'isActive': isActive,
-        'activeAssignmentCode': activeAssignmentCode,
-        'retiredAt': retiredAt?.toIso8601String(),
-        'createdAt': createdAt?.toIso8601String(),
-        'updatedAt': updatedAt?.toIso8601String(),
-      };
+    'id': id,
+    'ownerId': ownerId,
+    'driverProfileId': driverProfileId,
+    'make': make,
+    'model': model,
+    'color': color,
+    'plateNumber': plateNumber,
+    'sector': sector,
+    'category': category,
+    'fuelRatePerKm': fuelRatePerKm,
+    'loadCapacityKg': loadCapacityKg,
+    'year': year,
+    'fuelType': fuelType,
+    'seatingCapacity': seatingCapacity,
+    'isCommercial': isCommercial,
+    'verificationStatus': verificationStatus,
+    'isActive': isActive,
+    'activeAssignmentCode': activeAssignmentCode,
+    'retiredAt': retiredAt?.toIso8601String(),
+    'createdAt': createdAt?.toIso8601String(),
+    'updatedAt': updatedAt?.toIso8601String(),
+  };
 }

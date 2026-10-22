@@ -88,10 +88,7 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [
-                    Color(0xFF032213),
-                    Color(0xFF064E2A),
-                  ],
+                  colors: [Color(0xFF032213), Color(0xFF064E2A)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -119,8 +116,8 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
                           isPrivacy
                               ? Icons.security_rounded
                               : (isTerms
-                                  ? Icons.gavel_rounded
-                                  : Icons.article_rounded),
+                                    ? Icons.gavel_rounded
+                                    : Icons.article_rounded),
                           color: const Color(0xFFA7F3D0),
                           size: 20,
                         ),
@@ -214,13 +211,23 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
                   const SizedBox(height: 8),
                   const Text(
                     'For any questions, privacy requests, or grievances under the DPDP Act 2023 or IT Rules 2021, contact our dedicated Grievance Officer:',
-                    style: TextStyle(fontSize: 12, color: textGray, height: 1.4),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: textGray,
+                      height: 1.4,
+                    ),
                   ),
                   const SizedBox(height: 10),
                   _buildGrievanceRow('Officer', 'Legal Compliance Officer'),
                   _buildGrievanceRow('Email', 'support@infurnus.com'),
-                  _buildGrievanceRow('Address', 'INFURNUS Logistics Head Office, India'),
-                  _buildGrievanceRow('SLA', 'Acknowledgment in 24 hrs • Resolution in 15 days'),
+                  _buildGrievanceRow(
+                    'Address',
+                    'INFURNUS Logistics Head Office, India',
+                  ),
+                  _buildGrievanceRow(
+                    'SLA',
+                    'Acknowledgment in 24 hrs • Resolution in 15 days',
+                  ),
                 ],
               ),
             ),
@@ -231,7 +238,9 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
               onPressed: () {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Thank you for reviewing INFURNUS legal terms.'),
+                    content: Text(
+                      'Thank you for reviewing INFURNUS legal terms.',
+                    ),
                     duration: Duration(seconds: 2),
                   ),
                 );
@@ -319,7 +328,8 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
             const SizedBox(height: 10),
           ],
           ...section.paragraphs.map((p) {
-            final isBullet = p.trim().startsWith('-') ||
+            final isBullet =
+                p.trim().startsWith('-') ||
                 p.trim().startsWith('•') ||
                 RegExp(r'^\d+\.').hasMatch(p.trim());
 

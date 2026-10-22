@@ -4,6 +4,15 @@ import { z } from 'zod';
 // Common schemas
 // ============================================================
 
+export const accountRoleSchema = z.enum([
+  'customer',
+  'driver',
+  'fleet_owner',
+  'driver_fleet_owner',
+  'admin',
+  'super_admin',
+]);
+
 const phoneSchema = z
   .string()
   .trim()
@@ -78,6 +87,8 @@ export const signupSchema = z
 
     role: z.enum(['customer', 'driver', 'fleet_owner', 'driver_fleet_owner']).default('customer'),
 
+    onboardingLicencePending: z.boolean().optional(),
+
     licenseNumber: z
       .string()
       .trim()
@@ -148,7 +159,15 @@ export const signupSchema = z
     // Driver fields
     // --------------------------------------------------------
 
-    if (isDriver) {
+    if (data.onboardingLicencePending && (!isDriver || data.licenseNumber || data.licenseExpiry)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['onboardingLicencePending'],
+        message:
+          'Licence onboarding is only available to a Driver account without registration licence fields',
+      });
+    }
+    if (isDriver && !data.onboardingLicencePending) {
       if (!data.licenseNumber) {
         ctx.addIssue({
           code: 'custom',
@@ -257,6 +276,7 @@ export const resendSignupOtpSchema = z
 
 export const loginSchema = z
   .object({
+    role: accountRoleSchema.optional(),
     email: emailSchema.optional(),
 
     phone: phoneSchema.optional(),
@@ -308,6 +328,7 @@ export const resendLoginOtpSchema = z
 
 export const forgotPasswordSchema = z
   .object({
+    role: accountRoleSchema.optional(),
     email: emailSchema,
   })
   .strict();
@@ -395,10 +416,23 @@ export const googleLinkSchema = z
 // customer callers omit this field and retain their current behavior.
 export const googleAuthSchema = googleLinkSchema
   .extend({
+    accountRole: accountRoleSchema.optional(),
     driverFlow: z.enum(['signup', 'signin']).optional(),
     providerRole: z.enum(['driver', 'fleet_owner', 'driver_fleet_owner']).optional(),
   })
   .superRefine((input, ctx) => {
+    if (input.accountRole && input.providerRole && input.accountRole !== input.providerRole)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['accountRole'],
+        message: 'Account and provider roles must agree',
+      });
+    if (input.accountRole === 'customer' && input.driverFlow)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['accountRole'],
+        message: 'Customer role cannot use provider flow',
+      });
     if (input.providerRole && input.driverFlow !== 'signup') {
       ctx.addIssue({
         code: 'custom',

@@ -103,7 +103,9 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
   @override
   Widget build(BuildContext context) {
     final rideState = ref.watch(rideProvider);
-    final selectedTier = rideState.selectedTier.isEmpty ? 'auto' : rideState.selectedTier;
+    final selectedTier = rideState.selectedTier.isEmpty
+        ? 'auto'
+        : rideState.selectedTier;
 
     final filteredVehicles = _selectedFilter == 'All'
         ? _allVehicles
@@ -209,10 +211,14 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                       vertical: 14,
                     ),
                     decoration: BoxDecoration(
-                      color: isSelected ? const Color(0xFFF0FDF4) : Colors.white,
+                      color: isSelected
+                          ? const Color(0xFFF0FDF4)
+                          : Colors.white,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: isSelected ? const Color(0xFF16A34A) : const Color(0xFFE5E7EB),
+                        color: isSelected
+                            ? const Color(0xFF16A34A)
+                            : const Color(0xFFE5E7EB),
                         width: isSelected ? 1.8 : 1,
                       ),
                       boxShadow: [
@@ -264,7 +270,9 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                                       style: TextStyle(
                                         fontSize: 15,
                                         fontWeight: FontWeight.bold,
-                                        color: isSelected ? const Color(0xFF15803D) : const Color(0xFF111827),
+                                        color: isSelected
+                                            ? const Color(0xFF15803D)
+                                            : const Color(0xFF111827),
                                       ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
@@ -273,7 +281,10 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                                   if (isSelected) ...[
                                     const SizedBox(width: 8),
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
                                       decoration: BoxDecoration(
                                         color: const Color(0xFF16A34A),
                                         borderRadius: BorderRadius.circular(6),
@@ -307,7 +318,10 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
 
                         // Price and Selection / Chevron
                         ConstrainedBox(
-                          constraints: const BoxConstraints(minWidth: 70, maxWidth: 95),
+                          constraints: const BoxConstraints(
+                            minWidth: 70,
+                            maxWidth: 95,
+                          ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             mainAxisSize: MainAxisSize.min,
@@ -322,16 +336,22 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                                   style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w800,
-                                    color: isSelected ? const Color(0xFF16A34A) : const Color(0xFF111827),
+                                    color: isSelected
+                                        ? const Color(0xFF16A34A)
+                                        : const Color(0xFF111827),
                                     letterSpacing: -0.2,
                                   ),
                                 ),
                               ),
                               const SizedBox(height: 4),
                               Icon(
-                                isSelected ? Icons.check_circle_rounded : Icons.chevron_right_rounded,
+                                isSelected
+                                    ? Icons.check_circle_rounded
+                                    : Icons.chevron_right_rounded,
                                 size: 20,
-                                color: isSelected ? const Color(0xFF16A34A) : const Color(0xFF9CA3AF),
+                                color: isSelected
+                                    ? const Color(0xFF16A34A)
+                                    : const Color(0xFF9CA3AF),
                               ),
                             ],
                           ),
@@ -372,7 +392,9 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                   ),
                   onPressed: () {
                     ref.read(rideProvider.notifier).selectSector('passenger');
-                    ref.read(rideProvider.notifier).selectTier(selectedVehicle['category']);
+                    ref
+                        .read(rideProvider.notifier)
+                        .selectTier(selectedVehicle['category']);
                     context.push('/ride-booking');
                   },
                   child: Row(
@@ -389,7 +411,11 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      const Icon(Icons.arrow_forward_rounded, size: 18, color: Colors.white),
+                      const Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 18,
+                        color: Colors.white,
+                      ),
                     ],
                   ),
                 ),

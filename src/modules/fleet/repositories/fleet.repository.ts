@@ -1,3 +1,7 @@
+import { paidRideRevenueSql } from './fleet-revenue.repository.js';
+import { env } from '../../../config/env.js';
+import { FleetRevenueRepository, type RevenueFilter } from './fleet-revenue.repository.js';
+import { AppError } from '../../../common/errors/app-error.js';
 import type { FleetListQuery } from '../schemas/fleet.schemas.js';
 import type { Pool } from 'pg';
 import { randomInt } from 'node:crypto';
@@ -12,6 +16,8 @@ import type {
 
 export interface FleetRepository {
   getDashboard(ownerId: string): Promise<FleetDashboardMetrics>;
+  revenue(ownerId: string, filter?: RevenueFilter): ReturnType<FleetRevenueRepository['report']>;
+  catalog(): Promise<{ sectors: string[]; types: Record<string, unknown>[] }>;
 
   listVehicles(ownerId: string, query?: FleetListQuery): Promise<FleetVehicle[]>;
 
@@ -28,6 +34,7 @@ export interface FleetRepository {
   generateAssignmentCode(
     ownerId: string,
     vehicleId: string,
+    driverProfileId?: string,
   ): Promise<{ code: string; expiresAt: Date }>;
 
   unassignDriver(ownerId: string, vehicleId: string): Promise<boolean>;
@@ -42,6 +49,17 @@ export interface FleetRepository {
 export class PostgresFleetRepository implements FleetRepository {
   constructor(private readonly pool: Pool) {}
 
+  async catalog() {
+    const types = (
+      await this.pool.query(
+        'SELECT id,code,name,sector,active FROM vehicle_types ORDER BY sector,name',
+      )
+    ).rows;
+    return { sectors: ['passenger', 'logistics', 'service', 'premium', 'rental'], types };
+  }
+  async revenue(ownerId: string, filter: RevenueFilter = {}) {
+    return new FleetRevenueRepository(this.pool).report(ownerId, filter);
+  }
   async getDashboard(ownerId: string): Promise<FleetDashboardMetrics> {
     const vehiclesRes = await this.pool.query<{
       totalVehicles: string;
@@ -147,7 +165,7 @@ export class PostgresFleetRepository implements FleetRepository {
       availableDrivers: parseInt(dRow?.availableDrivers ?? '0', 10),
       pendingDocuments: parseInt(docRow?.pendingDocs ?? '0', 10),
       activeTrips: parseInt(tRow?.activeTrips ?? '0', 10),
-      todayRevenue: parseFloat(tRow?.todayRevenue ?? '0'),
+      todayRevenue: Number((await this.revenue(ownerId)).summary.todayRevenuePaise) / 100,
     };
   }
 
@@ -178,6 +196,8 @@ export class PostgresFleetRepository implements FleetRepository {
       driverPhone: string | null;
       driverAvailability: string | null;
       activeCode: string | null;
+      assignmentCodeStatus: string | null;
+      assignmentDriverProfileId: string | null;
       createdAt: Date;
       updatedAt: Date;
     }>(
@@ -225,6 +245,8 @@ export class PostgresFleetRepository implements FleetRepository {
          u.phone AS "driverPhone",
          dp.availability_status AS "driverAvailability",
          ac.code AS "activeCode",
+         ac.status AS "assignmentCodeStatus",
+         ac.intended_driver_profile_id AS "assignmentDriverProfileId",
          v.created_at AS "createdAt",
          v.updated_at AS "updatedAt"
        FROM vehicles v
@@ -233,11 +255,10 @@ export class PostgresFleetRepository implements FleetRepository {
        LEFT JOIN users u
          ON u.id = dp.user_id
        LEFT JOIN LATERAL (
-         SELECT code
+         SELECT code,status,intended_driver_profile_id
          FROM driver_assignment_codes
          WHERE vehicle_id = v.id
-           AND status = 'ACTIVE'
-           AND expires_at > NOW()
+           AND ((status = 'ACTIVE' AND expires_at > NOW()) OR (status='CLAIMED' AND driver_id=dp.user_id AND v.driver_profile_id=dp.id))
          ORDER BY created_at DESC
          LIMIT 1
        ) ac ON TRUE
@@ -289,14 +310,30 @@ export class PostgresFleetRepository implements FleetRepository {
             }
           : null,
       activeAssignmentCode: row.activeCode,
+      assignmentCodeStatus: row.assignmentCodeStatus,
+      assignmentDriverProfileId: row.assignmentDriverProfileId,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     }));
   }
 
   async createVehicle(ownerId: string, input: CreateFleetVehicleInput): Promise<FleetVehicle> {
-    const result = await this.pool.query<FleetVehicle>(
-      `INSERT INTO vehicles (
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const configuredType = await client.query(
+        `SELECT id FROM vehicle_types WHERE code=$1 AND (sector=$2 OR ($2='rental' AND sector IN ('passenger','premium')))`,
+        [input.category, input.sector],
+      );
+      if (!configuredType.rowCount)
+        throw new AppError(
+          'INVALID_VEHICLE_CATEGORY',
+          'Choose a configured vehicle type for this sector',
+          400,
+        );
+
+      const result = await client.query<FleetVehicle>(
+        `INSERT INTO vehicles (
          owner_id,
          make,
          model,
@@ -365,33 +402,41 @@ export class PostgresFleetRepository implements FleetRepository {
          is_active AS "isActive",
          created_at AS "createdAt",
          updated_at AS "updatedAt"`,
-      [
-        ownerId,
-        input.make,
-        input.model,
-        input.color ?? null,
-        input.plateNumber,
-        input.sector,
-        input.category,
-        input.fuelRatePerKm,
-        input.loadCapacityKg,
-        input.year ?? null,
-        input.fuelType ?? null,
-        input.seatingCapacity ?? null,
-        input.registrationDate ?? null,
-        input.registrationExpiry ?? null,
-        input.isCommercial,
-        input.permitDetails ?? null,
-      ],
-    );
+        [
+          ownerId,
+          input.make,
+          input.model,
+          input.color ?? null,
+          input.plateNumber,
+          input.sector,
+          input.category,
+          input.fuelRatePerKm,
+          input.loadCapacityKg,
+          input.year ?? null,
+          input.fuelType ?? null,
+          input.seatingCapacity ?? null,
+          input.registrationDate ?? null,
+          input.registrationExpiry ?? null,
+          input.isCommercial,
+          input.permitDetails ?? null,
+        ],
+      );
 
-    const vehicle = result.rows[0];
+      const vehicle = result.rows[0];
 
-    if (!vehicle) {
-      throw new Error('Failed to create fleet vehicle');
+      if (!vehicle) {
+        throw new Error('Failed to create fleet vehicle');
+      }
+
+      const joining = await this.issueVehicleCode(client, ownerId, vehicle.id);
+      await client.query('COMMIT');
+      return { ...vehicle, activeAssignmentCode: joining.code, assignmentCodeStatus: 'ACTIVE' };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
-
-    return vehicle;
   }
 
   async updateVehicle(
@@ -399,36 +444,72 @@ export class PostgresFleetRepository implements FleetRepository {
     vehicleId: string,
     input: UpdateFleetVehicleInput,
   ): Promise<FleetVehicle | null> {
-    const columns: Record<string, string> = {
-      make: 'make',
-      model: 'model',
-      color: 'color',
-      plateNumber: 'plate_number',
-      sector: 'sector',
-      category: 'category',
-      fuelRatePerKm: 'fuel_rate_per_km',
-      loadCapacityKg: 'load_capacity_kg',
-      year: 'manufacturing_year',
-      fuelType: 'fuel_type',
-      seatingCapacity: 'seating_capacity',
-      registrationDate: 'registration_date',
-      registrationExpiry: 'registration_expiry',
-      isCommercial: 'is_commercial',
-      permitDetails: 'permit_details',
-    };
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended('provider_vehicle:'||$1::text,0))",
+        [vehicleId],
+      );
+      await client.query("SELECT set_config('infurnus.actor_id',$1,TRUE)", [ownerId]);
+      const columns: Record<string, string> = {
+        make: 'make',
+        model: 'model',
+        color: 'color',
+        plateNumber: 'plate_number',
+        sector: 'sector',
+        category: 'category',
+        fuelRatePerKm: 'fuel_rate_per_km',
+        loadCapacityKg: 'load_capacity_kg',
+        year: 'manufacturing_year',
+        fuelType: 'fuel_type',
+        seatingCapacity: 'seating_capacity',
+        registrationDate: 'registration_date',
+        registrationExpiry: 'registration_expiry',
+        isCommercial: 'is_commercial',
+        permitDetails: 'permit_details',
+      };
 
-    const fields = Object.keys(input) as (keyof UpdateFleetVehicleInput)[];
+      if (input.sector != null || input.category != null) {
+        const current = (
+          await client.query(
+            'SELECT sector,category FROM vehicles WHERE id=$1 AND owner_id=$2 FOR UPDATE',
+            [vehicleId, ownerId],
+          )
+        ).rows[0];
+        if (!current) {
+          await client.query('ROLLBACK');
+          return null;
+        }
+        const sector = input.sector ?? current.sector,
+          category = input.category ?? current.category;
+        if (
+          !(
+            await client.query(
+              "SELECT id FROM vehicle_types WHERE code=$1 AND (sector=$2 OR ($2='rental' AND sector IN ('passenger','premium')))",
+              [category, sector],
+            )
+          ).rowCount
+        )
+          throw new AppError(
+            'INVALID_VEHICLE_CATEGORY',
+            'Choose a configured vehicle type for this sector',
+            400,
+          );
+      }
+      const fields = Object.keys(input) as (keyof UpdateFleetVehicleInput)[];
 
-    if (fields.length === 0) {
-      return null;
-    }
+      if (fields.length === 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
 
-    const values = fields.map((field) => (input[field] === undefined ? null : input[field]));
+      const values = fields.map((field) => (input[field] === undefined ? null : input[field]));
 
-    const assignments = fields.map((field, index) => `${columns[field]} = $${index + 1}`);
+      const assignments = fields.map((field, index) => `${columns[field]} = $${index + 1}`);
 
-    const result = await this.pool.query<FleetVehicle>(
-      `UPDATE vehicles
+      const result = await client.query<FleetVehicle>(
+        `UPDATE vehicles
        SET ${assignments.join(', ')},
            updated_at = NOW()
        WHERE id = $${values.length + 1}
@@ -446,10 +527,17 @@ export class PostgresFleetRepository implements FleetRepository {
          is_active AS "isActive",
          created_at AS "createdAt",
          updated_at AS "updatedAt"`,
-      [...values, vehicleId, ownerId],
-    );
+        [...values, vehicleId, ownerId],
+      );
 
-    return result.rows[0] ?? null;
+      await client.query('COMMIT');
+      return result.rows[0] ?? null;
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
   }
 
   async deactivateVehicle(ownerId: string, vehicleId: string): Promise<boolean> {
@@ -519,7 +607,7 @@ export class PostgresFleetRepository implements FleetRepository {
          SET status = 'REVOKED',
              updated_at = NOW()
          WHERE vehicle_id = $1
-           AND status = 'ACTIVE'`,
+           AND status IN ('ACTIVE','CLAIMED')`,
         [vehicleId],
       );
 
@@ -539,9 +627,31 @@ export class PostgresFleetRepository implements FleetRepository {
     }
   }
 
+  private async issueVehicleCode(
+    client: import('pg').PoolClient,
+    ownerId: string,
+    vehicleId: string,
+    driverProfileId?: string,
+  ) {
+    const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+    let code: string | null = null;
+    for (let attempt = 0; attempt < 20 && !code; attempt++) {
+      const candidate = randomInt(0, 1000000).toString().padStart(6, '0');
+      const inserted = await client.query<{ code: string }>(
+        'INSERT INTO driver_assignment_codes(code,vehicle_id,fleet_owner_id,expires_at,intended_driver_profile_id) VALUES($1,$2,$3,$4,$5) ON CONFLICT(code) DO NOTHING RETURNING code',
+        [candidate, vehicleId, ownerId, expiresAt, driverProfileId],
+      );
+      code = inserted.rows[0]?.code ?? null;
+    }
+    if (!code) throw new Error('ASSIGNMENT_CODE_CAPACITY_EXCEEDED');
+
+    return { code, expiresAt };
+  }
+
   async generateAssignmentCode(
     ownerId: string,
     vehicleId: string,
+    driverProfileId?: string,
   ): Promise<{
     code: string;
     expiresAt: Date;
@@ -565,14 +675,9 @@ export class PostgresFleetRepository implements FleetRepository {
       }>(
         `SELECT v.id
          FROM vehicles v
-         JOIN partners p
-           ON p.user_id = v.owner_id
          WHERE v.id = $1
            AND v.owner_id = $2
-           AND v.is_active = TRUE
-           AND v.verification_status = 'approved'
            AND v.driver_profile_id IS NULL
-           AND p.approval_status = 'approved'
          FOR UPDATE`,
         [vehicleId, ownerId],
       );
@@ -581,6 +686,16 @@ export class PostgresFleetRepository implements FleetRepository {
         throw new Error('VEHICLE_NOT_AVAILABLE_FOR_ASSIGNMENT');
       }
 
+      if (
+        driverProfileId &&
+        !(
+          await client.query(
+            `SELECT dp.id FROM driver_profiles dp JOIN partner_drivers pd ON pd.driver_profile_id=dp.id JOIN partners p ON p.id=pd.partner_id JOIN users u ON u.id=dp.user_id WHERE dp.id=$1 AND p.user_id=$2 AND pd.status='ACTIVE' AND dp.verification_status='approved' AND dp.license_expiry>=CURRENT_DATE AND dp.active_vehicle_id IS NULL AND u.status='active' AND u.deleted_at IS NULL FOR SHARE OF dp,pd,u`,
+            [driverProfileId, ownerId],
+          )
+        ).rowCount
+      )
+        throw new Error('DRIVER_NOT_ELIGIBLE_FOR_ASSIGNMENT');
       /*
        * Only one active assignment code should exist for a vehicle.
        */
@@ -589,21 +704,16 @@ export class PostgresFleetRepository implements FleetRepository {
          SET status = 'REVOKED',
              updated_at = NOW()
          WHERE vehicle_id = $1
-           AND status = 'ACTIVE'`,
+           AND status IN ('ACTIVE','CLAIMED')`,
         [vehicleId],
       );
 
-      const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
-      let code: string | null = null;
-      for (let attempt = 0; attempt < 20 && !code; attempt++) {
-        const candidate = 'FLEET-' + randomInt(10000, 100000);
-        const inserted = await client.query<{ code: string }>(
-          'INSERT INTO driver_assignment_codes(code,vehicle_id,fleet_owner_id,expires_at) VALUES($1,$2,$3,$4) ON CONFLICT(code) DO NOTHING RETURNING code',
-          [candidate, vehicleId, ownerId, expiresAt],
-        );
-        code = inserted.rows[0]?.code ?? null;
-      }
-      if (!code) throw new Error('ASSIGNMENT_CODE_CAPACITY_EXCEEDED');
+      const { code, expiresAt } = await this.issueVehicleCode(
+        client,
+        ownerId,
+        vehicleId,
+        driverProfileId,
+      );
 
       await client.query('COMMIT');
 
@@ -678,7 +788,7 @@ export class PostgresFleetRepository implements FleetRepository {
          SET status = 'REVOKED',
              updated_at = NOW()
          WHERE vehicle_id = $1
-           AND status = 'ACTIVE'`,
+           AND status IN ('ACTIVE','CLAIMED')`,
         [vehicleId],
       );
 
@@ -736,16 +846,7 @@ export class PostgresFleetRepository implements FleetRepository {
 
          COUNT(r.id)::text AS "completedTrips",
 
-         COALESCE(
-           SUM(
-             COALESCE(
-               r.final_fare,
-               r.fare_estimate,
-               0
-             )
-           ),
-           0
-         )::text AS "totalEarnings"
+         COALESCE(SUM(${paidRideRevenueSql}),0)::text AS "totalEarnings"
 
        FROM partners p
 
@@ -766,7 +867,8 @@ export class PostgresFleetRepository implements FleetRepository {
         AND v.verification_status = 'approved'
 
        LEFT JOIN rides r
-         ON r.assigned_vehicle_id = v.id
+         ON r.assigned_driver_id = dp.id
+        AND EXISTS(SELECT 1 FROM vehicles owned WHERE owned.id=r.assigned_vehicle_id AND owned.owner_id=p.user_id)
         AND r.status = 'completed'
 
        WHERE p.user_id = $1
@@ -887,90 +989,17 @@ export class PostgresFleetRepository implements FleetRepository {
   }
 
   async getEarnings(ownerId: string): Promise<FleetEarningsSummary> {
-    const result = await this.pool.query<{
-      todayRevenue: string;
-      thisWeekRevenue: string;
-      thisMonthRevenue: string;
-      totalTrips: string;
-    }>(
-      `SELECT
-         COALESCE(
-           SUM(
-             COALESCE(
-               r.final_fare,
-               r.fare_estimate,
-               0
-             )
-           ) FILTER (
-             WHERE r.status = 'completed'
-               AND r.completed_at >= CURRENT_DATE
-           ),
-           0
-         )::text AS "todayRevenue",
-
-         COALESCE(
-           SUM(
-             COALESCE(
-               r.final_fare,
-               r.fare_estimate,
-               0
-             )
-           ) FILTER (
-             WHERE r.status = 'completed'
-               AND r.completed_at >= date_trunc(
-                 'week',
-                 CURRENT_DATE
-               )
-           ),
-           0
-         )::text AS "thisWeekRevenue",
-
-         COALESCE(
-           SUM(
-             COALESCE(
-               r.final_fare,
-               r.fare_estimate,
-               0
-             )
-           ) FILTER (
-             WHERE r.status = 'completed'
-               AND r.completed_at >= date_trunc(
-                 'month',
-                 CURRENT_DATE
-               )
-           ),
-           0
-         )::text AS "thisMonthRevenue",
-
-         COUNT(r.id) FILTER (
-           WHERE r.status = 'completed'
-         )::text AS "totalTrips"
-
-       FROM rides r
-
-       JOIN vehicles v
-         ON v.id = r.assigned_vehicle_id
-
-       WHERE v.owner_id = $1`,
-      [ownerId],
-    );
-
-    const row = result.rows[0];
-
-    const thisMonthRevenue = parseFloat(row?.thisMonthRevenue ?? '0');
-
+    const report = await this.revenue(ownerId);
     const settled = await this.pool.query<{ commission: string; net: string }>(
-      "SELECT COALESCE(-SUM(amount_paise) FILTER(WHERE entry_type='COMMISSION'),0)::text AS commission,COALESCE(SUM(amount_paise) FILTER(WHERE entry_type IN ('EARNING','COMMISSION','ADJUSTMENT')),0)::text AS net FROM provider_wallet_entries WHERE user_id=$1 AND created_at>=date_trunc('month',CURRENT_DATE)",
-      [ownerId],
+      "SELECT COALESCE(-SUM(amount_paise) FILTER(WHERE entry_type='COMMISSION'),0)::text AS commission,COALESCE(SUM(amount_paise) FILTER(WHERE entry_type IN ('EARNING','COMMISSION','ADJUSTMENT')),0)::text AS net FROM provider_wallet_entries WHERE user_id=$1 AND date_trunc('month',created_at AT TIME ZONE $2)=date_trunc('month',NOW() AT TIME ZONE $2)",
+      [ownerId, env.FLEET_REPORT_TIME_ZONE],
     );
-    const commission = Number(settled.rows[0]?.commission ?? '0') / 100;
-
     return {
-      todayRevenue: parseFloat(row?.todayRevenue ?? '0'),
-      thisWeekRevenue: parseFloat(row?.thisWeekRevenue ?? '0'),
-      thisMonthRevenue,
-      totalTrips: parseInt(row?.totalTrips ?? '0', 10),
-      platformCommission: commission,
+      todayRevenue: Number(report.summary.todayRevenuePaise) / 100,
+      thisWeekRevenue: Number(report.summary.weekRevenuePaise) / 100,
+      thisMonthRevenue: Number(report.summary.monthRevenuePaise) / 100,
+      totalTrips: report.summary.completedJobs,
+      platformCommission: Number(settled.rows[0]?.commission ?? '0') / 100,
       netPayout: Number(settled.rows[0]?.net ?? '0') / 100,
     };
   }

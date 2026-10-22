@@ -36,20 +36,24 @@ class ProviderBankAccountModel {
       bankName: json['bankName'] as String? ?? '',
       upiId: json['upiId'] as String?,
       isVerified: json['isVerified'] as bool? ?? false,
-      createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt'] as String) : null,
-      updatedAt: json['updatedAt'] != null ? DateTime.parse(json['updatedAt'] as String) : null,
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'] as String)
+          : null,
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.parse(json['updatedAt'] as String)
+          : null,
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'userId': userId,
-        'accountHolderName': accountHolderName,
-        'accountNumberMasked': accountNumberMasked,
-        'accountNumberLast4': accountNumberLast4,
-        'ifscCode': ifscCode,
-        'bankName': bankName,
-        'upiId': upiId,
-        'isVerified': isVerified,
-      };
+    'id': id,
+    'userId': userId,
+    'accountHolderName': accountHolderName,
+    'accountNumberMasked': accountNumberMasked,
+    'accountNumberLast4': accountNumberLast4,
+    'ifscCode': ifscCode,
+    'bankName': bankName,
+    'upiId': upiId,
+    'isVerified': isVerified,
+  };
 }

@@ -18,6 +18,7 @@ afterEach(async () => {
   for (const id of users.splice(0)) {
     for (const table of ['refresh_tokens', 'login_challenges', 'user_credentials'])
       await pool.query(`DELETE FROM ${table} WHERE user_id=$1`, [id]);
+    await pool.query('DELETE FROM provider_onboarding WHERE user_id=$1', [id]);
     await pool.query('DELETE FROM users WHERE id=$1', [id]);
   }
   for (const value of contacts.splice(0))

@@ -1,0 +1,282 @@
+[
+  {
+    "file": ".env.example",
+    "decision": "Retain pending local security or notification extension"
+  },
+  {
+    "file": ".env.example",
+    "decision": "Retain pending local security or notification extension"
+  },
+  {
+    "file": ".github/workflows/ci.yml",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": ".github/workflows/ci.yml",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": ".github/workflows/ci.yml",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": ".github/workflows/ci.yml",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "Dockerfile",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "config/otp-provider.example.json",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "config/otp-provider.example.json",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "config/otp-provider.example.json",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "config/otp-provider.example.json",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "config/otp-provider.example.json",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "config/otp-provider.example.json",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "config/service-area/bihar.geojson",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "scripts/check-source-secrets.js",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "scripts/test-backend-isolated.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "scripts/test-backend-isolated.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "scripts/test-migrations.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "src/infrastructure/database/backend-standby.test.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "src/infrastructure/database/backend-standby.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "src/infrastructure/socket/socket.server.ts",
+    "decision": "Keep dispatch worker and push notification dependencies"
+  },
+  {
+    "file": "src/infrastructure/socket/socket.server.ts",
+    "decision": "Retain pending local security or notification extension"
+  },
+  {
+    "file": "src/infrastructure/socket/socket.server.ts",
+    "decision": "Retain pending local security or notification extension"
+  },
+  {
+    "file": "src/infrastructure/socket/socket.server.ts",
+    "decision": "Retain pending local security or notification extension"
+  },
+  {
+    "file": "src/infrastructure/socket/tests/driver-master.socket.test.ts",
+    "decision": "Retain pending local security or notification extension"
+  },
+  {
+    "file": "src/infrastructure/socket/tests/driver-master.socket.test.ts",
+    "decision": "Retain pending local security or notification extension"
+  },
+  {
+    "file": "src/infrastructure/socket/tests/driver-master.socket.test.ts",
+    "decision": "Retain pending local security or notification extension"
+  },
+  {
+    "file": "src/infrastructure/socket/tests/driver-master.socket.test.ts",
+    "decision": "Retain pending local security or notification extension"
+  },
+  {
+    "file": "src/modules/admin/repositories/admin.repository.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "src/modules/auth/providers/generic-http-otp.provider.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "src/modules/auth/providers/generic-http-otp.provider.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "src/modules/auth/providers/generic-http-otp.provider.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "src/modules/auth/providers/otp-provider.factory.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "src/modules/auth/providers/otp-provider.factory.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "src/modules/auth/repositories/login.repository.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "src/modules/auth/repositories/pending-signup.repository.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "src/modules/auth/repositories/pending-signup.repository.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "src/modules/auth/services/admin-provision.service.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "src/modules/auth/services/admin-provision.service.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "src/modules/auth/services/admin-provision.service.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "src/modules/auth/tests/auth.integration.test.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "src/modules/auth/tests/generic-otp-auth.integration.test.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "src/modules/auth/tests/generic-otp-auth.integration.test.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "src/modules/auth/tests/generic-otp-auth.integration.test.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "src/modules/auth/tests/generic-otp-auth.integration.test.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "src/modules/auth/tests/msg91-factory.test.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "src/modules/auth/tests/msg91-factory.test.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "src/modules/auth/tests/msg91-factory.test.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "src/modules/auth/tests/msg91-factory.test.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "src/modules/auth/tests/otp-attempts.integration.test.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "src/modules/auth/tests/otp-attempts.integration.test.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "src/modules/auth/tests/otp-attempts.integration.test.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "src/modules/auth/tests/otp-attempts.integration.test.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "src/modules/auth/tests/otp-attempts.integration.test.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "src/modules/providers/repositories/provider-operations.repository.ts",
+    "decision": "Preserve consolidated admin review and add front-photo guard"
+  },
+  {
+    "file": "src/modules/providers/repositories/provider-operations.repository.ts",
+    "decision": "Preserve consolidated admin review and add front-photo guard"
+  },
+  {
+    "file": "src/modules/providers/repositories/provider-operations.repository.ts",
+    "decision": "Preserve consolidated admin review and add front-photo guard"
+  },
+  {
+    "file": "src/modules/providers/repositories/provider-operations.repository.ts",
+    "decision": "Preserve consolidated admin review and add front-photo guard"
+  },
+  {
+    "file": "src/modules/providers/tests/driver-master.database.test.ts",
+    "decision": "Retain pending local security or notification extension"
+  },
+  {
+    "file": "src/modules/rides/repositories/driver-eligibility.ts",
+    "decision": "Retain rental exclusion and new submitted-licence guard"
+  },
+  {
+    "file": "src/modules/rides/repositories/driver-eligibility.ts",
+    "decision": "Retain rental exclusion and new submitted-licence guard"
+  },
+  {
+    "file": "src/modules/rides/repositories/driver.repository.ts",
+    "decision": "Preserve newer GitHub validation and regressions"
+  },
+  {
+    "file": "src/modules/rides/repositories/ride-pin.ts",
+    "decision": "Retain pending local security or notification extension"
+  },
+  {
+    "file": "src/modules/rides/repositories/ride-pin.ts",
+    "decision": "Retain pending local security or notification extension"
+  },
+  {
+    "file": "src/modules/rides/repositories/ride.repository.ts",
+    "decision": "Retain pending local security or notification extension"
+  },
+  {
+    "file": "src/modules/rides/repositories/ride.repository.ts",
+    "decision": "Retain pending local security or notification extension"
+  },
+  {
+    "file": "src/modules/rides/repositories/ride.repository.ts",
+    "decision": "Retain pending local security or notification extension"
+  },
+  {
+    "file": "src/modules/rides/repositories/ride.repository.ts",
+    "decision": "Retain pending local security or notification extension"
+  },
+  {
+    "file": "src/modules/rides/services/ride.service.ts",
+    "decision": "Retain pending local security or notification extension"
+  },
+  {
+    "file": "src/server.ts",
+    "decision": "Retain pending local security or notification extension"
+  }
+]

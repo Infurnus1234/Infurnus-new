@@ -1,7 +1,7 @@
 import { pool } from '../../../infrastructure/database/postgres.js';
 
 export interface AccountRepository {
-  findUserByEmail(email: string): Promise<{ id: string; email: string } | null>;
+  findUserByEmail(email: string, role?: string): Promise<{ id: string; email: string } | null>;
 
   updatePassword(userId: string, passwordHash: string): Promise<boolean>;
 
@@ -9,17 +9,21 @@ export interface AccountRepository {
 }
 
 export class PostgresAccountRepository implements AccountRepository {
-  async findUserByEmail(email: string): Promise<{ id: string; email: string } | null> {
+  async findUserByEmail(
+    email: string,
+    role?: string,
+  ): Promise<{ id: string; email: string } | null> {
     const result = await pool.query<{ id: string; email: string }>(
       `SELECT id, email
        FROM users
        WHERE LOWER(email) = LOWER($1)
          AND deleted_at IS NULL
-       LIMIT 1`,
-      [email],
+         AND ($2::text IS NULL OR role::text=$2)
+       LIMIT 2`,
+      [email, role ?? null],
     );
 
-    return result.rows[0] ?? null;
+    return result.rows.length === 1 ? result.rows[0]! : null;
   }
 
   async updatePassword(userId: string, passwordHash: string): Promise<boolean> {

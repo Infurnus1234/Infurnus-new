@@ -28,9 +28,10 @@ class _InfurnusSkeletonState extends State<InfurnusSkeleton>
       vsync: this,
       duration: const Duration(milliseconds: 1400),
     )..repeat();
-    _animation = Tween<double>(begin: -1.0, end: 2.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _animation = Tween<double>(
+      begin: -1.0,
+      end: 2.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override
@@ -91,7 +92,11 @@ class InfurnusSkeletonCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                InfurnusSkeleton(width: double.infinity, height: 14, borderRadius: 4),
+                InfurnusSkeleton(
+                  width: double.infinity,
+                  height: 14,
+                  borderRadius: 4,
+                ),
                 SizedBox(height: 8),
                 InfurnusSkeleton(width: 120, height: 11, borderRadius: 4),
               ],

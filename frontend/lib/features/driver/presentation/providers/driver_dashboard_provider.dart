@@ -1,5 +1,7 @@
 import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../../core/services/location_service.dart';
 import '../../../../core/storage/secure_storage.dart';
 import '../../data/models/driver_history_model.dart';
@@ -41,8 +43,10 @@ class DriverDashboardState {
       partner: partner ?? this.partner,
       vehicle: vehicle ?? this.vehicle,
       history: history ?? this.history,
-      isUpdatingAvailability: isUpdatingAvailability ?? this.isUpdatingAvailability,
-      isBroadcastingLocation: isBroadcastingLocation ?? this.isBroadcastingLocation,
+      isUpdatingAvailability:
+          isUpdatingAvailability ?? this.isUpdatingAvailability,
+      isBroadcastingLocation:
+          isBroadcastingLocation ?? this.isBroadcastingLocation,
     );
   }
 }
@@ -68,7 +72,9 @@ class DriverDashboardNotifier extends StateNotifier<DriverDashboardState> {
       try {
         partner = await ref.read(getMyPartnerUseCaseProvider).execute();
         if (partner != null) {
-          await ref.read(secureStorageProvider).write(key: 'partner_id', value: partner.id);
+          await ref
+              .read(secureStorageProvider)
+              .write(key: 'partner_id', value: partner.id);
         }
       } catch (_) {
         // Fallback to reading partner_id from secure storage
@@ -76,13 +82,20 @@ class DriverDashboardNotifier extends StateNotifier<DriverDashboardState> {
         final partnerId = await storage.read(key: 'partner_id');
         if (partnerId != null && partnerId.isNotEmpty) {
           try {
-            partner = await ref.read(getPartnerUseCaseProvider).execute(partnerId);
+            partner = await ref
+                .read(getPartnerUseCaseProvider)
+                .execute(partnerId);
           } catch (_) {}
         }
       }
 
       if (partner == null) {
-        state = state.copyWith(isLoading: false, partner: null, vehicle: null, history: null);
+        state = state.copyWith(
+          isLoading: false,
+          partner: null,
+          vehicle: null,
+          history: null,
+        );
         _stopLocationBroadcasting();
         return;
       }
@@ -90,9 +103,14 @@ class DriverDashboardNotifier extends StateNotifier<DriverDashboardState> {
       // 2. Fetch active vehicle if available
       VehicleModel? vehicle;
       try {
-        final vehicles = await ref.read(listVehiclesUseCaseProvider).execute(partner.id);
+        final vehicles = await ref
+            .read(listVehiclesUseCaseProvider)
+            .execute(partner.id);
         if (vehicles.isNotEmpty) {
-          vehicle = vehicles.firstWhere((v) => v.isActive, orElse: () => vehicles.first);
+          vehicle = vehicles.firstWhere(
+            (v) => v.isActive,
+            orElse: () => vehicles.first,
+          );
         }
       } catch (_) {}
 
@@ -116,10 +134,7 @@ class DriverDashboardNotifier extends StateNotifier<DriverDashboardState> {
         _stopLocationBroadcasting();
       }
     } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        errorMessage: e.toString(),
-      );
+      state = state.copyWith(isLoading: false, errorMessage: e.toString());
     }
   }
 
@@ -129,7 +144,9 @@ class DriverDashboardNotifier extends StateNotifier<DriverDashboardState> {
     state = state.copyWith(isUpdatingAvailability: true, errorMessage: null);
 
     try {
-      await ref.read(updateDriverAvailabilityUseCaseProvider).execute(newStatus);
+      await ref
+          .read(updateDriverAvailabilityUseCaseProvider)
+          .execute(newStatus);
 
       final updatedPartner = PartnerModel(
         id: state.partner!.id,
@@ -190,7 +207,9 @@ class DriverDashboardNotifier extends StateNotifier<DriverDashboardState> {
     }
 
     try {
-      final position = await ref.read(locationServiceProvider).getCurrentPosition();
+      final position = await ref
+          .read(locationServiceProvider)
+          .getCurrentPosition();
       if (position != null) {
         await ref.read(updateDriverLocationUseCaseProvider).execute({
           'latitude': position.latitude,
@@ -206,5 +225,5 @@ class DriverDashboardNotifier extends StateNotifier<DriverDashboardState> {
 
 final driverDashboardProvider =
     StateNotifierProvider<DriverDashboardNotifier, DriverDashboardState>((ref) {
-  return DriverDashboardNotifier(ref);
-});
+      return DriverDashboardNotifier(ref);
+    });

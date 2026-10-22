@@ -24,12 +24,25 @@ export function administrativePermissionGate(
   service: Pick<AdminManagementService, 'identity'>,
 ): RequestHandler {
   return async (req, res, next) => {
-    // These endpoints authenticate passwords/refresh cookies themselves. An old access
+    // These endpoints validate their own Google identity, OTP, password or refresh cookie. An old access
     // cookie must never prevent signing in, rotating a session or revoking that session.
     if (
-      ['/auth/admin/login', '/auth/login', '/auth/refresh', '/auth/logout'].includes(
-        req.path.replace(/\/+$/, ''),
-      )
+      req.method === 'POST' &&
+      [
+        '/auth/admin/login',
+        '/auth/login',
+        '/auth/login/verify',
+        '/auth/login/resend',
+        '/auth/google',
+        '/auth/signup',
+        '/auth/signup/verify',
+        '/auth/signup/resend',
+        '/auth/forgot-password',
+        '/auth/forgot-password/verify',
+        '/auth/reset-password',
+        '/auth/refresh',
+        '/auth/logout',
+      ].includes(req.path.replace(/\/+$/, ''))
     ) {
       next();
       return;

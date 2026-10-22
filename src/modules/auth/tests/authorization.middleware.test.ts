@@ -3,7 +3,10 @@ import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 import { errorMiddleware } from '../../../common/middleware/error.middleware.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
-import { requireRoles } from '../middleware/authorization.middleware.js';
+import {
+  requireFleetFinancialContext,
+  requireRoles,
+} from '../middleware/authorization.middleware.js';
 import { signAccessToken } from '../utils/jwt.js';
 
 function createApp() {
@@ -73,5 +76,28 @@ describe('requireRoles', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.data.role).toBe('super_admin');
+  });
+});
+
+describe('Fleet financial context', () => {
+  it.each([
+    ['driver', undefined, 403],
+    ['driver', 'fleet_owner', 403],
+    ['customer', 'fleet_owner', 403],
+    ['driver_fleet_owner', undefined, 403],
+    ['driver_fleet_owner', 'driver', 403],
+    ['driver_fleet_owner', 'fleet_owner', 200],
+    ['fleet_owner', undefined, 200],
+  ] as const)('enforces role %s and mode %s', async (role, mode, status) => {
+    const app = express();
+    app.get('/finance', requireAuth, requireFleetFinancialContext(), (_req, res) =>
+      res.json({ ok: true }),
+    );
+    app.use(errorMiddleware);
+    const req = request(app)
+      .get('/finance')
+      .set('Authorization', 'Bearer ' + (await createToken(role)));
+    if (mode) req.set('X-Provider-Mode', mode);
+    expect((await req).status).toBe(status);
   });
 });

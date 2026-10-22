@@ -6,6 +6,7 @@ import '../../data/models/auth_models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
 import '../widgets/auth_hero_banner.dart';
+import '../widgets/google_sign_in_button.dart';
 
 class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
@@ -19,12 +20,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _lastNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
 
   bool _isEmail = false;
-  bool _obscurePassword = true;
-  bool _obscureConfirm = true;
   final String _selectedRole = 'customer';
   String? _validationError;
 
@@ -34,8 +31,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     _lastNameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
-    _passwordController.dispose();
-    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -46,7 +41,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     final lastName = _lastNameController.text.trim();
 
     if (firstName.isEmpty || lastName.isEmpty) {
-      setState(() => _validationError = 'Please enter your first and last name.');
+      setState(
+        () => _validationError = 'Please enter your first and last name.',
+      );
       return;
     }
 
@@ -57,19 +54,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
     if (!_isEmail && _phoneController.text.trim().isEmpty) {
       setState(() => _validationError = 'Please enter a valid phone number.');
-      return;
-    }
-
-    final password = _passwordController.text;
-    final confirmPassword = _confirmPasswordController.text;
-
-    if (password.length < 8 || password.length > 128) {
-      setState(() => _validationError = 'Password must be 8\u2013128 characters.');
-      return;
-    }
-
-    if (password != confirmPassword) {
-      setState(() => _validationError = 'Passwords do not match');
       return;
     }
 
@@ -88,8 +72,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       lastName: lastName,
       email: email,
       phone: phone,
-      password: password,
-      confirmPassword: confirmPassword,
       role: _selectedRole,
     );
 
@@ -130,7 +112,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   ),
                 ],
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 28.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24.0,
+                vertical: 28.0,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -191,9 +176,15 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFD1D5DB), width: 1.2),
+                        border: Border.all(
+                          color: const Color(0xFFD1D5DB),
+                          width: 1.2,
+                        ),
                       ),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 4,
+                      ),
                       child: Row(
                         children: [
                           const Text('🇮🇳', style: TextStyle(fontSize: 18)),
@@ -213,7 +204,11 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                             size: 20,
                           ),
                           const SizedBox(width: 8),
-                          Container(height: 24, width: 1, color: const Color(0xFFE5E7EB)),
+                          Container(
+                            height: 24,
+                            width: 1,
+                            color: const Color(0xFFE5E7EB),
+                          ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: TextField(
@@ -264,39 +259,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 12),
-
-                  // Password Fields
-                  _buildInputBox(
-                    controller: _passwordController,
-                    hint: 'Password',
-                    icon: Icons.lock_outline_rounded,
-                    obscureText: _obscurePassword,
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                        color: const Color(0xFF6B7280),
-                        size: 20,
-                      ),
-                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildInputBox(
-                    controller: _confirmPasswordController,
-                    hint: 'Confirm Password',
-                    icon: Icons.lock_outline_rounded,
-                    obscureText: _obscureConfirm,
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                        color: const Color(0xFF6B7280),
-                        size: 20,
-                      ),
-                      onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
-                    ),
-                  ),
-
                   const SizedBox(height: 20),
 
                   if (_validationError != null)
@@ -305,7 +267,11 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                       child: Center(
                         child: Text(
                           _validationError!,
-                          style: const TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.w500),
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
                           textAlign: TextAlign.center,
                         ),
                       ),
@@ -318,7 +284,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     decoration: BoxDecoration(
                       color: const Color(0xFF012010),
                       borderRadius: BorderRadius.circular(26),
-                      border: Border.all(color: const Color(0xFF00E676), width: 1.2),
+                      border: Border.all(
+                        color: const Color(0xFF00E676),
+                        width: 1.2,
+                      ),
                       boxShadow: const [
                         BoxShadow(
                           color: Color(0x5500E676),
@@ -331,23 +300,41 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.transparent,
                         shadowColor: Colors.transparent,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(26),
+                        ),
                       ),
-                      onPressed: authState.status == AuthStatus.loading ? null : _handleSignup,
+                      onPressed: authState.status == AuthStatus.loading
+                          ? null
+                          : _handleSignup,
                       child: authState.status == AuthStatus.loading
                           ? const SizedBox(
                               width: 22,
                               height: 22,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                            )
-                          : const Text(
-                              'Sign Up   \u2192',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
                                 color: Colors.white,
-                                letterSpacing: 0.5,
                               ),
+                            )
+                          : const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  'Sign Up',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                                SizedBox(width: 8),
+                                Icon(
+                                  Icons.arrow_forward_rounded,
+                                  size: 20,
+                                  color: Colors.white,
+                                ),
+                              ],
                             ),
                     ),
                   ),
@@ -357,7 +344,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   // Separator: "OR"
                   Row(
                     children: [
-                      const Expanded(child: Divider(color: Color(0xFFE5E7EB), thickness: 1)),
+                      const Expanded(
+                        child: Divider(color: Color(0xFFE5E7EB), thickness: 1),
+                      ),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 14),
                         child: Text(
@@ -370,7 +359,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                           ),
                         ),
                       ),
-                      const Expanded(child: Divider(color: Color(0xFFE5E7EB), thickness: 1)),
+                      const Expanded(
+                        child: Divider(color: Color(0xFFE5E7EB), thickness: 1),
+                      ),
                     ],
                   ),
 
@@ -383,16 +374,22 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(25),
-                      border: Border.all(color: const Color(0xFFD1D5DB), width: 1.2),
+                      border: Border.all(
+                        color: const Color(0xFFD1D5DB),
+                        width: 1.2,
+                      ),
                     ),
-                    child: OutlinedButton(
+                    child: GoogleSignInButton(
                       style: OutlinedButton.styleFrom(
                         side: BorderSide.none,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(25),
+                        ),
                       ),
-                      onPressed: () {
-                        ref.read(authProvider.notifier).signInWithGoogle('dummy-google-token');
-                      },
+                      enabled: authState.status != AuthStatus.loading,
+                      onIdToken: ref
+                          .read(authProvider.notifier)
+                          .signInWithGoogle,
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -426,7 +423,11 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                       child: Center(
                         child: Text(
                           authState.errorMessage!,
-                          style: const TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.w500),
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
                           textAlign: TextAlign.center,
                         ),
                       ),
@@ -440,7 +441,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                       onTap: () => context.push('/login'),
                       child: RichText(
                         text: const TextSpan(
-                          style: TextStyle(fontSize: 14, color: Color(0xFF4B5563)),
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF4B5563),
+                          ),
                           children: [
                             TextSpan(text: 'Already have an account? '),
                             TextSpan(

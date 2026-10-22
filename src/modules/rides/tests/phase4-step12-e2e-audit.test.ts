@@ -70,7 +70,17 @@ describe('Phase 4 Step 12: End-to-End Validation & Final Audit Suite', () => {
     let isVerified = false;
     const mockRideRepo: Partial<RideRepository> = {
       isAssignedDriverProfile: vi.fn().mockResolvedValue(true),
-      findById: vi.fn().mockResolvedValue(mockRide({ status: 'driver_arrived' })),
+      findById: vi.fn().mockImplementation(async () =>
+        mockRide({
+          status: isVerified ? 'in_progress' : 'driver_arrived',
+          pinVerified: isVerified,
+        }),
+      ),
+      verifyPinAttempt: vi.fn().mockImplementation(async (_ride, _driver, pin) => {
+        if (pin !== '5678') return 'invalid';
+        isVerified = true;
+        return 'verified';
+      }),
       getRidePin: vi.fn().mockResolvedValue('5678'),
       isPinVerified: vi.fn().mockImplementation(async () => isVerified),
       markPinVerified: vi.fn().mockImplementation(async () => {
@@ -88,10 +98,12 @@ describe('Phase 4 Step 12: End-to-End Validation & Final Audit Suite', () => {
       mockRideRepo as RideRepository,
       mockDriverRepo as DriverRepository,
     );
-    const pinRes = await rideService.verifyRidePin('ride-e2e-001', 'driver-e2e-1', '5678');
-    expect(pinRes.verified).toBe(true);
-
-    const started = await rideService.transitionRide('ride-e2e-001', 'in_progress', 'driver-e2e-1');
+    const started = await rideService.transitionRide(
+      'ride-e2e-001',
+      'in_progress',
+      'driver-e2e-1',
+      '5678',
+    );
     expect(started.status).toBe('in_progress');
 
     const completed = await rideService.completeRide('ride-e2e-001', 'driver-e2e-1');

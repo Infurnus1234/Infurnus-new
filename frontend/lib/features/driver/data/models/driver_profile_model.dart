@@ -66,30 +66,34 @@ class DriverProfileModel {
       emergencyContactName: json['emergencyContactName'] as String?,
       emergencyContactPhone: json['emergencyContactPhone'] as String?,
       activeVehicleId: json['activeVehicleId'] as String?,
-      createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt'] as String) : null,
-      updatedAt: json['updatedAt'] != null ? DateTime.parse(json['updatedAt'] as String) : null,
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'] as String)
+          : null,
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.parse(json['updatedAt'] as String)
+          : null,
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'userId': userId,
-        'licenseNumber': licenseNumber,
-        'licenseExpiry': licenseExpiry,
-        'licenseDocumentKey': licenseDocumentKey,
-        'vehicleRcDocumentKey': vehicleRcDocumentKey,
-        'profilePhotoKey': profilePhotoKey,
-        'verificationStatus': verificationStatus,
-        'rejectionReason': rejectionReason,
-        'availabilityStatus': availabilityStatus,
-        'dob': dob,
-        'gender': gender,
-        'address': address,
-        'city': city,
-        'state': state,
-        'pinCode': pinCode,
-        'emergencyContactName': emergencyContactName,
-        'emergencyContactPhone': emergencyContactPhone,
-        'activeVehicleId': activeVehicleId,
-      };
+    'id': id,
+    'userId': userId,
+    'licenseNumber': licenseNumber,
+    'licenseExpiry': licenseExpiry,
+    'licenseDocumentKey': licenseDocumentKey,
+    'vehicleRcDocumentKey': vehicleRcDocumentKey,
+    'profilePhotoKey': profilePhotoKey,
+    'verificationStatus': verificationStatus,
+    'rejectionReason': rejectionReason,
+    'availabilityStatus': availabilityStatus,
+    'dob': dob,
+    'gender': gender,
+    'address': address,
+    'city': city,
+    'state': state,
+    'pinCode': pinCode,
+    'emergencyContactName': emergencyContactName,
+    'emergencyContactPhone': emergencyContactPhone,
+    'activeVehicleId': activeVehicleId,
+  };
 }

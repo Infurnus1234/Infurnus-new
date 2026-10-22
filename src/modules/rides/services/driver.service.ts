@@ -1,3 +1,4 @@
+import { storageService } from '../../../infrastructure/storage/index.js';
 import { MatchingService } from './matching.service.js';
 import { rideEvents } from '../events/ride.events.js';
 import { validateCoordinates } from '../../maps/geometry.js';
@@ -47,7 +48,6 @@ export class DriverService {
     if (isDriverRole) {
       return {
         totalTrips: completedRides.length,
-        totalEarnings: 0,
         rides: rides.map(sanitizeRideForDriver),
       };
     }
@@ -174,8 +174,10 @@ export class DriverService {
       : null;
   }
 
-  async verifyAssignmentCode(code: string) {
-    const preview = await this.repository.verifyAssignmentCode(code);
+  async verifyAssignmentCode(code: string, userId?: string) {
+    const preview = await (userId
+      ? this.repository.verifyAssignmentCode(code, userId)
+      : this.repository.verifyAssignmentCode(code));
     if (!preview) {
       throw new AppError(
         'INVALID_ASSIGNMENT_CODE',
@@ -191,6 +193,13 @@ export class DriverService {
     try {
       return await this.repository.claimAssignmentCode(code, userId, profileId);
     } catch (error) {
+      if (error instanceof Error && error.message === 'DRIVER_ALREADY_ASSIGNED') {
+        throw new AppError(
+          'DRIVER_ALREADY_ASSIGNED',
+          'Ask your Fleet Owner to release your current vehicle before joining another.',
+          409,
+        );
+      }
       if (error instanceof Error && error.message === 'ASSIGNMENT_CODE_INVALID') {
         throw new AppError(
           'INVALID_ASSIGNMENT_CODE',
@@ -221,7 +230,29 @@ export class DriverService {
     if (!vehicle) {
       throw new AppError('NO_ASSIGNED_VEHICLE', 'No active vehicle assigned', 404);
     }
-    return vehicle;
+    const { photoStorage, ...safe } = vehicle;
+    let photoUrl: string | null = null;
+    let photoStatus = 'missing';
+    if (photoStorage) {
+      try {
+        photoUrl = await storageService.getAccessUrl({
+          storageKey: photoStorage.storageKey,
+          resourceType: photoStorage.resourceType,
+          accessMode: photoStorage.accessMode,
+          options: { expiresIn: 300 },
+        });
+        photoStatus = 'available';
+      } catch {
+        photoStatus = 'unavailable';
+      }
+    }
+    return {
+      ...safe,
+      photoUrl,
+      photoStatus,
+      photoExpiresIn: photoUrl ? 300 : null,
+      assignmentStatus: 'selected',
+    };
   }
 
   async nearby(latitude: number, longitude: number, sector?: string, vehicleCategory?: string) {

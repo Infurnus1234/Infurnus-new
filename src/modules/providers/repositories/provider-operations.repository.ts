@@ -1,3 +1,6 @@
+import { paidRideRevenueSql } from '../../fleet/repositories/fleet-revenue.repository.js';
+import { ManagedDriverRepository } from './managed-driver.repository.js';
+import { RoleEnrolmentRepository } from './role-enrolment.repository.js';
 import { env } from '../../../config/env.js';
 import type { Pool, PoolClient } from 'pg';
 import { AppError } from '../../../common/errors/app-error.js';
@@ -18,7 +21,12 @@ import type {
 } from '../../../infrastructure/storage/types.js';
 
 export class PostgresProviderOperationsRepository {
-  constructor(private readonly pool: Pool) {}
+  readonly enrolment: RoleEnrolmentRepository;
+  readonly managedDrivers: ManagedDriverRepository;
+  constructor(private readonly pool: Pool) {
+    this.enrolment = new RoleEnrolmentRepository(pool);
+    this.managedDrivers = new ManagedDriverRepository(pool);
+  }
 
   private async authorizeReviewer(client: import('pg').PoolClient, actorId: string) {
     const actor = (
@@ -37,7 +45,7 @@ export class PostgresProviderOperationsRepository {
       await this.authorizeReviewer(client, actorId);
       return (
         await client.query(
-          'SELECT id,provider_role,vehicle_category,document_code,required,requires_expiry,minimum_pages,active,updated_at FROM provider_document_requirements ORDER BY provider_role,vehicle_category,document_code LIMIT 1000',
+          'SELECT id,provider_role,vehicle_category,document_code,required,requires_expiry,minimum_pages,onboarding_deferrable,active,updated_at FROM provider_document_requirements ORDER BY provider_role,vehicle_category,document_code LIMIT 1000',
         )
       ).rows;
     } finally {
@@ -459,6 +467,8 @@ export class PostgresProviderOperationsRepository {
         throw new AppError('SELF_REVIEW_FORBIDDEN', 'Cannot review your own resource', 403);
       const approved = input.status === 'APPROVED',
         state = approved ? 'approved' : 'rejected';
+      if (approved && request.target_type === 'vehicle')
+        await this.requireVehicleFrontPhoto(client, owner, target.id);
       if (approved && ['driver_document', 'partner_document'].includes(request.target_type)) {
         const isDriver = request.target_type === 'driver_document';
         const code = isDriver
@@ -770,6 +780,10 @@ export class PostgresProviderOperationsRepository {
         [profileId, vehicles.map((v) => v.id)],
       );
       await client.query(
+        "UPDATE fleet_managed_driver_accounts SET status='INACTIVE',updated_at=NOW() WHERE partner_id=$1 AND driver_user_id=(SELECT user_id FROM driver_profiles WHERE id=$2)",
+        [actor.id, profileId],
+      );
+      await client.query(
         "UPDATE partner_drivers SET status='INACTIVE',updated_at=NOW() WHERE id=$1",
         [membership.id],
       );
@@ -890,11 +904,290 @@ export class PostgresProviderOperationsRepository {
     }
   }
 
+  async onboarding(
+    userId: string,
+    role: string,
+    input?: { defer?: string; resume?: string; submit?: boolean },
+  ) {
+    await this.authorize(userId, role);
+    if (!['driver', 'driver_fleet_owner'].includes(role))
+      throw new AppError('FORBIDDEN', 'Driver role required', 403);
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        'INSERT INTO provider_onboarding(user_id) VALUES($1) ON CONFLICT DO NOTHING',
+        [userId],
+      );
+      const progress = (
+        await client.query('SELECT * FROM provider_onboarding WHERE user_id=$1 FOR UPDATE', [
+          userId,
+        ])
+      ).rows[0];
+      const profile = (
+        await client.query('SELECT * FROM driver_profiles WHERE user_id=$1 FOR SHARE', [userId])
+      ).rows[0];
+      const category = profile?.active_vehicle_id
+        ? (
+            await client.query('SELECT category FROM vehicles WHERE id=$1', [
+              profile.active_vehicle_id,
+            ])
+          ).rows[0]?.category
+        : '*';
+      const policy = (
+        await client.query(
+          `SELECT * FROM provider_document_requirements WHERE active AND provider_role=$1 AND vehicle_category IN ('*',$2)`,
+          [role, category],
+        )
+      ).rows;
+      if (!policy.some((r) => r.document_code === 'driver_license'))
+        policy.push({
+          document_code: 'driver_license',
+          required: true,
+          requires_expiry: false,
+          minimum_pages: 1,
+          onboarding_deferrable: false,
+        });
+      const deferred = new Set<string>(progress.deferred_codes);
+      if (input?.defer) {
+        const code = input.defer;
+        const rules = policy.filter((r) => r.document_code === code);
+        if (
+          !['vehicle', 'fleet'].includes(code) &&
+          !(code === 'profile_photo' && rules.length === 0) &&
+          !(
+            rules.length &&
+            rules.every((r) => r.onboarding_deferrable && r.document_code !== 'driver_license')
+          )
+        )
+          throw new AppError(
+            'REQUIRED_ONBOARDING_STEP',
+            'This requirement cannot be deferred',
+            400,
+          );
+        deferred.add(code);
+        await client.query(
+          'UPDATE provider_onboarding SET deferred_codes=$2::jsonb,updated_at=NOW() WHERE user_id=$1',
+          [userId, JSON.stringify([...deferred])],
+        );
+      }
+      if (input?.resume) {
+        deferred.delete(input.resume);
+        await client.query(
+          'UPDATE provider_onboarding SET deferred_codes=$2::jsonb,updated_at=NOW() WHERE user_id=$1',
+          [userId, JSON.stringify([...deferred])],
+        );
+      }
+      const documents = profile
+        ? (
+            await client.query(
+              `SELECT d.*,GREATEST(1,(SELECT count(*) FROM driver_document_pages pg WHERE pg.document_id=d.id AND pg.version=d.version)) AS pages FROM driver_documents d WHERE driver_profile_id=$1 FOR SHARE OF d`,
+              [profile.id],
+            )
+          ).rows
+        : [];
+      if (input?.submit) {
+        if (
+          !profile?.license_number?.trim() ||
+          !profile.license_expiry ||
+          new Date(profile.license_expiry).getTime() <
+            new Date(new Date().toISOString().slice(0, 10)).getTime()
+        )
+          throw new AppError(
+            'LICENCE_REQUIRED',
+            'Save valid licence details before submission',
+            400,
+          );
+        const partnerDocs = (
+          await client.query(
+            `SELECT d.* FROM partner_documents d JOIN partners p ON p.id=d.partner_id LEFT JOIN vehicles v ON v.id=d.vehicle_id WHERE p.user_id=$1 AND (d.vehicle_id IS NULL OR v.owner_id=$1) FOR SHARE OF d`,
+            [userId],
+          )
+        ).rows;
+        const required = policy.filter(
+          (r) => r.document_code === 'driver_license' || (r.required && !r.onboarding_deferrable),
+        );
+        for (const rule of required) {
+          const doc = documents.find(
+            (d) => (d.document_metadata?.documentCode ?? d.document_type) === rule.document_code,
+          );
+          const expiry = doc?.document_metadata?.expiresAt;
+          const partnerDoc =
+            rule.document_code === 'driver_license'
+              ? undefined
+              : partnerDocs.find(
+                  (d) =>
+                    (d.metadata?.documentCode ?? d.document_type.toLowerCase()) ===
+                      rule.document_code &&
+                    (d.vehicle_id == null || d.vehicle_id === profile.active_vehicle_id) &&
+                    !['REJECTED', 'EXPIRED'].includes(d.status) &&
+                    d.metadata?.storage?.storageKey &&
+                    (!d.expires_at ||
+                      new Date(d.expires_at).getTime() >=
+                        Date.parse(new Date().toISOString().slice(0, 10))) &&
+                    (!rule.requires_expiry || d.expires_at) &&
+                    Math.max(1, d.metadata?.pages?.length ?? 0) >= rule.minimum_pages,
+                );
+          if (
+            !partnerDoc &&
+            (!doc ||
+              ['rejected', 'expired', 'changes_requested'].includes(doc.verification_status) ||
+              !doc.storage_key ||
+              Number(doc.pages) < rule.minimum_pages ||
+              (rule.requires_expiry && !expiry) ||
+              (expiry &&
+                (!Number.isFinite(Date.parse(expiry)) ||
+                  Date.parse(expiry) < Date.parse(new Date().toISOString().slice(0, 10)))))
+          )
+            throw new AppError(
+              'DOCUMENT_REQUIRED',
+              `Upload valid ${rule.document_code} pages before submission`,
+              400,
+            );
+        }
+        const targets = [
+          {
+            type: 'driver_profile',
+            id: profile.id,
+            state: profile.verification_status,
+            updated: profile.updated_at,
+          },
+          ...documents
+            .filter(
+              (d) => !['rejected', 'expired', 'changes_requested'].includes(d.verification_status),
+            )
+            .map((d) => ({
+              type: 'driver_document',
+              id: d.id,
+              state: d.verification_status,
+              updated: d.updated_at,
+            })),
+        ];
+        if (!deferred.has('fleet')) {
+          const partners = (
+            await client.query(
+              'SELECT id,approval_status AS state,updated_at AS updated FROM partners WHERE user_id=$1 FOR SHARE',
+              [userId],
+            )
+          ).rows;
+          targets.push(...partners.map((p) => ({ ...p, type: 'partner' })));
+        }
+        const owned = (
+          await client.query(
+            `SELECT d.id,d.status AS state,d.updated_at AS updated FROM partner_documents d JOIN partners p ON p.id=d.partner_id LEFT JOIN vehicles v ON v.id=d.vehicle_id WHERE p.user_id=$1 AND (d.vehicle_id IS NULL OR v.owner_id=$1) AND d.status NOT IN ('REJECTED','EXPIRED') FOR SHARE OF d`,
+            [userId],
+          )
+        ).rows;
+        targets.push(...owned.map((d) => ({ ...d, type: 'partner_document' })));
+        const vehicles = (
+          await client.query('SELECT * FROM vehicles WHERE owner_id=$1 ORDER BY id FOR SHARE', [
+            userId,
+          ])
+        ).rows;
+        if (!deferred.has('vehicle'))
+          for (const vehicle of vehicles) {
+            if (vehicle.verification_status === 'approved') continue;
+            await this.requireVehicleFrontPhoto(client, userId, vehicle.id);
+            targets.push({
+              type: 'vehicle',
+              id: vehicle.id,
+              state: vehicle.verification_status,
+              updated: vehicle.updated_at,
+            });
+          }
+        targets.sort((a, b) => a.id.localeCompare(b.id));
+        const snapshot = JSON.stringify(targets);
+        if (
+          !(
+            await client.query(
+              'SELECT snapshot=$2::jsonb AS same FROM provider_onboarding WHERE user_id=$1',
+              [userId, snapshot],
+            )
+          ).rows[0].same ||
+          !progress.receipt_id
+        ) {
+          for (const target of targets) {
+            if (['approved', 'VERIFIED'].includes(target.state)) continue;
+            await client.query(
+              `INSERT INTO provider_approval_requests(requester_id,requester_role,target_type,target_id,request_type,metadata)
+              SELECT $1::uuid,$2::varchar,$3::varchar,$4::uuid,'compliance_review',jsonb_build_object('onboarding',true)
+              WHERE NOT EXISTS(SELECT 1 FROM provider_approval_requests WHERE target_type=$3::varchar AND target_id=$4::uuid AND status='PENDING')
+              ON CONFLICT DO NOTHING`,
+              [userId, role, target.type, target.id],
+            );
+          }
+          await client.query(
+            `UPDATE provider_onboarding SET receipt_id=gen_random_uuid(),snapshot=$2::jsonb,submitted_at=NOW(),updated_at=NOW() WHERE user_id=$1`,
+            [userId, snapshot],
+          );
+        }
+      }
+      const result = (
+        await client.query(
+          'SELECT receipt_id,submitted_at,updated_at,deferred_codes FROM provider_onboarding WHERE user_id=$1',
+          [userId],
+        )
+      ).rows[0];
+      const statuses = (
+        await client.query(
+          `SELECT target_type,target_id,status,rejection_reason,requested_changes,updated_at FROM provider_approval_requests WHERE requester_id=$1 ORDER BY updated_at DESC`,
+          [userId],
+        )
+      ).rows;
+      const latest = new Map<string, string>();
+      for (const review of statuses) {
+        const key = review.target_type + ':' + review.target_id;
+        if (!latest.has(key)) latest.set(key, review.status);
+      }
+      const snapshot = (
+        await client.query('SELECT snapshot FROM provider_onboarding WHERE user_id=$1', [userId])
+      ).rows[0].snapshot as { type: string; id: string; state: string }[];
+      const outcomes = snapshot.map(
+        (t) =>
+          latest.get(t.type + ':' + t.id) ??
+          (['approved', 'VERIFIED'].includes(t.state) ? 'APPROVED' : 'PENDING'),
+      );
+      const verificationStatus = !result.receipt_id
+        ? 'Draft'
+        : outcomes.includes('REJECTED')
+          ? 'Action required'
+          : outcomes.length && outcomes.every((v) => v === 'APPROVED')
+            ? 'Approved'
+            : 'Under review';
+      await client.query('COMMIT');
+      return {
+        ...result,
+        dashboardAccessible: !!result.receipt_id,
+        verificationStatus,
+        requirements: policy,
+        review: statuses,
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  private async requireVehicleFrontPhoto(client: PoolClient, userId: string, vehicleId: string) {
+    const photo = await client.query(
+      `SELECT d.id FROM partner_documents d JOIN partners p ON p.id=d.partner_id JOIN vehicles v ON v.id=d.vehicle_id WHERE d.vehicle_id=$1 AND p.user_id=$2 AND v.owner_id=$2 AND d.metadata->>'documentCode'='vehicle_front_photo' AND d.status NOT IN ('REJECTED','EXPIRED') AND d.metadata->'storage'->>'mimeType' IN ('image/jpeg','image/png','image/webp') AND COALESCE(d.metadata->'storage'->>'storageKey','')<>''`,
+      [vehicleId, userId],
+    );
+    if (!photo.rowCount)
+      throw new AppError(
+        'VEHICLE_PHOTO_REQUIRED',
+        'Upload a front photograph showing the whole vehicle and registration plate, or defer vehicle submission',
+        400,
+      );
+  }
+
   async documentRequirements(userId: string, role: string, category: string) {
     await this.authorize(userId, role);
     return (
       await this.pool.query(
-        `SELECT document_code,required,requires_expiry,minimum_pages,vehicle_category FROM provider_document_requirements WHERE active=TRUE AND provider_role=$1 AND vehicle_category IN ('*',$2) ORDER BY document_code`,
+        `SELECT document_code,required,requires_expiry,minimum_pages,onboarding_deferrable,vehicle_category FROM provider_document_requirements WHERE active=TRUE AND provider_role=$1 AND vehicle_category IN ('*',$2) ORDER BY document_code`,
         [role, category],
       )
     ).rows;
@@ -958,6 +1251,8 @@ export class PostgresProviderOperationsRepository {
     try {
       await client.query('BEGIN');
       await client.query("SELECT set_config('infurnus.actor_id',$1,TRUE)", [userId]);
+      if (input.targetType === 'vehicle')
+        await this.requireVehicleFrontPhoto(client, userId, input.targetId);
       const fleet = (
         await client.query<{ id: string; approval_status: string }>(
           'SELECT id,approval_status::text FROM partners WHERE user_id=$1 FOR SHARE',
@@ -1046,6 +1341,7 @@ export class PostgresProviderOperationsRepository {
       `SELECT dp.id AS "driverProfileId",dp.user_id AS "driverUserId",v.id AS "vehicleId",v.plate_number AS "plateNumber",
        dp.availability_status AS availability,dp.verification_status AS verification,
        ST_Y(dp.last_location::geometry) AS latitude,ST_X(dp.last_location::geometry) AS longitude,
+       (SELECT jsonb_build_object('id',r.id,'status',r.status,'origin',r.pickup_address,'destination',r.destination_address,'originLatitude',ST_Y(r.pickup_location::geometry),'originLongitude',ST_X(r.pickup_location::geometry),'destinationLatitude',ST_Y(r.destination_location::geometry),'destinationLongitude',ST_X(r.destination_location::geometry)) FROM rides r WHERE r.assigned_driver_id=dp.id AND r.assigned_vehicle_id=v.id AND r.status IN ('driver_assigned','driver_arriving','driver_arrived','in_progress') ORDER BY r.updated_at DESC LIMIT 1) AS trip,
        dp.last_location_at AS "recordedAt",dp.location_speed AS speed,dp.location_heading AS heading,dp.location_accuracy AS accuracy,
        CASE WHEN dp.last_location_at IS NULL OR dp.last_location_at < NOW()-($2::int*INTERVAL '1 second') THEN TRUE ELSE FALSE END AS stale,
        CASE WHEN dp.last_location_at >= NOW()-($2::int*INTERVAL '1 second') AND dp.availability_status IN ('available','busy')
@@ -1180,6 +1476,7 @@ export class PostgresProviderOperationsRepository {
       required: boolean;
       requiresExpiry: boolean;
       minimumPages: number;
+      onboardingDeferrable?: boolean | undefined;
       active: boolean;
     },
   ) {
@@ -1208,8 +1505,8 @@ export class PostgresProviderOperationsRepository {
       )
         throw new AppError('INVALID_DOCUMENT_POLICY', 'Invalid document policy', 400);
       const result = await client.query(
-        `INSERT INTO provider_document_requirements(provider_role,vehicle_category,document_code,required,requires_expiry,minimum_pages,active,updated_by)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(provider_role,vehicle_category,document_code) DO UPDATE SET required=EXCLUDED.required,requires_expiry=EXCLUDED.requires_expiry,minimum_pages=EXCLUDED.minimum_pages,active=EXCLUDED.active,updated_by=EXCLUDED.updated_by,updated_at=NOW() RETURNING id`,
+        `INSERT INTO provider_document_requirements(provider_role,vehicle_category,document_code,required,requires_expiry,minimum_pages,active,updated_by,onboarding_deferrable)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(provider_role,vehicle_category,document_code) DO UPDATE SET required=EXCLUDED.required,requires_expiry=EXCLUDED.requires_expiry,minimum_pages=EXCLUDED.minimum_pages,active=EXCLUDED.active,onboarding_deferrable=EXCLUDED.onboarding_deferrable,updated_by=EXCLUDED.updated_by,updated_at=NOW() RETURNING id`,
         [
           input.providerRole,
           input.category,
@@ -1219,6 +1516,7 @@ export class PostgresProviderOperationsRepository {
           input.minimumPages,
           input.active,
           actorId,
+          input.documentCode === 'driver_license' ? false : (input.onboardingDeferrable ?? true),
         ],
       );
       await client.query(
@@ -1248,6 +1546,8 @@ export class PostgresProviderOperationsRepository {
   }
 
   async earnings(userId: string, role: string) {
+    if (!['fleet_owner', 'driver_fleet_owner'].includes(role))
+      throw new AppError('FORBIDDEN', 'Fleet Owner financial access required', 403);
     await this.authorize(userId, role);
     // Settlement ledger is authoritative for commissions/net paid. Do not
     // manufacture a percentage or equate estimated booking fare with a payout.
@@ -1272,11 +1572,11 @@ export class PostgresProviderOperationsRepository {
     );
     const performance = await this.pool.query(
       `SELECT r.assigned_driver_id AS "driverProfileId",r.assigned_vehicle_id AS "vehicleId",COUNT(*)::int AS "completedCount",
-       COALESCE(SUM(r.actual_distance_meters),0)::text AS "distanceMeters",COALESCE(SUM(r.final_fare),0)::text AS "grossRevenue"
+       COALESCE(SUM(r.actual_distance_meters),0)::text AS "distanceMeters",COALESCE(SUM(${paidRideRevenueSql}),0)::text AS "grossRevenue"
        FROM rides r LEFT JOIN vehicles v ON v.id=r.assigned_vehicle_id
-       WHERE r.status='completed' AND (v.owner_id=$1 OR r.assigned_driver_id IN(SELECT id FROM driver_profiles WHERE user_id=$1))
+       WHERE r.status='completed' AND v.owner_id=$1 AND $2::boolean
        GROUP BY r.assigned_driver_id,r.assigned_vehicle_id ORDER BY r.assigned_driver_id,r.assigned_vehicle_id LIMIT 1000`,
-      [userId],
+      [userId, ['fleet_owner', 'driver_fleet_owner'].includes(role)],
     );
     return {
       currency: 'INR',

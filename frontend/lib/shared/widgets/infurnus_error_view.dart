@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../core/theme/app_colors.dart';
 import 'infurnus_button.dart';
 
@@ -25,7 +26,10 @@ class InfurnusErrorView extends StatelessWidget {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, color: AppColors.textPrimary),
+              style: const TextStyle(
+                fontSize: 16,
+                color: AppColors.textPrimary,
+              ),
             ),
             const SizedBox(height: 24),
             InfurnusButton(

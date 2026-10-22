@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../../core/theme/app_colors.dart';
 
 class SetupCompleteScreen extends StatelessWidget {
@@ -28,9 +29,17 @@ class SetupCompleteScreen extends StatelessWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.check_circle, size: 80, color: AppColors.primaryGreen),
+                      const Icon(
+                        Icons.check_circle,
+                        size: 80,
+                        color: AppColors.primaryGreen,
+                      ),
                       const SizedBox(height: 16),
-                      Icon(Icons.directions_car, size: 50, color: Colors.grey[400]),
+                      Icon(
+                        Icons.directions_car,
+                        size: 50,
+                        color: Colors.grey[400],
+                      ),
                     ],
                   ),
                 ),
@@ -48,10 +57,7 @@ class SetupCompleteScreen extends StatelessWidget {
               const Text(
                 'Your account has been created\nsuccessfully.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey,
-                ),
+                style: TextStyle(fontSize: 16, color: Colors.grey),
               ),
               const Spacer(),
               ElevatedButton(
@@ -64,7 +70,10 @@ class SetupCompleteScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text('Go to Home   →', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                child: const Text(
+                  'Go to Home   →',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
               ),
               const SizedBox(height: 20),
             ],

@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { fleetListQuerySchema } from '../schemas/fleet.schemas.js';
 import type { NextFunction, Request, Response } from 'express';
 import { AppError } from '../../../common/errors/app-error.js';
@@ -11,6 +12,29 @@ import type { FleetService } from '../services/fleet.service.js';
 export class FleetController {
   constructor(private readonly fleetService: FleetService) {}
 
+  catalog = async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      res.json({ success: true, data: await this.fleetService.catalog() });
+    } catch (e) {
+      next(e);
+    }
+  };
+  revenue = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const query = z
+        .object({ from: z.iso.date().optional(), to: z.iso.date().optional() })
+        .strict()
+        .refine((q) => !q.from || !q.to || q.from <= q.to, 'Start date must not follow end date')
+        .parse(req.query);
+      const vehicleId = req.params.id ? z.string().uuid().parse(req.params.id) : undefined;
+      res.json({
+        success: true,
+        data: await this.fleetService.revenue(req.auth!.userId, { ...query, vehicleId }),
+      });
+    } catch (e) {
+      next(e);
+    }
+  };
   getDashboard = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const metrics = await this.fleetService.getDashboard(req.auth!.userId);
@@ -74,7 +98,15 @@ export class FleetController {
   generateAssignmentCode = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { id } = fleetVehicleIdSchema.parse(req.params);
-      const result = await this.fleetService.generateAssignmentCode(req.auth!.userId, id);
+      const { driverProfileId } = z
+        .object({ driverProfileId: z.string().uuid().optional() })
+        .strict()
+        .parse(req.body);
+      const result = await this.fleetService.generateAssignmentCode(
+        req.auth!.userId,
+        id,
+        driverProfileId,
+      );
       res.json({ success: true, data: result, message: 'Assignment code generated' });
     } catch (error) {
       next(error);

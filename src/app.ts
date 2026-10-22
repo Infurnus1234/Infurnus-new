@@ -111,6 +111,7 @@ import { createVehicleRouter } from './modules/vehicles/routes/vehicle.routes.js
 import { VehicleService } from './modules/vehicles/services/vehicle.service.js';
 
 import { createDeviceTokenRouter } from './modules/notifications/device-tokens/routes/device-token.routes.js';
+import { createNotificationInboxRouter } from './modules/notifications/routes/notification-inbox.routes.js';
 
 export interface AppOptions {
   enableAuthRateLimiting?: boolean;
@@ -577,6 +578,7 @@ export function createApp(
   // ==========================================================
 
   app.use('/notifications/devices', createDeviceTokenRouter());
+  app.use('/notifications/inbox', createNotificationInboxRouter());
 
   // ==========================================================
   // Authentication

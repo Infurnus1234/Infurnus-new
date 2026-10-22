@@ -133,8 +133,13 @@ export class PostgresDriverDocumentRepository implements DriverDocumentRepositor
       await client.query('BEGIN');
       const owner = await client.query(
         `SELECT dp.id FROM driver_profiles dp JOIN users u ON u.id=dp.user_id
-         WHERE dp.id=$1 AND dp.user_id=$2 AND u.status='active' AND u.deleted_at IS NULL
-         AND u.role IN ('driver','driver_fleet_owner') FOR UPDATE OF dp`,
+         WHERE dp.id=$1 AND u.status='active' AND u.deleted_at IS NULL
+         AND u.role IN ('driver','driver_fleet_owner')
+         AND (dp.user_id=$2 OR EXISTS(
+           SELECT 1 FROM fleet_managed_driver_accounts m JOIN partners p ON p.id=m.partner_id JOIN users actor ON actor.id=p.user_id
+           WHERE m.driver_user_id=dp.user_id AND m.status='ACTIVE' AND actor.id=$2
+           AND actor.role IN ('fleet_owner','driver_fleet_owner') AND actor.status='active' AND actor.deleted_at IS NULL
+           AND p.approval_status='approved')) FOR UPDATE OF dp`,
         [input.driverProfileId, input.uploadedBy],
       );
       if (!owner.rowCount) throw new Error('Driver document upload is not authorized');
@@ -199,6 +204,19 @@ export class PostgresDriverDocumentRepository implements DriverDocumentRepositor
           },
         ],
       );
+      if (input.documentType === 'profile_photo')
+        await client.query(
+          `UPDATE provider_onboarding SET flow_steps=jsonb_set(flow_steps,'{profile_photo}',to_jsonb('completed'::text)),account_photo=$2::jsonb,updated_at=NOW()
+         WHERE user_id=(SELECT user_id FROM driver_profiles WHERE id=$1)`,
+          [
+            input.driverProfileId,
+            JSON.stringify({
+              storageKey: input.storageKey,
+              resourceType: input.resourceType,
+              accessMode: input.accessMode,
+            }),
+          ],
+        );
       await client.query('COMMIT');
       return { document, previous };
     } catch (error) {

@@ -66,3 +66,18 @@ export function requireFleetOwner() {
 export function requireProvider() {
   return requireRoles('driver', 'fleet_owner', 'driver_fleet_owner');
 }
+
+/** Financial views require Fleet Owner authority and explicit combined-account mode. */
+export function requireFleetFinancialContext() {
+  const requireFleet = requireFleetOwner();
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (
+      req.auth?.role === 'driver_fleet_owner' &&
+      req.headers['x-provider-mode'] !== 'fleet_owner'
+    ) {
+      next(new AppError('FORBIDDEN', 'Switch to Fleet Owner mode to view financial reports', 403));
+      return;
+    }
+    requireFleet(req, res, next);
+  };
+}

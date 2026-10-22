@@ -19,6 +19,7 @@ afterAll(async () => {
     await pool.query('DELETE FROM login_challenges WHERE user_id=$1', [id]);
     await pool.query('DELETE FROM user_credentials WHERE user_id=$1', [id]);
     await pool.query('DELETE FROM driver_profiles WHERE user_id=$1', [id]);
+    await pool.query('DELETE FROM provider_onboarding WHERE user_id=$1', [id]);
     await pool.query('DELETE FROM users WHERE id=$1', [id]);
   }
   for (const id of signups) await pool.query('DELETE FROM pending_signups WHERE id=$1', [id]);
@@ -252,8 +253,9 @@ describe('provider-independent OTP attempt budgets and passwordless identities',
     const initial = await request(app).post('/auth/signup').send(payload).expect(201);
     signups.push(initial.body.data.signupId);
     await pool.query(
-      "UPDATE pending_signups SET otp_provider_expires_at=NOW()-INTERVAL '1 second' WHERE id=$1",
-      [initial.body.data.signupId],
+      'UPDATE pending_signups SET otp_provider_expires_at=$2 WHERE id=$1',
+      // Expire against the application clock too; Docker and host clocks can differ.
+      [initial.body.data.signupId, new Date(Date.now() - 60_000)],
     );
     const next = await request(app).post('/auth/signup').send(payload).expect(201);
     signups.push(next.body.data.signupId);
@@ -292,8 +294,8 @@ describe('provider-independent OTP attempt budgets and passwordless identities',
       users.push(duplicateUserId);
       await expect(
         pool.query(
-          "INSERT INTO users(id,first_name,last_name,phone,role,phone_verified) VALUES($1,'Collision','Fixture',$2,'customer',TRUE)",
-          [duplicateUserId, phone.slice(1)],
+          "INSERT INTO users(id,first_name,last_name,phone,role,phone_verified) VALUES($1,'Collision','Fixture',$2,$3,TRUE)",
+          [duplicateUserId, phone.slice(1), role],
         ),
       ).rejects.toMatchObject({ code: '23505' });
       const duplicate = await request(app)

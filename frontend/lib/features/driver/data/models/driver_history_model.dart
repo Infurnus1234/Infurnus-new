@@ -16,7 +16,9 @@ class DriverHistoryModel {
     return DriverHistoryModel(
       totalTrips: (json['totalTrips'] as num?)?.toInt() ?? 0,
       totalEarnings: (json['totalEarnings'] as num?)?.toDouble() ?? 0.0,
-      rides: ridesList.map((e) => RideModel.fromJson(e as Map<String, dynamic>)).toList(),
+      rides: ridesList
+          .map((e) => RideModel.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
   }
 }

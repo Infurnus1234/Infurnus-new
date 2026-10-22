@@ -75,6 +75,7 @@ describe('Driver Google identity, onboarding and role boundaries', () => {
         )
       ).rows[0].count,
     ).toBe(0);
+    await pool.query('DELETE FROM provider_onboarding WHERE user_id=ANY($1::uuid[])', [ids]);
     await pool.query('DELETE FROM users WHERE id=ANY($1::uuid[])', [ids]);
   });
   async function existing(role = 'driver') {
@@ -172,10 +173,18 @@ describe('Driver Google identity, onboarding and role boundaries', () => {
     'links an existing %s without creating another account or changing its role',
     async (role) => {
       const id = await existing(role);
-      expect((await authenticate('signup')).status).toBe(409);
+      expect(
+        (
+          await request(app)
+            .post('/auth/google')
+            .send({ idToken, driverFlow: 'signup', providerRole: role })
+        ).status,
+      ).toBe(409);
       expect((await link(id, role)).status).toBe(200);
       for (const flow of ['signup', 'signin'] as const) {
-        const result = await authenticate(flow);
+        const result = await request(app)
+          .post('/auth/google')
+          .send({ idToken, driverFlow: flow, accountRole: role });
         expect(result.status).toBe(200);
         expect(await verifyAccessToken(result.body.data.accessToken)).toMatchObject({
           sub: id,
@@ -208,12 +217,13 @@ describe('Driver Google identity, onboarding and role boundaries', () => {
       const mismatch = await request(app)
         .post('/auth/google')
         .send({ ...body, providerRole: otherRole });
-      expect(mismatch.status).toBe(409);
-      expect(mismatch.body.error.code).toBe('GOOGLE_PROVIDER_ROLE_MISMATCH');
+      expect(mismatch.status).toBe(200);
+      expect(mismatch.body.data.userId).not.toBe(id);
+      expect((await verifyAccessToken(mismatch.body.data.accessToken)).role).toBe(otherRole);
       expect((await pool.query('SELECT role FROM users WHERE id=$1', [id])).rows[0].role).toBe(
         providerRole,
       );
-      expect((await pool.query('SELECT id FROM users WHERE email=$1', [email])).rowCount).toBe(1);
+      expect((await pool.query('SELECT id FROM users WHERE email=$1', [email])).rowCount).toBe(2);
     },
   );
   it('preserves customer Google authentication without provider intent', async () => {
@@ -227,8 +237,10 @@ describe('Driver Google identity, onboarding and role boundaries', () => {
     const signin = await request(app).post('/auth/google').send({ idToken });
     expect(signin.status).toBe(200);
     expect(signin.body.data.userId).toBe(id);
-    expect((await authenticate('signup')).status).toBe(403);
-    expect((await pool.query('SELECT id FROM users WHERE email=$1', [email])).rowCount).toBe(1);
+    const separate = await authenticate('signup');
+    expect(separate.status).toBe(200);
+    expect(separate.body.data.userId).not.toBe(id);
+    expect((await pool.query('SELECT id FROM users WHERE email=$1', [email])).rowCount).toBe(2);
   });
   it('never creates an account through sign-in alone', async () => {
     const response = await authenticate('signin');
@@ -239,12 +251,12 @@ describe('Driver Google identity, onboarding and role boundaries', () => {
   it('does not promote a linked customer to Driver', async () => {
     const id = await existing('customer');
     expect((await link(id, 'customer')).status).toBe(200);
-    for (const flow of ['signup', 'signin'] as const) {
-      const response = await authenticate(flow);
-      expect(response.status).toBe(403);
-      expect(response.body.error.code).toBe('GOOGLE_DRIVER_ROLE_REQUIRED');
-      expect(response.headers['set-cookie']).toBeUndefined();
-    }
+    const separate = await authenticate('signup');
+    expect(separate.status).toBe(200);
+    expect(separate.body.data.userId).not.toBe(id);
+    const signin = await authenticate('signin');
+    expect(signin.status).toBe(200);
+    expect(signin.body.data.userId).toBe(separate.body.data.userId);
     expect((await pool.query('SELECT role FROM users WHERE id=$1', [id])).rows[0].role).toBe(
       'customer',
     );

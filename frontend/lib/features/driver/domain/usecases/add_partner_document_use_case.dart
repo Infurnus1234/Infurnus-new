@@ -6,7 +6,10 @@ class AddPartnerDocumentUseCase {
 
   AddPartnerDocumentUseCase(this.repository);
 
-  Future<PartnerDocumentModel> execute(String partnerId, Map<String, dynamic> data) {
+  Future<PartnerDocumentModel> execute(
+    String partnerId,
+    Map<String, dynamic> data,
+  ) {
     return repository.addDocument(partnerId, data);
   }
 }

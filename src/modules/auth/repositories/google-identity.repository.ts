@@ -10,6 +10,8 @@ export class PostgresGoogleIdentityRepository {
     linkUserId?: string,
     driverFlow?: 'signup' | 'signin',
     providerRole?: 'driver' | 'fleet_owner' | 'driver_fleet_owner',
+    accountRole?:
+      'customer' | 'driver' | 'fleet_owner' | 'driver_fleet_owner' | 'admin' | 'super_admin',
   ): Promise<AuthUserIdentity> {
     try {
       return await withTransaction(async (client) => {
@@ -20,12 +22,18 @@ export class PostgresGoogleIdentityRepository {
         await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [
           'google-email:' + identity.email,
         ]);
+        const requestedRole = accountRole ?? providerRole;
         const linked = await client.query<AuthUserIdentity & { deleted: boolean }>(
           `SELECT u.id,u.role,u.status,u.deleted_at IS NOT NULL AS deleted
            FROM auth_external_identities i JOIN users u ON u.id=i.user_id
-           WHERE i.provider='GOOGLE' AND i.provider_subject=$1 FOR UPDATE OF u`,
-          [identity.subject],
+           WHERE i.provider='GOOGLE' AND i.provider_subject=$1
+           AND ($2::text IS NULL OR u.role::text=$2)
+           AND ($3::uuid IS NULL OR u.id=$3)
+           AND (NOT $4::boolean OR u.role IN ('driver','fleet_owner','driver_fleet_owner')) FOR UPDATE OF u`,
+          [identity.subject, requestedRole ?? null, linkUserId ?? null, Boolean(driverFlow)],
         );
+        if (linked.rows.length > 1)
+          throw new AppError('ACCOUNT_ROLE_REQUIRED', 'Specify the account role to sign in', 409);
         if (linked.rows[0]) {
           if (linkUserId && linked.rows[0].id !== linkUserId) this.conflict();
           if (linked.rows[0].deleted || linked.rows[0].status !== 'active') this.inactive();
@@ -60,17 +68,32 @@ export class PostgresGoogleIdentityRepository {
           if (target.rows[0]?.email?.toLowerCase() !== identity.email) this.conflict();
         } else {
           const existing = await client.query(
-            'SELECT id FROM users WHERE LOWER(email)=$1 AND deleted_at IS NULL',
-            [identity.email],
+            'SELECT id FROM users WHERE LOWER(btrim(email))=$1 AND (role=$2 OR $3::boolean) AND deleted_at IS NULL',
+            [
+              identity.email,
+              requestedRole ?? (driverFlow ? 'driver' : 'customer'),
+              !requestedRole && !driverFlow,
+            ],
           );
           if (existing.rowCount) this.conflict();
-          if (driverFlow === 'signin') {
+          if (
+            driverFlow === 'signin' ||
+            (requestedRole &&
+              ['driver', 'fleet_owner', 'driver_fleet_owner'].includes(requestedRole) &&
+              driverFlow !== 'signup')
+          ) {
             throw new AppError(
               'GOOGLE_DRIVER_ACCOUNT_NOT_FOUND',
               'No linked Driver or Fleet account found. Use provider signup, or sign in to your existing account and link Google.',
               409,
             );
           }
+          if (requestedRole === 'admin' || requestedRole === 'super_admin')
+            throw new AppError(
+              'ADMIN_PROVISIONING_REQUIRED',
+              'Administrative accounts require authorized provisioning and explicit linking',
+              403,
+            );
           const firstName = signupSchema.shape.firstName.safeParse(identity.firstName);
           const lastName = signupSchema.shape.lastName.safeParse(identity.lastName);
           if ((!firstName.success || !lastName.success) && driverFlow !== 'signup')
@@ -86,10 +109,16 @@ export class PostgresGoogleIdentityRepository {
               firstName.success ? firstName.data : '',
               lastName.success ? lastName.data : '',
               identity.email,
-              driverFlow === 'signup' ? (providerRole ?? 'driver') : 'customer',
+              requestedRole ?? (driverFlow === 'signup' ? 'driver' : 'customer'),
             ],
           );
           user = created.rows[0];
+          if (user && ['driver', 'fleet_owner', 'driver_fleet_owner'].includes(user.role)) {
+            await client.query(
+              'INSERT INTO provider_onboarding(user_id,role_selection_pending,role_flow_active) VALUES($1,$2,TRUE) ON CONFLICT DO NOTHING',
+              [user.id, !requestedRole],
+            );
+          }
         }
         if (!user)
           throw new AppError(

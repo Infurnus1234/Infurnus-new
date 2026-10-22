@@ -28,7 +28,9 @@ void main() {
       overrides: [cookieJarProvider.overrideWith((ref) async => jar)],
     );
     dio = container.read(dioProvider);
-    dio.httpClientAdapter = IOHttpClientAdapter(createHttpClient: () => _RealHttpOverrides().createHttpClient(null));
+    dio.httpClientAdapter = IOHttpClientAdapter(
+      createHttpClient: () => _RealHttpOverrides().createHttpClient(null),
+    );
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     dio.options.baseUrl = 'http://127.0.0.1:${server.port}';
   });
@@ -42,6 +44,7 @@ void main() {
   test('first authentication response saves refresh/CSRF cookies and logout sends them', () async {
     server.listen((request) async {
       if (request.uri.path == '/auth/google') {
+        expect(request.headers.value('authorization'), isNull);
         request.response.cookies.add(
           Cookie('infurnus_refresh_token', 'refresh-fixture')
             ..httpOnly = true

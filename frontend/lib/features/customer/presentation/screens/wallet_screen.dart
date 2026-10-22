@@ -34,7 +34,9 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
       'payment_method': 'UPI (Google Pay)',
       'status': 'completed',
       'title': 'Wallet Top-Up',
-      'created_at': DateTime.now().subtract(const Duration(days: 1)).toIso8601String(),
+      'created_at': DateTime.now()
+          .subtract(const Duration(days: 1))
+          .toIso8601String(),
     },
     {
       'id': 'topup_002',
@@ -43,7 +45,9 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
       'payment_method': 'Cashback Bonus',
       'status': 'completed',
       'title': 'Promotional Cashback',
-      'created_at': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(),
+      'created_at': DateTime.now()
+          .subtract(const Duration(days: 3))
+          .toIso8601String(),
     },
   ];
 
@@ -69,28 +73,39 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
     // Combine server payments with top-up credits
     final List<Map<String, dynamic>> allTransactions = [
       ..._mockCredits,
-      ...serverPayments.map((p) => {
-            'id': p['id']?.toString() ?? 'tx_${p.hashCode}',
-            'amount': (p['amount'] as num?)?.toDouble() ?? 0.0,
-            'type': 'debit',
-            'payment_method': p['provider']?.toString().toUpperCase() ??
-                p['payment_method']?.toString().toUpperCase() ??
-                'UPI / CARD',
-            'status': (p['status']?.toString().toLowerCase() == 'captured' ||
-                    p['status']?.toString().toLowerCase() == 'completed')
-                ? 'completed'
-                : (p['status']?.toString().toLowerCase() ?? 'completed'),
-            'title': p['rideId'] != null ? 'Mobility Fare Payment' : 'Service Payment',
-            'created_at': p['createdAt']?.toString() ??
-                p['created_at']?.toString() ??
-                DateTime.now().toIso8601String(),
-          }),
+      ...serverPayments.map(
+        (p) => {
+          'id': p['id']?.toString() ?? 'tx_${p.hashCode}',
+          'amount': (p['amount'] as num?)?.toDouble() ?? 0.0,
+          'type': 'debit',
+          'payment_method':
+              p['provider']?.toString().toUpperCase() ??
+              p['payment_method']?.toString().toUpperCase() ??
+              'UPI / CARD',
+          'status':
+              (p['status']?.toString().toLowerCase() == 'captured' ||
+                  p['status']?.toString().toLowerCase() == 'completed')
+              ? 'completed'
+              : (p['status']?.toString().toLowerCase() ?? 'completed'),
+          'title': p['rideId'] != null
+              ? 'Mobility Fare Payment'
+              : 'Service Payment',
+          'created_at':
+              p['createdAt']?.toString() ??
+              p['created_at']?.toString() ??
+              DateTime.now().toIso8601String(),
+        },
+      ),
     ];
 
     // Sort newest first
     allTransactions.sort((a, b) {
-      final dateA = DateTime.tryParse(a['created_at']?.toString() ?? '') ?? DateTime.now();
-      final dateB = DateTime.tryParse(b['created_at']?.toString() ?? '') ?? DateTime.now();
+      final dateA =
+          DateTime.tryParse(a['created_at']?.toString() ?? '') ??
+          DateTime.now();
+      final dateB =
+          DateTime.tryParse(b['created_at']?.toString() ?? '') ??
+          DateTime.now();
       return dateB.compareTo(dateA);
     });
 
@@ -197,11 +212,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
       width: double.infinity,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [
-            Color(0xFF032213),
-            Color(0xFF064E2A),
-            Color(0xFF0A5C34),
-          ],
+          colors: [Color(0xFF032213), Color(0xFF064E2A), Color(0xFF0A5C34)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -305,10 +316,16 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                           ),
                           elevation: 0,
                         ),
-                        icon: const Icon(Icons.add_circle_outline_rounded, size: 18),
+                        icon: const Icon(
+                          Icons.add_circle_outline_rounded,
+                          size: 18,
+                        ),
                         label: const Text(
                           'Add Money',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
                         ),
                         onPressed: _showAddMoneyModal,
                       ),
@@ -317,14 +334,20 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                     Expanded(
                       child: OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Color(0xFFA7F3D0), width: 1.5),
+                          side: const BorderSide(
+                            color: Color(0xFFA7F3D0),
+                            width: 1.5,
+                          ),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
+                        icon: const Icon(
+                          Icons.qr_code_scanner_rounded,
+                          size: 18,
+                        ),
                         label: const Text(
                           'Scan & Pay',
                           style: TextStyle(
@@ -367,9 +390,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
         decoration: BoxDecoration(
           color: isSelected ? darkGreen : cardBg,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: isSelected ? darkGreen : borderCard,
-          ),
+          border: Border.all(color: isSelected ? darkGreen : borderCard),
         ),
         child: Text(
           label,
@@ -391,9 +412,8 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
     final status = tx['status']?.toString() ?? 'completed';
     final rawDate = tx['created_at']?.toString();
     final date = rawDate != null
-        ? DateFormat('dd MMM yyyy • hh:mm a').format(
-            DateTime.tryParse(rawDate) ?? DateTime.now(),
-          )
+        ? DateFormat('dd MMM yyyy • hh:mm a')
+              .format(DateTime.tryParse(rawDate) ?? DateTime.now())
         : 'Recent';
 
     return Container(
@@ -471,7 +491,10 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                     ),
                     const SizedBox(height: 3),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: status == 'completed'
                             ? const Color(0xFFD1FAE5)
@@ -621,7 +644,10 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: brandGreen, width: 2),
+                          borderSide: const BorderSide(
+                            color: brandGreen,
+                            width: 2,
+                          ),
                         ),
                       ),
                     ),
@@ -645,7 +671,9 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                               vertical: 8,
                             ),
                             decoration: BoxDecoration(
-                              color: isSelected ? darkGreen : const Color(0xFFF1F5F9),
+                              color: isSelected
+                                  ? darkGreen
+                                  : const Color(0xFFF1F5F9),
                               borderRadius: BorderRadius.circular(10),
                               border: Border.all(
                                 color: isSelected ? darkGreen : borderCard,
@@ -691,10 +719,13 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                       text: 'Proceed to Pay',
                       onPressed: () {
                         final enteredAmount =
-                            double.tryParse(amountController.text.trim()) ?? 0.0;
+                            double.tryParse(amountController.text.trim()) ??
+                            0.0;
                         if (enteredAmount <= 0) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Please enter a valid amount')),
+                            const SnackBar(
+                              content: Text('Please enter a valid amount'),
+                            ),
                           );
                           return;
                         }
@@ -703,7 +734,8 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                         setState(() {
                           _walletBalance += enteredAmount;
                           _mockCredits.insert(0, {
-                            'id': 'topup_${DateTime.now().millisecondsSinceEpoch}',
+                            'id':
+                                'topup_${DateTime.now().millisecondsSinceEpoch}',
                             'amount': enteredAmount,
                             'type': 'credit',
                             'payment_method': 'UPI Payment',
@@ -849,7 +881,9 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                     Navigator.pop(ctx);
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('Scanned merchant code verified. Payment ready.'),
+                        content: Text(
+                          'Scanned merchant code verified. Payment ready.',
+                        ),
                       ),
                     );
                   },

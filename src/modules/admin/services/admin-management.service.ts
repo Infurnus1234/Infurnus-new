@@ -199,9 +199,10 @@ export class AdminManagementService {
       await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
         `admin-provision:${input.email}`,
       ]);
-      const duplicate = await client.query('SELECT id FROM users WHERE lower(btrim(email))=$1', [
-        input.email,
-      ]);
+      const duplicate = await client.query(
+        "SELECT id FROM users WHERE lower(btrim(email))=$1 AND role='admin' AND deleted_at IS NULL",
+        [input.email],
+      );
       if (duplicate.rowCount)
         throw new AppError('ACCOUNT_EXISTS', 'An account with this email already exists', 409);
       const created = await client.query<{ id: string }>(

@@ -26,7 +26,11 @@ export interface PendingSignupRepository {
    * Returns the pending signup without exposing the provider
    * session token.
    */
-  findByContact(contactType: string, contactValue: string): Promise<PendingSignup | null>;
+  findByContact(
+    contactType: string,
+    contactValue: string,
+    role?: string,
+  ): Promise<PendingSignup | null>;
 
   /**
    * Loads the provider session credential only for operations
@@ -109,6 +113,7 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
             license_number,
             license_expiry,
             business_name,
+            licence_onboarding_pending,
             otp_hash,
             otp_expires_at,
             otp_attempts,
@@ -130,6 +135,7 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
             $8,
             $9,
             $10,
+            $15,
             NULL,
             NULL,
             0,
@@ -178,6 +184,7 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
           data.otpProviderSessionId,
           data.otpProviderSessionToken,
           data.otpProviderExpiresAt,
+          data.onboardingLicencePending ?? false,
         ],
       );
 
@@ -265,7 +272,11 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
   // Find by contact
   // ----------------------------------------------------------
 
-  async findByContact(contactType: string, contactValue: string): Promise<PendingSignup | null> {
+  async findByContact(
+    contactType: string,
+    contactValue: string,
+    role?: string,
+  ): Promise<PendingSignup | null> {
     const result = await pool.query<PendingSignup>(
       `
         SELECT
@@ -292,10 +303,11 @@ export class PostgresPendingSignupRepository implements PendingSignupRepository 
           updated_at AS "updatedAt"
         FROM pending_signups
         WHERE contact_type = $1
+          AND ($3::text IS NULL OR role::text=$3)
           AND (contact_value = $2 OR ($1 = 'phone' AND ltrim(contact_value, '+') = ltrim($2, '+')))
         LIMIT 1
       `,
-      [contactType, contactValue],
+      [contactType, contactValue, role ?? null],
     );
 
     const row = result.rows[0];

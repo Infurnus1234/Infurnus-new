@@ -52,7 +52,7 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
     beforeAll(() => {
       const url = new URL(process.env.DATABASE_URL!);
       if (
-        url.hostname !== 'localhost' ||
+        !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) ||
         url.port !== '5434' ||
         !/^\/admin_master_test_[a-f0-9]{32}$/.test(url.pathname)
       )

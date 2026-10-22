@@ -61,6 +61,11 @@ export interface DriverRepository {
   findActiveVehicleByUserId?(userId: string): Promise<{
     sector: string;
     category: string;
+    verificationStatus?: string;
+    operationalStatus?: string;
+    isActive?: boolean;
+    photoStorage?:
+      import('../../partners/types/partner-document.js').PartnerDocumentStorageMetadata | null;
   } | null>;
 
   findNearbyEligible(
@@ -87,7 +92,7 @@ export interface DriverRepository {
     vehicleCategory?: string,
   ): Promise<number>;
 
-  verifyAssignmentCode(code: string): Promise<AssignmentCodePreview | null>;
+  verifyAssignmentCode(code: string, driverUserId?: string): Promise<AssignmentCodePreview | null>;
 
   claimAssignmentCode(
     code: string,
@@ -110,6 +115,11 @@ export interface DriverRepository {
     color: string | null;
     sector: string;
     category: string;
+    verificationStatus?: string;
+    operationalStatus?: string;
+    isActive?: boolean;
+    photoStorage?:
+      import('../../partners/types/partner-document.js').PartnerDocumentStorageMetadata | null;
   } | null>;
 }
 
@@ -136,45 +146,13 @@ const driverProjection = `
   updated_at AS "updatedAt"
 `;
 
-export class PostgresDriverRepository implements DriverRepository {
-  constructor(private readonly pool: Pool) {}
-
-  async findProfileIdByUserId(userId: string): Promise<string | null> {
-    const result = await this.pool.query<{ id: string }>(
-      `SELECT id
-       FROM driver_profiles
-       WHERE user_id = $1`,
-      [userId],
-    );
-
-    return result.rows[0]?.id ?? null;
-  }
-
-  async findProfileByUserId(userId: string): Promise<DriverProfile | null> {
-    const result = await this.pool.query<DriverProfile>(
-      `SELECT ${driverProjection}
-       FROM driver_profiles
-       WHERE user_id = $1`,
-      [userId],
-    );
-
-    return result.rows[0] ?? null;
-  }
-
-  async findProfileById(profileId: string): Promise<DriverProfile | null> {
-    const result = await this.pool.query<DriverProfile>(
-      `SELECT ${driverProjection}
-       FROM driver_profiles
-       WHERE id = $1`,
-      [profileId],
-    );
-
-    return result.rows[0] ?? null;
-  }
-
-  async upsertProfile(userId: string, input: UpsertDriverProfileInput): Promise<DriverProfile> {
-    const result = await this.pool.query<DriverProfile>(
-      `INSERT INTO driver_profiles (
+export async function saveDriverProfile(
+  queryable: Pick<Pool, 'query'>,
+  userId: string,
+  input: UpsertDriverProfileInput,
+): Promise<DriverProfile> {
+  const result = await queryable.query<DriverProfile>(
+    `INSERT INTO driver_profiles (
          user_id,
          license_number,
          license_expiry,
@@ -240,30 +218,70 @@ export class PostgresDriverRepository implements DriverRepository {
            ),
            updated_at = NOW()
        RETURNING ${driverProjection}`,
-      [
-        userId,
-        input.licenseNumber,
-        input.licenseExpiry,
-        input.dob ?? null,
-        input.gender ?? null,
-        input.address ?? null,
-        input.city ?? null,
-        input.state ?? null,
-        input.pinCode ?? null,
-        input.emergencyContactName ?? null,
-        input.emergencyContactPhone ?? null,
-        input.emergencyContactRelationship ?? null,
-        input.alternateContactPhone ?? null,
-      ],
+    [
+      userId,
+      input.licenseNumber,
+      input.licenseExpiry,
+      input.dob ?? null,
+      input.gender ?? null,
+      input.address ?? null,
+      input.city ?? null,
+      input.state ?? null,
+      input.pinCode ?? null,
+      input.emergencyContactName ?? null,
+      input.emergencyContactPhone ?? null,
+      input.emergencyContactRelationship ?? null,
+      input.alternateContactPhone ?? null,
+    ],
+  );
+
+  const profile = result.rows[0];
+
+  if (!profile) {
+    throw new Error('Driver profile upsert returned no row');
+  }
+
+  return profile;
+}
+
+export class PostgresDriverRepository implements DriverRepository {
+  constructor(private readonly pool: Pool) {}
+
+  async findProfileIdByUserId(userId: string): Promise<string | null> {
+    const result = await this.pool.query<{ id: string }>(
+      `SELECT id
+       FROM driver_profiles
+       WHERE user_id = $1`,
+      [userId],
     );
 
-    const profile = result.rows[0];
+    return result.rows[0]?.id ?? null;
+  }
 
-    if (!profile) {
-      throw new Error('Driver profile upsert returned no row');
-    }
+  async findProfileByUserId(userId: string): Promise<DriverProfile | null> {
+    const result = await this.pool.query<DriverProfile>(
+      `SELECT ${driverProjection}
+       FROM driver_profiles
+       WHERE user_id = $1`,
+      [userId],
+    );
 
-    return profile;
+    return result.rows[0] ?? null;
+  }
+
+  async findProfileById(profileId: string): Promise<DriverProfile | null> {
+    const result = await this.pool.query<DriverProfile>(
+      `SELECT ${driverProjection}
+       FROM driver_profiles
+       WHERE id = $1`,
+      [profileId],
+    );
+
+    return result.rows[0] ?? null;
+  }
+
+  async upsertProfile(userId: string, input: UpsertDriverProfileInput): Promise<DriverProfile> {
+    return saveDriverProfile(this.pool, userId, input);
   }
 
   async updateVerificationStatus(
@@ -427,6 +445,11 @@ export class PostgresDriverRepository implements DriverRepository {
   async findActiveVehicleByUserId(userId: string): Promise<{
     sector: string;
     category: string;
+    verificationStatus?: string;
+    operationalStatus?: string;
+    isActive?: boolean;
+    photoStorage?:
+      import('../../partners/types/partner-document.js').PartnerDocumentStorageMetadata | null;
   } | null> {
     const result = await this.pool.query<{
       sector: string;
@@ -642,7 +665,10 @@ export class PostgresDriverRepository implements DriverRepository {
     return result.rows;
   }
 
-  async verifyAssignmentCode(code: string): Promise<AssignmentCodePreview | null> {
+  async verifyAssignmentCode(
+    code: string,
+    driverUserId?: string,
+  ): Promise<AssignmentCodePreview | null> {
     const result = await this.pool.query<AssignmentCodePreview>(
       `SELECT
            dac.code,
@@ -657,7 +683,7 @@ export class PostgresDriverRepository implements DriverRepository {
            ) AS vehicle,
            json_build_object(
              'id', u.id,
-             'name', u.name,
+             'name', concat_ws(' ',u.first_name,u.last_name),
              'businessName', p.business_name
            ) AS owner
          FROM driver_assignment_codes dac
@@ -668,12 +694,13 @@ export class PostgresDriverRepository implements DriverRepository {
          LEFT JOIN partners p
            ON p.user_id = u.id
          WHERE dac.code = $1
-           AND dac.status = 'ACTIVE'
+           AND ($2::uuid IS NULL OR EXISTS(SELECT 1 FROM driver_profiles caller JOIN partner_drivers pd ON pd.driver_profile_id=caller.id JOIN partners owner ON owner.id=pd.partner_id WHERE caller.user_id=$2 AND pd.status='ACTIVE' AND owner.user_id=dac.fleet_owner_id AND (dac.intended_driver_profile_id IS NULL OR dac.intended_driver_profile_id=caller.id)))
+           AND ((dac.status = 'ACTIVE' AND v.driver_profile_id IS NULL) OR (dac.status='CLAIMED' AND dac.driver_id=$2 AND EXISTS(SELECT 1 FROM driver_profiles current_driver WHERE current_driver.user_id=$2 AND current_driver.id=v.driver_profile_id AND current_driver.active_vehicle_id=v.id)))
            AND dac.expires_at > NOW()
            AND v.is_active = TRUE
            AND v.verification_status = 'approved'
-           AND v.driver_profile_id IS NULL`,
-      [code],
+`,
+      [code, driverUserId ?? null],
     );
 
     return result.rows[0] ?? null;
@@ -683,6 +710,7 @@ export class PostgresDriverRepository implements DriverRepository {
     code: string,
     driverUserId: string,
     driverProfileId: string,
+    authorizedFleetOwnerId?: string,
   ): Promise<{
     vehicleId: string;
     make: string;
@@ -714,14 +742,18 @@ export class PostgresDriverRepository implements DriverRepository {
         fleetOwnerId: string;
         status: string;
         expiresAt: Date;
+        intendedDriverProfileId: string | null;
+        claimedDriverId: string | null;
       }>(
         `SELECT
            vehicle_id AS "vehicleId",
            fleet_owner_id AS "fleetOwnerId",
+           driver_id AS "claimedDriverId",
            status,
-           expires_at AS "expiresAt"
+           expires_at AS "expiresAt",
+           intended_driver_profile_id AS "intendedDriverProfileId"
          FROM driver_assignment_codes
-         WHERE code = $1
+         WHERE code = $1 AND expires_at>NOW()
          FOR UPDATE`,
         [code],
       );
@@ -730,10 +762,27 @@ export class PostgresDriverRepository implements DriverRepository {
 
       if (
         !assignmentCode ||
-        assignmentCode.status !== 'ACTIVE' ||
+        !['ACTIVE', 'CLAIMED'].includes(assignmentCode.status) ||
+        (assignmentCode.status === 'CLAIMED' && assignmentCode.claimedDriverId !== driverUserId) ||
+        (assignmentCode.intendedDriverProfileId != null &&
+          assignmentCode.intendedDriverProfileId !== driverProfileId) ||
         assignmentCode.expiresAt <= new Date()
       ) {
         throw new Error('ASSIGNMENT_CODE_INVALID');
+      }
+
+      if (authorizedFleetOwnerId) {
+        const owner = await client.query(
+          `SELECT u.id FROM users u JOIN partners p ON p.user_id=u.id
+         WHERE u.id=$1 AND u.role IN ('fleet_owner','driver_fleet_owner') AND u.status='active' AND u.deleted_at IS NULL
+         AND p.approval_status='approved' FOR SHARE OF u,p`,
+          [authorizedFleetOwnerId],
+        );
+        if (!owner.rowCount || assignmentCode.fleetOwnerId !== authorizedFleetOwnerId)
+          throw new Error('ASSIGNMENT_CODE_INVALID');
+        await client.query("SELECT set_config('infurnus.actor_id',$1,TRUE)", [
+          authorizedFleetOwnerId,
+        ]);
       }
 
       /*
@@ -751,6 +800,9 @@ export class PostgresDriverRepository implements DriverRepository {
          WHERE id = $1
            AND user_id = $2
            AND verification_status = 'approved'
+           AND license_expiry >= CURRENT_DATE
+           AND availability_status <> 'busy'
+           AND EXISTS(SELECT 1 FROM users u WHERE u.id=driver_profiles.user_id AND u.role IN ('driver','driver_fleet_owner') AND u.status='active' AND u.deleted_at IS NULL)
          FOR UPDATE`,
         [driverProfileId, driverUserId],
       );
@@ -778,6 +830,7 @@ export class PostgresDriverRepository implements DriverRepository {
          WHERE p.user_id = $1
            AND pd.driver_profile_id = $2
            AND pd.status = 'ACTIVE'
+           AND p.approval_status = 'approved'
          LIMIT 1`,
         [assignmentCode.fleetOwnerId, driverProfileId],
       );
@@ -785,6 +838,33 @@ export class PostgresDriverRepository implements DriverRepository {
       if (!membershipResult.rows[0]) {
         throw new Error('ASSIGNMENT_CODE_INVALID');
       }
+
+      if (assignmentCode.status === 'CLAIMED') {
+        const existing = await client.query<{
+          id: string;
+          make: string;
+          model: string;
+          plateNumber: string;
+        }>(
+          `SELECT v.id,v.make,v.model,v.plate_number AS "plateNumber" FROM vehicles v
+           JOIN driver_profiles dp ON dp.id=v.driver_profile_id AND dp.active_vehicle_id=v.id
+           WHERE v.id=$1 AND v.owner_id=$2 AND dp.id=$3 AND v.is_active AND v.verification_status='approved'`,
+          [assignmentCode.vehicleId, assignmentCode.fleetOwnerId, driverProfileId],
+        );
+        if (!existing.rows[0]) throw new Error('ASSIGNMENT_CODE_INVALID');
+        await client.query('COMMIT');
+        return {
+          vehicleId: existing.rows[0].id,
+          make: existing.rows[0].make,
+          model: existing.rows[0].model,
+          plateNumber: existing.rows[0].plateNumber,
+        };
+      }
+      const conflict = await client.query(
+        'SELECT 1 FROM driver_profiles WHERE id=$1 AND active_vehicle_id IS NOT NULL AND active_vehicle_id<>$2 UNION ALL SELECT 1 FROM vehicles WHERE driver_profile_id=$1 AND id<>$2 LIMIT 1',
+        [driverProfileId, assignmentCode.vehicleId],
+      );
+      if (conflict.rowCount) throw new Error('DRIVER_ALREADY_ASSIGNED');
 
       /*
        * Lock the vehicle and validate the complete operational state.
@@ -812,6 +892,7 @@ export class PostgresDriverRepository implements DriverRepository {
              AND is_active = TRUE
              AND verification_status = 'approved'
              AND driver_profile_id IS NULL
+             AND (registration_expiry IS NULL OR registration_expiry>=CURRENT_DATE)
            FOR UPDATE`,
         [assignmentCode.vehicleId, assignmentCode.fleetOwnerId],
       );
@@ -821,23 +902,6 @@ export class PostgresDriverRepository implements DriverRepository {
       if (!vehicle) {
         throw new Error('ASSIGNMENT_CODE_INVALID');
       }
-
-      /*
-       * Defensive consistency check:
-       * if the driver currently points to another vehicle, clear that
-       * pointer before assigning the new vehicle.
-       *
-       * The vehicle-side relationship is only changed for the new
-       * vehicle, so the two sides remain consistent.
-       */
-      await client.query(
-        `UPDATE vehicles
-         SET driver_profile_id = NULL,
-             updated_at = NOW()
-         WHERE driver_profile_id = $1
-           AND id <> $2`,
-        [driverProfileId, assignmentCode.vehicleId],
-      );
 
       await client.query(
         `UPDATE driver_profiles
@@ -868,6 +932,10 @@ export class PostgresDriverRepository implements DriverRepository {
         [driverUserId, code],
       );
 
+      await client.query(
+        `UPDATE provider_onboarding SET flow_steps=jsonb_set(flow_steps,'{vehicle_assignment}',to_jsonb('completed'::text)),updated_at=NOW() WHERE user_id=$1`,
+        [driverUserId],
+      );
       await client.query('COMMIT');
 
       return {
@@ -950,6 +1018,11 @@ export class PostgresDriverRepository implements DriverRepository {
     color: string | null;
     sector: string;
     category: string;
+    verificationStatus?: string;
+    operationalStatus?: string;
+    isActive?: boolean;
+    photoStorage?:
+      import('../../partners/types/partner-document.js').PartnerDocumentStorageMetadata | null;
   } | null> {
     const result = await this.pool.query<{
       id: string;
@@ -967,14 +1040,21 @@ export class PostgresDriverRepository implements DriverRepository {
          v.plate_number AS "plateNumber",
          v.color,
          v.sector,
-         v.category
+         v.category,
+         v.verification_status AS "verificationStatus",
+         v.operational_status AS "operationalStatus", v.is_active AS "isActive",
+         (SELECT d.metadata->'storage' FROM partner_documents d
+           JOIN partners p ON p.id=d.partner_id AND p.user_id=v.owner_id
+           WHERE d.vehicle_id=v.id AND d.document_type='OTHER'
+             AND d.metadata->>'documentCode'='vehicle_front_photo'
+             AND d.metadata->'storage'->>'mimeType' IN ('image/jpeg','image/png','image/webp')
+             AND d.status NOT IN ('REJECTED','EXPIRED')
+           ORDER BY d.updated_at DESC LIMIT 1) AS "photoStorage"
        FROM vehicles v
        JOIN driver_profiles dp
          ON dp.active_vehicle_id = v.id
         AND v.driver_profile_id = dp.id
        WHERE dp.id = $1
-         AND v.is_active = TRUE
-         AND v.verification_status = 'approved'
        LIMIT 1`,
       [driverProfileId],
     );

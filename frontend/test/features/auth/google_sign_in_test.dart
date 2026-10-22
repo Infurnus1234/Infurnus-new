@@ -42,17 +42,25 @@ void main() {
                   handler.reject(
                     DioException(
                       requestOptions: options,
-                      type: status == 0 ? DioExceptionType.connectionError : DioExceptionType.badResponse,
-                      response: status == 0 ? null : Response(
-                        requestOptions: options,
-                        statusCode: status,
-                        data: {
-                          'error': {
-                            'code': status == 409 ? 'GOOGLE_ACCOUNT_LINK_CONFLICT' : 'GOOGLE_AUTH_ERROR',
-                            'message': status == 409 ? 'Authenticate and explicitly link your existing account' : 'Google authentication rejected',
-                          },
-                        },
-                      ),
+                      type: status == 0
+                          ? DioExceptionType.connectionError
+                          : DioExceptionType.badResponse,
+                      response: status == 0
+                          ? null
+                          : Response(
+                              requestOptions: options,
+                              statusCode: status,
+                              data: {
+                                'error': {
+                                  'code': status == 409
+                                      ? 'GOOGLE_ACCOUNT_LINK_CONFLICT'
+                                      : 'GOOGLE_AUTH_ERROR',
+                                  'message': status == 409
+                                      ? 'Authenticate and explicitly link your existing account'
+                                      : 'Google authentication rejected',
+                                },
+                              },
+                            ),
                     ),
                   );
                 } else {
@@ -120,7 +128,10 @@ void main() {
             requests.first.uri.toString(),
             'http://localhost:3000/auth/google',
           );
-          expect(requests.first.data, {'idToken': googleFixture});
+          expect(requests.first.data, {
+            'idToken': googleFixture,
+            'accountRole': 'customer',
+          });
           expect(requests.first.extra['withCredentials'], isTrue);
           final storage = container.read(secureStorageProvider);
           if (accepted) {
@@ -141,10 +152,16 @@ void main() {
             expect(await storage.read(key: 'auth_token'), isNull);
             expect(socket.connectedToken, isNull);
             if (status == 409) {
-              expect(container.read(authProvider).errorMessage, contains('explicitly link'));
+              expect(
+                container.read(authProvider).errorMessage,
+                contains('explicitly link'),
+              );
             }
             if (status == 0) {
-              expect(container.read(authProvider).errorMessage, contains('local server'));
+              expect(
+                container.read(authProvider).errorMessage,
+                contains('local server'),
+              );
             }
             expect(requests.length, 1);
           }

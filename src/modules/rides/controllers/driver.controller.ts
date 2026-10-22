@@ -144,12 +144,13 @@ export class DriverController {
         throw new AppError('INVALID_PIN', 'PIN must be exactly 4 digits', 400);
       }
 
-      const result = await this.rideService.verifyRidePin(id, profileId, pin);
+      const ride = await this.rideService.transitionRide(id, 'in_progress', profileId, pin);
+      rideEvents.emit('ride:lifecycle_updated', ride);
 
       res.json({
         success: true,
-        data: result,
-        message: 'PIN verified successfully',
+        data: { verified: true, ride: sanitizeRideForDriver(ride) },
+        message: 'PIN verified and trip started',
       });
     } catch (error) {
       next(error);
@@ -216,9 +217,9 @@ export class DriverController {
     try {
       const limit = req.query.limit ? Number(req.query.limit) : 20;
 
-      const isDriver =
-        req.auth?.role === 'driver' ||
-        (req.headers['x-provider-mode'] as string | undefined)?.toLowerCase() === 'driver';
+      // This is the Driver history route, including combined accounts in Driver context.
+      // Sanitize operational history rather than returning accumulated analytics.
+      const isDriver = ['driver', 'driver_fleet_owner'].includes(req.auth!.role);
 
       const history = await this.driverService.getDriverHistory(req.auth!.userId, limit, isDriver);
 
@@ -277,7 +278,7 @@ export class DriverController {
     try {
       const input = verifyAssignmentCodeSchema.parse(req.body);
 
-      const preview = await this.driverService.verifyAssignmentCode(input.code);
+      const preview = await this.driverService.verifyAssignmentCode(input.code, req.auth!.userId);
 
       res.json({
         success: true,

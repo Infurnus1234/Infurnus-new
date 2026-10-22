@@ -1,3 +1,4 @@
+import { AppError } from '../../../common/errors/app-error.js';
 import type { FleetListQuery } from '../schemas/fleet.schemas.js';
 import type { FleetRepository } from '../repositories/fleet.repository.js';
 import type { CreateFleetVehicleInput, UpdateFleetVehicleInput } from '../schemas/fleet.schemas.js';
@@ -11,6 +12,16 @@ import type {
 
 export class FleetService {
   constructor(private readonly fleetRepo: FleetRepository) {}
+
+  async revenue(
+    ownerId: string,
+    filter: import('../repositories/fleet-revenue.repository.js').RevenueFilter = {},
+  ) {
+    return this.fleetRepo.revenue(ownerId, filter);
+  }
+  async catalog() {
+    return this.fleetRepo.catalog();
+  }
 
   async getDashboard(ownerId: string): Promise<FleetDashboardMetrics> {
     return this.fleetRepo.getDashboard(ownerId);
@@ -41,8 +52,28 @@ export class FleetService {
   async generateAssignmentCode(
     ownerId: string,
     vehicleId: string,
+    driverProfileId?: string,
   ): Promise<{ code: string; expiresAt: Date }> {
-    return this.fleetRepo.generateAssignmentCode(ownerId, vehicleId);
+    try {
+      return await (driverProfileId
+        ? this.fleetRepo.generateAssignmentCode(ownerId, vehicleId, driverProfileId)
+        : this.fleetRepo.generateAssignmentCode(ownerId, vehicleId));
+    } catch (e) {
+      if (
+        e instanceof Error &&
+        [
+          'DRIVER_NOT_ELIGIBLE_FOR_ASSIGNMENT',
+          'VEHICLE_NOT_AVAILABLE_FOR_ASSIGNMENT',
+          'ASSIGNMENT_CODE_CAPACITY_EXCEEDED',
+        ].includes(e.message)
+      )
+        throw new AppError(
+          e.message,
+          'The Driver or vehicle is not available for this assignment. Refresh fleet status.',
+          409,
+        );
+      throw e;
+    }
   }
 
   async unassignDriver(ownerId: string, vehicleId: string): Promise<boolean> {

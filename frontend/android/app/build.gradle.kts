@@ -83,9 +83,7 @@ android {
         versionName = flutter.versionName
 
         manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
-        if (googleWebClientId.isNotBlank()) {
-            resValue("string", "default_web_client_id", googleWebClientId)
-        }
+        // google-services supplies default_web_client_id from the registered configuration.
     }
 
     buildTypes {

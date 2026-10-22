@@ -41,7 +41,7 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyCmslWL8h_b9Qd7Q6y_KNb9UpuIKsNowa8',
+    apiKey: String.fromEnvironment('FIREBASE_WEB_API_KEY'),
     appId: '1:479633076709:web:753e61476836d65d6e3f0c',
     messagingSenderId: '479633076709',
     projectId: 'infurnus-299d7',
@@ -50,15 +50,16 @@ class DefaultFirebaseOptions {
     measurementId: 'G-344M94DVSK',
   );
 
+  // Android configuration matches android/app/google-services.json.
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyB0YOOuDa-E4l7e0AEbGO1eNK_nnuWKYgE',
-    appId: '1:479633076709:android:5a5336fcbeed70636e3f0c',
-    messagingSenderId: '479633076709',
-    projectId: 'infurnus-299d7',
-    storageBucket: 'infurnus-299d7.firebasestorage.app',
+    apiKey: String.fromEnvironment('FIREBASE_ANDROID_API_KEY'),
+    appId: '1:675633214574:android:cdc18d872a3e159912227f',
+    messagingSenderId: '675633214574',
+    projectId: 'infurnus-5c47c',
+    storageBucket: 'infurnus-5c47c.firebasestorage.app',
   );
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyDMmr8tTW2a0PV47Bw386TedyeNYZ3ZudE',
+    apiKey: String.fromEnvironment('FIREBASE_IOS_API_KEY'),
     appId: '1:479633076709:ios:41793095ac4293c26e3f0c',
     messagingSenderId: '479633076709',
     projectId: 'infurnus-299d7',
@@ -66,7 +67,7 @@ class DefaultFirebaseOptions {
     iosBundleId: 'com.infurnus.app',
   );
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyDMmr8tTW2a0PV47Bw386TedyeNYZ3ZudE',
+    apiKey: String.fromEnvironment('FIREBASE_MACOS_API_KEY'),
     appId: '1:479633076709:ios:48e8e61588f999e86e3f0c',
     messagingSenderId: '479633076709',
     projectId: 'infurnus-299d7',
@@ -75,7 +76,7 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyCmslWL8h_b9Qd7Q6y_KNb9UpuIKsNowa8',
+    apiKey: String.fromEnvironment('FIREBASE_WINDOWS_API_KEY'),
     appId: '1:479633076709:web:c1f4f330cad2c88c6e3f0c',
     messagingSenderId: '479633076709',
     projectId: 'infurnus-299d7',

@@ -33,13 +33,13 @@ class PartnerModel {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'userId': userId,
-        'businessName': businessName,
-        'businessDescription': businessDescription,
-        'approvalStatus': approvalStatus,
-        'availabilityStatus': availabilityStatus,
-        'createdAt': createdAt.toIso8601String(),
-        'updatedAt': updatedAt.toIso8601String(),
-      };
+    'id': id,
+    'userId': userId,
+    'businessName': businessName,
+    'businessDescription': businessDescription,
+    'approvalStatus': approvalStatus,
+    'availabilityStatus': availabilityStatus,
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+  };
 }

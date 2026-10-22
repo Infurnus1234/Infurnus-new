@@ -109,7 +109,7 @@ describe('passwordless authentication', () => {
       expect(pending.create).toHaveBeenNthCalledWith(
         1,
         expect.objectContaining({
-          email: null,
+          email: f.identity.email,
           contactType: 'phone',
           passwordHash: 'random-credential-hash',
           role,
@@ -150,6 +150,7 @@ describe('passwordless authentication', () => {
         role: 'admin',
       }).success,
     ).toBe(false);
-    expect(loginSchema.safeParse({ email: 'a@example.com', role: 'admin' }).success).toBe(false);
+    // Selecting an existing role is not permission to register or authenticate it.
+    expect(loginSchema.safeParse({ email: 'a@example.com', role: 'admin' }).success).toBe(true);
   });
 });

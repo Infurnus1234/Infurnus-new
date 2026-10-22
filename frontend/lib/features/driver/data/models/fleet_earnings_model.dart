@@ -21,7 +21,8 @@ class FleetEarningsModel {
       thisWeekRevenue: (json['thisWeekRevenue'] as num?)?.toDouble() ?? 0.0,
       thisMonthRevenue: (json['thisMonthRevenue'] as num?)?.toDouble() ?? 0.0,
       totalTrips: json['totalTrips'] as int? ?? 0,
-      platformCommission: (json['platformCommission'] as num?)?.toDouble() ?? 0.0,
+      platformCommission:
+          (json['platformCommission'] as num?)?.toDouble() ?? 0.0,
       netPayout: (json['netPayout'] as num?)?.toDouble() ?? 0.0,
     );
   }

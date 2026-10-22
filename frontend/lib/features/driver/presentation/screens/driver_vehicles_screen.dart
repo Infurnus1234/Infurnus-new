@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_button.dart';
 import '../../../../shared/widgets/infurnus_card.dart';
@@ -14,7 +15,8 @@ class DriverVehiclesScreen extends ConsumerStatefulWidget {
   const DriverVehiclesScreen({super.key});
 
   @override
-  ConsumerState<DriverVehiclesScreen> createState() => _DriverVehiclesScreenState();
+  ConsumerState<DriverVehiclesScreen> createState() =>
+      _DriverVehiclesScreenState();
 }
 
 class _DriverVehiclesScreenState extends ConsumerState<DriverVehiclesScreen> {
@@ -61,14 +63,18 @@ class _DriverVehiclesScreenState extends ConsumerState<DriverVehiclesScreen> {
     try {
       // Auto-fetch driver profile to eliminate manual UUID entry
       try {
-        final profile = await ref.read(getDriverProfileUseCaseProvider).execute();
+        final profile = await ref
+            .read(getDriverProfileUseCaseProvider)
+            .execute();
         if (profile != null) {
           _driverProfile = profile;
           _driverProfileIdController.text = profile.id;
         }
       } catch (_) {}
 
-      final list = await ref.read(listVehiclesUseCaseProvider).execute(partner.id);
+      final list = await ref
+          .read(listVehiclesUseCaseProvider)
+          .execute(partner.id);
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -106,7 +112,8 @@ class _DriverVehiclesScreenState extends ConsumerState<DriverVehiclesScreen> {
         'driverProfileId': _driverProfileIdController.text.trim(),
         'make': _makeController.text.trim(),
         'model': _modelController.text.trim(),
-        if (_colorController.text.trim().isNotEmpty) 'color': _colorController.text.trim(),
+        if (_colorController.text.trim().isNotEmpty)
+          'color': _colorController.text.trim(),
         'plateNumber': _plateNumberController.text.trim(),
       };
 
@@ -157,152 +164,187 @@ class _DriverVehiclesScreenState extends ConsumerState<DriverVehiclesScreen> {
     final partner = ref.watch(driverDashboardProvider).partner;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Registered Vehicles'),
-      ),
+      appBar: AppBar(title: const Text('Registered Vehicles')),
       body: _isLoading
           ? const InfurnusLoader(message: 'Loading Vehicles...')
           : partner == null
-              ? const Center(child: Text('Partner Profile required.'))
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (_errorMessage != null) _buildErrorBanner(_errorMessage!),
+          ? const Center(child: Text('Partner Profile required.'))
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_errorMessage != null) _buildErrorBanner(_errorMessage!),
 
-                      // Vehicle Register Form
-                      InfurnusCard(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Register New Vehicle', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 12),
-                            if (_driverProfile != null)
-                              Container(
-                                margin: const EdgeInsets.only(bottom: 12),
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: Colors.green[50],
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.green[200]!),
+                  // Vehicle Register Form
+                  InfurnusCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Register New Vehicle',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        if (_driverProfile != null)
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.green[50],
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.green[200]!),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.check_circle,
+                                  color: AppColors.primaryGreen,
+                                  size: 16,
                                 ),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.check_circle, color: AppColors.primaryGreen, size: 16),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        'Auto-linked Driver Profile: ${_driverProfile!.licenseNumber}',
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          color: AppColors.primaryGreen,
-                                        ),
-                                      ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Auto-linked Driver Profile: ${_driverProfile!.licenseNumber}',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.primaryGreen,
                                     ),
-                                  ],
+                                  ),
                                 ),
-                              )
-                            else
-                              InfurnusTextField(
-                                label: 'Driver Profile UUID',
-                                hintText: 'Enter driverProfileId',
-                                controller: _driverProfileIdController,
+                              ],
+                            ),
+                          )
+                        else
+                          InfurnusTextField(
+                            label: 'Driver Profile UUID',
+                            hintText: 'Enter driverProfileId',
+                            controller: _driverProfileIdController,
+                          ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: InfurnusTextField(
+                                label: 'Make',
+                                hintText: 'Toyota',
+                                controller: _makeController,
                               ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: InfurnusTextField(
-                                    label: 'Make',
-                                    hintText: 'Toyota',
-                                    controller: _makeController,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: InfurnusTextField(
-                                    label: 'Model',
-                                    hintText: 'Camry',
-                                    controller: _modelController,
-                                  ),
-                                ),
-                              ],
                             ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: InfurnusTextField(
-                                    label: 'Color (Optional)',
-                                    hintText: 'White',
-                                    controller: _colorController,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: InfurnusTextField(
-                                    label: 'Plate Number',
-                                    hintText: 'KA-01-AB-1234',
-                                    controller: _plateNumberController,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            InfurnusButton(
-                              text: 'Register Vehicle',
-                              isLoading: _isSubmitting,
-                              onPressed: _addVehicle,
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: InfurnusTextField(
+                                label: 'Model',
+                                hintText: 'Camry',
+                                controller: _modelController,
+                              ),
                             ),
                           ],
                         ),
-                      ),
-
-                      const SizedBox(height: 24),
-                      const Text('Vehicle Fleet', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 12),
-
-                      if (_vehicles.isEmpty)
-                        const Center(child: Text('No vehicles registered.'))
-                      else
-                        ListView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: _vehicles.length,
-                          itemBuilder: (context, index) {
-                            final vehicle = _vehicles[index];
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 12),
-                              child: InfurnusCard(
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.directions_car, color: AppColors.primaryGreen, size: 36),
-                                    const SizedBox(width: 16),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text('${vehicle.make} ${vehicle.model}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                          Text('Plate: ${vehicle.plateNumber}', style: TextStyle(color: Colors.grey[600], fontSize: 13)),
-                                        ],
-                                      ),
-                                    ),
-                                    if (vehicle.isActive)
-                                      IconButton(
-                                        icon: const Icon(Icons.power_settings_new, color: Colors.red),
-                                        onPressed: () => _deactivateVehicle(vehicle.id),
-                                      ),
-                                  ],
-                                ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: InfurnusTextField(
+                                label: 'Color (Optional)',
+                                hintText: 'White',
+                                controller: _colorController,
                               ),
-                            );
-                          },
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: InfurnusTextField(
+                                label: 'Plate Number',
+                                hintText: 'KA-01-AB-1234',
+                                controller: _plateNumberController,
+                              ),
+                            ),
+                          ],
                         ),
-                    ],
+                        const SizedBox(height: 16),
+                        InfurnusButton(
+                          text: 'Register Vehicle',
+                          isLoading: _isSubmitting,
+                          onPressed: _addVehicle,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Vehicle Fleet',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+
+                  if (_vehicles.isEmpty)
+                    const Center(child: Text('No vehicles registered.'))
+                  else
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _vehicles.length,
+                      itemBuilder: (context, index) {
+                        final vehicle = _vehicles[index];
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          child: InfurnusCard(
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.directions_car,
+                                  color: AppColors.primaryGreen,
+                                  size: 36,
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '${vehicle.make} ${vehicle.model}',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                      Text(
+                                        'Plate: ${vehicle.plateNumber}',
+                                        style: TextStyle(
+                                          color: Colors.grey[600],
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (vehicle.isActive)
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.power_settings_new,
+                                      color: Colors.red,
+                                    ),
+                                    onPressed: () =>
+                                        _deactivateVehicle(vehicle.id),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                ],
+              ),
+            ),
     );
   }
 
@@ -316,7 +358,10 @@ class _DriverVehiclesScreenState extends ConsumerState<DriverVehiclesScreen> {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.red[200]!),
       ),
-      child: Text(message, style: const TextStyle(color: Colors.red, fontSize: 13)),
+      child: Text(
+        message,
+        style: const TextStyle(color: Colors.red, fontSize: 13),
+      ),
     );
   }
 }

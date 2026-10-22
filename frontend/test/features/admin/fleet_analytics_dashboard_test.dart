@@ -24,7 +24,9 @@ class FakeAdminFleetRemoteDataSource implements AdminFleetRemoteDataSource {
   }
 
   @override
-  Future<List<StateFleetAnalyticsModel>> getStateFleetAnalytics({String? sector}) async {
+  Future<List<StateFleetAnalyticsModel>> getStateFleetAnalytics({
+    String? sector,
+  }) async {
     return [
       const StateFleetAnalyticsModel(
         state: 'Bihar',
@@ -37,7 +39,10 @@ class FakeAdminFleetRemoteDataSource implements AdminFleetRemoteDataSource {
   }
 
   @override
-  Future<List<CityFleetAnalyticsModel>> getCityFleetAnalytics(String state, {String? sector}) async {
+  Future<List<CityFleetAnalyticsModel>> getCityFleetAnalytics(
+    String state, {
+    String? sector,
+  }) async {
     return [
       const CityFleetAnalyticsModel(
         state: 'Bihar',
@@ -69,15 +74,17 @@ class FakeAdminFleetRemoteDataSource implements AdminFleetRemoteDataSource {
 }
 
 void main() {
-  testWidgets('FleetAnalyticsDashboardScreen renders header and title', (WidgetTester tester) async {
+  testWidgets('FleetAnalyticsDashboardScreen renders header and title', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          adminFleetRemoteDataSourceProvider.overrideWithValue(FakeAdminFleetRemoteDataSource()),
+          adminFleetRemoteDataSourceProvider.overrideWithValue(
+            FakeAdminFleetRemoteDataSource(),
+          ),
         ],
-        child: const MaterialApp(
-          home: FleetAnalyticsDashboardScreen(),
-        ),
+        child: const MaterialApp(home: FleetAnalyticsDashboardScreen()),
       ),
     );
 

@@ -122,19 +122,23 @@ void main() {
 
     test('VehicleCategoryConfig defaults', () {
       expect(
-        VehicleCategoryConfig.getConfig(VehicleCategoryType.rides).assetImagePath,
+        VehicleCategoryConfig.getConfig(VehicleCategoryType.rides)
+            .assetImagePath,
         'assets/images/sedan.jpg',
       );
       expect(
-        VehicleCategoryConfig.getConfig(VehicleCategoryType.logistics).assetImagePath,
+        VehicleCategoryConfig.getConfig(VehicleCategoryType.logistics)
+            .assetImagePath,
         'assets/images/mini_commercial.jpg',
       );
       expect(
-        VehicleCategoryConfig.getConfig(VehicleCategoryType.auto).assetImagePath,
+        VehicleCategoryConfig.getConfig(VehicleCategoryType.auto)
+            .assetImagePath,
         'assets/images/auto_rickshaw.png',
       );
       expect(
-        VehicleCategoryConfig.getConfig(VehicleCategoryType.bike).assetImagePath,
+        VehicleCategoryConfig.getConfig(VehicleCategoryType.bike)
+            .assetImagePath,
         'assets/images/bike_motorcycle.png',
       );
     });

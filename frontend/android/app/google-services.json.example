@@ -1,0 +1,68 @@
+{
+  "project_info": {
+    "project_number": "675633214574",
+    "project_id": "infurnus-5c47c",
+    "storage_bucket": "infurnus-5c47c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:675633214574:android:cdc18d872a3e159912227f",
+        "android_client_info": {
+          "package_name": "com.infurnus.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "675633214574-mvf40t4lj3jhtmlo7i0l0o1dlqildolo.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "CONFIGURE_FIREBASE_API_KEY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "675633214574-mvf40t4lj3jhtmlo7i0l0o1dlqildolo.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:675633214574:android:90fe6cddb3392a4112227f",
+        "android_client_info": {
+          "package_name": "com.infurnus.driver.infurnus_driver"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "675633214574-mvf40t4lj3jhtmlo7i0l0o1dlqildolo.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "CONFIGURE_FIREBASE_API_KEY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "675633214574-mvf40t4lj3jhtmlo7i0l0o1dlqildolo.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

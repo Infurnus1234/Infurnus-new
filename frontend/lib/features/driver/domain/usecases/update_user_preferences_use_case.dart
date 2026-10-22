@@ -6,7 +6,10 @@ class UpdateUserPreferencesUseCase {
 
   UpdateUserPreferencesUseCase(this.repository);
 
-  Future<UserPreferencesModel> execute(String userId, Map<String, dynamic> data) {
+  Future<UserPreferencesModel> execute(
+    String userId,
+    Map<String, dynamic> data,
+  ) {
     return repository.updateUserPreferences(userId, data);
   }
 }

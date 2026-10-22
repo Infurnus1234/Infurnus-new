@@ -1,3 +1,4 @@
+import { requireDriverEnrolment } from '../../providers/services/driver-enrolment-gate.js';
 import rateLimit from 'express-rate-limit';
 import { env } from '../../../config/env.js';
 import { Router } from 'express';
@@ -25,6 +26,13 @@ export function createRideRouter(controller: RideController, driverController?: 
     keyGenerator: (req) => req.auth!.userId,
   });
 
+  const assignmentLimit = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 10,
+    keyGenerator: (req) => req.auth!.userId,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+  });
   if (driverController) {
     // ==========================================================
     // Driver Profile
@@ -88,15 +96,31 @@ export function createRideRouter(controller: RideController, driverController?: 
 
     router.get('/driver/history', requireRoles('driver'), driverController.history);
 
-    router.patch('/driver/availability', requireRoles('driver'), driverController.availability);
+    router.patch(
+      '/driver/availability',
+      requireRoles('driver'),
+      (req, res, next) =>
+        req.body?.status === 'available' ? requireDriverEnrolment(req, res, next) : next(),
+      driverController.availability,
+    );
 
     router.post('/driver/location', requireRoles('driver'), driverController.location);
 
-    router.get('/driver/available', requireRoles('driver'), driverController.listAvailableRides);
+    router.get(
+      '/driver/available',
+      requireRoles('driver'),
+      requireDriverEnrolment,
+      driverController.listAvailableRides,
+    );
 
     router.post('/driver/available/:id/decline', requireRoles('driver'), driverController.decline);
 
-    router.get('/driver/rides/:id/map', requireRoles('driver'), mapLimit, driverController.map);
+    router.get(
+      '/driver/rides/:id/map',
+      requireRoles('driver'),
+      assignmentLimit,
+      driverController.map,
+    );
 
     router.get('/driver/current-trip', requireRoles('driver'), driverController.getCurrentTrip);
 
@@ -113,12 +137,14 @@ export function createRideRouter(controller: RideController, driverController?: 
     router.post(
       '/driver/assignment/verify-code',
       requireRoles('driver'),
+      assignmentLimit,
       driverController.verifyAssignmentCode,
     );
 
     router.post(
       '/driver/assignment/claim-code',
       requireRoles('driver'),
+      assignmentLimit,
       driverController.claimAssignmentCode,
     );
 
@@ -132,7 +158,12 @@ export function createRideRouter(controller: RideController, driverController?: 
     // Driver Ride Actions
     // ==========================================================
 
-    router.post('/:id/accept', requireRoles('driver'), driverController.accept);
+    router.post(
+      '/:id/accept',
+      requireRoles('driver'),
+      requireDriverEnrolment,
+      driverController.accept,
+    );
 
     router.post('/:id/complete', requireRoles('driver'), driverController.complete);
 

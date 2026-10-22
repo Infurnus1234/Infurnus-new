@@ -60,7 +60,19 @@ export class PartnerDocumentStorageService {
 
   async uploadDocument(input: UploadPartnerDocumentInput): Promise<SafePartnerDocument> {
     await this.partnerDocumentService.assertAccess(input.partnerId, input.actor);
-    const category = getDocumentCategory(input.documentType);
+    if (
+      input.documentMetadata?.documentCode === 'vehicle_front_photo' &&
+      (!input.vehicleId || input.documentType !== 'OTHER')
+    )
+      throw new AppError(
+        'VEHICLE_PHOTO_SCOPE_REQUIRED',
+        'Select an owned vehicle for its front photo',
+        400,
+      );
+    const category =
+      input.documentMetadata?.documentCode === 'vehicle_front_photo'
+        ? 'partner-vehicle-photo'
+        : getDocumentCategory(input.documentType);
 
     const accessMode = getStorageAccessMode(category);
 
@@ -132,7 +144,11 @@ export class PartnerDocumentStorageService {
       input.actor,
     );
 
-    const category = getDocumentCategory(existing.documentType);
+    const category =
+      (input.documentMetadata?.documentCode ?? existing.metadata?.documentCode) ===
+      'vehicle_front_photo'
+        ? 'partner-vehicle-photo'
+        : getDocumentCategory(existing.documentType);
 
     const accessMode = getStorageAccessMode(category);
 
@@ -372,7 +388,7 @@ async function uploadPages(
   if (
     files.length < 1 ||
     files.length > 5 ||
-    (category === 'partner-profile-photo' && files.length !== 1)
+    (['partner-profile-photo', 'partner-vehicle-photo'].includes(category) && files.length !== 1)
   )
     throw new AppError('INVALID_DOCUMENT_BUNDLE', 'Invalid page count', 400);
   if (files.reduce((sum, file) => sum + file.size, 0) > 30 * 1024 * 1024)

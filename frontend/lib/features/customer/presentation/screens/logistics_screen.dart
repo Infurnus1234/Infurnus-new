@@ -143,10 +143,7 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Text(
                 fareEstimate!.message!,
-                style: const TextStyle(
-                  color: Color(0xFF92400E),
-                  fontSize: 13,
-                ),
+                style: const TextStyle(color: Color(0xFF92400E), fontSize: 13),
               ),
             ),
 

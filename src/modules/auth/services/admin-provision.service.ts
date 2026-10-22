@@ -32,9 +32,10 @@ export async function provisionAdministrativeAccount(
       role: string;
       status: string;
       deleted_at: Date | null;
-    }>('SELECT id,role,status,deleted_at FROM users WHERE lower(btrim(email))=$1 FOR UPDATE', [
-      email,
-    ]);
+    }>(
+      'SELECT id,role,status,deleted_at FROM users WHERE lower(btrim(email))=$1 AND (($2::uuid IS NOT NULL AND id=$2) OR ($2::uuid IS NULL AND role::text=$3)) FOR UPDATE',
+      [email, input.reconciliation?.expectedUserId ?? null, input.role],
+    );
     if (existing.rows.length > 1)
       throw new Error('Duplicate identities require an explicit reconciliation plan');
     const account = existing.rows[0];

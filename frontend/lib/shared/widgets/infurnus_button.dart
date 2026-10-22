@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../core/theme/app_colors.dart';
 
 class InfurnusButton extends StatelessWidget {
@@ -23,9 +24,7 @@ class InfurnusButton extends StatelessWidget {
         backgroundColor: AppColors.primaryGreen,
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(vertical: 16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         elevation: 0,
       ),
       child: isLoading
@@ -39,10 +38,7 @@ class InfurnusButton extends StatelessWidget {
             )
           : Text(
               text,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
     );
 

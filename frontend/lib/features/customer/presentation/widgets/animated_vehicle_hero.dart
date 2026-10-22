@@ -37,13 +37,15 @@ class _AnimatedVehicleHeroState extends State<AnimatedVehicleHero>
       duration: const Duration(milliseconds: 2400),
     )..repeat(reverse: true);
 
-    _floatAnimation = Tween<double>(begin: 0.0, end: -6.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _floatAnimation = Tween<double>(
+      begin: 0.0,
+      end: -6.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
 
-    _shadowAnimation = Tween<double>(begin: 0.85, end: 1.15).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _shadowAnimation = Tween<double>(
+      begin: 0.85,
+      end: 1.15,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override

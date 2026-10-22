@@ -72,28 +72,37 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     });
     try {
       final dio = ref.read(dioProvider);
-      final response = await dio.patch('/users/${user.id}', data: {
-        'firstName': _firstNameController.text.trim(),
-        if (_lastNameController.text.trim().isNotEmpty)
-          'lastName': _lastNameController.text.trim(),
-        if (_emailController.text.trim().isNotEmpty)
-          'email': _emailController.text.trim(),
-        if (_phoneController.text.trim().isNotEmpty)
-          'phone': _phoneController.text.trim(),
-      });
-      final data = (response.data as Map<String, dynamic>)['data']
-          as Map<String, dynamic>;
-      ref.read(userProvider.notifier).setUser(User(
-            id: data['id'] as String? ?? user.id,
-            firstName: data['firstName'] as String? ?? user.firstName,
-            lastName: (data['lastName'] as String?) ?? '',
-            email: data['email'] as String?,
-            phone: data['phone'] as String?,
-            role: user.role,
-            createdAt: user.createdAt,
-            updatedAt: DateTime.tryParse(data['updatedAt'] as String? ?? '') ??
-                user.updatedAt,
-          ));
+      final response = await dio.patch(
+        '/users/${user.id}',
+        data: {
+          'firstName': _firstNameController.text.trim(),
+          if (_lastNameController.text.trim().isNotEmpty)
+            'lastName': _lastNameController.text.trim(),
+          if (_emailController.text.trim().isNotEmpty)
+            'email': _emailController.text.trim(),
+          if (_phoneController.text.trim().isNotEmpty)
+            'phone': _phoneController.text.trim(),
+        },
+      );
+      final data =
+          (response.data as Map<String, dynamic>)['data']
+              as Map<String, dynamic>;
+      ref
+          .read(userProvider.notifier)
+          .setUser(
+            User(
+              id: data['id'] as String? ?? user.id,
+              firstName: data['firstName'] as String? ?? user.firstName,
+              lastName: (data['lastName'] as String?) ?? '',
+              email: data['email'] as String?,
+              phone: data['phone'] as String?,
+              role: user.role,
+              createdAt: user.createdAt,
+              updatedAt:
+                  DateTime.tryParse(data['updatedAt'] as String? ?? '') ??
+                  user.updatedAt,
+            ),
+          );
       setState(() {
         _saveMessage = 'Personal information updated successfully.';
         _isEditingPersonal = false;
@@ -191,10 +200,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         height: 82,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          border: Border.all(
-                            color: brandGreen,
-                            width: 2.5,
-                          ),
+                          border: Border.all(color: brandGreen, width: 2.5),
                           color: const Color(0xFF0F5132),
                         ),
                         child: const Center(
@@ -447,11 +453,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               children: [
                 const Row(
                   children: [
-                    Icon(
-                      Icons.badge_outlined,
-                      size: 20,
-                      color: darkGreen,
-                    ),
+                    Icon(Icons.badge_outlined, size: 20, color: darkGreen),
                     SizedBox(width: 8),
                     Text(
                       'Account Details',
@@ -519,17 +521,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               _buildInfoRow(
                 Icons.phone_iphone_rounded,
                 'Mobile Number',
-                user?.phone?.isNotEmpty == true
-                    ? user!.phone!
-                    : 'Not linked',
+                user?.phone?.isNotEmpty == true ? user!.phone! : 'Not linked',
               ),
               const SizedBox(height: 12),
               _buildInfoRow(
                 Icons.email_outlined,
                 'Email Address',
-                user?.email?.isNotEmpty == true
-                    ? user!.email!
-                    : 'Not linked',
+                user?.email?.isNotEmpty == true ? user!.email! : 'Not linked',
               ),
             ] else ...[
               // Editable Form
@@ -760,7 +758,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           onTap: onTap,
         ),
         if (showDivider)
-          const Divider(height: 1, indent: 56, endIndent: 16, color: borderCard),
+          const Divider(
+            height: 1,
+            indent: 56,
+            endIndent: 16,
+            color: borderCard,
+          ),
       ],
     );
   }
@@ -770,7 +773,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Logout', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Logout',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         content: const Text(
           'Are you sure you want to log out of your INFURNUS account?',
         ),

@@ -39,6 +39,8 @@ export interface FleetVehicle {
     availabilityStatus?: string | null;
   } | null;
   activeAssignmentCode?: string | null;
+  assignmentCodeStatus?: string | null;
+  assignmentDriverProfileId?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

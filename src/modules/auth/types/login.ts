@@ -1,4 +1,5 @@
 export interface LoginInput {
+  role?: string | undefined;
   email?: string;
   phone?: string;
   password?: string | undefined;

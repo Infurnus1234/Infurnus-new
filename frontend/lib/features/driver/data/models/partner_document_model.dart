@@ -36,14 +36,14 @@ class PartnerDocumentModel {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'partnerId': partnerId,
-        'vehicleId': vehicleId,
-        'documentType': type,
-        'status': status,
-        'issuedAt': issuedAt,
-        'expiresAt': expiresAt,
-        'createdAt': createdAt.toIso8601String(),
-        'updatedAt': updatedAt.toIso8601String(),
-      };
+    'id': id,
+    'partnerId': partnerId,
+    'vehicleId': vehicleId,
+    'documentType': type,
+    'status': status,
+    'issuedAt': issuedAt,
+    'expiresAt': expiresAt,
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+  };
 }

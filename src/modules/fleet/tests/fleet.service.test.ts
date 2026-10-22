@@ -8,6 +8,8 @@ const vehicleId = '660e8400-e29b-41d4-a716-446655440000';
 
 function createMockRepo(overrides: Partial<FleetRepository> = {}): FleetRepository {
   return {
+    revenue: vi.fn().mockResolvedValue({}),
+    catalog: vi.fn().mockResolvedValue({ sectors: [], types: [] }),
     getDashboard: vi.fn().mockResolvedValue({
       totalVehicles: 5,
       activeVehicles: 4,

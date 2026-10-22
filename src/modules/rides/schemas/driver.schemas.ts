@@ -84,7 +84,10 @@ export type UpsertDriverProfileInput = z.infer<typeof upsertDriverProfileSchema>
 
 export const verifyAssignmentCodeSchema = z
   .object({
-    code: z.string().trim().min(1, 'Code is required').max(20),
+    code: z
+      .string()
+      .trim()
+      .regex(/^\d{6}$/, 'Enter exactly six numeric digits'),
   })
   .strict();
 
@@ -92,7 +95,10 @@ export type VerifyAssignmentCodeInput = z.infer<typeof verifyAssignmentCodeSchem
 
 export const claimAssignmentCodeSchema = z
   .object({
-    code: z.string().trim().min(1, 'Code is required').max(20),
+    code: z
+      .string()
+      .trim()
+      .regex(/^\d{6}$/, 'Enter exactly six numeric digits'),
   })
   .strict();
 

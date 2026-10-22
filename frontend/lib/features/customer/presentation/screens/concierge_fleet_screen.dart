@@ -10,7 +10,8 @@ class ConciergeFleetScreen extends ConsumerStatefulWidget {
   const ConciergeFleetScreen({super.key});
 
   @override
-  ConsumerState<ConciergeFleetScreen> createState() => _ConciergeFleetScreenState();
+  ConsumerState<ConciergeFleetScreen> createState() =>
+      _ConciergeFleetScreenState();
 }
 
 class _ConciergeFleetScreenState extends ConsumerState<ConciergeFleetScreen> {
@@ -110,14 +111,18 @@ class _ConciergeFleetScreenState extends ConsumerState<ConciergeFleetScreen> {
                     selectedColor: AppColors.primaryGreen,
                     backgroundColor: const Color(0xFFF3F4F6),
                     labelStyle: TextStyle(
-                      color: isSelected ? Colors.white : const Color(0xFF4B5563),
+                      color: isSelected
+                          ? Colors.white
+                          : const Color(0xFF4B5563),
                       fontWeight: FontWeight.bold,
                       fontSize: 13,
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20),
                       side: BorderSide(
-                        color: isSelected ? AppColors.primaryGreen : const Color(0xFFE5E7EB),
+                        color: isSelected
+                            ? AppColors.primaryGreen
+                            : const Color(0xFFE5E7EB),
                       ),
                     ),
                     onSelected: (selected) {
@@ -143,7 +148,9 @@ class _ConciergeFleetScreenState extends ConsumerState<ConciergeFleetScreen> {
                 return GestureDetector(
                   onTap: () {
                     ref.read(rideProvider.notifier).selectSector('premium');
-                    ref.read(rideProvider.notifier).selectTier(item['category']!);
+                    ref
+                        .read(rideProvider.notifier)
+                        .selectTier(item['category']!);
                     context.push('/rentals');
                   },
                   child: Container(

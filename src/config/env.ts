@@ -17,6 +17,17 @@ export const envSchema = z
     DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
 
     CORS_ORIGIN: z.string().min(1).default('http://localhost:5173'),
+    FLEET_REPORT_TIME_ZONE: z
+      .string()
+      .default('Asia/Kolkata')
+      .refine((value) => {
+        try {
+          new Intl.DateTimeFormat('en', { timeZone: value });
+          return true;
+        } catch {
+          return false;
+        }
+      }, 'Valid business reporting timezone required'),
 
     CORS_CREDENTIALS: z.coerce.boolean().default(true),
 
@@ -87,9 +98,11 @@ export const envSchema = z
 
     AUTH_OTP_RESEND_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
 
-    AUTH_OTP_RESEND_COOLDOWN_SECONDS: z.coerce.number().int().positive().default(60),
     AUTH_OTP_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(5),
+
     AUTH_EMAIL_OTP_TTL_SECONDS: z.coerce.number().int().min(60).max(900).default(600),
+
+    AUTH_OTP_RESEND_COOLDOWN_SECONDS: z.coerce.number().int().positive().default(60),
 
     AUTH_REFRESH_RATE_LIMIT_WINDOW_MS: z.coerce
       .number()
@@ -424,14 +437,15 @@ export const envSchema = z
       config.FIREBASE_PROJECT_ID || config.FIREBASE_CLIENT_EMAIL || config.FIREBASE_PRIVATE_KEY;
 
     const firebaseConfigurationComplete =
-      config.FIREBASE_PROJECT_ID && config.FIREBASE_CLIENT_EMAIL && config.FIREBASE_PRIVATE_KEY;
+      config.FIREBASE_PROJECT_ID &&
+      Boolean(config.FIREBASE_CLIENT_EMAIL) === Boolean(config.FIREBASE_PRIVATE_KEY);
 
     if (firebaseValuesProvided && !firebaseConfigurationComplete) {
       ctx.addIssue({
         code: 'custom',
         path: ['FIREBASE_PROJECT_ID'],
         message:
-          'FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY must all be provided together',
+          'Firebase requires a project with application-default credentials, or a project with both client email and private key',
       });
     }
 

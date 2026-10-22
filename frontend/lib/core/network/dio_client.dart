@@ -55,7 +55,23 @@ final dioProvider = Provider<Dio>((ref) {
         // 2. Attach Access Token
         final storage = ref.read(secureStorageProvider);
         final accessToken = await storage.read(key: 'auth_token');
-        if (accessToken != null && accessToken.isNotEmpty) {
+        const publicAuthPaths = {
+          '/auth/google',
+          '/auth/login',
+          '/auth/login/verify',
+          '/auth/login/resend',
+          '/auth/signup',
+          '/auth/signup/verify',
+          '/auth/signup/resend',
+          '/auth/forgot-password',
+          '/auth/forgot-password/verify',
+          '/auth/reset-password',
+        };
+        if (publicAuthPaths.contains(options.path)) {
+          options.headers.removeWhere(
+            (key, _) => key.toLowerCase() == 'authorization',
+          );
+        } else if (accessToken != null && accessToken.isNotEmpty) {
           options.headers['Authorization'] = 'Bearer $accessToken';
         }
 

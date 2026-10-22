@@ -922,8 +922,7 @@ class RideNotifier extends StateNotifier<RideState> {
         } else if (e.type == DioExceptionType.connectionTimeout ||
             e.type == DioExceptionType.receiveTimeout ||
             e.type == DioExceptionType.connectionError) {
-          cleanMessage =
-              'Unable to reach the server. Please check your internet connection.';
+          cleanMessage = 'Unable to reach the server. Please check your internet connection.';
         } else if (e.response?.data is Map &&
             (e.response!.data as Map)['message'] is String) {
           cleanMessage = (e.response!.data as Map)['message'] as String;
