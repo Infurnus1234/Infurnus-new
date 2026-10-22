@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -58,6 +59,8 @@ class RideState {
   final String? vehicleInfo;
   final model.RideModel? currentRide;
   final List<model.RideModel> history;
+  final bool isHistoryLoading;
+  final bool isUnauthenticated;
   final String? errorMessage;
   final String? mapError;
   final DriverLocation? lastDriverLocation;
@@ -91,6 +94,8 @@ class RideState {
     this.vehicleInfo,
     this.currentRide,
     this.history = const [],
+    this.isHistoryLoading = false,
+    this.isUnauthenticated = false,
     this.errorMessage,
     this.mapError,
     this.lastDriverLocation,
@@ -128,7 +133,10 @@ class RideState {
     String? vehicleInfo,
     model.RideModel? currentRide,
     List<model.RideModel>? history,
+    bool? isHistoryLoading,
+    bool? isUnauthenticated,
     String? errorMessage,
+    bool clearError = false,
     String? mapError,
     bool clearMapData = false,
     bool clearRide = false,
@@ -169,7 +177,9 @@ class RideState {
       vehicleInfo: vehicleInfo ?? this.vehicleInfo,
       currentRide: clearRide ? null : currentRide ?? this.currentRide,
       history: history ?? this.history,
-      errorMessage: errorMessage,
+      isHistoryLoading: isHistoryLoading ?? this.isHistoryLoading,
+      isUnauthenticated: isUnauthenticated ?? this.isUnauthenticated,
+      errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       mapError: mapError,
       lastDriverLocation: clearMapData
           ? null
@@ -879,12 +889,52 @@ class RideNotifier extends StateNotifier<RideState> {
 
   Future<void> fetchRideHistory() async {
     try {
+      final storage = ref.read(secureStorageProvider);
+      final token = await storage.read(key: 'auth_token');
+      if (token == null || token.isEmpty) {
+        state = state.copyWith(
+          history: [],
+          isHistoryLoading: false,
+          isUnauthenticated: true,
+          clearError: true,
+        );
+        return;
+      }
+
+      state = state.copyWith(isHistoryLoading: true, clearError: true);
       final history = await ref
           .read(listRidesUseCaseProvider)
           .execute(limit: 20);
-      state = state.copyWith(history: history);
+      state = state.copyWith(
+        history: history,
+        isHistoryLoading: false,
+        isUnauthenticated: false,
+        clearError: true,
+      );
     } catch (e) {
-      state = state.copyWith(errorMessage: e.toString());
+      String cleanMessage = 'Failed to load booking history. Please try again.';
+      bool unauthenticated = false;
+
+      if (e is DioException) {
+        if (e.response?.statusCode == 401) {
+          unauthenticated = true;
+          cleanMessage = 'Please sign in to view your bookings.';
+        } else if (e.type == DioExceptionType.connectionTimeout ||
+            e.type == DioExceptionType.receiveTimeout ||
+            e.type == DioExceptionType.connectionError) {
+          cleanMessage =
+              'Unable to reach the server. Please check your internet connection.';
+        } else if (e.response?.data is Map &&
+            (e.response!.data as Map)['message'] is String) {
+          cleanMessage = (e.response!.data as Map)['message'] as String;
+        }
+      }
+
+      state = state.copyWith(
+        isHistoryLoading: false,
+        isUnauthenticated: unauthenticated,
+        errorMessage: cleanMessage,
+      );
     }
   }
 

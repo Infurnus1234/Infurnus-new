@@ -16,15 +16,17 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
-  static const Color mainBg = Color(0xFFF9FAFB);
+  static const Color mainBg = Color(0xFFF8FAFC);
   static const Color cardBg = Color(0xFFFFFFFF);
-  static const Color borderCard = Color(0xFFE5E7EB);
-  static const Color textBlack = Color(0xFF111827);
-  static const Color textGray = Color(0xFF6B7280);
-  static const Color brandGreen = Color(0xFF16A34A);
-  static const Color serviceRed = Color(0xFFDC2626);
+  static const Color borderCard = Color(0xFFE2E8F0);
+  static const Color textBlack = Color(0xFF0F172A);
+  static const Color textGray = Color(0xFF64748B);
+  static const Color brandGreen = Color(0xFF10B981);
+  static const Color darkGreen = Color(0xFF065F46);
+  static const Color headerDark = Color(0xFF032213);
+  static const Color serviceRed = Color(0xFFEF4444);
 
-  bool _showPersonalInfo = false;
+  bool _isEditingPersonal = false;
   bool _isSaving = false;
   String? _saveMessage;
   String? _saveError;
@@ -53,9 +55,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   void _populateControllers(User? user) {
-    if (user != null && !_showPersonalInfo) {
+    if (user != null && !_isEditingPersonal) {
       _firstNameController.text = user.firstName;
-      _lastNameController.text = user.lastName ?? '';
+      _lastNameController.text = user.lastName;
       _emailController.text = user.email ?? '';
       _phoneController.text = user.phone ?? '';
     }
@@ -94,10 +96,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ));
       setState(() {
         _saveMessage = 'Personal information updated successfully.';
-        _showPersonalInfo = false;
+        _isEditingPersonal = false;
       });
     } catch (e) {
-      String msg = 'An error occurred. Please try again.';
+      String msg = 'An error occurred while saving. Please try again.';
       try {
         final dynamic err = e;
         // ignore: avoid_dynamic_calls
@@ -124,7 +126,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-              'Open your device settings to manage INFURNUS permissions.'),
+            'Open your device settings to manage INFURNUS permissions.',
+          ),
           duration: Duration(seconds: 4),
         ),
       );
@@ -139,7 +142,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     return Scaffold(
       backgroundColor: mainBg,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF032213),
+        backgroundColor: headerDark,
         elevation: 0,
         centerTitle: false,
         leading: IconButton(
@@ -158,17 +161,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // 1. Dark Emerald Header with Avatar & Wave Aura
+            // 1. Header with Avatar & Name (NO phone number below name)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.only(
-                  top: 16, bottom: 28, left: 24, right: 24),
+                top: 16,
+                bottom: 26,
+                left: 24,
+                right: 24,
+              ),
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
                     Color(0xFF032213),
                     Color(0xFF063B23),
-                    Color(0xFF0A4F30)
+                    Color(0xFF0A4F30),
                   ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
@@ -180,17 +187,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     alignment: Alignment.bottomRight,
                     children: [
                       Container(
-                        width: 84,
-                        height: 84,
+                        width: 82,
+                        height: 82,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           border: Border.all(
-                              color: const Color(0xFF16A34A), width: 2.5),
+                            color: brandGreen,
+                            width: 2.5,
+                          ),
                           color: const Color(0xFF0F5132),
                         ),
                         child: const Center(
-                          child: Icon(Icons.person_rounded,
-                              size: 48, color: Colors.white),
+                          child: Icon(
+                            Icons.person_rounded,
+                            size: 46,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                       Container(
@@ -209,140 +221,184 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    user != null
-                        ? '${user.firstName} ${user.lastName ?? ''}'.trim()
-                        : 'Test Customer',
+                    user != null && user.name.isNotEmpty
+                        ? user.name
+                        : 'INFURNUS Customer',
                     style: const TextStyle(
-                      fontSize: 18,
+                      fontSize: 19,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    user?.phone ?? '+91 7301301936',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: Color(0xFFA7F3D0),
-                      fontWeight: FontWeight.w500,
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: brandGreen.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: brandGreen.withValues(alpha: 0.4),
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.verified_rounded,
+                          size: 13,
+                          color: Color(0xFFA7F3D0),
+                        ),
+                        SizedBox(width: 5),
+                        Text(
+                          'Verified Customer Account',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFFA7F3D0),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
 
-            // 2. Menu Group Cards
+            // 2. Body Cards
             Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+              padding: const EdgeInsets.all(16.0),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Save/Error feedback
+                  // Feedback message
                   if (_saveMessage != null)
                     Container(
                       width: double.infinity,
-                      margin: const EdgeInsets.only(bottom: 12),
+                      margin: const EdgeInsets.only(bottom: 14),
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: const Color(0xFFD1FAE5),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFA7F3D0)),
                       ),
-                      child: Text(
-                        _saveMessage!,
-                        style: const TextStyle(
-                            color: Color(0xFF065F46), fontSize: 13),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.check_circle_rounded,
+                            color: Color(0xFF065F46),
+                            size: 18,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              _saveMessage!,
+                              style: const TextStyle(
+                                color: Color(0xFF065F46),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
 
-                  // Group 1: Personal, History, Wallet, Payment Methods
+                  // CARD 1: Personal Information Card
+                  _buildSectionHeader('Personal Information'),
+                  const SizedBox(height: 8),
+                  _buildPersonalInformationCard(user),
+                  const SizedBox(height: 20),
+
+                  // CARD 2: Activity & Services
+                  _buildSectionHeader('Activity & Payments'),
+                  const SizedBox(height: 8),
                   _buildSectionCard([
                     _buildTile(
-                      Icons.person_outline_rounded,
-                      'Personal Information',
-                      () {
-                        setState(() {
-                          _showPersonalInfo = !_showPersonalInfo;
-                          _saveError = null;
-                          _saveMessage = null;
-                          if (_showPersonalInfo) {
-                            _firstNameController.text =
-                                user?.firstName ?? '';
-                            _lastNameController.text =
-                                user?.lastName ?? '';
-                            _emailController.text = user?.email ?? '';
-                            _phoneController.text = user?.phone ?? '';
-                          }
-                        });
-                      },
-                    ),
-                    if (_showPersonalInfo) _buildPersonalInfoForm(user),
-                    _buildTile(
-                      Icons.history_rounded,
-                      'Ride History',
+                      Icons.receipt_long_rounded,
+                      'Booking History',
                       () => context.push('/booking-history'),
+                      subtitle: 'Review past trips & delivery orders',
                     ),
                     _buildTile(
-                      Icons.account_balance_wallet_outlined,
+                      Icons.account_balance_wallet_rounded,
                       'Wallet & Pay',
                       () => context.push('/wallet'),
-                    ),
-                    _buildTile(
-                      Icons.payment_rounded,
-                      'Payment Methods',
-                      () => context.push('/wallet'),
+                      subtitle: 'Balance, top-ups & recent payments',
                       showDivider: false,
                     ),
                   ]),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 20),
 
-                  // Group 2: Notifications, Privacy, Help, Terms
+                  // CARD 3: Preferences & Support
+                  _buildSectionHeader('Preferences & Security'),
+                  const SizedBox(height: 8),
                   _buildSectionCard([
                     _buildTile(
-                        Icons.notifications_outlined, 'Notifications', () {}),
+                      Icons.notifications_outlined,
+                      'Notifications',
+                      () {},
+                      subtitle: 'Trip alerts and service updates',
+                    ),
                     _buildTile(
                       Icons.shield_outlined,
-                      'Privacy Settings',
+                      'Privacy & App Permissions',
                       _openPrivacySettings,
+                      subtitle: 'Location, camera & storage access',
                     ),
                     _buildTile(
-                      Icons.help_outline_rounded,
+                      Icons.support_agent_rounded,
                       'Help & Support',
                       () => context.push('/support'),
-                    ),
-                    _buildTile(
-                      Icons.info_outline_rounded,
-                      'Privacy Policy',
-                      () => context.push('/legal/privacy'),
-                    ),
-                    _buildTile(
-                      Icons.description_outlined,
-                      'Terms & Conditions',
-                      () => context.push('/legal/terms'),
+                      subtitle: '24/7 dedicated customer assistance',
                       showDivider: false,
                     ),
                   ]),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 20),
 
-                  // Group 3: Delete Account, Logout
+                  // CARD 4: Legal & Policies
+                  _buildSectionHeader('Legal & Compliance'),
+                  const SizedBox(height: 8),
+                  _buildSectionCard([
+                    _buildTile(
+                      Icons.policy_outlined,
+                      'Privacy Policy',
+                      () => context.push('/legal/privacy'),
+                      subtitle: 'Data handling & DPDP Act compliance',
+                    ),
+                    _buildTile(
+                      Icons.gavel_rounded,
+                      'Terms & Conditions',
+                      () => context.push('/legal/terms'),
+                      subtitle: 'Customer agreement & service terms',
+                      showDivider: false,
+                    ),
+                  ]),
+                  const SizedBox(height: 20),
+
+                  // CARD 5: Account Actions
+                  _buildSectionHeader('Account Actions'),
+                  const SizedBox(height: 8),
                   _buildSectionCard([
                     _buildTile(
                       Icons.delete_outline_rounded,
                       'Delete Account',
                       () => context.push('/delete-account'),
+                      subtitle: 'Permanently remove your account & data',
                       isDestructive: true,
                     ),
                     _buildTile(
                       Icons.logout_rounded,
                       'Logout',
-                      () async {
-                        await ref.read(authProvider.notifier).logout();
-                        if (context.mounted) context.go('/login');
-                      },
+                      _showLogoutDialog,
+                      subtitle: 'Sign out of your active session',
                       isDestructive: true,
                       showDivider: false,
                     ),
                   ]),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 32),
                 ],
               ),
             ),
@@ -352,70 +408,254 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  Widget _buildPersonalInfoForm(User? user) {
+  Widget _buildSectionHeader(String title) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (_saveError != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                _saveError!,
-                style: const TextStyle(color: serviceRed, fontSize: 13),
-              ),
-            ),
-          _buildFormField(
-            label: 'First Name',
-            controller: _firstNameController,
+      padding: const EdgeInsets.only(left: 4),
+      child: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.bold,
+          color: textGray,
+          letterSpacing: 0.3,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPersonalInformationCard(User? user) {
+    return Container(
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderCard),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
-          const SizedBox(height: 10),
-          _buildFormField(
-            label: 'Last Name',
-            controller: _lastNameController,
-          ),
-          const SizedBox(height: 10),
-          _buildFormField(
-            label: 'Email',
-            controller: _emailController,
-            keyboardType: TextInputType.emailAddress,
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 46,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: brandGreen,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
-                elevation: 0,
-              ),
-              onPressed: _isSaving ? null : () => _saveDetails(user),
-              child: _isSaving
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Text(
-                      'Save Details',
-                      style: TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.bold),
-                    ),
-            ),
-          ),
-          const SizedBox(height: 12),
         ],
       ),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Row(
+                  children: [
+                    Icon(
+                      Icons.badge_outlined,
+                      size: 20,
+                      color: darkGreen,
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      'Account Details',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: textBlack,
+                      ),
+                    ),
+                  ],
+                ),
+                TextButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _isEditingPersonal = !_isEditingPersonal;
+                      _saveError = null;
+                      _saveMessage = null;
+                    });
+                  },
+                  icon: Icon(
+                    _isEditingPersonal
+                        ? Icons.close_rounded
+                        : Icons.edit_outlined,
+                    size: 16,
+                    color: darkGreen,
+                  ),
+                  label: Text(
+                    _isEditingPersonal ? 'Cancel' : 'Edit',
+                    style: const TextStyle(
+                      color: darkGreen,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            const Divider(height: 1, color: borderCard),
+            const SizedBox(height: 14),
+
+            if (!_isEditingPersonal) ...[
+              // Read-only Details View
+              _buildInfoRow(
+                Icons.person_outline_rounded,
+                'First Name',
+                user?.firstName.isNotEmpty == true
+                    ? user!.firstName
+                    : 'Not provided',
+              ),
+              const SizedBox(height: 12),
+              _buildInfoRow(
+                Icons.person_outline_rounded,
+                'Last Name',
+                user != null && user.lastName.isNotEmpty
+                    ? user.lastName
+                    : 'Not provided',
+              ),
+              const SizedBox(height: 12),
+              _buildInfoRow(
+                Icons.phone_iphone_rounded,
+                'Mobile Number',
+                user?.phone?.isNotEmpty == true
+                    ? user!.phone!
+                    : 'Not linked',
+              ),
+              const SizedBox(height: 12),
+              _buildInfoRow(
+                Icons.email_outlined,
+                'Email Address',
+                user?.email?.isNotEmpty == true
+                    ? user!.email!
+                    : 'Not linked',
+              ),
+            ] else ...[
+              // Editable Form
+              if (_saveError != null)
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEE2E2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    _saveError!,
+                    style: const TextStyle(color: serviceRed, fontSize: 12),
+                  ),
+                ),
+              _buildFormField(
+                label: 'First Name',
+                controller: _firstNameController,
+                icon: Icons.person_outline,
+              ),
+              const SizedBox(height: 12),
+              _buildFormField(
+                label: 'Last Name',
+                controller: _lastNameController,
+                icon: Icons.person_outline,
+              ),
+              const SizedBox(height: 12),
+              _buildFormField(
+                label: 'Mobile Number',
+                controller: _phoneController,
+                icon: Icons.phone_iphone,
+                keyboardType: TextInputType.phone,
+              ),
+              const SizedBox(height: 12),
+              _buildFormField(
+                label: 'Email Address',
+                controller: _emailController,
+                icon: Icons.email_outlined,
+                keyboardType: TextInputType.emailAddress,
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                height: 44,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: brandGreen,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    elevation: 0,
+                  ),
+                  onPressed: _isSaving ? null : () => _saveDetails(user),
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text(
+                          'Save Information',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, String label, String value) {
+    return Row(
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 18, color: textGray),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: textGray,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: textBlack,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
   Widget _buildFormField({
     required String label,
     required TextEditingController controller,
+    required IconData icon,
     TextInputType keyboardType = TextInputType.text,
   }) {
     return TextField(
@@ -423,9 +663,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       keyboardType: keyboardType,
       decoration: InputDecoration(
         labelText: label,
+        prefixIcon: Icon(icon, size: 18, color: textGray),
         labelStyle: const TextStyle(color: textGray, fontSize: 13),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 12,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: borderCard),
@@ -436,7 +679,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: brandGreen),
+          borderSide: const BorderSide(color: brandGreen, width: 1.5),
         ),
         filled: true,
         fillColor: mainBg,
@@ -456,15 +699,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.02),
-              blurRadius: 6,
+              blurRadius: 8,
               offset: const Offset(0, 2),
             ),
           ],
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: Column(children: children),
-        ),
+        child: Column(children: children),
       ),
     );
   }
@@ -473,39 +713,90 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     IconData icon,
     String title,
     VoidCallback onTap, {
+    String? subtitle,
     bool isDestructive = false,
     bool showDivider = true,
   }) {
+    final color = isDestructive ? serviceRed : textBlack;
+    final iconColor = isDestructive ? serviceRed : darkGreen;
+
     return Column(
       children: [
         ListTile(
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 18, vertical: 2),
-          leading: Icon(icon,
-              color: isDestructive ? serviceRed : textBlack, size: 20),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 4,
+          ),
+          leading: Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: isDestructive
+                  ? serviceRed.withValues(alpha: 0.08)
+                  : const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: iconColor, size: 19),
+          ),
           title: Text(
             title,
             style: TextStyle(
-              fontWeight: FontWeight.w600,
               fontSize: 14,
-              color: isDestructive ? serviceRed : textBlack,
+              fontWeight: FontWeight.bold,
+              color: color,
             ),
           ),
+          subtitle: subtitle != null
+              ? Text(
+                  subtitle,
+                  style: const TextStyle(fontSize: 11, color: textGray),
+                )
+              : null,
           trailing: Icon(
             Icons.chevron_right_rounded,
             size: 20,
-            color: isDestructive ? serviceRed : const Color(0xFF9CA3AF),
+            color: isDestructive ? serviceRed : textGray,
           ),
           onTap: onTap,
         ),
         if (showDivider)
-          const Divider(
-              height: 1,
-              thickness: 1,
-              color: borderCard,
-              indent: 54,
-              endIndent: 16),
+          const Divider(height: 1, indent: 56, endIndent: 16, color: borderCard),
       ],
+    );
+  }
+
+  void _showLogoutDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Logout', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text(
+          'Are you sure you want to log out of your INFURNUS account?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel', style: TextStyle(color: textGray)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: serviceRed,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            onPressed: () async {
+              Navigator.pop(context);
+              await ref.read(authProvider.notifier).logout();
+              if (!context.mounted) return;
+              context.go('/login');
+            },
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
     );
   }
 }

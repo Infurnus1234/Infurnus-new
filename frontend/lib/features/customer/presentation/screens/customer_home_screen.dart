@@ -50,7 +50,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
 
   // Borders & dividers
   static const Color borderDim  = Color(0xFFE2E8F0); // subtle border
-  static const Color borderGlow = Color(0xFF22C55E);
 
   // Text
   static const Color textWhite   = Color(0xFF0F172A); // dark slate primary text
@@ -67,7 +66,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
   static const Color accentLogis = Color(0xFFF59E0B); // amber
   static const Color accentEmerg = Color(0xFFEF4444); // red
   static const Color accentRent  = Color(0xFFA855F7); // purple
-  static const Color accentGold  = Color(0xFFCA8A04);
 
   @override
   void initState() {

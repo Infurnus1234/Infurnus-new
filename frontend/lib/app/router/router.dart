@@ -7,8 +7,6 @@ import '../../features/onboarding/presentation/screens/onboarding_screen.dart';
 import '../../features/auth/presentation/screens/welcome_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/password_recovery_screen.dart';
-import '../../features/auth/presentation/providers/user_provider.dart';
-import '../../features/auth/data/models/auth_models.dart';
 // SignupScreen is no longer needed — /signup redirects to /login combined screen
 
 import '../../features/auth/presentation/screens/otp_screen.dart';
@@ -157,16 +155,20 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/legal/:title',
         builder: (context, state) {
-          final title = state.pathParameters['title'] ?? 'Legal Document';
+          final param = state.pathParameters['title'] ?? 'Legal Document';
+          String displayTitle = 'Legal Document';
           String text = LegalTexts.privacyPolicy;
-          if (title.toLowerCase().contains('term')) {
+          if (param.toLowerCase().contains('term')) {
+            displayTitle = 'Terms & Conditions';
             text = LegalTexts.termsOfService;
-          } else if (title.toLowerCase().contains('content')) {
+          } else if (param.toLowerCase().contains('content')) {
+            displayTitle = 'Content Policy';
             text = LegalTexts.contentPolicy;
-          } else if (title.toLowerCase().contains('privacy')) {
+          } else if (param.toLowerCase().contains('privacy')) {
+            displayTitle = 'Privacy Policy';
             text = LegalTexts.privacyPolicy;
           }
-          return LegalDocumentScreen(title: title, content: text);
+          return LegalDocumentScreen(title: displayTitle, content: text);
         },
       ),
       GoRoute(
