@@ -85,7 +85,7 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
       'subtitle': '9-12 seater • Executive group transit',
       'capacity': '9-12 seats',
       'price': 'Route estimate',
-      'image': 'assets/images/winger.jpg',
+      'image': 'assets/images/winger_tata.jpg',
       'fallbackIcon': Icons.directions_bus_rounded,
     },
     {
@@ -95,18 +95,8 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
       'subtitle': '12 seater • Group travel',
       'capacity': '12 seats',
       'price': 'Route estimate',
-      'image': 'assets/images/force_urbania.jpg',
+      'image': 'assets/images/force_traveller_van.jpg',
       'fallbackIcon': Icons.airport_shuttle_rounded,
-    },
-    {
-      'title': 'Mini / Commercial',
-      'category': 'mini_commercial',
-      'filter': 'Car',
-      'subtitle': '3-4 seater • City passenger commercial',
-      'capacity': '3-4 seats',
-      'price': 'Route estimate',
-      'image': 'assets/images/mini_commercial.jpg',
-      'fallbackIcon': Icons.local_shipping_outlined,
     },
   ];
 

@@ -1391,7 +1391,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
             'category': 'winger',
             'capacity': '9-12 seats',
             'icon': Icons.directions_bus_rounded,
-            'image': 'assets/images/winger.jpg',
+            'image': 'assets/images/winger_tata.jpg',
           },
           {
             'name': 'Mini Commercial',
@@ -1817,13 +1817,13 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
       return 'assets/images/scorpio_n_white.png';
     }
     if (cat.contains('winger') || name.contains('winger')) {
-      return 'assets/images/winger.jpg';
+      return 'assets/images/winger_tata.jpg';
     }
     if (cat.contains('traveller') ||
         name.contains('traveller') ||
         cat.contains('urbania') ||
         name.contains('urbania')) {
-      return 'assets/images/force_urbania.jpg';
+      return 'assets/images/force_traveller_van.jpg';
     }
     if (cat.contains('towing') ||
         name.contains('towing') ||

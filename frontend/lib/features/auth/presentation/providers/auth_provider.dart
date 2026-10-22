@@ -6,7 +6,6 @@ import '../../../../core/services/socket_service.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/storage/secure_storage.dart';
 import '../../data/models/auth_models.dart';
-import '../../domain/entities/user.dart';
 import 'auth_use_case_providers.dart';
 import 'user_provider.dart';
 

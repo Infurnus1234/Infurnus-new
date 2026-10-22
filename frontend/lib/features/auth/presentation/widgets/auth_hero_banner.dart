@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 /// Photo-realistic Auth Hero Banner using the Infurnus promotional image.
-/// Uses BoxFit.contain so the complete promotional background, heading,
-/// tagline, phone mockup, and feature cards are never cropped.
+/// Uses BoxFit.cover with top alignment to fill the full available screen width
+/// without black side margins while keeping the artwork prominent.
 class AuthHeroBanner extends StatelessWidget {
   const AuthHeroBanner({super.key});
 
@@ -12,13 +12,12 @@ class AuthHeroBanner extends StatelessWidget {
       builder: (context, constraints) {
         final heroHeight = constraints.maxHeight;
 
-        return Container(
+        return SizedBox(
           width: double.infinity,
           height: heroHeight,
-          color: Colors.black,
           child: Image.asset(
             'assets/images/login_hero_banner.jpg',
-            fit: BoxFit.contain,
+            fit: BoxFit.cover,
             alignment: Alignment.topCenter,
             errorBuilder: (_, __, ___) => _FallbackHeroBanner(height: heroHeight),
           ),

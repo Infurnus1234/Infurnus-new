@@ -111,12 +111,12 @@ class VehicleVisualImage extends StatelessWidget {
       return 'assets/images/ambulance_van.png';
     }
     if (key.contains('winger')) {
-      return 'assets/images/winger.jpg';
+      return 'assets/images/winger_tata.jpg';
     }
     if (key.contains('traveller') ||
         key.contains('urbania') ||
         key.contains('van')) {
-      return 'assets/images/force_urbania.jpg';
+      return 'assets/images/force_traveller_van.jpg';
     }
     if (key.contains('hatchback') ||
         key.contains('compact') ||
