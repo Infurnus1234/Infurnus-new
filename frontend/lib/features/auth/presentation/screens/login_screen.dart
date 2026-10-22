@@ -47,27 +47,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final totalHeight = constraints.maxHeight;
-            // Proportioned heights to fit everything on one screen without scrolling
-            final heroHeight = totalHeight * 0.44;
-            final panelHeight = totalHeight - heroHeight;
+            final h = constraints.maxHeight;
 
-            return Column(
+            return Stack(
               children: [
-                // ── TOP: Promotional hero banner ──
-                SizedBox(
-                  height: heroHeight,
+                // ── TOP: Promotional background image via Stack/Positioned ──
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: h * 0.54,
                   child: const AuthHeroBanner(),
                 ),
 
-                // ── BOTTOM: White rounded login panel ──
-                SizedBox(
-                  height: panelHeight,
+                // ── BOTTOM: White rounded login panel with controlled overlap ──
+                Positioned(
+                  top: h * 0.48,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
                   child: Container(
-                    width: double.infinity,
                     decoration: const BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                      borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
                       boxShadow: [
                         BoxShadow(
                           color: Color(0x33000000),
@@ -76,7 +78,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ),
                       ],
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       crossAxisAlignment: CrossAxisAlignment.start,
