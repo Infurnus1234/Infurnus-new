@@ -185,7 +185,7 @@ class UiKitPresentationBoardScreen extends ConsumerWidget {
                               child: const Row(
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,
-                                children: const [
+                                children: [
                                   Text(
                                     '9:41',
                                     style: TextStyle(

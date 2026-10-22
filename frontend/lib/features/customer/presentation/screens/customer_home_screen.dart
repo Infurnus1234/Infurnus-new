@@ -477,7 +477,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
           children: [
             Container(
               padding: const EdgeInsets.all(7),
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: brandGreenGlow,
                 shape: BoxShape.circle,
               ),
@@ -1081,7 +1081,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
             ),
             Container(
               padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: brandGreenGlow,
                 shape: BoxShape.circle,
               ),
@@ -1235,7 +1235,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(top: BorderSide(color: borderDim, width: 1)),
+        border: const Border(top: BorderSide(color: borderDim, width: 1)),
         boxShadow: [
           BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 16, offset: const Offset(0, -3)),
         ],
@@ -1395,8 +1395,8 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                             avatar: Icon(dest['icon'] as IconData, size: 14, color: brandGreen),
                             label: Text(dest['label'] as String, style: const TextStyle(fontSize: 11, color: textWhite)),
                             backgroundColor: bgSurface,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(18),
+                            shape: const RoundedRectangleBorder(
+                              borderRadius: BorderRadius.all(Radius.circular(18)),
                               side: BorderSide(color: borderDim),
                             ),
                             onPressed: () {
