@@ -58,7 +58,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   final notifier = ref.read(routerNotifierProvider);
 
   return GoRouter(
-    initialLocation: '/login',
+    initialLocation: '/customer-home',
     refreshListenable: notifier,
     routes: [
       GoRoute(
@@ -183,32 +183,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
     ],
     redirect: (context, state) {
-      final status = notifier.status;
-
-      final isAuthFlow =
-          state.matchedLocation == '/welcome' ||
-          state.matchedLocation == '/onboarding' ||
-          state.matchedLocation == '/login' ||
-          state.matchedLocation == '/forgot-password' ||
-          state.matchedLocation == '/otp' ||
-          state.matchedLocation == '/signup' ||
-          state.matchedLocation == '/location-permission' ||
-          state.matchedLocation == '/notifications-permission' ||
-          state.matchedLocation == '/setup-complete';
-      final isSplash = state.matchedLocation == '/splash';
-
-      if (status == AuthStatus.initial) return isSplash ? null : '/splash';
-
-      if (status == AuthStatus.unauthenticated) {
-        return isAuthFlow ? null : '/login';
-      }
-
-      if (status == AuthStatus.authenticated) {
-        if (isAuthFlow || isSplash) {
-          return authHomeRoute(ref.read(userProvider)?.role);
-        }
-      }
-
+      // Direct testing mode: Allow unrestricted access to dashboard & all screens
       return null;
     },
   );

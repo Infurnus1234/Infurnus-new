@@ -2,7 +2,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/user.dart';
 
 class UserNotifier extends StateNotifier<User?> {
-  UserNotifier() : super(null);
+  UserNotifier()
+      : super(
+          User(
+            id: 'dev-customer-id',
+            firstName: 'Abhishek',
+            lastName: 'Arjun',
+            email: 'abhishek@infurnus.com',
+            phone: '+919876543210',
+            role: 'customer',
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          ),
+        );
 
   void setUser(User user) {
     state = user;
