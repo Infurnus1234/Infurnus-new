@@ -91,12 +91,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       if (!mounted) return;
 
       if (onboardingDone == 'true') {
-        context.go('/welcome');
+        context.go('/login');
       } else {
-        context.go('/onboarding');
+        context.go('/login');
       }
     } catch (_) {
-      if (mounted) context.go('/welcome');
+      if (mounted) context.go('/login');
     }
   }
 

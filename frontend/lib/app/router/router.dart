@@ -58,7 +58,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   final notifier = ref.read(routerNotifierProvider);
 
   return GoRouter(
-    initialLocation: '/splash',
+    initialLocation: '/login',
     refreshListenable: notifier,
     routes: [
       GoRoute(
@@ -200,7 +200,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (status == AuthStatus.initial) return isSplash ? null : '/splash';
 
       if (status == AuthStatus.unauthenticated) {
-        return isAuthFlow ? null : '/welcome';
+        return isAuthFlow ? null : '/login';
       }
 
       if (status == AuthStatus.authenticated) {
