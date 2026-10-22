@@ -2,7 +2,7 @@
 
 The user explicitly approved registering `infurnuslogistics.com` on 18 October 2026. The domain entry was created in the existing Resend account. It is not yet verified; no DNS records have been published by this task.
 
-Dashboard: https://resend.com/domains/add/096023aa-54e0-4cd7-bfba-1233c5b4d60d
+Dashboard: https://resend.com/domains/add/[evidence ID redacted]
 
 The following values were read from this domain's actual Resend manual-setup page. Use these account-specific records rather than generic examples. TTL is Auto.
 
