@@ -65,3 +65,8 @@ frontend/android/debug-dependencies.txt
 *.apk
 *.aab
 *.log
+
+# Service-account and private credential exports
+**/service-account*.json
+**/serviceAccount*.json
+**/firebase-adminsdk*.json
