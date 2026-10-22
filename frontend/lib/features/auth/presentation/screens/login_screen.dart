@@ -47,13 +47,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // ── TOP: Dedicated compact promotional banner (Non-overlapping) ──
+            // ── TOP: Original promotional poster header ──
             const SizedBox(
-              height: 145,
+              height: 200,
               child: AuthHeroBanner(),
             ),
 
-            // ── BOTTOM: White rounded login panel positioned directly below ──
+            // ── BOTTOM: White rounded login panel positioned below ──
             Expanded(
               child: Container(
                 width: double.infinity,
@@ -68,7 +68,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ],
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   crossAxisAlignment: CrossAxisAlignment.start,
