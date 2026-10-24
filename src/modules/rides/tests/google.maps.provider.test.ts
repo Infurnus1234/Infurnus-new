@@ -9,6 +9,7 @@ vi.mock('../../../config/env.js', async (importOriginal) => {
       ...actual.env,
       GOOGLE_MAPS_API_KEY: 'non-secret-default-key',
       GOOGLE_REQUEST_TIMEOUT_MS: 20,
+      GOOGLE_PLACES_MIN_QUERY_LENGTH: 1,
     },
   };
 });

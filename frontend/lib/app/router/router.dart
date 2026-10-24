@@ -7,7 +7,7 @@ import '../../features/onboarding/presentation/screens/onboarding_screen.dart';
 import '../../features/auth/presentation/screens/welcome_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/password_recovery_screen.dart';
-// SignupScreen is no longer needed — /signup redirects to /login combined screen
+import '../../features/auth/presentation/screens/signup_screen.dart';
 
 import '../../features/auth/presentation/screens/otp_screen.dart';
 import '../../features/auth/presentation/screens/location_permission_screen.dart';
@@ -56,7 +56,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   final notifier = ref.read(routerNotifierProvider);
 
   return GoRouter(
-    initialLocation: '/customer-home',
+    initialLocation: '/splash',
     refreshListenable: notifier,
     routes: [
       GoRoute(
@@ -86,7 +86,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           initialEmail: state.extra is String ? state.extra as String : '',
         ),
       ),
-      GoRoute(path: '/signup', redirect: (context, state) => '/login'),
+      GoRoute(
+        path: '/signup',
+        builder: (context, state) => const SignupScreen(),
+      ),
       GoRoute(path: '/otp', builder: (context, state) => const OtpScreen()),
       GoRoute(
         path: '/location-permission',
