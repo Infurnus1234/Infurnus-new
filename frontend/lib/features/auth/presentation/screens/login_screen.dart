@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../data/models/auth_models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
+import '../widgets/google_sign_in_button.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -705,7 +706,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           ),
         ],
       ),
-      child: OutlinedButton(
+      child: GoogleSignInButton(
         style: OutlinedButton.styleFrom(
           side: BorderSide.none,
           shape: RoundedRectangleBorder(
@@ -713,13 +714,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           ),
           padding: const EdgeInsets.symmetric(horizontal: 16),
         ),
-        onPressed: isLoading
-            ? null
-            : () {
-                ref
-                    .read(authProvider.notifier)
-                    .signInWithGoogle('dummy-google-token');
-              },
+        enabled: !isLoading,
+        onIdToken: ref.read(authProvider.notifier).signInWithGoogle,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -735,7 +731,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             ),
             const SizedBox(width: 12),
             const Text(
-              'Continue with Google',
+              'Sign in with Google',
               style: TextStyle(
                 fontSize: 15.5,
                 fontWeight: FontWeight.w600,

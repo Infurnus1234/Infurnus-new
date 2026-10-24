@@ -33,6 +33,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
   bool _navigated = false;
   Timer? _safetyTimer;
+  Timer? _delayTimer;
+  Timer? _listenerTimer;
 
   @override
   void initState() {
@@ -114,7 +116,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       // Delay check slightly to let the animation play
-      Future.delayed(const Duration(milliseconds: 2500), () {
+      _delayTimer = Timer(const Duration(milliseconds: 2500), () {
         if (mounted && !_navigated) {
           final currentStatus = ref.read(authProvider).status;
           if (currentStatus != AuthStatus.initial) {
@@ -128,6 +130,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   @override
   void dispose() {
     _safetyTimer?.cancel();
+    _delayTimer?.cancel();
+    _listenerTimer?.cancel();
     _mainController.dispose();
     _pulseController.dispose();
     _particleController.dispose();
@@ -166,7 +170,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     ref.listen<AuthState>(authProvider, (previous, next) {
       if (next.status != AuthStatus.initial && !_navigated) {
         // Give time for animation before navigating
-        Future.delayed(const Duration(milliseconds: 1500), () {
+        _listenerTimer?.cancel();
+        _listenerTimer = Timer(const Duration(milliseconds: 1500), () {
           if (mounted && !_navigated) {
             _handleNavigation(next.status);
           }

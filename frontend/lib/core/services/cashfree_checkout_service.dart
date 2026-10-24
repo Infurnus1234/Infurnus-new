@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_cashfree_pg_sdk/api/cferrorresponse/cferrorresponse.dart';
-import 'package:flutter_cashfree_pg_sdk/api/cfpayment/cfdropcheckoutpayment.dart';
+import 'package:flutter_cashfree_pg_sdk/api/cfpayment/cfwebcheckoutpayment.dart';
 import 'package:flutter_cashfree_pg_sdk/api/cfpaymentgateway/cfpaymentgatewayservice.dart';
 import 'package:flutter_cashfree_pg_sdk/api/cfsession/cfsession.dart';
 import 'package:flutter_cashfree_pg_sdk/utils/cfenums.dart';
@@ -90,8 +90,7 @@ class CashfreePgCheckoutService implements CashfreeCheckoutService {
           .setPaymentSessionId(paymentSessionId)
           .build();
 
-      // ignore: deprecated_member_use
-      final dropCheckout = CFDropCheckoutPaymentBuilder()
+      final dropCheckout = CFWebCheckoutPaymentBuilder()
           .setSession(session)
           .build();
 
