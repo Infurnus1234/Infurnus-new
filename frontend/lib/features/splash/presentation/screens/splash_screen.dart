@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../../core/storage/secure_storage.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_brand_mark.dart';
@@ -77,11 +79,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
     _titleSlideAnimation =
         Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
-      CurvedAnimation(
-        parent: _mainController,
-        curve: const Interval(0.3, 0.65, curve: Curves.easeOutCubic),
-      ),
-    );
+          CurvedAnimation(
+            parent: _mainController,
+            curve: const Interval(0.3, 0.65, curve: Curves.easeOutCubic),
+          ),
+        );
 
     _taglineFadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
@@ -238,12 +240,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                                 child: Image.asset(
                                   'assets/images/infurnus_logo.png',
                                   fit: BoxFit.contain,
-                                  errorBuilder:
-                                      (context, error, stackTrace) =>
-                                          const InfurnusBrandMark(
-                                    iconSize: 84,
-                                    showText: false,
-                                  ),
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      const InfurnusBrandMark(
+                                        iconSize: 84,
+                                        showText: false,
+                                      ),
                                 ),
                               ),
                             ),
@@ -357,14 +358,16 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       final delay = random.nextDouble();
 
       return Positioned(
-        left:
-            MediaQuery.of(context).size.width * startX,
+        left: MediaQuery.of(context).size.width * startX,
         top:
             MediaQuery.of(context).size.height *
             ((startY + _particleController.value * speed * 0.1 + delay) % 1.0),
         child: Opacity(
-          opacity: (0.15 + sin(_particleController.value * pi * 2 + delay * pi * 2) * 0.15)
-              .clamp(0.0, 1.0),
+          opacity:
+              (0.15 +
+                      sin(_particleController.value * pi * 2 + delay * pi * 2) *
+                          0.15)
+                  .clamp(0.0, 1.0),
           child: Container(
             width: size,
             height: size,

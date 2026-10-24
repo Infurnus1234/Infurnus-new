@@ -45,8 +45,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen>
     );
     _slideAnimation =
         Tween<Offset>(begin: const Offset(0, 0.08), end: Offset.zero).animate(
-      CurvedAnimation(parent: _entryController, curve: Curves.easeOutCubic),
-    );
+          CurvedAnimation(parent: _entryController, curve: Curves.easeOutCubic),
+        );
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _entryController,
@@ -76,19 +76,18 @@ class _SignupScreenState extends ConsumerState<SignupScreen>
 
     if (firstName.isEmpty || lastName.isEmpty) {
       setState(
-          () => _validationError = 'Please enter your first and last name.');
+        () => _validationError = 'Please enter your first and last name.',
+      );
       return;
     }
 
     if (_isEmail && _emailController.text.trim().isEmpty) {
-      setState(
-          () => _validationError = 'Please enter a valid email address.');
+      setState(() => _validationError = 'Please enter a valid email address.');
       return;
     }
 
     if (!_isEmail && _phoneController.text.trim().isEmpty) {
-      setState(
-          () => _validationError = 'Please enter a valid phone number.');
+      setState(() => _validationError = 'Please enter a valid phone number.');
       return;
     }
 
@@ -97,7 +96,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen>
 
     if (password.length < 8 || password.length > 128) {
       setState(
-          () => _validationError = 'Password must be 8\u2013128 characters.');
+        () => _validationError = 'Password must be 8\u2013128 characters.',
+      );
       return;
     }
 
@@ -231,8 +231,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen>
                                 borderRadius: BorderRadius.circular(14),
                                 boxShadow: [
                                   BoxShadow(
-                                    color:
-                                        _neonGreen.withValues(alpha: 0.3),
+                                    color: _neonGreen.withValues(alpha: 0.3),
                                     blurRadius: 20,
                                     spreadRadius: 2,
                                   ),
@@ -308,9 +307,21 @@ class _SignupScreenState extends ConsumerState<SignupScreen>
                         ),
                         child: Row(
                           children: [
-                            _roleTab('customer', 'Customer', Icons.person_outline_rounded),
-                            _roleTab('driver', 'Driver', Icons.directions_car_outlined),
-                            _roleTab('partner', 'Partner', Icons.business_outlined),
+                            _roleTab(
+                              'customer',
+                              'Customer',
+                              Icons.person_outline_rounded,
+                            ),
+                            _roleTab(
+                              'driver',
+                              'Driver',
+                              Icons.directions_car_outlined,
+                            ),
+                            _roleTab(
+                              'partner',
+                              'Partner',
+                              Icons.business_outlined,
+                            ),
                           ],
                         ),
                       ),
@@ -420,7 +431,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen>
                             size: 20,
                           ),
                           onPressed: () => setState(
-                              () => _obscurePassword = !_obscurePassword),
+                            () => _obscurePassword = !_obscurePassword,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -438,7 +450,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen>
                             size: 20,
                           ),
                           onPressed: () => setState(
-                              () => _obscureConfirm = !_obscureConfirm),
+                            () => _obscureConfirm = !_obscureConfirm,
+                          ),
                         ),
                       ),
 
@@ -554,10 +567,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen>
                               borderRadius: BorderRadius.circular(27),
                             ),
                           ),
-                          onPressed:
-                              authState.status == AuthStatus.loading
-                                  ? null
-                                  : _handleSignup,
+                          onPressed: authState.status == AuthStatus.loading
+                              ? null
+                              : _handleSignup,
                           child: authState.status == AuthStatus.loading
                               ? const SizedBox(
                                   width: 22,
@@ -609,8 +621,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen>
                             ),
                           ),
                           Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 16),
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
                             child: Text(
                               'OR',
                               style: TextStyle(
@@ -799,8 +810,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen>
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                  color:
-                      isSelected ? Colors.white : const Color(0xFF6B7280),
+                  color: isSelected ? Colors.white : const Color(0xFF6B7280),
                 ),
               ),
             ],
@@ -862,10 +872,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen>
                 hintText: 'Enter Phone Number',
                 border: InputBorder.none,
                 isDense: true,
-                hintStyle: TextStyle(
-                  color: Color(0xFFBBBBBB),
-                  fontSize: 15,
-                ),
+                hintStyle: TextStyle(color: Color(0xFFBBBBBB), fontSize: 15),
               ),
               style: const TextStyle(
                 fontSize: 15,
@@ -908,8 +915,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen>
           suffixIcon: suffixIcon,
           border: InputBorder.none,
           isDense: true,
-          hintStyle:
-              const TextStyle(color: Color(0xFFBBBBBB), fontSize: 15),
+          hintStyle: const TextStyle(color: Color(0xFFBBBBBB), fontSize: 15),
         ),
         style: const TextStyle(
           fontSize: 15,

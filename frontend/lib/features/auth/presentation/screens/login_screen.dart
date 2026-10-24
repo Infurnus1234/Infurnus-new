@@ -34,10 +34,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       vsync: this,
       duration: const Duration(milliseconds: 600),
     );
-    _sheetSlide =
-        Tween<Offset>(begin: const Offset(0, 0.15), end: Offset.zero).animate(
-      CurvedAnimation(parent: _sheetController, curve: Curves.easeOutCubic),
-    );
+    _sheetSlide = Tween<Offset>(begin: const Offset(0, 0.15), end: Offset.zero)
+        .animate(
+          CurvedAnimation(parent: _sheetController, curve: Curves.easeOutCubic),
+        );
     _sheetFade = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _sheetController,
@@ -169,8 +169,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                   width: double.infinity,
                   decoration: const BoxDecoration(
                     color: Colors.white,
-                    borderRadius:
-                        BorderRadius.vertical(top: Radius.circular(32)),
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(32),
+                    ),
                     boxShadow: [
                       BoxShadow(
                         color: Color(0x44000000),
@@ -250,8 +251,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(5),
                                   ),
-                                  side:
-                                      const BorderSide(color: _green, width: 2),
+                                  side: const BorderSide(
+                                    color: _green,
+                                    width: 2,
+                                  ),
                                   onChanged: (val) {
                                     setState(() => _rememberMe = val ?? true);
                                   },
@@ -271,7 +274,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                               GestureDetector(
                                 onTap: () {
                                   setState(
-                                      () => _isEmailLogin = !_isEmailLogin);
+                                    () => _isEmailLogin = !_isEmailLogin,
+                                  );
                                 },
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(
@@ -402,8 +406,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                 ),
                               ),
                               Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 16),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
                                 child: Text(
                                   'OR',
                                   style: TextStyle(
@@ -442,8 +447,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             child: GestureDetector(
                               onTap: () => context.push('/signup'),
                               child: Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 6),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 6,
+                                ),
                                 child: RichText(
                                   text: const TextSpan(
                                     style: TextStyle(
@@ -624,7 +630,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(27),
-        border: Border.all(color: _neonGreen.withValues(alpha: 0.5), width: 1.5),
+        border: Border.all(
+          color: _neonGreen.withValues(alpha: 0.5),
+          width: 1.5,
+        ),
         boxShadow: [
           BoxShadow(
             color: _neonGreen.withValues(alpha: 0.25),
@@ -752,8 +761,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             content: const Text('Please enter a valid email address.'),
             backgroundColor: Colors.red.shade600,
             behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
         return;
@@ -770,8 +780,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             content: const Text('Please enter a valid 10-digit phone number.'),
             backgroundColor: Colors.red.shade600,
             behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         );
         return;
