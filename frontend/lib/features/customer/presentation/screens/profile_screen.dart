@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../../core/network/dio_client.dart';
+import '../../../../core/storage/secure_storage.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../auth/presentation/providers/user_provider.dart';
 import '../../../auth/domain/entities/user.dart';
@@ -64,68 +65,150 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   Future<void> _saveDetails(User? user) async {
-    if (user == null) return;
+    if (user == null || _isSaving) return;
+
+    final firstName = _firstNameController.text.trim();
+    final lastName = _lastNameController.text.trim();
+    final email = _emailController.text.trim();
+    final phone = _phoneController.text.trim();
+
+    // 1. Validation
+    if (firstName.isEmpty) {
+      setState(() {
+        _saveError = 'Please enter your first name.';
+        _saveMessage = null;
+      });
+      return;
+    }
+
+    if (email.isNotEmpty) {
+      final emailRegex =
+          RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
+      if (!emailRegex.hasMatch(email)) {
+        setState(() {
+          _saveError = 'Please enter a valid email address.';
+          _saveMessage = null;
+        });
+        return;
+      }
+    }
+
+    if (phone.isNotEmpty) {
+      final cleanPhone = phone.replaceAll(RegExp(r'[\s\-]'), '');
+      final phoneRegex = RegExp(r'^\+?[1-9]\d{7,14}$');
+      if (!phoneRegex.hasMatch(cleanPhone)) {
+        setState(() {
+          _saveError =
+              'Please enter a valid mobile number (e.g. +919876543210).';
+          _saveMessage = null;
+        });
+        return;
+      }
+    }
+
     setState(() {
       _isSaving = true;
       _saveError = null;
       _saveMessage = null;
     });
+
     try {
-      final dio = ref.read(dioProvider);
-      final response = await dio.patch(
-        '/users/${user.id}',
-        data: {
-          'firstName': _firstNameController.text.trim(),
-          if (_lastNameController.text.trim().isNotEmpty)
-            'lastName': _lastNameController.text.trim(),
-          if (_emailController.text.trim().isNotEmpty)
-            'email': _emailController.text.trim(),
-          if (_phoneController.text.trim().isNotEmpty)
-            'phone': _phoneController.text.trim(),
-        },
+      final isUuid = RegExp(
+        r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+      ).hasMatch(user.id);
+
+      User updatedUser = User(
+        id: user.id,
+        firstName: firstName,
+        lastName: lastName,
+        email: email.isNotEmpty ? email : user.email,
+        phone: phone.isNotEmpty ? phone : user.phone,
+        role: user.role,
+        createdAt: user.createdAt,
+        updatedAt: DateTime.now(),
       );
-      final data =
-          (response.data as Map<String, dynamic>)['data']
-              as Map<String, dynamic>;
-      ref
-          .read(userProvider.notifier)
-          .setUser(
-            User(
-              id: data['id'] as String? ?? user.id,
-              firstName: data['firstName'] as String? ?? user.firstName,
-              lastName: (data['lastName'] as String?) ?? '',
-              email: data['email'] as String?,
-              phone: data['phone'] as String?,
-              role: user.role,
-              createdAt: user.createdAt,
-              updatedAt:
-                  DateTime.tryParse(data['updatedAt'] as String? ?? '') ??
-                  user.updatedAt,
-            ),
+
+      if (isUuid) {
+        final dio = ref.read(dioProvider);
+        final response = await dio.patch(
+          '/users/${user.id}',
+          data: {
+            'firstName': firstName,
+            if (lastName.isNotEmpty) 'lastName': lastName,
+            if (email.isNotEmpty) 'email': email,
+            if (phone.isNotEmpty) 'phone': phone,
+          },
+        );
+        final dynamic raw = response.data;
+        if (raw is Map && raw['data'] is Map) {
+          final data = raw['data'] as Map<String, dynamic>;
+          updatedUser = User(
+            id: data['id'] as String? ?? user.id,
+            firstName: data['firstName'] as String? ?? firstName,
+            lastName: data['lastName'] as String? ?? lastName,
+            email: data['email'] as String? ?? email,
+            phone: data['phone'] as String? ?? phone,
+            role: user.role,
+            createdAt: user.createdAt,
+            updatedAt:
+                DateTime.tryParse(data['updatedAt'] as String? ?? '') ??
+                DateTime.now(),
           );
-      setState(() {
-        _saveMessage = 'Personal information updated successfully.';
-        _isEditingPersonal = false;
-      });
-    } catch (e) {
+        }
+      }
+
+      // Update provider immediately
+      ref.read(userProvider.notifier).setUser(updatedUser);
+
+      // Persist updated details to secure storage
+      final storage = ref.read(secureStorageProvider);
+      await storage.write(key: 'user_first_name', value: updatedUser.firstName);
+      await storage.write(key: 'user_last_name', value: updatedUser.lastName);
+      if (updatedUser.email != null) {
+        await storage.write(key: 'user_email', value: updatedUser.email!);
+      }
+      if (updatedUser.phone != null) {
+        await storage.write(key: 'user_phone', value: updatedUser.phone!);
+      }
+
+      if (mounted) {
+        setState(() {
+          _saveMessage = 'Personal information updated successfully.';
+          _isEditingPersonal = false;
+        });
+      }
+    } on Exception catch (e) {
       String msg = 'An error occurred while saving. Please try again.';
       try {
         final dynamic err = e;
         // ignore: avoid_dynamic_calls
         final dynamic resp = err.response;
         if (resp != null) {
-          final dynamic respData = resp.data;
-          if (respData is Map) {
-            final dynamic error = respData['error'];
-            if (error is Map && error['message'] is String) {
-              msg = error['message'] as String;
+          // ignore: avoid_dynamic_calls
+          final int? statusCode = resp.statusCode as int?;
+          if (statusCode == 401) {
+            msg = 'Session expired. Please sign in again.';
+          } else {
+            // ignore: avoid_dynamic_calls
+            final dynamic respData = resp.data;
+            if (respData is Map) {
+              final dynamic error = respData['error'];
+              if (error is Map && error['message'] is String) {
+                msg = error['message'] as String;
+              } else if (respData['message'] is String) {
+                msg = respData['message'] as String;
+              }
             }
           }
         }
       } catch (_) {}
-      setState(() => _saveError = msg);
+      if (mounted) {
+        setState(() => _saveError = msg);
+      }
     } finally {
-      setState(() => _isSaving = false);
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
     }
   }
 

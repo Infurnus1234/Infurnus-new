@@ -192,10 +192,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
             decoration: const BoxDecoration(
               gradient: RadialGradient(
                 center: Alignment(0, -0.15),
-                radius: 1.1,
+                radius: 1.15,
                 colors: [
-                  Color(0xFF0A1F12),
-                  Color(0xFF050E08),
+                  Color(0xFF042F1A),
+                  Color(0xFF02170D),
                   Color(0xFF000000),
                 ],
               ),
@@ -221,27 +221,29 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                             child: Container(
                               width: 130,
                               height: 130,
+                              padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                shape: BoxShape.circle,
+                                color: Colors.black,
+                                borderRadius: BorderRadius.circular(28),
                                 boxShadow: [
                                   BoxShadow(
                                     color: AppColors.emeraldNeon.withValues(
                                       alpha: _glowAnimation.value,
                                     ),
-                                    blurRadius: 60,
-                                    spreadRadius: 8,
+                                    blurRadius: 50,
+                                    spreadRadius: 6,
                                   ),
                                   BoxShadow(
                                     color: AppColors.emeraldNeon.withValues(
                                       alpha: _glowAnimation.value * 0.3,
                                     ),
-                                    blurRadius: 100,
-                                    spreadRadius: 20,
+                                    blurRadius: 90,
+                                    spreadRadius: 16,
                                   ),
                                 ],
                               ),
                               child: ClipRRect(
-                                borderRadius: BorderRadius.circular(28),
+                                borderRadius: BorderRadius.circular(18),
                                 child: Image.asset(
                                   'assets/images/infurnus_logo.png',
                                   fit: BoxFit.contain,

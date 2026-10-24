@@ -84,22 +84,14 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
           _isLoadingFleet = false;
         });
         final rideState = ref.read(rideProvider);
-        if (fleet.isNotEmpty &&
-            !fleet.any(
-              (vehicle) => vehicle.category == rideState.selectedTier,
-            )) {
+        if (rideState.selectedTier.isEmpty && fleet.isNotEmpty) {
           ref.read(rideProvider.notifier).selectTier(fleet.first.category);
         }
       }
     } catch (error) {
       if (mounted) {
         setState(() => _isLoadingFleet = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(error.toString()),
-            backgroundColor: serviceRed,
-          ),
-        );
+        debugPrint('Fleet fetch fallback to catalog: $error');
       }
     }
   }
@@ -825,12 +817,8 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
           RouteDistanceSummary(route: state.currentRoute!),
         const SizedBox(height: 12),
 
-        // Sector Switcher Tabs
-        _buildSectorPills(state),
-        const SizedBox(height: 12),
-
-        // Vehicle Category Cards
-        _buildVehicleTierCards(state),
+        // Selected Vehicle Summary (set from dashboard — no catalogue repeated here)
+        _buildSelectedVehicleChip(state),
         const SizedBox(height: 14),
 
         // Sector-specific options
@@ -1209,52 +1197,66 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
     );
   }
 
+  bool _isTierMatching(String selectedTier, String category, int index) {
+    if (selectedTier.isEmpty) return index == 0;
+    final s = selectedTier.toLowerCase().trim();
+    final c = category.toLowerCase().trim();
+    if (s == c) return true;
+    if (s == 'innova crysta' && c == 'innova') return true;
+    if (s == 'force traveller' &&
+        (c == 'traveller' || c == 'force_traveller')) {
+      return true;
+    }
+    if ((s == '207 cargo' || s == '207 heavy' || s == 'cargo_207_heavy') &&
+        (c == 'cargo_207' || c == 'cargo_207_heavy')) {
+      return true;
+    }
+    if ((s == '407 cargo' || s == 'tata_407') &&
+        (c == 'cargo_407' || c == 'tata_407')) {
+      return true;
+    }
+    if ((s == 'piaggio ape' || s == 'three_wheeler') &&
+        (c == 'piaggio_ape' || c == 'three_wheeler')) {
+      return true;
+    }
+    if ((s == 'tata magic' || s == 'mini_truck') &&
+        (c == 'tata_magic' || c == 'mini_truck')) {
+      return true;
+    }
+    return false;
+  }
+
   List<Map<String, dynamic>> _getVehiclesForSector(String sector) {
     switch (sector.toLowerCase()) {
       case 'logistics':
         return [
           {
             'name': 'Piaggio Ape',
-            'category': 'three_wheeler',
+            'category': 'piaggio_ape',
             'capacity': 'Up to 500 kg',
-            'icon': Icons.electric_rickshaw_rounded,
-            'image': 'assets/images/mini_commercial.jpg',
+            'icon': Icons.local_shipping_outlined,
+            'image': 'assets/images/piaggio_ape_yellow.png',
           },
           {
             'name': 'Tata Magic',
-            'category': 'mini_truck',
+            'category': 'tata_magic',
             'capacity': 'Up to 750 kg',
             'icon': Icons.local_shipping_rounded,
             'image': 'assets/images/tata_magic_cream.png',
           },
-
           {
-            'name': '207 Heavy',
-            'category': 'cargo_207_heavy',
-            'capacity': 'Up to 1200 kg',
+            'name': '207 Cargo',
+            'category': 'cargo_207',
+            'capacity': 'Up to 1500 kg',
             'icon': Icons.local_shipping_rounded,
             'image': 'assets/images/cargo_207_heavy.png',
           },
           {
             'name': '407 Cargo',
-            'category': 'tata_407',
+            'category': 'cargo_407',
             'capacity': 'Up to 2500 kg',
             'icon': Icons.local_shipping_rounded,
             'image': 'assets/images/cargo_407.jpg',
-          },
-          {
-            'name': 'Mini Truck',
-            'category': 'mini_truck',
-            'capacity': 'Up to 2000 kg',
-            'icon': Icons.local_shipping_rounded,
-            'image': 'assets/images/mini_truck.jpg',
-          },
-          {
-            'name': 'E-Rickshaw Cargo',
-            'category': 'e_rickshaw',
-            'capacity': 'Up to 400 kg',
-            'icon': Icons.electric_rickshaw_rounded,
-            'image': 'assets/images/e_rickshaw_green_white.png',
           },
         ];
       case 'service':
@@ -1279,13 +1281,6 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
             'capacity': 'Construction',
             'icon': Icons.construction_rounded,
             'image': 'assets/images/jcb_excavator.jpg',
-          },
-          {
-            'name': 'Road Roller',
-            'category': 'road_roller',
-            'capacity': 'Compaction',
-            'icon': Icons.construction_rounded,
-            'image': 'assets/images/road_roller.jpg',
           },
           {
             'name': 'Crane',
@@ -1360,17 +1355,10 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
             'image': 'assets/images/sedan.jpg',
           },
           {
-            'name': 'SUV',
-            'category': 'suv',
-            'capacity': '6 seats',
-            'icon': Icons.directions_car_filled_rounded,
-            'image': 'assets/images/scorpio_n_white.png',
-          },
-          {
             'name': 'Innova Crysta',
             'category': 'innova',
-            'capacity': '7 seats',
-            'icon': Icons.airport_shuttle_rounded,
+            'capacity': '6-7 seats',
+            'icon': Icons.directions_car_filled_rounded,
             'image': 'assets/images/innova_crysta.jpg',
           },
           {
@@ -1381,217 +1369,133 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
             'image': 'assets/images/winger_tata.jpg',
           },
           {
-            'name': 'Mini Commercial',
-            'category': 'mini_commercial',
-            'capacity': '3-4 seats',
-            'icon': Icons.local_shipping_outlined,
-            'image': 'assets/images/mini_commercial.jpg',
+            'name': 'Force Traveller',
+            'category': 'traveller',
+            'capacity': '12 seats',
+            'icon': Icons.airport_shuttle_rounded,
+            'image': 'assets/images/force_urbania.jpg',
           },
         ];
     }
   }
 
-  Widget _buildSectorPills(RideState state) {
-    final sectors = [
-      {
-        'id': 'passenger',
-        'label': 'Rides',
-        'icon': Icons.directions_car_rounded,
-      },
-      {
-        'id': 'logistics',
-        'label': 'Logistics',
-        'icon': Icons.local_shipping_rounded,
-      },
-      {'id': 'service', 'label': 'Emergency', 'icon': Icons.emergency_rounded},
-      {'id': 'premium', 'label': 'Rentals', 'icon': Icons.stars_rounded},
-    ];
+  /// Compact chip showing which vehicle/service the customer already selected
+  /// on the dashboard — no sector tabs, no full catalogue repeated here.
+  Widget _buildSelectedVehicleChip(RideState state) {
+    final vehicles = _getVehiclesForSector(state.selectedSector);
+    final selected = vehicles.firstWhere(
+      (v) => _isTierMatching(state.selectedTier, v['category'] as String, 0),
+      orElse: () => vehicles.isNotEmpty ? vehicles.first : <String, dynamic>{},
+    );
 
-    return SizedBox(
-      height: 38,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: sectors.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final sec = sectors[index];
-          final isSelected = state.selectedSector == sec['id'];
-          return GestureDetector(
-            onTap: () {
-              ref.read(rideProvider.notifier).selectSector(sec['id'] as String);
-              final sectorVehicles = _getVehiclesForSector(sec['id'] as String);
-              if (sectorVehicles.isNotEmpty) {
-                ref
-                    .read(rideProvider.notifier)
-                    .selectTier(sectorVehicles.first['category'] as String);
-              }
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: isSelected ? const Color(0xFF111827) : Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: isSelected
-                      ? const Color(0xFF111827)
-                      : const Color(0xFFE5E7EB),
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    sec['icon'] as IconData,
-                    size: 16,
-                    color: isSelected
-                        ? const Color(0xFF16A34A)
-                        : const Color(0xFF4B5563),
+    if (selected.isEmpty) return const SizedBox.shrink();
+
+    final sectorLabel = {
+          'passenger': 'Rides',
+          'logistics': 'Logistics',
+          'service': 'Emergency',
+          'premium': 'Rentals',
+        }[state.selectedSector] ??
+        'Ride';
+
+    final String fareBadge;
+    if (state.isEstimatingFare) {
+      fareBadge = 'Calculating…';
+    } else if (state.fareEstimate != null) {
+      fareBadge = state.fareEstimate!.displayFare;
+    } else {
+      fareBadge = selected['capacity'] as String? ?? '';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0FDF4),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF16A34A).withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          // Vehicle thumbnail
+          SizedBox(
+            width: 52,
+            height: 40,
+            child: selected['image'] != null
+                ? Image.asset(
+                    selected['image'] as String,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => Icon(
+                      selected['icon'] as IconData,
+                      size: 28,
+                      color: const Color(0xFF16A34A),
+                    ),
+                  )
+                : Icon(
+                    selected['icon'] as IconData,
+                    size: 28,
+                    color: const Color(0xFF16A34A),
                   ),
-                  const SizedBox(width: 6),
-                  Text(
-                    sec['label'] as String,
+          ),
+          const SizedBox(width: 12),
+          // Name + sector
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  selected['name'] as String,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+                Text(
+                  sectorLabel,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF6B7280),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Fare / capacity badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: state.fareEstimate != null
+                  ? const Color(0xFF16A34A)
+                  : const Color(0xFFE5E7EB),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: state.isEstimatingFare
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Color(0xFF16A34A),
+                    ),
+                  )
+                : Text(
+                    fareBadge,
                     style: TextStyle(
                       fontSize: 12,
-                      fontWeight: isSelected
-                          ? FontWeight.bold
-                          : FontWeight.w600,
-                      color: isSelected
-                          ? Colors.white
-                          : const Color(0xFF111827),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildVehicleTierCards(RideState state) {
-    final tiers = _getVehiclesForSector(state.selectedSector);
-    final hasLocations =
-        state.pickupCoords != null &&
-        state.destinationCoords != null &&
-        _pickupController.text.trim().isNotEmpty &&
-        _destinationController.text.trim().isNotEmpty;
-
-    return SizedBox(
-      height: 104,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: tiers.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
-        itemBuilder: (context, index) {
-          final tier = tiers[index];
-          final category = tier['category'] as String;
-          final isSelected =
-              state.selectedTier == category ||
-              (state.selectedTier.isEmpty && index == 0);
-
-          String badgeText;
-          if (!hasLocations) {
-            badgeText = tier['capacity'] as String;
-          } else if (isSelected) {
-            if (state.isEstimatingFare) {
-              badgeText = 'Calculating...';
-            } else if (state.fareEstimate != null) {
-              badgeText = state.fareEstimate!.displayFare;
-            } else if (state.errorMessage != null) {
-              badgeText = 'Retry';
-            } else {
-              badgeText = tier['capacity'] as String;
-            }
-          } else {
-            badgeText = tier['capacity'] as String;
-          }
-
-          return GestureDetector(
-            onTap: () {
-              ref.read(rideProvider.notifier).selectTier(category);
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 100,
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-              decoration: BoxDecoration(
-                color: isSelected ? const Color(0xFFF0FDF4) : Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: isSelected
-                      ? const Color(0xFF16A34A)
-                      : const Color(0xFFE5E7EB),
-                  width: isSelected ? 2 : 1,
-                ),
-                boxShadow: isSelected
-                    ? [
-                        BoxShadow(
-                          color: const Color(0xFF16A34A)
-                              .withValues(alpha: 0.15),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ]
-                    : null,
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: tier['image'] != null
-                        ? Image.asset(
-                            tier['image'] as String,
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) => Icon(
-                              tier['icon'] as IconData,
-                              size: 26,
-                              color: const Color(0xFF111827),
-                            ),
-                          )
-                        : Icon(
-                            tier['icon'] as IconData,
-                            size: 26,
-                            color: const Color(0xFF111827),
-                          ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    tier['name'] as String,
-                    style: const TextStyle(
-                      fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF111827),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      badgeText,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: isSelected && state.fareEstimate != null
-                            ? FontWeight.bold
-                            : FontWeight.w600,
-                        color: isSelected && state.fareEstimate != null
-                            ? const Color(0xFF16A34A)
-                            : (isSelected
-                                  ? const Color(0xFF111827)
-                                  : const Color(0xFF6B7280)),
-                      ),
+                      color: state.fareEstimate != null
+                          ? Colors.white
+                          : const Color(0xFF374151),
                     ),
                   ),
-                ],
-              ),
-            ),
-          );
-        },
+          ),
+        ],
       ),
     );
   }
+
 
   Widget _buildConfirmButton(RideState state) {
     final hasLocations =
@@ -1770,9 +1674,6 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
         name.contains('excavator')) {
       return 'assets/images/jcb_excavator.jpg';
     }
-    if (cat.contains('roller') || name.contains('roller')) {
-      return 'assets/images/road_roller.jpg';
-    }
     if (cat.contains('crane') || name.contains('crane')) {
       return 'assets/images/crane_truck.png';
     }
@@ -1781,14 +1682,6 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
         cat.contains('dump') ||
         name.contains('dump')) {
       return 'assets/images/garbage_dump_truck.png';
-    }
-    if (cat.contains('tuk') || name.contains('tuk')) {
-      return 'assets/images/e_rickshaw_passenger.png';
-    }
-    if (cat.contains('e_rickshaw') ||
-        name.contains('rickshaw') ||
-        name.contains('e-rickshaw')) {
-      return 'assets/images/e_rickshaw_green_white.png';
     }
     if (cat.contains('bike') || name.contains('bike')) {
       return 'assets/images/bike_motorcycle.png';

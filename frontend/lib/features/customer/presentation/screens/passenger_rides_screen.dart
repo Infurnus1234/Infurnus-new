@@ -15,7 +15,7 @@ class PassengerRidesScreen extends ConsumerStatefulWidget {
 class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
   String _selectedFilter = 'All';
 
-  final List<String> _filters = ['All', 'Bike', 'Auto', 'E-Rickshaw', 'Car'];
+  final List<String> _filters = ['All', 'Bike', 'Auto', 'Car'];
 
   final List<Map<String, dynamic>> _allVehicles = [
     {
@@ -36,16 +36,6 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
       'capacity': '3 seats',
       'price': 'Route estimate',
       'image': 'assets/images/auto_rickshaw.png',
-      'fallbackIcon': Icons.electric_rickshaw_rounded,
-    },
-    {
-      'title': 'E-Rickshaw',
-      'category': 'e-rickshaw',
-      'filter': 'E-Rickshaw',
-      'subtitle': '4 seater • Eco-friendly',
-      'capacity': '4 seats',
-      'price': 'Route estimate',
-      'image': 'assets/images/e_rickshaw_passenger.png',
       'fallbackIcon': Icons.electric_rickshaw_rounded,
     },
     {
@@ -237,12 +227,13 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                         Container(
                           width: 64,
                           height: 52,
+                          padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
                             color: const Color(0xFFF3F4F6),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(8),
                             child: Image.asset(
                               vehicle['image'],
                               fit: BoxFit.contain,

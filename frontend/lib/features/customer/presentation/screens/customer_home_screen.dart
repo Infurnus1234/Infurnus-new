@@ -1280,6 +1280,50 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     );
   }
 
+  String _passengerTierSlug(String title) {
+    switch (title.toLowerCase().trim()) {
+      case 'innova crysta':
+        return 'innova';
+      case 'force traveller':
+        return 'traveller';
+      default:
+        return title.toLowerCase().trim();
+    }
+  }
+
+  String _logisticsTierSlug(String title) {
+    switch (title.toLowerCase().trim()) {
+      case 'piaggio ape':
+        return 'piaggio_ape';
+      case 'tata magic':
+        return 'tata_magic';
+      case '207 cargo':
+      case '207 cargo heavy':
+        return 'cargo_207';
+      case '407 cargo':
+        return 'cargo_407';
+      default:
+        return title.toLowerCase().replaceAll(' ', '_');
+    }
+  }
+
+  String _serviceTierSlug(String title) {
+    switch (title.toLowerCase().trim()) {
+      case 'ambulance':
+        return 'ambulance';
+      case 'towing van':
+        return 'towing';
+      case 'jcb / excavator':
+        return 'jcb';
+      case 'crane':
+        return 'crane';
+      case 'roadside assist':
+        return 'roadside_assist';
+      default:
+        return title.toLowerCase().replaceAll(' ', '_');
+    }
+  }
+
   Widget _buildPassengerSection(BuildContext context) {
     const items = [
       _VehicleCategoryItem(
@@ -1299,15 +1343,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         icon: Icons.electric_rickshaw_rounded,
         category: VehicleCategoryType.auto,
         assetImagePath: 'assets/images/auto_rickshaw.png',
-      ),
-      _VehicleCategoryItem(
-        title: 'E-Rickshaw',
-        capacity: '4 seater',
-        rate: 'Route Estimate',
-        eta: 'Instant',
-        icon: Icons.electric_rickshaw_outlined,
-        category: VehicleCategoryType.auto,
-        assetImagePath: 'assets/images/e_rickshaw_passenger.png',
       ),
       _VehicleCategoryItem(
         title: 'Hatchback',
@@ -1354,15 +1389,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         category: VehicleCategoryType.rides,
         assetImagePath: 'assets/images/force_urbania.jpg',
       ),
-      _VehicleCategoryItem(
-        title: 'Mini / Commercial',
-        capacity: '3-4 seater',
-        rate: 'Route Estimate',
-        eta: 'Instant',
-        icon: Icons.local_shipping_outlined,
-        category: VehicleCategoryType.rides,
-        assetImagePath: 'assets/images/mini_commercial.jpg',
-      ),
     ];
 
     return Column(
@@ -1388,7 +1414,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                   ref.read(rideProvider.notifier).selectSector('passenger');
                   ref
                       .read(rideProvider.notifier)
-                      .selectTier(item.title.toLowerCase());
+                      .selectTier(_passengerTierSlug(item.title));
                   context.push('/ride-booking');
                 },
               );
@@ -1402,13 +1428,13 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
   Widget _buildLogisticsSection(BuildContext context) {
     const items = [
       _VehicleCategoryItem(
-        title: 'Mini / Commercial',
+        title: 'Piaggio Ape',
         capacity: 'Up to 500 kg',
         rate: 'Server Rate',
         eta: 'On-demand',
         icon: Icons.local_shipping_outlined,
         category: VehicleCategoryType.logistics,
-        assetImagePath: 'assets/images/mini_commercial.jpg',
+        assetImagePath: 'assets/images/piaggio_ape_yellow.png',
       ),
       _VehicleCategoryItem(
         title: 'Tata Magic',
@@ -1419,9 +1445,8 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         category: VehicleCategoryType.logistics,
         assetImagePath: 'assets/images/tata_magic_cream.png',
       ),
-
       _VehicleCategoryItem(
-        title: '207 Cargo Heavy',
+        title: '207 Cargo',
         capacity: 'Up to 1500 kg',
         rate: 'Server Rate',
         eta: 'On-demand',
@@ -1434,36 +1459,9 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         capacity: 'Up to 2500 kg',
         rate: 'Server Rate',
         eta: 'On-demand',
-        icon: Icons.directions_bus_outlined,
-        category: VehicleCategoryType.logistics,
-        assetImagePath: 'assets/images/cargo_407.jpg',
-      ),
-      _VehicleCategoryItem(
-        title: 'Mini Truck',
-        capacity: 'Up to 1000 kg',
-        rate: 'Server Rate',
-        eta: 'On-demand',
         icon: Icons.local_shipping_rounded,
         category: VehicleCategoryType.logistics,
-        assetImagePath: 'assets/images/mini_truck.jpg',
-      ),
-      _VehicleCategoryItem(
-        title: 'E-Rickshaw Cargo',
-        capacity: 'Up to 300 kg',
-        rate: 'Server Rate',
-        eta: 'On-demand',
-        icon: Icons.electric_rickshaw_rounded,
-        category: VehicleCategoryType.logistics,
-        assetImagePath: 'assets/images/e_rickshaw_green_white.png',
-      ),
-      _VehicleCategoryItem(
-        title: 'Electric Tuk-Tuk',
-        capacity: 'Up to 350 kg',
-        rate: 'Server Rate',
-        eta: 'On-demand',
-        icon: Icons.electric_rickshaw_outlined,
-        category: VehicleCategoryType.logistics,
-        assetImagePath: 'assets/images/e_rickshaw_passenger.png',
+        assetImagePath: 'assets/images/cargo_407.jpg',
       ),
     ];
 
@@ -1487,7 +1485,13 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
               final item = items[index];
               return _buildHorizontalVehicleCard(
                 item: item,
-                onTap: () => context.push('/logistics'),
+                onTap: () {
+                  ref.read(rideProvider.notifier).selectSector('logistics');
+                  ref
+                      .read(rideProvider.notifier)
+                      .selectTier(_logisticsTierSlug(item.title));
+                  context.push('/ride-booking');
+                },
               );
             },
           ),
@@ -1526,15 +1530,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         assetImagePath: 'assets/images/jcb_excavator.jpg',
       ),
       _VehicleCategoryItem(
-        title: 'Road Roller',
-        capacity: 'Road & Soil Compaction',
-        rate: 'Trip-Based',
-        eta: 'Scheduled',
-        icon: Icons.construction_rounded,
-        category: VehicleCategoryType.logistics,
-        assetImagePath: 'assets/images/road_roller.jpg',
-      ),
-      _VehicleCategoryItem(
         title: 'Crane',
         capacity: 'Heavy Lifting',
         rate: 'Trip-Based',
@@ -1543,7 +1538,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         category: VehicleCategoryType.logistics,
         assetImagePath: 'assets/images/crane_truck.png',
       ),
-
       _VehicleCategoryItem(
         title: 'Roadside Assist',
         capacity: 'Tire / Battery Support',
@@ -1579,6 +1573,9 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                 item: item,
                 onTap: () {
                   ref.read(rideProvider.notifier).selectSector('service');
+                  ref
+                      .read(rideProvider.notifier)
+                      .selectTier(_serviceTierSlug(item.title));
                   context.push('/ride-booking');
                 },
               );

@@ -44,29 +44,12 @@ class _SpecialtyEmergencyScreenState
       'fallbackIcon': Icons.construction_rounded,
     },
     {
-      'title': 'Road Roller',
-      'category': 'road_roller',
-      'filter': 'Construction',
-      'subtitle': 'Road & Soil Compaction • Shift-Based',
-      'image': 'assets/images/road_roller.jpg',
-      'fallbackIcon': Icons.construction_rounded,
-    },
-    {
       'title': 'Crane',
       'category': 'crane',
       'filter': 'Construction',
       'subtitle': 'Heavy Lifting • Trip-Based',
       'image': 'assets/images/crane_truck.png',
       'fallbackIcon': Icons.precision_manufacturing_rounded,
-    },
-
-    {
-      'title': 'Fire Truck',
-      'category': 'fire_truck',
-      'filter': 'Emergency',
-      'subtitle': 'Emergency Firefighting & Rescue • Priority',
-      'image': null,
-      'fallbackIcon': Icons.fire_truck_rounded,
     },
     {
       'title': 'Roadside Assist',

@@ -803,9 +803,13 @@ class RideNotifier extends StateNotifier<RideState> {
       return true;
     } catch (e) {
       if (!mounted || generation != _fareEstimateGeneration) return false;
+      final is401 = e is DioException && e.response?.statusCode == 401;
       state = state.copyWith(
         isEstimatingFare: false,
-        errorMessage: 'Fare calculation unavailable: ${e.toString()}',
+        isUnauthenticated: is401,
+        errorMessage: is401
+            ? null
+            : 'Fare calculation unavailable. Please verify route points.',
       );
       return false;
     }

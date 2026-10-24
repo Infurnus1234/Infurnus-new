@@ -48,7 +48,7 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
       'filter': 'Truck',
       'subtitle': 'Up to 4000 kg • Heavy cargo',
       'image': 'assets/images/tata_407_beige.png',
-      'fallbackIcon': Icons.fire_truck_rounded,
+      'fallbackIcon': Icons.local_shipping_rounded,
     },
   ];
 
@@ -184,20 +184,21 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
                       children: [
                         // Image
                         Container(
-                          width: 60,
-                          height: 50,
+                          width: 64,
+                          height: 52,
+                          padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
                             color: const Color(0xFFF3F4F6),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(8),
                             child: Image.asset(
                               item['image'] as String,
                               fit: BoxFit.contain,
                               errorBuilder: (_, __, ___) => Icon(
                                 item['fallbackIcon'] as IconData,
-                                size: 30,
+                                size: 28,
                                 color: const Color(0xFF16A34A),
                               ),
                             ),
