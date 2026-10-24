@@ -809,7 +809,7 @@ class RideNotifier extends StateNotifier<RideState> {
         isUnauthenticated: is401,
         errorMessage: is401
             ? null
-            : 'Fare calculation unavailable. Please verify route points.',
+            : 'Fare calculation unavailable: ${e.toString()}',
       );
       return false;
     }

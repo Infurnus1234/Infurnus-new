@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../../core/network/dio_client.dart';
-import '../../../../core/storage/secure_storage.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../auth/presentation/providers/user_provider.dart';
 import '../../../auth/domain/entities/user.dart';
@@ -114,63 +113,37 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     });
 
     try {
-      final isUuid = RegExp(
-        r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
-      ).hasMatch(user.id);
+      final dio = ref.read(dioProvider);
+      final response = await dio.patch(
+        '/users/${user.id}',
+        data: {
+          'firstName': firstName,
+          if (lastName.isNotEmpty) 'lastName': lastName,
+          if (email.isNotEmpty) 'email': email,
+          if (phone.isNotEmpty) 'phone': phone,
+        },
+      );
+      final dynamic raw = response.data;
+      final data = (raw is Map && raw['data'] is Map)
+          ? raw['data'] as Map<String, dynamic>
+          : (raw is Map ? raw as Map<String, dynamic> : <String, dynamic>{});
 
-      User updatedUser = User(
-        id: user.id,
-        firstName: firstName,
-        lastName: lastName,
-        email: email.isNotEmpty ? email : user.email,
-        phone: phone.isNotEmpty ? phone : user.phone,
+      final updatedUser = User(
+        id: data['id'] as String? ?? user.id,
+        firstName: data['firstName'] as String? ?? firstName,
+        lastName: data['lastName'] as String? ?? lastName,
+        email:
+            data['email'] as String? ?? (email.isNotEmpty ? email : user.email),
+        phone:
+            data['phone'] as String? ?? (phone.isNotEmpty ? phone : user.phone),
         role: user.role,
         createdAt: user.createdAt,
-        updatedAt: DateTime.now(),
+        updatedAt:
+            DateTime.tryParse(data['updatedAt'] as String? ?? '') ??
+            DateTime.now(),
       );
 
-      if (isUuid) {
-        final dio = ref.read(dioProvider);
-        final response = await dio.patch(
-          '/users/${user.id}',
-          data: {
-            'firstName': firstName,
-            if (lastName.isNotEmpty) 'lastName': lastName,
-            if (email.isNotEmpty) 'email': email,
-            if (phone.isNotEmpty) 'phone': phone,
-          },
-        );
-        final dynamic raw = response.data;
-        if (raw is Map && raw['data'] is Map) {
-          final data = raw['data'] as Map<String, dynamic>;
-          updatedUser = User(
-            id: data['id'] as String? ?? user.id,
-            firstName: data['firstName'] as String? ?? firstName,
-            lastName: data['lastName'] as String? ?? lastName,
-            email: data['email'] as String? ?? email,
-            phone: data['phone'] as String? ?? phone,
-            role: user.role,
-            createdAt: user.createdAt,
-            updatedAt:
-                DateTime.tryParse(data['updatedAt'] as String? ?? '') ??
-                DateTime.now(),
-          );
-        }
-      }
-
-      // Update provider immediately
       ref.read(userProvider.notifier).setUser(updatedUser);
-
-      // Persist updated details to secure storage
-      final storage = ref.read(secureStorageProvider);
-      await storage.write(key: 'user_first_name', value: updatedUser.firstName);
-      await storage.write(key: 'user_last_name', value: updatedUser.lastName);
-      if (updatedUser.email != null) {
-        await storage.write(key: 'user_email', value: updatedUser.email!);
-      }
-      if (updatedUser.phone != null) {
-        await storage.write(key: 'user_phone', value: updatedUser.phone!);
-      }
 
       if (mounted) {
         setState(() {
