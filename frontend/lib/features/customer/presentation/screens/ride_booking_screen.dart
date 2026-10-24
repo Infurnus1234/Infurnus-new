@@ -1390,7 +1390,8 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
 
     if (selected.isEmpty) return const SizedBox.shrink();
 
-    final sectorLabel = {
+    final sectorLabel =
+        {
           'passenger': 'Rides',
           'logistics': 'Logistics',
           'service': 'Emergency',
@@ -1412,7 +1413,9 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFFF0FDF4),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF16A34A).withValues(alpha: 0.35)),
+        border: Border.all(
+          color: const Color(0xFF16A34A).withValues(alpha: 0.35),
+        ),
       ),
       child: Row(
         children: [
@@ -1495,7 +1498,6 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
       ),
     );
   }
-
 
   Widget _buildConfirmButton(RideState state) {
     final hasLocations =

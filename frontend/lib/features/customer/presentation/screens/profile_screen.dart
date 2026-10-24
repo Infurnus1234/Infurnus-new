@@ -82,8 +82,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
 
     if (email.isNotEmpty) {
-      final emailRegex =
-          RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
+      final emailRegex = RegExp(
+        r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+      );
       if (!emailRegex.hasMatch(email)) {
         setState(() {
           _saveError = 'Please enter a valid email address.';
