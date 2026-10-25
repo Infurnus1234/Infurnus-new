@@ -25,8 +25,7 @@ class VehicleCategoryConfig {
     required this.fallbackIcon,
   });
 
-  static Map<VehicleCategoryType, VehicleCategoryConfig> get registry =>
-      const {
+  static Map<VehicleCategoryType, VehicleCategoryConfig> get registry => const {
     VehicleCategoryType.rides: VehicleCategoryConfig(
       category: VehicleCategoryType.rides,
       title: 'Rides & Cabs',
