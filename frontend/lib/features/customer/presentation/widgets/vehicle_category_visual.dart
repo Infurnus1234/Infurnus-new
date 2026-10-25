@@ -25,33 +25,34 @@ class VehicleCategoryConfig {
     required this.fallbackIcon,
   });
 
-  static Map<VehicleCategoryType, VehicleCategoryConfig> get registry => const {
+  static Map<VehicleCategoryType, VehicleCategoryConfig> get registry =>
+      const {
     VehicleCategoryType.rides: VehicleCategoryConfig(
       category: VehicleCategoryType.rides,
       title: 'Rides & Cabs',
       subtitle: 'Daily city rides',
-      assetImagePath: 'assets/images/rides_cab.png',
+      assetImagePath: 'assets/images/hatchback_clean.jpg',
       fallbackIcon: Icons.directions_car_rounded,
     ),
     VehicleCategoryType.logistics: VehicleCategoryConfig(
       category: VehicleCategoryType.logistics,
       title: 'Logistics',
       subtitle: 'Cargo & Trucks',
-      assetImagePath: 'assets/images/logistics_truck.png',
+      assetImagePath: 'assets/images/mahindra_207_white.png',
       fallbackIcon: Icons.local_shipping_rounded,
     ),
     VehicleCategoryType.emergency: VehicleCategoryConfig(
       category: VehicleCategoryType.emergency,
       title: 'Emergency',
       subtitle: 'Ambulance & Tow',
-      assetImagePath: 'assets/images/emergency_ambulance.png',
+      assetImagePath: 'assets/images/ambulance_clean.jpg',
       fallbackIcon: Icons.medical_services_rounded,
     ),
     VehicleCategoryType.rental: VehicleCategoryConfig(
       category: VehicleCategoryType.rental,
       title: 'Rentals',
       subtitle: 'Chauffeur & Self-drive',
-      assetImagePath: 'assets/images/rentals_car.png',
+      assetImagePath: 'assets/images/innova_crysta_clean.jpg',
       fallbackIcon: Icons.car_rental_rounded,
     ),
     VehicleCategoryType.auto: VehicleCategoryConfig(
@@ -72,7 +73,7 @@ class VehicleCategoryConfig {
       category: VehicleCategoryType.premium,
       title: 'Premium SUV',
       subtitle: 'Luxury & Fortuner',
-      assetImagePath: 'assets/images/innova_crysta.jpg',
+      assetImagePath: 'assets/images/innova_crysta_clean.jpg',
       fallbackIcon: Icons.stars_rounded,
     ),
   };
@@ -106,7 +107,7 @@ class VehicleCategoryVisual extends StatelessWidget {
         width: size,
         height: size,
         decoration: BoxDecoration(
-          color: const Color(0xFFF3F4F6),
+          color: Colors.white,
           borderRadius: BorderRadius.circular(borderRadius),
         ),
         child: config.assetImagePath != null

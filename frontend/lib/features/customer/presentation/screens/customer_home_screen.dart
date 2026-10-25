@@ -969,7 +969,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Instant',
         icon: Icons.directions_car_rounded,
         category: VehicleCategoryType.rides,
-        assetImagePath: 'assets/images/hatchback_white_bg.png',
+        assetImagePath: 'assets/images/hatchback_clean.jpg',
       ),
       _VehicleCategoryItem(
         title: 'Sedan',
@@ -978,7 +978,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Instant',
         icon: Icons.directions_car_rounded,
         category: VehicleCategoryType.rides,
-        assetImagePath: 'assets/images/sedan_white_bg.png',
+        assetImagePath: 'assets/images/sedan_clean.jpg',
       ),
       _VehicleCategoryItem(
         title: 'Innova Crysta',
@@ -987,7 +987,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Instant',
         icon: Icons.directions_car_filled_rounded,
         category: VehicleCategoryType.premium,
-        assetImagePath: 'assets/images/innova_white_bg.png',
+        assetImagePath: 'assets/images/innova_crysta_clean.jpg',
       ),
       _VehicleCategoryItem(
         title: 'Winger',
@@ -996,7 +996,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Scheduled',
         icon: Icons.directions_bus_rounded,
         category: VehicleCategoryType.rides,
-        assetImagePath: 'assets/images/winger.jpg',
+        assetImagePath: 'assets/images/winger_clean.jpg',
       ),
       _VehicleCategoryItem(
         title: 'Force Traveller',
@@ -1005,7 +1005,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Scheduled',
         icon: Icons.airport_shuttle_rounded,
         category: VehicleCategoryType.rides,
-        assetImagePath: 'assets/images/force_urbania.jpg',
+        assetImagePath: 'assets/images/force_traveller_clean.jpg',
       ),
     ];
 
@@ -1127,7 +1127,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Priority',
         icon: Icons.medical_services_rounded,
         category: VehicleCategoryType.emergency,
-        assetImagePath: 'assets/images/ambulance_van.png',
+        assetImagePath: 'assets/images/ambulance_clean.jpg',
       ),
       _VehicleCategoryItem(
         title: 'Towing Van',
@@ -1136,7 +1136,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Priority',
         icon: Icons.car_repair_rounded,
         category: VehicleCategoryType.emergency,
-        assetImagePath: 'assets/images/towing_van.jpg',
+        assetImagePath: 'assets/images/flatbed_towing_truck.png',
       ),
       _VehicleCategoryItem(
         title: 'JCB / Excavator',
@@ -1163,7 +1163,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Priority',
         icon: Icons.build_rounded,
         category: VehicleCategoryType.emergency,
-        assetImagePath: 'assets/images/towing_van.jpg',
+        assetImagePath: 'assets/images/flatbed_towing_truck.png',
       ),
     ];
 
@@ -1211,14 +1211,14 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         badge: 'Executive',
         subtitle: 'Flagship comfort & space',
         price: 'Chauffeur + Fuel',
-        assetImagePath: 'assets/images/innova_crysta.jpg',
+        assetImagePath: 'assets/images/innova_crysta_clean.jpg',
       ),
       _LuxuryVehicleItem(
         title: 'Force Traveller',
         badge: 'Luxury Van',
         subtitle: 'VIP group executive transit',
         price: 'Chauffeur + Fuel',
-        assetImagePath: 'assets/images/force_urbania.jpg',
+        assetImagePath: 'assets/images/force_traveller_clean.jpg',
       ),
       _LuxuryVehicleItem(
         title: 'Toyota Fortuner',
@@ -1327,16 +1327,16 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     return _PressableScaleCard(
       onTap: () => context.push('/rentals'),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: surfaceWhite,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: cardBorder),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
             ),
           ],
         ),
@@ -1345,19 +1345,19 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: Container(
-                width: 52,
-                height: 52,
-                color: searchBg,
+                width: 80,
+                height: 60,
+                color: Colors.white,
                 child: item.assetImagePath != null
                     ? Image.asset(
                         item.assetImagePath!,
-                        width: 52,
-                        height: 52,
+                        width: 80,
+                        height: 60,
                         fit: BoxFit.contain,
                       )
                     : const VehicleCategoryVisual(
                         category: VehicleCategoryType.premium,
-                        size: 52,
+                        size: 60,
                         borderRadius: 12,
                       ),
               ),
@@ -1484,17 +1484,17 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     return _PressableScaleCard(
       onTap: onTap,
       child: Container(
-        width: 105,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+        width: 110,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
         decoration: BoxDecoration(
           color: surfaceWhite,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: cardBorder),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
             ),
           ],
         ),
@@ -1503,42 +1503,50 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              height: 48,
+              height: 64,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+              ),
               alignment: Alignment.center,
               child: item.assetImagePath != null
                   ? Image.asset(
                       item.assetImagePath!,
-                      height: 44,
+                      height: 60,
+                      width: double.infinity,
                       fit: BoxFit.contain,
                       errorBuilder: (_, __, ___) => VehicleCategoryVisual(
                         category: item.category,
-                        size: 38,
+                        size: 44,
                         borderRadius: 10,
                       ),
                     )
                   : VehicleCategoryVisual(
                       category: item.category,
-                      size: 38,
+                      size: 44,
                       borderRadius: 10,
                     ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
               item.title,
               style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
                 color: textBlack,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 2),
             Text(
               item.capacity,
-              style: const TextStyle(fontSize: 11, color: textSecondary),
+              style: const TextStyle(fontSize: 10, color: textSecondary),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
             ),
           ],
         ),

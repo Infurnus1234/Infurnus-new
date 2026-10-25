@@ -24,7 +24,7 @@ class _SpecialtyEmergencyScreenState
       'category': 'ambulance',
       'filter': 'Emergency',
       'subtitle': 'Patient + Medical Triage • Trip-Based',
-      'image': 'assets/images/ambulance_van.png',
+      'image': 'assets/images/ambulance_clean.jpg',
       'fallbackIcon': Icons.medical_services_rounded,
     },
     {
@@ -32,7 +32,7 @@ class _SpecialtyEmergencyScreenState
       'category': 'towing',
       'filter': 'Emergency',
       'subtitle': 'Breakdown Assistance • Trip-Based',
-      'image': 'assets/images/towing_van.jpg',
+      'image': 'assets/images/flatbed_towing_truck.png',
       'fallbackIcon': Icons.car_repair_rounded,
     },
     {
@@ -56,7 +56,7 @@ class _SpecialtyEmergencyScreenState
       'category': 'roadside_assist',
       'filter': 'Support',
       'subtitle': 'Tire / Battery Support • Trip-Based',
-      'image': 'assets/images/towing_van.jpg',
+      'image': 'assets/images/flatbed_towing_truck.png',
       'fallbackIcon': Icons.home_repair_service_rounded,
     },
   ];
@@ -176,11 +176,15 @@ class _SpecialtyEmergencyScreenState
                       children: [
                         // Image Thumbnail
                         Container(
-                          width: 60,
-                          height: 50,
+                          width: 72,
+                          height: 56,
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF3F4F6),
+                            color: Colors.white,
                             borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: const Color(0xFFE5E7EB),
+                              width: 0.5,
+                            ),
                           ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(10),

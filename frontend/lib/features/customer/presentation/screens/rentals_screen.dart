@@ -22,7 +22,7 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
       'category': 'innova',
       'filter': 'Luxury',
       'subtitle': 'Executive • Chauffeur + Fuel',
-      'image': 'assets/images/innova_crysta.jpg',
+      'image': 'assets/images/innova_crysta_clean.jpg',
       'fallbackIcon': Icons.directions_car_rounded,
     },
     {
@@ -38,7 +38,7 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
       'category': 'traveller',
       'filter': 'Vans',
       'subtitle': '12 seater luxury van • Chauffeur + Fuel',
-      'image': 'assets/images/force_urbania.jpg',
+      'image': 'assets/images/force_traveller_clean.jpg',
       'fallbackIcon': Icons.airport_shuttle_rounded,
     },
     {
@@ -198,11 +198,15 @@ class _RentalsScreenState extends ConsumerState<RentalsScreen> {
                       children: [
                         // Image Thumbnail
                         Container(
-                          width: 60,
-                          height: 50,
+                          width: 80,
+                          height: 60,
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF3F4F6),
+                            color: Colors.white,
                             borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: const Color(0xFFE5E7EB),
+                              width: 0.5,
+                            ),
                           ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(10),

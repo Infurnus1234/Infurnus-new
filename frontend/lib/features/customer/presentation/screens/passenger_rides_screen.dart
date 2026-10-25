@@ -26,7 +26,7 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
       'subtitle': '4 seater • Compact & comfortable',
       'capacity': '4 seats',
       'price': 'Route estimate',
-      'image': 'assets/images/hatchback_white_bg.png',
+      'image': 'assets/images/hatchback_clean.jpg',
       'fallbackIcon': Icons.directions_car_filled_rounded,
     },
     {
@@ -36,7 +36,7 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
       'subtitle': '4 seater • Premium comfort',
       'capacity': '4 seats',
       'price': 'Route estimate',
-      'image': 'assets/images/sedan_white_bg.png',
+      'image': 'assets/images/sedan_clean.jpg',
       'fallbackIcon': Icons.directions_car_rounded,
     },
     {
@@ -46,7 +46,7 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
       'subtitle': '6-7 seater • Spacious & luxurious',
       'capacity': '6-7 seats',
       'price': 'Route estimate',
-      'image': 'assets/images/innova_white_bg.png',
+      'image': 'assets/images/innova_crysta_clean.jpg',
       'fallbackIcon': Icons.directions_car_filled_rounded,
     },
     {
@@ -56,7 +56,7 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
       'subtitle': '9-12 seater • Executive group transit',
       'capacity': '9-12 seats',
       'price': 'Route estimate',
-      'image': 'assets/images/winger_tata.jpg',
+      'image': 'assets/images/winger_clean.jpg',
       'fallbackIcon': Icons.directions_bus_rounded,
     },
     {
@@ -66,7 +66,7 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
       'subtitle': '12 seater • Group travel',
       'capacity': '12 seats',
       'price': 'Route estimate',
-      'image': 'assets/images/force_traveller_van.jpg',
+      'image': 'assets/images/force_traveller_clean.jpg',
       'fallbackIcon': Icons.airport_shuttle_rounded,
     },
   ];
@@ -208,12 +208,16 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                       children: [
                         // Vehicle Image Thumbnail
                         Container(
-                          width: 64,
-                          height: 52,
+                          width: 80,
+                          height: 60,
                           padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF3F4F6),
+                            color: Colors.white,
                             borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: const Color(0xFFE5E7EB),
+                              width: 0.5,
+                            ),
                           ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(8),
