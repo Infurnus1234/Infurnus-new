@@ -13,7 +13,6 @@ import '../../../../shared/widgets/infurnus_empty_state.dart';
 import '../../../../shared/widgets/infurnus_skeleton.dart';
 import '../../data/models/ride_model.dart' as model;
 import '../providers/ride_provider.dart';
-import '../widgets/animated_vehicle_hero.dart';
 import '../widgets/vehicle_category_visual.dart';
 import '../../../auth/presentation/providers/user_provider.dart';
 
