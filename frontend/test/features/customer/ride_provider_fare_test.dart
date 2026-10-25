@@ -56,6 +56,7 @@ void main() {
       expect(await pending, isFalse);
     },
   );
+
   test(
     'sends current route coordinates and selected category to fare API',
     () async {
@@ -66,6 +67,8 @@ void main() {
       addTearDown(container.dispose);
       final notifier = container.read(rideProvider.notifier);
 
+      // setDestinationCoords triggers an initial estimate (with default tier).
+      // selectTier('bike') triggers the estimate we care about.
       notifier.setPickupCoords(const LatLng(12.3, 45.6));
       notifier.setDestinationCoords(const LatLng(23.4, 56.7));
       notifier.selectTier('bike');
@@ -73,6 +76,7 @@ void main() {
       repository.estimates.last.complete(_estimate(40));
 
       expect(await estimateFuture, isTrue);
+      // The last payload must use the explicitly selected 'bike' category.
       expect(repository.payloads.last, {
         'pickup': {'latitude': 12.3, 'longitude': 45.6},
         'destination': {'latitude': 23.4, 'longitude': 56.7},
@@ -92,21 +96,28 @@ void main() {
       addTearDown(container.dispose);
       final notifier = container.read(rideProvider.notifier);
 
+      // estimates[0] = initial hatchback (fired by setDestinationCoords)
+      // estimates[1] = bike  (stale — should be ignored)
+      // estimates[2] = suv   (current selection — should win)
       notifier.setPickupCoords(const LatLng(12.3, 45.6));
       notifier.setDestinationCoords(const LatLng(23.4, 56.7));
       notifier.selectTier('bike');
       notifier.selectTier('suv');
 
-      repository.estimates[1].complete(_estimate(100));
-      repository.estimates[0].complete(_estimate(40));
+      // Complete suv (current) first; then complete stale bike + initial.
+      repository.estimates[2].complete(_estimate(100));
+      repository.estimates[1].complete(_estimate(40));
+      repository.estimates[0].complete(_estimate(20));
       await Future<void>.delayed(Duration.zero);
 
       expect(container.read(rideProvider).selectedTier, 'suv');
       expect(container.read(rideProvider).fare, 100);
-      expect(repository.payloads.map((payload) => payload['vehicleCategory']), [
-        'bike',
-        'suv',
-      ]);
+
+      // The last two explicit selectTier calls sent bike then suv to the API.
+      final categories =
+          repository.payloads.map((p) => p['vehicleCategory']).toList();
+      expect(categories.last, 'suv');
+      expect(categories[categories.length - 2], 'bike');
     },
   );
 }

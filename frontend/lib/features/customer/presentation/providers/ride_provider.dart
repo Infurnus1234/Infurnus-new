@@ -16,6 +16,7 @@ import '../../../../core/storage/secure_storage.dart';
 import '../../data/models/fare_estimate_model.dart';
 import '../../data/models/ride_model.dart' as model;
 import '../../data/models/route_model.dart';
+import '../../domain/utils/vehicle_category_mapper.dart';
 import 'ride_use_case_providers.dart';
 
 enum RideStatus {
@@ -83,7 +84,7 @@ class RideState {
     this.pickupCoords,
     this.destinationCoords,
     this.selectedSector = 'passenger',
-    this.selectedTier = '',
+    this.selectedTier = 'hatchback',
     this.fare,
     this.fareEstimate,
     this.distanceKm,
@@ -669,7 +670,8 @@ class RideNotifier extends StateNotifier<RideState> {
   }
 
   void selectSector(String sector) {
-    state = state.copyWith(selectedSector: sector, selectedTier: '');
+    final defaultTier = defaultVehicleCategoryForSector(sector);
+    state = state.copyWith(selectedSector: sector, selectedTier: defaultTier);
     estimateRouteFare();
   }
 
@@ -727,9 +729,14 @@ class RideNotifier extends StateNotifier<RideState> {
 
   Future<bool> _performFareEstimate() async {
     final generation = ++_fareEstimateGeneration;
+    String tier = state.selectedTier.trim();
+    if (tier.isEmpty) {
+      tier = defaultVehicleCategoryForSector(state.selectedSector);
+      state = state.copyWith(selectedTier: tier);
+    }
     if (state.pickupCoords == null ||
         state.destinationCoords == null ||
-        state.selectedTier.trim().isEmpty) {
+        tier.isEmpty) {
       state = state.copyWith(clearFareData: true, isEstimatingFare: false);
       return false;
     }
@@ -737,7 +744,7 @@ class RideNotifier extends StateNotifier<RideState> {
     final pickup = state.pickupCoords!;
     final destination = state.destinationCoords!;
     final sector = state.selectedSector;
-    final vehicleCategory = state.selectedTier;
+    final vehicleCategory = normalizeVehicleCategoryForBackend(sector, tier);
     final goods = state.goods;
     final serviceDetails = state.serviceDetails;
     final rentalDetails = state.rentalDetails;
@@ -856,7 +863,10 @@ class RideNotifier extends StateNotifier<RideState> {
         'pickupAddress': state.pickup ?? 'Current Location',
         'destinationAddress': state.destination ?? 'Destination',
         'sector': state.selectedSector,
-        'vehicleCategory': state.selectedTier,
+        'vehicleCategory': normalizeVehicleCategoryForBackend(
+          state.selectedSector,
+          state.selectedTier,
+        ),
       };
 
       if (state.goods != null) {

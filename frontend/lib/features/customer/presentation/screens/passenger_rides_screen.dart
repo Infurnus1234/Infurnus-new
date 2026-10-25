@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../providers/ride_provider.dart';
+import '../../domain/utils/passenger_vehicle_filter.dart';
 
 class PassengerRidesScreen extends ConsumerStatefulWidget {
   const PassengerRidesScreen({super.key});
@@ -15,33 +16,13 @@ class PassengerRidesScreen extends ConsumerStatefulWidget {
 class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
   String _selectedFilter = 'All';
 
-  final List<String> _filters = ['All', 'Bike', 'Auto', 'Car'];
+  final List<String> _filters = ['All', 'Hatchback', 'Sedan', 'SUV', 'Van'];
 
   final List<Map<String, dynamic>> _allVehicles = [
     {
-      'title': 'Bike',
-      'category': 'bike',
-      'filter': 'Bike',
-      'subtitle': '1 rider • Fast & affordable',
-      'capacity': '1 rider',
-      'price': 'Route estimate',
-      'image': 'assets/images/bike_motorcycle.png',
-      'fallbackIcon': Icons.two_wheeler_rounded,
-    },
-    {
-      'title': 'Auto',
-      'category': 'auto',
-      'filter': 'Auto',
-      'subtitle': '3 seater • Everyday travel',
-      'capacity': '3 seats',
-      'price': 'Route estimate',
-      'image': 'assets/images/auto_rickshaw.png',
-      'fallbackIcon': Icons.electric_rickshaw_rounded,
-    },
-    {
       'title': 'Hatchback',
       'category': 'hatchback',
-      'filter': 'Car',
+      'filter': 'Hatchback',
       'subtitle': '4 seater • Compact & comfortable',
       'capacity': '4 seats',
       'price': 'Route estimate',
@@ -51,7 +32,7 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
     {
       'title': 'Sedan',
       'category': 'sedan',
-      'filter': 'Car',
+      'filter': 'Sedan',
       'subtitle': '4 seater • Premium comfort',
       'capacity': '4 seats',
       'price': 'Route estimate',
@@ -61,7 +42,7 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
     {
       'title': 'Innova Crysta',
       'category': 'innova',
-      'filter': 'Car',
+      'filter': 'SUV',
       'subtitle': '6-7 seater • Spacious & luxurious',
       'capacity': '6-7 seats',
       'price': 'Route estimate',
@@ -71,7 +52,7 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
     {
       'title': 'Winger',
       'category': 'winger',
-      'filter': 'Car',
+      'filter': 'Van',
       'subtitle': '9-12 seater • Executive group transit',
       'capacity': '9-12 seats',
       'price': 'Route estimate',
@@ -81,7 +62,7 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
     {
       'title': 'Force Traveller',
       'category': 'traveller',
-      'filter': 'Car',
+      'filter': 'Van',
       'subtitle': '12 seater • Group travel',
       'capacity': '12 seats',
       'price': 'Route estimate',
@@ -93,8 +74,10 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
   @override
   Widget build(BuildContext context) {
     final rideState = ref.watch(rideProvider);
-    final selectedTier = rideState.selectedTier.isEmpty
-        ? 'auto'
+    final selectedTier =
+        (rideState.selectedTier.isEmpty ||
+            isExcludedPassengerVehicle(rideState.selectedTier))
+        ? 'hatchback'
         : rideState.selectedTier;
 
     final filteredVehicles = _selectedFilter == 'All'
@@ -103,7 +86,7 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
 
     final selectedVehicle = _allVehicles.firstWhere(
       (v) => v['category'] == selectedTier,
-      orElse: () => _allVehicles[1],
+      orElse: () => _allVehicles.first,
     );
 
     return Scaffold(

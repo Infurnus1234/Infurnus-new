@@ -389,386 +389,11 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     );
   }
 
-  final List<Map<String, dynamic>> _quickDestinations = [
-    {
-      'label': 'Airport T1',
-      'icon': Icons.flight_rounded,
-      'address': 'Airport Terminal 1, International Hub',
-      'coords': const LatLng(25.5913, 85.0880),
-    },
-    {
-      'label': 'Railway Station',
-      'icon': Icons.train_rounded,
-      'address': 'Patna Junction Railway Station',
-      'coords': const LatLng(25.6022, 85.1376),
-    },
-    {
-      'label': 'Gandhi Maidan',
-      'icon': Icons.location_city_rounded,
-      'address': 'Gandhi Maidan, Patna',
-      'coords': const LatLng(25.6154, 85.1437),
-    },
-    {
-      'label': 'Boring Road',
-      'icon': Icons.business_rounded,
-      'address': 'Boring Road Chauraha, Patna',
-      'coords': const LatLng(25.6127, 85.1189),
-    },
-  ];
 
-  void _showSearchModal(BuildContext context) {
-    List<PlaceSuggestion> modalSuggestions = [];
-    String? modalSearchError;
-    Timer? modalDebounce;
-    CancelToken? modalCancelToken;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: surfaceWhite,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                left: 20,
-                right: 20,
-                top: 20,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-              ),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Where to?',
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w900,
-                            color: textBlack,
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(
-                            Icons.close_rounded,
-                            color: textBlack,
-                          ),
-                          onPressed: () {
-                            modalDebounce?.cancel();
-                            modalCancelToken?.cancel();
-                            Navigator.pop(context);
-                          },
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: searchBg,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: cardBorder),
-                      ),
-                      child: Column(
-                        children: [
-                          const Row(
-                            children: [
-                              Icon(
-                                Icons.my_location_rounded,
-                                color: successGreen,
-                                size: 18,
-                              ),
-                              SizedBox(width: 12),
-                              Text(
-                                'Current Location (GPS Active)',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: textBlack,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const Padding(
-                            padding: EdgeInsets.only(
-                              left: 8,
-                              top: 4,
-                              bottom: 4,
-                            ),
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: SizedBox(
-                                height: 16,
-                                child: VerticalDivider(
-                                  color: textMuted,
-                                  thickness: 2,
-                                ),
-                              ),
-                            ),
-                          ),
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.location_on_rounded,
-                                color: serviceRed,
-                                size: 18,
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: TextField(
-                                  autofocus: true,
-                                  style: const TextStyle(
-                                    color: textBlack,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                  decoration: const InputDecoration(
-                                    hintText: 'Search destination (e.g. Airport, Mall...)',
-                                    hintStyle: TextStyle(color: textMuted),
-                                    border: InputBorder.none,
-                                    isDense: true,
-                                    contentPadding: EdgeInsets.zero,
-                                  ),
-                                  onChanged: (val) {
-                                    modalDebounce?.cancel();
-                                    modalCancelToken?.cancel();
-                                    final trimmed = val.trim();
-                                    if (trimmed.isEmpty) {
-                                      setModalState(() {
-                                        modalSuggestions = [];
-                                        modalSearchError = null;
-                                      });
-                                      return;
-                                    }
-                                    modalDebounce = Timer(
-                                      const Duration(milliseconds: 200),
-                                      () async {
-                                        modalCancelToken = CancelToken();
-                                        try {
-                                          final service = ref.read(
-                                            placesAutocompleteServiceProvider,
-                                          );
-                                          final results = await service
-                                              .getSuggestions(
-                                                trimmed,
-                                                cancelToken: modalCancelToken,
-                                              );
-                                          if (context.mounted &&
-                                              !(modalCancelToken?.isCancelled ??
-                                                  false)) {
-                                            setModalState(() {
-                                              modalSuggestions = results;
-                                              modalSearchError = null;
-                                            });
-                                          }
-                                        } catch (e) {
-                                          if (e is DioException &&
-                                              CancelToken.isCancel(e)) {
-                                            return;
-                                          }
-                                          if (context.mounted) {
-                                            setModalState(() {
-                                              modalSuggestions = [];
-                                              modalSearchError =
-                                                  locationSearchErrorMessage(e);
-                                            });
-                                          }
-                                        }
-                                      },
-                                    );
-                                  },
-                                  onSubmitted: (val) {
-                                    if (val.trim().isNotEmpty) {
-                                      modalDebounce?.cancel();
-                                      modalCancelToken?.cancel();
-                                      Navigator.pop(context);
-                                      ref
-                                          .read(rideProvider.notifier)
-                                          .setRoute(
-                                            'Current Location',
-                                            val.trim(),
-                                          );
-                                      context.push('/ride-booking');
-                                    }
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (modalSearchError != null) ...[
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFEF2F2),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFFCA5A5)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.info_outline_rounded,
-                              color: Color(0xFFDC2626),
-                              size: 18,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                modalSearchError!,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Color(0xFF991B1B),
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Quick Destinations',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      height: 38,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        children: _quickDestinations.map((dest) {
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: ActionChip(
-                              avatar: Icon(
-                                dest['icon'] as IconData,
-                                size: 16,
-                                color: successGreen,
-                              ),
-                              label: Text(
-                                dest['label'] as String,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: textBlack,
-                                ),
-                              ),
-                              backgroundColor: searchBg,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
-                                side: const BorderSide(color: cardBorder),
-                              ),
-                              onPressed: () {
-                                modalDebounce?.cancel();
-                                modalCancelToken?.cancel();
-                                Navigator.pop(context);
-                                ref
-                                    .read(rideProvider.notifier)
-                                    .setRoute(
-                                      'Current Location',
-                                      dest['address'] as String,
-                                    );
-                                if (dest['coords'] != null) {
-                                  ref
-                                      .read(rideProvider.notifier)
-                                      .setDestinationCoords(
-                                        dest['coords'] as LatLng,
-                                        address: dest['address'] as String,
-                                      );
-                                }
-                                context.push('/ride-booking');
-                              },
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                    if (modalSuggestions.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      const Text(
-                        'Suggestions',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: textSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      ...modalSuggestions.map((s) {
-                        return InkWell(
-                          onTap: () {
-                            Navigator.pop(context);
-                            _selectSuggestion(s);
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  Icons.location_on_outlined,
-                                  size: 18,
-                                  color: textBlack,
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        s.title,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 14,
-                                          color: textBlack,
-                                        ),
-                                      ),
-                                      Text(
-                                        s.subtitle,
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: textSecondary,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }),
-                    ],
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
 
   Widget _buildDestinationSearchBar(BuildContext context) {
     return GestureDetector(
-      onTap: () => _showSearchModal(context),
+      onTap: () => context.push('/pickup-selection'),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
@@ -1064,27 +689,39 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     final services = [
       {
         'title': 'Rides',
-        'subtitle': 'Bike, Auto, Cab',
+        'subtitle': 'Cab, Sedan & More',
         'category': VehicleCategoryType.rides,
-        'action': () => context.push('/passenger-rides'),
+        'action': () {
+          ref.read(rideProvider.notifier).selectSector('passenger');
+          context.push('/pickup-selection', extra: 'passenger');
+        },
       },
       {
         'title': 'Logistics',
         'subtitle': 'Parcels & Trucks',
         'category': VehicleCategoryType.logistics,
-        'action': () => context.push('/logistics'),
+        'action': () {
+          ref.read(rideProvider.notifier).selectSector('logistics');
+          context.push('/pickup-selection', extra: 'logistics');
+        },
       },
       {
         'title': 'Emergency',
         'subtitle': 'Ambulance & Tow',
         'category': VehicleCategoryType.emergency,
-        'action': () => context.push('/emergency'),
+        'action': () {
+          ref.read(rideProvider.notifier).selectSector('service');
+          context.push('/pickup-selection', extra: 'service');
+        },
       },
       {
         'title': 'Rentals',
         'subtitle': 'Luxury & Chauffeur',
         'category': VehicleCategoryType.rental,
-        'action': () => context.push('/rentals'),
+        'action': () {
+          ref.read(rideProvider.notifier).selectSector('premium');
+          context.push('/pickup-selection', extra: 'premium');
+        },
       },
     ];
 
@@ -1326,24 +963,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
 
   Widget _buildPassengerSection(BuildContext context) {
     const items = [
-      _VehicleCategoryItem(
-        title: 'Bike',
-        capacity: '1 rider',
-        rate: 'Route Estimate',
-        eta: 'Instant',
-        icon: Icons.two_wheeler_rounded,
-        category: VehicleCategoryType.bike,
-        assetImagePath: 'assets/images/bike_motorcycle.png',
-      ),
-      _VehicleCategoryItem(
-        title: 'Auto',
-        capacity: '3 seater',
-        rate: 'Route Estimate',
-        eta: 'Instant',
-        icon: Icons.electric_rickshaw_rounded,
-        category: VehicleCategoryType.auto,
-        assetImagePath: 'assets/images/auto_rickshaw.png',
-      ),
       _VehicleCategoryItem(
         title: 'Hatchback',
         capacity: '4 seater',

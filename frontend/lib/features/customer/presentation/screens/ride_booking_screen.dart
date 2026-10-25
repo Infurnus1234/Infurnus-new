@@ -18,6 +18,7 @@ import '../providers/ride_provider.dart';
 import '../widgets/fare_range_details.dart';
 import '../widgets/waiting_timer_widget.dart';
 import '../providers/ride_use_case_providers.dart';
+import '../../domain/utils/passenger_vehicle_filter.dart';
 
 class RideBookingScreen extends ConsumerStatefulWidget {
   const RideBookingScreen({super.key});
@@ -60,6 +61,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
   // ignore: unused_field
   bool _isLoadingFleet = true;
   List<FleetVehicleModel> _fleetVehicles = [];
+  CancelToken _fleetCancelToken = CancelToken();
 
   @override
   void initState() {
@@ -71,27 +73,72 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _detectCurrentLocation(preserveSelection: true);
       _fetchFleet(rideState.selectedSector);
+      if (rideState.pickupCoords != null && rideState.destinationCoords != null) {
+        ref.read(rideProvider.notifier).estimateRouteFare();
+      }
     });
   }
 
   Future<void> _fetchFleet(String sector) async {
+    _fleetCancelToken.cancel();
+    _fleetCancelToken = CancelToken();
+    final cancelToken = _fleetCancelToken;
     if (mounted) setState(() => _isLoadingFleet = true);
     try {
-      final fleet = await ref.read(getFleetUseCaseProvider)(sector: sector);
+      final rawFleet = await ref
+          .read(getFleetUseCaseProvider)
+          .call(sector: sector);
+      if (cancelToken.isCancelled) return;
+      final fleet = sector == 'passenger'
+          ? rawFleet
+                .where(
+                  (v) => !isExcludedPassengerVehicle(v.category, v.displayName),
+                )
+                .toList()
+          : rawFleet;
       if (mounted) {
         setState(() {
           _fleetVehicles = fleet;
           _isLoadingFleet = false;
         });
         final rideState = ref.read(rideProvider);
-        if (rideState.selectedTier.isEmpty && fleet.isNotEmpty) {
-          ref.read(rideProvider.notifier).selectTier(fleet.first.category);
+        if (rideState.selectedTier.isEmpty) {
+          final nextTier = fleet.isNotEmpty
+              ? fleet.first.category
+              : (_getVehiclesForSector(sector).isNotEmpty
+                  ? _getVehiclesForSector(sector).first['category'] as String
+                  : 'hatchback');
+          ref.read(rideProvider.notifier).selectTier(nextTier);
+        }
+      }
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.cancel) return;
+      if (mounted) {
+        setState(() => _isLoadingFleet = false);
+        debugPrint('Fleet fetch fallback to catalog: $e');
+        final rideState = ref.read(rideProvider);
+        if (rideState.selectedTier.isEmpty) {
+          final catalog = _getVehiclesForSector(sector);
+          if (catalog.isNotEmpty) {
+            ref
+                .read(rideProvider.notifier)
+                .selectTier(catalog.first['category'] as String);
+          }
         }
       }
     } catch (error) {
       if (mounted) {
         setState(() => _isLoadingFleet = false);
         debugPrint('Fleet fetch fallback to catalog: $error');
+        final rideState = ref.read(rideProvider);
+        if (rideState.selectedTier.isEmpty) {
+          final catalog = _getVehiclesForSector(sector);
+          if (catalog.isNotEmpty) {
+            ref
+                .read(rideProvider.notifier)
+                .selectTier(catalog.first['category'] as String);
+          }
+        }
       }
     }
   }
@@ -371,6 +418,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
 
   @override
   void dispose() {
+    _fleetCancelToken.cancel();
     _pickupController.dispose();
     _destinationController.dispose();
     _pickupAutocompleteTimer?.cancel();
@@ -384,6 +432,20 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
 
   void _handleBooking() async {
     if (_isSubmittingBooking) return;
+
+    final initialRideState = ref.read(rideProvider);
+    if (_isUnsupportedVehicle(initialRideState)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Bike, Auto, and E-Rickshaw are not available. Please select a valid passenger vehicle.',
+          ),
+          backgroundColor: serviceRed,
+        ),
+      );
+      _showVehicleSelectionBottomSheet(initialRideState);
+      return;
+    }
 
     final pickupText = _pickupController.text.trim();
     final destText = _destinationController.text.trim();
@@ -642,6 +704,26 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
     );
   }
 
+  String _appBarTitle(RideStatus status) {
+    switch (status) {
+      case RideStatus.searching:
+        return 'Finding your driver…';
+      case RideStatus.matched:
+        return 'Driver matched';
+      case RideStatus.arrived:
+        return 'Driver has arrived';
+      case RideStatus.active:
+        return 'Ride in progress';
+      case RideStatus.completed:
+        return 'Ride completed';
+      case RideStatus.cancelled:
+        return 'Ride cancelled';
+      case RideStatus.initial:
+      case RideStatus.error:
+        return 'Book a Ride';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final rideState = ref.watch(rideProvider);
@@ -660,30 +742,35 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
           )
         : rideState.destinationCoords;
 
+    final isInitial = (rideState.status == RideStatus.initial ||
+        rideState.status == RideStatus.error);
+
     return Scaffold(
       backgroundColor: mainBg,
-      appBar: AppBar(
-        title: const Text(
-          'Book a Ride',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-          ),
-        ),
-        backgroundColor: const Color(0xFF032213),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-          onPressed: () {
-            if (rideState.status == RideStatus.completed) {
-              ref.read(rideProvider.notifier).resetRide();
-            }
-            context.pop();
-          },
-        ),
-      ),
+      appBar: isInitial
+          ? null
+          : AppBar(
+              title: Text(
+                _appBarTitle(rideState.status),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
+              backgroundColor: const Color(0xFF032213),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                onPressed: () {
+                  if (rideState.status == RideStatus.completed) {
+                    ref.read(rideProvider.notifier).resetRide();
+                  }
+                  context.pop();
+                },
+              ),
+            ),
       body: LayoutBuilder(
         builder: (context, constraints) => Stack(
           fit: StackFit.expand,
@@ -725,6 +812,130 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                 ),
               ),
 
+            // Floating Back Button on Map (matching reference Screenshot 3)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 8,
+              left: 16,
+              child: CircleAvatar(
+                backgroundColor: Colors.white,
+                radius: 20,
+                child: IconButton(
+                  icon: const Icon(
+                    Icons.arrow_back_rounded,
+                    color: Color(0xFF111827),
+                    size: 20,
+                  ),
+                  onPressed: () {
+                    if (rideState.status == RideStatus.completed) {
+                      ref.read(rideProvider.notifier).resetRide();
+                    }
+                    context.pop();
+                  },
+                ),
+              ),
+            ),
+
+            // Floating Pickup Location Pill with Edit Pencil (matching reference Screenshot 3)
+            if (rideState.pickup != null && rideState.pickup!.isNotEmpty)
+              Positioned(
+                top: MediaQuery.of(context).padding.top + 8,
+                left: 68,
+                right: 16,
+                child: GestureDetector(
+                  onTap: () => context.push(
+                    '/pickup-selection',
+                    extra: rideState.selectedSector,
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 9,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.12),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            rideState.pickup!,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF111827),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        const Icon(
+                          Icons.edit_outlined,
+                          size: 16,
+                          color: Color(0xFF16A34A),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+            // Floating "+ Add stop" Button on Map (matching reference Screenshot 3)
+            Positioned(
+              bottom: constraints.maxHeight * 0.55 + 14,
+              right: 16,
+              child: GestureDetector(
+                onTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Multi-stop booking will be available soon!'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.12),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.add_rounded, size: 16, color: Color(0xFF111827)),
+                      SizedBox(width: 4),
+                      Text(
+                        'Add stop',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          color: Color(0xFF111827),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
             // 2. Dynamic Bottom Panel
             Align(
               alignment: Alignment.bottomCenter,
@@ -736,16 +947,23 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: cardBg,
+                      color: isInitial ? Colors.white : cardBg,
                       borderRadius: const BorderRadius.vertical(
                         top: Radius.circular(24),
                       ),
-                      border: const Border(
-                        top: BorderSide(color: borderCard, width: 1.0),
+                      border: Border(
+                        top: BorderSide(
+                          color: isInitial
+                              ? const Color(0xFFE5E7EB)
+                              : borderCard,
+                          width: 1.0,
+                        ),
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.6),
+                          color: Colors.black.withValues(
+                            alpha: isInitial ? 0.08 : 0.6,
+                          ),
                           blurRadius: 16,
                           offset: const Offset(0, -4),
                         ),
@@ -1327,20 +1545,6 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
       default:
         return [
           {
-            'name': 'Bike',
-            'category': 'bike',
-            'capacity': '1 rider',
-            'icon': Icons.two_wheeler_rounded,
-            'image': 'assets/images/bike_motorcycle.png',
-          },
-          {
-            'name': 'Auto',
-            'category': 'auto',
-            'capacity': '3 seats',
-            'icon': Icons.electric_rickshaw_rounded,
-            'image': 'assets/images/auto_rickshaw.png',
-          },
-          {
             'name': 'Hatchback',
             'category': 'hatchback',
             'capacity': '4 seats',
@@ -1379,9 +1583,236 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
     }
   }
 
+  bool _isUnsupportedVehicle(RideState state) {
+    if (state.selectedSector != 'passenger' &&
+        state.selectedSector.isNotEmpty) {
+      return false;
+    }
+    return isExcludedPassengerVehicle(state.selectedTier);
+  }
+
+  void _showVehicleSelectionBottomSheet(RideState state) {
+    final vehicles = _getVehiclesForSector(state.selectedSector);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD1D5DB),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Select Vehicle',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 20),
+                      onPressed: () => Navigator.pop(sheetContext),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(context).size.height * 0.5,
+                  ),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: vehicles.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      final v = vehicles[index];
+                      final isSelected = _isTierMatching(
+                        state.selectedTier,
+                        v['category'] as String,
+                        0,
+                      );
+                      return InkWell(
+                        onTap: () {
+                          ref
+                              .read(rideProvider.notifier)
+                              .selectTier(v['category'] as String);
+                          Navigator.pop(sheetContext);
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? const Color(0xFFF0FDF4)
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isSelected
+                                  ? const Color(0xFF16A34A)
+                                  : const Color(0xFFE5E7EB),
+                              width: isSelected ? 1.5 : 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              SizedBox(
+                                width: 44,
+                                height: 36,
+                                child: v['image'] != null
+                                    ? Image.asset(
+                                        v['image'] as String,
+                                        fit: BoxFit.contain,
+                                        errorBuilder: (_, __, ___) => Icon(
+                                          v['icon'] as IconData,
+                                          size: 24,
+                                          color: const Color(0xFF16A34A),
+                                        ),
+                                      )
+                                    : Icon(
+                                        v['icon'] as IconData,
+                                        size: 24,
+                                        color: const Color(0xFF16A34A),
+                                      ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      v['name'] as String,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF111827),
+                                      ),
+                                    ),
+                                    Text(
+                                      v['capacity'] as String? ?? '',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Color(0xFF6B7280),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (isSelected)
+                                const Icon(
+                                  Icons.check_circle_rounded,
+                                  color: Color(0xFF16A34A),
+                                  size: 20,
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   /// Compact chip showing which vehicle/service the customer already selected
   /// on the dashboard — no sector tabs, no full catalogue repeated here.
   Widget _buildSelectedVehicleChip(RideState state) {
+    if (_isUnsupportedVehicle(state)) {
+      return InkWell(
+        onTap: () => _showVehicleSelectionBottomSheet(state),
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFEF2F2),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: const Color(0xFFDC2626).withValues(alpha: 0.5),
+            ),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.warning_amber_rounded,
+                color: Color(0xFFDC2626),
+                size: 26,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Vehicle Not Available',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF991B1B),
+                      ),
+                    ),
+                    Text(
+                      'Bike, Auto & E-Rickshaw are excluded. Tap to choose a cab.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.red.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDC2626),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Text(
+                  'Select',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     final vehicles = _getVehiclesForSector(state.selectedSector);
     final selected = vehicles.firstWhere(
       (v) => _isTierMatching(state.selectedTier, v['category'] as String, 0),
@@ -1408,98 +1839,135 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
       fareBadge = selected['capacity'] as String? ?? '';
     }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF0FDF4),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: const Color(0xFF16A34A).withValues(alpha: 0.35),
+    return InkWell(
+      onTap: () => _showVehicleSelectionBottomSheet(state),
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0FDF4),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: const Color(0xFF16A34A).withValues(alpha: 0.35),
+          ),
         ),
-      ),
-      child: Row(
-        children: [
-          // Vehicle thumbnail
-          SizedBox(
-            width: 52,
-            height: 40,
-            child: selected['image'] != null
-                ? Image.asset(
-                    selected['image'] as String,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => Icon(
+        child: Row(
+          children: [
+            // Vehicle thumbnail
+            SizedBox(
+              width: 52,
+              height: 40,
+              child: selected['image'] != null
+                  ? Image.asset(
+                      selected['image'] as String,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => Icon(
+                        selected['icon'] as IconData,
+                        size: 28,
+                        color: const Color(0xFF16A34A),
+                      ),
+                    )
+                  : Icon(
                       selected['icon'] as IconData,
                       size: 28,
                       color: const Color(0xFF16A34A),
                     ),
-                  )
-                : Icon(
-                    selected['icon'] as IconData,
-                    size: 28,
-                    color: const Color(0xFF16A34A),
-                  ),
-          ),
-          const SizedBox(width: 12),
-          // Name + sector
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  selected['name'] as String,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF111827),
-                  ),
-                ),
-                Text(
-                  sectorLabel,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF6B7280),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
             ),
-          ),
-          // Fare / capacity badge
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: state.fareEstimate != null
-                  ? const Color(0xFF16A34A)
-                  : const Color(0xFFE5E7EB),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: state.isEstimatingFare
-                ? const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Color(0xFF16A34A),
-                    ),
-                  )
-                : Text(
-                    fareBadge,
-                    style: TextStyle(
+            const SizedBox(width: 12),
+            // Name + sector
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        selected['name'] as String,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF111827),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Icon(
+                        Icons.unfold_more_rounded,
+                        size: 16,
+                        color: Color(0xFF16A34A),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    sectorLabel,
+                    style: const TextStyle(
                       fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: state.fareEstimate != null
-                          ? Colors.white
-                          : const Color(0xFF374151),
+                      color: Color(0xFF6B7280),
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-          ),
-        ],
+                ],
+              ),
+            ),
+            // Fare / capacity badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: state.fareEstimate != null
+                    ? const Color(0xFF16A34A)
+                    : const Color(0xFFE5E7EB),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: state.isEstimatingFare
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF16A34A),
+                      ),
+                    )
+                  : Text(
+                      fareBadge,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: state.fareEstimate != null
+                            ? Colors.white
+                            : const Color(0xFF374151),
+                      ),
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildConfirmButton(RideState state) {
+    if (_isUnsupportedVehicle(state)) {
+      return SizedBox(
+        width: double.infinity,
+        height: 52,
+        child: ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFDC2626),
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(26),
+            ),
+          ),
+          icon: const Icon(Icons.directions_car_rounded, size: 20),
+          label: const Text(
+            'Select a Valid Passenger Vehicle',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+          ),
+          onPressed: () => _showVehicleSelectionBottomSheet(state),
+        ),
+      );
+    }
+
     final hasLocations =
         state.pickupCoords != null &&
         state.destinationCoords != null &&
