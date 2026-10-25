@@ -633,13 +633,15 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
               ClipRRect(
                 borderRadius: BorderRadius.circular(16),
                 child: Image.asset(
-                  'assets/images/infurnus_hero_logo.png',
-                  width: 130,
+                  'assets/images/infurnus_banner_brand.png',
+                  width: 120,
                   height: 105,
                   fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const AnimatedVehicleHero(
-                    height: 100,
-                    assetImagePath: 'assets/images/infurnus_3d_logo.png',
+                  errorBuilder: (_, __, ___) => Image.asset(
+                    'assets/images/infurnus_splash_logo.png',
+                    width: 120,
+                    height: 105,
+                    fit: BoxFit.contain,
                   ),
                 ),
               ),
@@ -968,7 +970,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Instant',
         icon: Icons.directions_car_rounded,
         category: VehicleCategoryType.rides,
-        assetImagePath: 'assets/images/hatchback.jpg',
+        assetImagePath: 'assets/images/hatchback_white_bg.png',
       ),
       _VehicleCategoryItem(
         title: 'Sedan',
@@ -977,7 +979,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Instant',
         icon: Icons.directions_car_rounded,
         category: VehicleCategoryType.rides,
-        assetImagePath: 'assets/images/sedan.jpg',
+        assetImagePath: 'assets/images/sedan_white_bg.png',
       ),
       _VehicleCategoryItem(
         title: 'Innova Crysta',
@@ -986,7 +988,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'Instant',
         icon: Icons.directions_car_filled_rounded,
         category: VehicleCategoryType.premium,
-        assetImagePath: 'assets/images/innova_crysta.jpg',
+        assetImagePath: 'assets/images/innova_white_bg.png',
       ),
       _VehicleCategoryItem(
         title: 'Winger',

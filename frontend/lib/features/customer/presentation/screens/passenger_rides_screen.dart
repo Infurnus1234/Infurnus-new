@@ -26,7 +26,7 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
       'subtitle': '4 seater • Compact & comfortable',
       'capacity': '4 seats',
       'price': 'Route estimate',
-      'image': 'assets/images/hatchback.jpg',
+      'image': 'assets/images/hatchback_white_bg.png',
       'fallbackIcon': Icons.directions_car_filled_rounded,
     },
     {
@@ -36,7 +36,7 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
       'subtitle': '4 seater • Premium comfort',
       'capacity': '4 seats',
       'price': 'Route estimate',
-      'image': 'assets/images/sedan.jpg',
+      'image': 'assets/images/sedan_white_bg.png',
       'fallbackIcon': Icons.directions_car_rounded,
     },
     {
@@ -46,7 +46,7 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
       'subtitle': '6-7 seater • Spacious & luxurious',
       'capacity': '6-7 seats',
       'price': 'Route estimate',
-      'image': 'assets/images/innova_crysta.jpg',
+      'image': 'assets/images/innova_white_bg.png',
       'fallbackIcon': Icons.directions_car_filled_rounded,
     },
     {
