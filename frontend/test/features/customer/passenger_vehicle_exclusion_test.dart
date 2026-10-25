@@ -44,43 +44,49 @@ class _FakeRideRepository implements RideRepository {
 
 void main() {
   group('Passenger Vehicle Exclusion Tests (Bike, Auto, E-Rickshaw)', () {
-    test('isExcludedPassengerVehicle correctly identifies excluded vehicles', () {
-      // Excluded variations
-      expect(isExcludedPassengerVehicle('bike'), isTrue);
-      expect(isExcludedPassengerVehicle('motorcycle'), isTrue);
-      expect(isExcludedPassengerVehicle('two_wheeler'), isTrue);
-      expect(isExcludedPassengerVehicle('auto'), isTrue);
-      expect(isExcludedPassengerVehicle('auto_rickshaw'), isTrue);
-      expect(isExcludedPassengerVehicle('e_rickshaw'), isTrue);
-      expect(isExcludedPassengerVehicle('e-rickshaw'), isTrue);
-      expect(isExcludedPassengerVehicle('personal_e_rickshaw'), isTrue);
-      expect(isExcludedPassengerVehicle('personal e rickshaw'), isTrue);
-      expect(isExcludedPassengerVehicle('tuk_tuk'), isTrue);
+    test(
+      'isExcludedPassengerVehicle correctly identifies excluded vehicles',
+      () {
+        // Excluded variations
+        expect(isExcludedPassengerVehicle('bike'), isTrue);
+        expect(isExcludedPassengerVehicle('motorcycle'), isTrue);
+        expect(isExcludedPassengerVehicle('two_wheeler'), isTrue);
+        expect(isExcludedPassengerVehicle('auto'), isTrue);
+        expect(isExcludedPassengerVehicle('auto_rickshaw'), isTrue);
+        expect(isExcludedPassengerVehicle('e_rickshaw'), isTrue);
+        expect(isExcludedPassengerVehicle('e-rickshaw'), isTrue);
+        expect(isExcludedPassengerVehicle('personal_e_rickshaw'), isTrue);
+        expect(isExcludedPassengerVehicle('personal e rickshaw'), isTrue);
+        expect(isExcludedPassengerVehicle('tuk_tuk'), isTrue);
 
-      // By name
-      expect(isExcludedPassengerVehicle(null, 'Bike'), isTrue);
-      expect(isExcludedPassengerVehicle(null, 'Auto'), isTrue);
-      expect(isExcludedPassengerVehicle(null, 'E-Rickshaw'), isTrue);
-      expect(isExcludedPassengerVehicle(null, 'Personal E Rickshaw'), isTrue);
+        // By name
+        expect(isExcludedPassengerVehicle(null, 'Bike'), isTrue);
+        expect(isExcludedPassengerVehicle(null, 'Auto'), isTrue);
+        expect(isExcludedPassengerVehicle(null, 'E-Rickshaw'), isTrue);
+        expect(isExcludedPassengerVehicle(null, 'Personal E Rickshaw'), isTrue);
 
-      // Remaining valid passenger vehicles MUST NOT be excluded
-      expect(isExcludedPassengerVehicle('hatchback'), isFalse);
-      expect(isExcludedPassengerVehicle('sedan'), isFalse);
-      expect(isExcludedPassengerVehicle('innova'), isFalse);
-      expect(isExcludedPassengerVehicle('winger'), isFalse);
-      expect(isExcludedPassengerVehicle('traveller'), isFalse);
-      expect(isExcludedPassengerVehicle('cab_economy'), isFalse);
-      expect(isExcludedPassengerVehicle('cab_premium'), isFalse);
+        // Remaining valid passenger vehicles MUST NOT be excluded
+        expect(isExcludedPassengerVehicle('hatchback'), isFalse);
+        expect(isExcludedPassengerVehicle('sedan'), isFalse);
+        expect(isExcludedPassengerVehicle('innova'), isFalse);
+        expect(isExcludedPassengerVehicle('winger'), isFalse);
+        expect(isExcludedPassengerVehicle('traveller'), isFalse);
+        expect(isExcludedPassengerVehicle('cab_economy'), isFalse);
+        expect(isExcludedPassengerVehicle('cab_premium'), isFalse);
 
-      // Logistics & emergency vehicles MUST NOT be excluded
-      expect(isExcludedPassengerVehicle('piaggio_ape', 'Piaggio Ape'), isFalse);
-      expect(isExcludedPassengerVehicle('tata_magic', 'Tata Magic'), isFalse);
-      expect(isExcludedPassengerVehicle('cargo_207', '207 Cargo'), isFalse);
-      expect(isExcludedPassengerVehicle('cargo_407', '407 Cargo'), isFalse);
-      expect(isExcludedPassengerVehicle('ambulance', 'Ambulance'), isFalse);
-      expect(isExcludedPassengerVehicle('towing', 'Towing Van'), isFalse);
-      expect(isExcludedPassengerVehicle('jcb', 'JCB Excavator'), isFalse);
-    });
+        // Logistics & emergency vehicles MUST NOT be excluded
+        expect(
+          isExcludedPassengerVehicle('piaggio_ape', 'Piaggio Ape'),
+          isFalse,
+        );
+        expect(isExcludedPassengerVehicle('tata_magic', 'Tata Magic'), isFalse);
+        expect(isExcludedPassengerVehicle('cargo_207', '207 Cargo'), isFalse);
+        expect(isExcludedPassengerVehicle('cargo_407', '407 Cargo'), isFalse);
+        expect(isExcludedPassengerVehicle('ambulance', 'Ambulance'), isFalse);
+        expect(isExcludedPassengerVehicle('towing', 'Towing Van'), isFalse);
+        expect(isExcludedPassengerVehicle('jcb', 'JCB Excavator'), isFalse);
+      },
+    );
 
     testWidgets(
       'PassengerRidesScreen displays only supported passenger vehicles and excludes Bike, Auto, E-Rickshaw',
@@ -93,11 +99,7 @@ void main() {
         });
 
         await tester.pumpWidget(
-          const ProviderScope(
-            child: MaterialApp(
-              home: PassengerRidesScreen(),
-            ),
-          ),
+          const ProviderScope(child: MaterialApp(home: PassengerRidesScreen())),
         );
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 100));
@@ -116,7 +118,6 @@ void main() {
         expect(find.text('Force Traveller'), findsOneWidget);
       },
     );
-
 
     testWidgets(
       'RideBookingScreen rejects previously selected Bike, Auto, or E-Rickshaw and blocks booking',
@@ -137,21 +138,21 @@ void main() {
         );
         addTearDown(container.dispose);
 
-        container.read(rideProvider.notifier).setRoute(
-          'Indiranagar, Bangalore',
-          'Koramangala, Bangalore',
-          pickupCoords: const LatLng(12.9716, 77.5946),
-          destCoords: const LatLng(12.9352, 77.6245),
-          vehicleCategory: 'bike',
-          sector: 'passenger',
-        );
+        container
+            .read(rideProvider.notifier)
+            .setRoute(
+              'Indiranagar, Bangalore',
+              'Koramangala, Bangalore',
+              pickupCoords: const LatLng(12.9716, 77.5946),
+              destCoords: const LatLng(12.9352, 77.6245),
+              vehicleCategory: 'bike',
+              sector: 'passenger',
+            );
 
         await tester.pumpWidget(
           UncontrolledProviderScope(
             container: container,
-            child: const MaterialApp(
-              home: RideBookingScreen(),
-            ),
+            child: const MaterialApp(home: RideBookingScreen()),
           ),
         );
         await tester.pump();
@@ -183,28 +184,25 @@ void main() {
       },
     );
 
-    testWidgets('Other sectors (Logistics, Emergency, Rentals) are unaffected', (
-      tester,
-    ) async {
-      tester.view.physicalSize = const Size(800, 1600);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(() {
-        tester.view.resetPhysicalSize();
-        tester.view.resetDevicePixelRatio();
-      });
+    testWidgets(
+      'Other sectors (Logistics, Emergency, Rentals) are unaffected',
+      (tester) async {
+        tester.view.physicalSize = const Size(800, 1600);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() {
+          tester.view.resetPhysicalSize();
+          tester.view.resetDevicePixelRatio();
+        });
 
-      // Logistics retains cargo vehicles (Piaggio Ape, Tata Magic, etc.)
-      await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(
-            home: LogisticsScreen(),
-          ),
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-      expect(find.text('Piaggio Ape'), findsOneWidget);
-      expect(find.text('Tata Magic'), findsOneWidget);
-    });
+        // Logistics retains cargo vehicles (Piaggio Ape, Tata Magic, etc.)
+        await tester.pumpWidget(
+          const ProviderScope(child: MaterialApp(home: LogisticsScreen())),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(find.text('Piaggio Ape'), findsOneWidget);
+        expect(find.text('Tata Magic'), findsOneWidget);
+      },
+    );
   });
 }

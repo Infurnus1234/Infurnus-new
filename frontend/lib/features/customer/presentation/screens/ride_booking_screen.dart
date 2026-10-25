@@ -73,7 +73,8 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _detectCurrentLocation(preserveSelection: true);
       _fetchFleet(rideState.selectedSector);
-      if (rideState.pickupCoords != null && rideState.destinationCoords != null) {
+      if (rideState.pickupCoords != null &&
+          rideState.destinationCoords != null) {
         ref.read(rideProvider.notifier).estimateRouteFare();
       }
     });
@@ -106,8 +107,8 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
           final nextTier = fleet.isNotEmpty
               ? fleet.first.category
               : (_getVehiclesForSector(sector).isNotEmpty
-                  ? _getVehiclesForSector(sector).first['category'] as String
-                  : 'hatchback');
+                    ? _getVehiclesForSector(sector).first['category'] as String
+                    : 'hatchback');
           ref.read(rideProvider.notifier).selectTier(nextTier);
         }
       }
@@ -742,7 +743,8 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
           )
         : rideState.destinationCoords;
 
-    final isInitial = (rideState.status == RideStatus.initial ||
+    final isInitial =
+        (rideState.status == RideStatus.initial ||
         rideState.status == RideStatus.error);
 
     return Scaffold(
@@ -896,7 +898,9 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                 onTap: () {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Multi-stop booking will be available soon!'),
+                      content: Text(
+                        'Multi-stop booking will be available soon!',
+                      ),
                       duration: Duration(seconds: 2),
                     ),
                   );
@@ -920,7 +924,11 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.add_rounded, size: 16, color: Color(0xFF111827)),
+                      Icon(
+                        Icons.add_rounded,
+                        size: 16,
+                        color: Color(0xFF111827),
+                      ),
                       SizedBox(width: 4),
                       Text(
                         'Add stop',

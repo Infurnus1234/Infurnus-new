@@ -17,10 +17,7 @@ import '../providers/ride_provider.dart';
 class PickupSelectionScreen extends ConsumerStatefulWidget {
   final String? initialSector;
 
-  const PickupSelectionScreen({
-    super.key,
-    this.initialSector,
-  });
+  const PickupSelectionScreen({super.key, this.initialSector});
 
   @override
   ConsumerState<PickupSelectionScreen> createState() =>
@@ -298,10 +295,7 @@ class _PickupSelectionScreenState extends ConsumerState<PickupSelectionScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_rounded,
-            color: Color(0xFF111827),
-          ),
+          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF111827)),
           onPressed: () => context.pop(),
         ),
         title: Text(
@@ -681,15 +675,12 @@ class _PickupSelectionScreenState extends ConsumerState<PickupSelectionScreen> {
     return ListView.separated(
       padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: _suggestions.length,
-      separatorBuilder: (_, __) => const Divider(
-        height: 1,
-        indent: 56,
-        color: Color(0xFFF3F4F6),
-      ),
+      separatorBuilder: (_, __) =>
+          const Divider(height: 1, indent: 56, color: Color(0xFFF3F4F6)),
       itemBuilder: (context, index) {
         final suggestion = _suggestions[index];
-        final latLng = suggestion.latitude != null &&
-                suggestion.longitude != null
+        final latLng =
+            suggestion.latitude != null && suggestion.longitude != null
             ? LatLng(suggestion.latitude!, suggestion.longitude!)
             : null;
 
@@ -732,11 +723,8 @@ class _PickupSelectionScreenState extends ConsumerState<PickupSelectionScreen> {
     return ListView.separated(
       padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: _recentPlaces.length,
-      separatorBuilder: (_, __) => const Divider(
-        height: 1,
-        indent: 56,
-        color: Color(0xFFF3F4F6),
-      ),
+      separatorBuilder: (_, __) =>
+          const Divider(height: 1, indent: 56, color: Color(0xFFF3F4F6)),
       itemBuilder: (context, index) {
         final place = _recentPlaces[index];
         return ListTile(
@@ -755,10 +743,7 @@ class _PickupSelectionScreenState extends ConsumerState<PickupSelectionScreen> {
           ),
           subtitle: Text(
             place['subtitle'] as String,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Color(0xFF6B7280),
-            ),
+            style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),

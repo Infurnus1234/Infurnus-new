@@ -389,8 +389,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     );
   }
 
-
-
   Widget _buildDestinationSearchBar(BuildContext context) {
     return GestureDetector(
       onTap: () => context.push('/pickup-selection'),

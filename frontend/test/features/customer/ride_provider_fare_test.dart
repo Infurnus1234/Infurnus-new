@@ -114,8 +114,9 @@ void main() {
       expect(container.read(rideProvider).fare, 100);
 
       // The last two explicit selectTier calls sent bike then suv to the API.
-      final categories =
-          repository.payloads.map((p) => p['vehicleCategory']).toList();
+      final categories = repository.payloads
+          .map((p) => p['vehicleCategory'])
+          .toList();
       expect(categories.last, 'suv');
       expect(categories[categories.length - 2], 'bike');
     },
