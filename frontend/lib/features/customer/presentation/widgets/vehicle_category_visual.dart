@@ -30,14 +30,14 @@ class VehicleCategoryConfig {
       category: VehicleCategoryType.rides,
       title: 'Rides & Cabs',
       subtitle: 'Daily city rides',
-      assetImagePath: 'assets/images/hatchback_clean.jpg',
+      assetImagePath: 'assets/images/sedan.jpg',
       fallbackIcon: Icons.directions_car_rounded,
     ),
     VehicleCategoryType.logistics: VehicleCategoryConfig(
       category: VehicleCategoryType.logistics,
       title: 'Logistics',
       subtitle: 'Cargo & Trucks',
-      assetImagePath: 'assets/images/mahindra_207_white.png',
+      assetImagePath: 'assets/images/mini_commercial.jpg',
       fallbackIcon: Icons.local_shipping_rounded,
     ),
     VehicleCategoryType.emergency: VehicleCategoryConfig(
