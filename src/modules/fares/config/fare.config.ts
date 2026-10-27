@@ -1,7 +1,7 @@
 import type { FarePricingConfig, VehiclePricing } from '../types/fare.js';
 
 /**
- * INFURNUS Fare Pricing — v1
+ * INFURNUS Fare Pricing â€” v1
  *
  * Simple initial pricing model:
  *
@@ -17,15 +17,15 @@ import type { FarePricingConfig, VehiclePricing } from '../types/fare.js';
  */
 
 export const DEFAULT_FARE_PRICING: Readonly<FarePricingConfig> = {
-  baseFare: 500, // ₹5.00
-  distanceRatePerKm: 1200, // ₹12.00 / km
-  timeRatePerMinute: 200, // ₹2.00 / minute
+  baseFare: 500, // â‚¹5.00
+  distanceRatePerKm: 1200, // â‚¹12.00 / km
+  timeRatePerMinute: 200, // â‚¹2.00 / minute
   currency: 'INR',
   pricingVersion: 'v1',
 };
 
 export const VEHICLE_UNAVAILABLE_MESSAGE =
-  'We’re sorry, but this vehicle is not available for booking yet. We’ll be introducing it soon. Please check back later.';
+  'Weâ€™re sorry, but this vehicle is not available for booking yet. Weâ€™ll be introducing it soon. Please check back later.';
 export const FIXED_QUOTE_REQUIRED_MESSAGE =
   'An approved fixed quote is required before booking this vehicle.';
 export const VEHICLE_PRICING_VERSION = 'vehicle-ranges-v1';
@@ -65,17 +65,17 @@ export const VEHICLE_FARE_PRICING: Readonly<
   },
   logistics: {
     three_wheeler: {
-      displayName: 'Piaggio Ape',
+      displayName: '3-Wheeler (Goods)',
       baseFare: { minimum: 20000, maximum: 20000 },
       perKmRate: { minimum: 1500, maximum: 2000 },
     },
     mini_truck: {
-      displayName: 'Magic',
+      displayName: 'Mini Truck (Tata Ace)',
       baseFare: { minimum: 23500, maximum: 32500 },
       perKmRate: { minimum: 1800, maximum: 2200 },
     },
     pickup_8ft: {
-      displayName: 'Pickup',
+      displayName: 'Pickup 8ft',
       baseFare: { minimum: 32500, maximum: 37500 },
       perKmRate: { minimum: 2000, maximum: 2500 },
     },

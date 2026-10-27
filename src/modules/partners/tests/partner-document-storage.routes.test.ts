@@ -350,8 +350,8 @@ describe('Partner document storage upload API', () => {
       })
       .field('documentType', 'INVALID_DOCUMENT');
 
-    expect(response.status).toBe(500);
-
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
     expect(mockStorageUpload).not.toHaveBeenCalled();
     expect(repo.create).not.toHaveBeenCalled();
   });
@@ -364,8 +364,24 @@ describe('Partner document storage upload API', () => {
       .set('Authorization', `Bearer ${token}`)
       .field('documentType', 'PAN');
 
-    expect(response.status).toBe(500);
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
+    expect(mockStorageUpload).not.toHaveBeenCalled();
+    expect(repo.create).not.toHaveBeenCalled();
+  });
 
+  it('rejects malformed vehicle ownership identifiers before storage or persistence', async () => {
+    const response = await request(app)
+      .post(`/partners/${partnerId}/documents/upload`)
+      .set('Authorization', `Bearer ${await createAuthenticatedToken()}`)
+      .attach('file', Buffer.from('%PDF-1.7\n'), {
+        filename: 'rc.pdf',
+        contentType: 'application/pdf',
+      })
+      .field('documentType', 'VEHICLE_RC')
+      .field('vehicleId', 'not-a-uuid');
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
     expect(mockStorageUpload).not.toHaveBeenCalled();
     expect(repo.create).not.toHaveBeenCalled();
   });

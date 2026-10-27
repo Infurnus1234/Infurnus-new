@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
@@ -11,7 +14,7 @@ import '../network/dio_client.dart';
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
-  debugPrint('Handling a background message: ${message.messageId}');
+  // Background display is handled by the OS; opening reconciles through the API.
 }
 
 class NotificationService {
@@ -22,8 +25,47 @@ class NotificationService {
 
   NotificationService(this._dio);
   String? _registeredId;
+  bool _initialized = false;
+  final _rideUpdates = StreamController<String>.broadcast();
+  final List<StreamSubscription<dynamic>> _subscriptions = [];
+  final Set<String> _seen = {};
+  String? _pendingRide;
+  Stream<String> get rideUpdates => _rideUpdates.stream;
+  String? takePendingRide() {
+    final id = _pendingRide;
+    _pendingRide = null;
+    return id;
+  }
+
+  /// A push is only an invalidation hint. Consumers fetch the authorized ride.
+  bool handleRideMessage(Map<String, dynamic> data, {bool opened = false}) {
+    final id = data['rideId'];
+    if (id is! String || id.isEmpty || _rideUpdates.isClosed) return false;
+    if (data['expiresAt'] != null) {
+      final expiry = DateTime.tryParse(data['expiresAt'].toString());
+      if (expiry == null || !expiry.isAfter(DateTime.now())) return false;
+    }
+    final notification = data['notificationId'];
+    if (!opened && notification is String && !_seen.add(notification)) {
+      return false;
+    }
+    if (_seen.length > 200) _seen.remove(_seen.first);
+    if (!_rideUpdates.hasListener) _pendingRide = id;
+    _rideUpdates.add(id);
+    return true;
+  }
+
+  void dispose() {
+    for (final subscription in _subscriptions) {
+      unawaited(subscription.cancel());
+    }
+    _subscriptions.clear();
+    unawaited(_rideUpdates.close());
+  }
 
   Future<void> init() async {
+    if (_initialized) return;
+    _initialized = true;
     try {
       await Firebase.initializeApp();
       FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
@@ -42,10 +84,38 @@ class NotificationService {
       await _notificationsPlugin.initialize(
         initializationSettings,
         onDidReceiveNotificationResponse: (details) {
-          debugPrint('Notification tapped with payload: ${details.payload}');
+          try {
+            final data = jsonDecode(details.payload ?? '{}');
+            if (data is Map<String, dynamic>) {
+              handleRideMessage(data, opened: true);
+            }
+          } on FormatException {
+            /* Reject malformed local payloads. */
+          }
         },
       );
 
+      _subscriptions.add(
+        FirebaseMessaging.onMessageOpenedApp.listen(
+          (message) => handleRideMessage(message.data, opened: true),
+        ),
+      );
+      final initial = await FirebaseMessaging.instance.getInitialMessage();
+      if (initial != null) handleRideMessage(initial.data, opened: true);
+      final localInitial = await _notificationsPlugin
+          .getNotificationAppLaunchDetails();
+      if (localInitial?.didNotificationLaunchApp == true) {
+        try {
+          final data = jsonDecode(
+            localInitial?.notificationResponse?.payload ?? '{}',
+          );
+          if (data is Map<String, dynamic>) {
+            handleRideMessage(data, opened: true);
+          }
+        } on FormatException {
+          /* Reject malformed local payloads. */
+        }
+      }
       final messaging = FirebaseMessaging.instance;
       final settings = await messaging.requestPermission(
         alert: true,
@@ -61,31 +131,36 @@ class NotificationService {
           await registerDeviceToken(fcmToken);
         }
 
-        messaging.onTokenRefresh.listen((newToken) {
-          registerDeviceToken(newToken);
-        });
+        _subscriptions.add(
+          messaging.onTokenRefresh.listen((newToken) {
+            unawaited(registerDeviceToken(newToken));
+          }),
+        );
 
-        FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-          debugPrint(
-            'Received foreground message: ${message.notification?.title}',
-          );
-          final notification = message.notification;
-          if (notification != null) {
-            showNotification(
-              id: notification.hashCode,
-              title: notification.title ?? 'Infurnus',
-              body: notification.body ?? '',
-              payload: message.data['rideId'] ?? message.data['payload'],
-            );
-          }
-        });
+        _subscriptions.add(
+          FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+            if (!handleRideMessage(message.data) &&
+                message.data['rideId'] != null) {
+              return;
+            }
+            final notification = message.notification;
+            if (notification != null) {
+              showNotification(
+                id: notification.hashCode,
+                title: notification.title ?? 'Infurnus',
+                body: notification.body ?? '',
+                payload: jsonEncode(message.data),
+              );
+            }
+          }),
+        );
       } else {
         debugPrint(
           'User declined or has not accepted push notification permission',
         );
       }
     } catch (e) {
-      debugPrint('Notification initialization error: $e');
+      debugPrint('Notification initialization unavailable: ${e.runtimeType}');
     }
   }
 
@@ -156,7 +231,7 @@ class NotificationService {
       }
       debugPrint('Device token successfully registered with backend');
     } catch (e) {
-      debugPrint('Failed to register device token with backend: $e');
+      debugPrint('Push registration unavailable: ${e.runtimeType}');
     }
   }
 
@@ -189,6 +264,8 @@ class NotificationService {
   }
 }
 
-final notificationServiceProvider = Provider(
-  (ref) => NotificationService(ref.read(dioProvider)),
-);
+final notificationServiceProvider = Provider((ref) {
+  final service = NotificationService(ref.read(dioProvider));
+  ref.onDispose(service.dispose);
+  return service;
+});

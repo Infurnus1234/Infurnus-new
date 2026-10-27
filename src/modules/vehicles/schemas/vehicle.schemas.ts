@@ -173,6 +173,19 @@ export const vehiclePricingReferenceSchema = z
       .nullable(),
     perKmRate: z.object({ minimum: referenceAmount, maximum: referenceAmount }).strict(),
     routeBased: z.boolean().optional(),
+    demandPricing: z
+      .object({
+        windowSeconds: z.number().int().min(1).max(86400),
+        lowBookingCount: z.number().int().nonnegative().max(1000000),
+        highBookingCount: z.number().int().positive().max(1000000),
+        staleAfterSeconds: z.number().int().positive().max(86400),
+      })
+      .strict()
+      .refine(
+        (v) => v.highBookingCount > v.lowBookingCount && v.staleAfterSeconds <= v.windowSeconds,
+        'Invalid demand thresholds',
+      )
+      .optional(),
   })
   .strict()
   .refine(
@@ -186,8 +199,8 @@ export const vehiclePricingReferenceSchema = z
 export const createVehicleTypeSchema = z
   .object({
     name: vehicleText,
-    code: z.string().regex(/^[a-z][a-z0-9_]{0,49}$/),
-    sector: z.enum(['passenger', 'logistics', 'service', 'premium']),
+    code: z.string().regex(/^[a-z][a-z0-9_-]{0,49}$/),
+    sector: z.enum(['passenger', 'logistics', 'service', 'premium', 'rental']),
     baseFare: exactFare.nullable(),
     perKmRate: exactFare.nullable(),
     pricingReference: vehiclePricingReferenceSchema.nullable().optional(),

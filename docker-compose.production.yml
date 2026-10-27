@@ -33,3 +33,21 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
+
+  notification-worker:
+    build: .
+    container_name: infurnus-notification-worker
+    restart: unless-stopped
+    init: true
+    command: ['node', 'dist/infrastructure/queue/notification-worker.js']
+    env_file:
+      - ${INFURNUS_RUNTIME_ENV_FILE:?Supply an approved runtime env file outside the repository}
+    environment:
+      NODE_ENV: production
+      MAP_SERVICE_AREA_BOUNDARY_FILE: /run/infurnus/service-area.geojson
+    volumes:
+      - type: bind
+        source: ${INFURNUS_APPROVED_BOUNDARY_FILE:?Supply the owner-approved GeoJSON geometry}
+        target: /run/infurnus/service-area.geojson
+        read_only: true
+    stop_grace_period: 30s

@@ -6,6 +6,8 @@ export const envSchema = z
     NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
 
     PORT: z.coerce.number().int().positive().default(3000),
+    // Local USB testing can bind loopback without changing deployed defaults.
+    SERVER_HOST: z.string().trim().min(1).default('0.0.0.0'),
     // Fail closed. Operators must configure the verified proxy topology before deployment.
     TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(10).default(0),
     // Explicit no-ownership preview: an idle serving revision must retain priority.
@@ -15,8 +17,15 @@ export const envSchema = z
       .transform((value) => value === true || value === 'true'),
 
     DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+    LOCAL_DOCUMENT_STORAGE_ROOT: z.string().min(1).optional(),
+    // Operator reference to an approved necessary/lawful masked-identity policy.
+    // Absent by default: no Aadhaar collection is authorized.
+    AADHAAR_COLLECTION_AUTHORIZATION: z.string().trim().min(1).optional(),
 
     CORS_ORIGIN: z.string().min(1).default('http://localhost:5173'),
+    // Optional paired live-device test isolation; never an authentication bypass.
+    DISPATCH_TEST_CUSTOMER_ID: z.string().uuid().optional(),
+    DISPATCH_TEST_DRIVER_USER_ID: z.string().uuid().optional(),
     FLEET_REPORT_TIME_ZONE: z
       .string()
       .default('Asia/Kolkata')
@@ -345,6 +354,18 @@ export const envSchema = z
       ),
   })
   .superRefine((config, ctx) => {
+    if (
+      Boolean(config.DISPATCH_TEST_CUSTOMER_ID) !== Boolean(config.DISPATCH_TEST_DRIVER_USER_ID) ||
+      (config.DISPATCH_TEST_CUSTOMER_ID &&
+        config.DISPATCH_TEST_CUSTOMER_ID === config.DISPATCH_TEST_DRIVER_USER_ID)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['DISPATCH_TEST_CUSTOMER_ID'],
+        message: 'Dispatch test isolation requires two distinct customer and driver user IDs',
+      });
+    }
+
     if (
       config.MAP_REQUEST_LOCK_MS <
       config.GOOGLE_REQUEST_TIMEOUT_MS * (config.GOOGLE_MAX_RETRIES + 1) + 1000

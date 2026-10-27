@@ -4,7 +4,7 @@ import 'dotenv/config';
 export default defineConfig({
   test: {
     environment: 'node',
-    exclude: ['**/node_modules/**', '**/dist/**'],
+    exclude: ['**/node_modules/**', '**/dist/**', '**/tmp/**'],
     testTimeout: 15000,
     // Database suites temporarily change global policy/catalog fixtures.
     // Keep their files isolated; concurrency assertions inside each test remain enabled.

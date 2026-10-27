@@ -137,7 +137,7 @@ export function createSocketServer(
           rideDependencies.matchingService,
           (candidate, ride, expiresAt) => {
             io.to(driverUserRoom(candidate.userId)).emit('ride:incoming', {
-              ride: sanitizeRideForDriver(ride),
+              ride: sanitizeRideForDriver({ ...ride, dispatchExpiresAt: expiresAt }),
               expiresAt: expiresAt.toISOString(),
             });
             void rideDependencies

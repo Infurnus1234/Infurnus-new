@@ -25,6 +25,33 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
       if (!/^\/admin_master_test_[a-f0-9]{32}$/.test(new URL(process.env.DATABASE_URL!).pathname))
         throw Error('Owned disposable database required');
     });
+    it('rejects repeat association review for an approved active Fleet member', async () => {
+      const f = await fixture();
+      await pool.query(
+        'INSERT INTO fleet_managed_driver_accounts(driver_user_id,partner_id,created_by) VALUES($1,$2,$3)',
+        [f.driver, f.partner, f.owner],
+      );
+      await expect(managed.submit(f.owner, 'fleet_owner', f.driver)).rejects.toMatchObject({
+        code: 'DRIVER_ALREADY_ASSOCIATED',
+        statusCode: 409,
+      });
+      expect(
+        (
+          await pool.query(
+            "SELECT id FROM provider_approval_requests WHERE target_id=$1 AND request_type='driver_association' AND status='PENDING'",
+            [f.profile],
+          )
+        ).rowCount,
+      ).toBe(0);
+      expect(
+        (
+          await pool.query(
+            "SELECT id FROM partner_drivers WHERE partner_id=$1 AND driver_profile_id=$2 AND status='ACTIVE'",
+            [f.partner, f.profile],
+          )
+        ).rowCount,
+      ).toBe(1);
+    });
     it('creates an OTP-only Driver profile without password, approval or assignment and is idempotent', async () => {
       const f = await fixture(),
         input = profileInput();

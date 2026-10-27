@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { fleetReportQuerySchema } from '../schemas/fleet-report.schemas.js';
 import { fleetListQuerySchema } from '../schemas/fleet.schemas.js';
 import type { NextFunction, Request, Response } from 'express';
 import { AppError } from '../../../common/errors/app-error.js';
@@ -14,18 +15,14 @@ export class FleetController {
 
   catalog = async (_req: Request, res: Response, next: NextFunction) => {
     try {
-      res.json({ success: true, data: await this.fleetService.catalog() });
+      res.json({ success: true, data: await this.fleetService.catalog(_req.auth!.userId) });
     } catch (e) {
       next(e);
     }
   };
   revenue = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const query = z
-        .object({ from: z.iso.date().optional(), to: z.iso.date().optional() })
-        .strict()
-        .refine((q) => !q.from || !q.to || q.from <= q.to, 'Start date must not follow end date')
-        .parse(req.query);
+      const query = fleetReportQuerySchema.parse(req.query);
       const vehicleId = req.params.id ? z.string().uuid().parse(req.params.id) : undefined;
       res.json({
         success: true,

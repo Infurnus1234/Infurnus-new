@@ -1,6 +1,6 @@
 import type { Buffer } from 'node:buffer';
 
-export type StorageProvider = 'cloudinary';
+export type StorageProvider = 'cloudinary' | 'local';
 
 export type StorageResourceType = 'image' | 'raw' | 'auto';
 

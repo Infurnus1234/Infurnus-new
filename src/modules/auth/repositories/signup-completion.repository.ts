@@ -25,7 +25,8 @@ export type SignupCompletionResult =
     }
   | {
       status: 'already_verified';
-    };
+    }
+  | { status: 'expired' };
 
 // ============================================================
 // Repository contract
@@ -135,15 +136,19 @@ export class PostgresSignupCompletionRepository implements SignupCompletionRepos
         // through the OTP provider before this method is called.
         // ======================================================
 
-        await client.query(
+        const verified = await client.query(
           `
           UPDATE pending_signups
           SET otp_verified_at = NOW()
           WHERE id = $1
             AND otp_verified_at IS NULL
+            AND otp_provider_expires_at > clock_timestamp()
+          RETURNING id
         `,
           [signupId],
         );
+        // Recheck after provider I/O and after acquiring the row lock.
+        if (verified.rowCount !== 1) return { status: 'expired' };
 
         // ======================================================
         // Determine verified contact.

@@ -29,8 +29,8 @@ const projection = `
   status,
   metadata,
   version, upload_source AS "uploadSource", reviewed_by AS "reviewedBy", reviewed_at AS "reviewedAt",
-  issued_at AS "issuedAt",
-  expires_at AS "expiresAt",
+  issued_at::text AS "issuedAt",
+  expires_at::text AS "expiresAt",
   uploaded_at AS "uploadedAt",
   verified_at AS "verifiedAt",
   created_at AS "createdAt",
@@ -175,10 +175,15 @@ export class PostgresPartnerDocumentRepository implements PartnerDocumentReposit
 
   async delete(id: string, partnerId: string): Promise<PartnerDocument | null> {
     const result = await this.pool.query<PartnerDocument>(
-      `DELETE FROM partner_documents
+      `WITH removed AS (DELETE FROM partner_documents
        WHERE id = $1
          AND partner_id = $2
-       RETURNING ${projection}`,
+         AND status='PENDING' AND version=1
+         AND NOT EXISTS(SELECT 1 FROM partner_document_history h WHERE h.document_id=$1)
+         AND NOT EXISTS(SELECT 1 FROM provider_approval_requests r WHERE r.target_type='partner_document' AND r.target_id=$1 AND r.status IN ('APPROVED','REJECTED'))
+       RETURNING ${projection}), cancelled AS (
+         UPDATE provider_approval_requests SET status='CANCELLED',updated_at=NOW() WHERE target_type='partner_document' AND target_id=$1 AND status='PENDING' AND EXISTS(SELECT 1 FROM removed) RETURNING id
+       ) SELECT * FROM removed`,
       [id, partnerId],
     );
 

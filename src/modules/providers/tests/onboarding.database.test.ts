@@ -112,7 +112,7 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
         ).rows[0].n,
       ).toBe(2);
     });
-    it('requires an actual owned front image for vehicle review, while deferring retains the draft', async () => {
+    it('submits an owned vehicle without a front image and retains optional later uploads', async () => {
       await upload();
       const partner = (
         await pool.query(
@@ -126,9 +126,9 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
           [user, randomUUID().slice(0, 18)],
         )
       ).rows[0].id;
-      await expect(repo.onboarding(user, 'driver', { submit: true })).rejects.toMatchObject({
-        code: 'VEHICLE_PHOTO_REQUIRED',
-      });
+      expect((await repo.onboarding(user, 'driver', { submit: true })).dashboardAccessible).toBe(
+        true,
+      );
       await repo.onboarding(user, 'driver', { defer: 'vehicle' });
       expect((await repo.onboarding(user, 'driver', { submit: true })).dashboardAccessible).toBe(
         true,

@@ -253,6 +253,18 @@ export class ManagedDriverRepository {
       const target = await this.authorizedProfile(owner, role, userId, c),
         partner = await this.owner(c, owner, role);
       await c.query('SELECT id FROM driver_profiles WHERE id=$1 FOR UPDATE', [target.id]);
+      const membership = await c.query(
+        `SELECT 1 FROM partner_drivers pd JOIN driver_profiles dp ON dp.id=pd.driver_profile_id
+         WHERE pd.partner_id=$1 AND pd.driver_profile_id=$2 AND pd.status='ACTIVE'
+           AND dp.verification_status='approved'`,
+        [partner, target.id],
+      );
+      if (membership.rowCount)
+        throw new AppError(
+          'DRIVER_ALREADY_ASSOCIATED',
+          'This approved Driver is already an active member of your Fleet',
+          409,
+        );
       const documents = await c.query(
         "SELECT id FROM driver_documents WHERE driver_profile_id=$1 AND document_type='driver_license' AND verification_status::text NOT IN ('rejected','expired','changes_requested')",
         [target.id],

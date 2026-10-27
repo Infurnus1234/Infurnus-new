@@ -27,7 +27,8 @@ class RideBookingScreen extends ConsumerStatefulWidget {
   ConsumerState<RideBookingScreen> createState() => _RideBookingScreenState();
 }
 
-class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
+class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
+    with WidgetsBindingObserver {
   static const Color mainBg = Color(0xFFF9FAFB);
   static const Color cardBg = Color(0xFFFFFFFF);
   static const Color cardElevated = Color(0xFFFFFFFF);
@@ -66,6 +67,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     final rideState = ref.read(rideProvider);
     _pickupController.text = rideState.pickup ?? '';
     _destinationController.text = rideState.destination ?? '';
@@ -78,6 +80,15 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
         ref.read(rideProvider.notifier).estimateRouteFare();
       }
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed || !mounted) return;
+    final rideId = ref.read(rideProvider).currentRide?.id;
+    if (rideId != null) {
+      unawaited(ref.read(rideProvider.notifier).getRideDetails(rideId));
+    }
   }
 
   Future<void> _fetchFleet(String sector) async {
@@ -420,6 +431,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen> {
   @override
   void dispose() {
     _fleetCancelToken.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _pickupController.dispose();
     _destinationController.dispose();
     _pickupAutocompleteTimer?.cancel();

@@ -324,7 +324,7 @@ try {
     }
 
     const catalog = await testPool.query(
-      "SELECT to_regclass('public.vehicle_types') AS catalog, to_regclass('public.vehicle_types_code_key') AS unique_code, to_regclass('public.vehicle_types_sector_active_idx') AS active_index, (SELECT count(*) FROM vehicle_types) AS seeded, (SELECT count(*) FROM vehicle_types WHERE active OR (code <> 'ftl' AND (base_fare_paise IS NULL OR per_km_rate_paise IS NULL)) OR (code = 'ftl' AND (base_fare_paise IS NOT NULL OR per_km_rate_paise IS NOT NULL OR pricing_reference IS NULL))) AS unsafe_seeded",
+      "SELECT to_regclass('public.vehicle_types') AS catalog, to_regclass('public.vehicle_types_sector_code_key') AS unique_code, to_regclass('public.vehicle_types_sector_active_idx') AS active_index, (SELECT count(*) FROM vehicle_types) AS seeded, (SELECT count(*) FROM vehicle_types WHERE NOT active OR base_fare_paise IS NOT NULL OR per_km_rate_paise IS NOT NULL OR pricing_reference IS NULL OR pricing_reference->'demandPricing' IS NULL OR (code = 'ftl' AND pricing_reference->>'routeBased' <> 'true')) AS unsafe_seeded",
     );
     if (
       !catalog.rows[0].catalog ||
@@ -334,7 +334,7 @@ try {
       Number(catalog.rows[0].unsafe_seeded) !== 0
     )
       throw new Error(
-        'Vehicle pricing migration must create nine inactive approved fixed prices and one route-based FTL reference',
+        'Vehicle pricing migration must create ten active chart demand references including route-based FTL',
       );
     const authSchema = await testPool.query(`SELECT
       EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='driver_profiles' AND column_name='emergency_contact_relationship') AS driver_contact,
@@ -378,7 +378,7 @@ try {
     }
     console.log('Driver schema, OTP attempts and real compliance function behavior verified');
     console.log(
-      'Vehicle type catalog constraints/indexes present; approved inactive fixed prices and route-based FTL',
+      'Vehicle type catalog constraints/indexes present; approved active demand ranges and route-based FTL',
     );
     console.log(`Clean migration verification passed for ${databaseName}`);
 

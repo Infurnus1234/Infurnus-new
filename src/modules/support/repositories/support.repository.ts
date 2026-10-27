@@ -82,7 +82,11 @@ export class PostgresSupportRepository implements SupportRepository {
        FROM support_tickets
        WHERE user_id = $1
        ORDER BY created_at DESC,id DESC LIMIT $2 OFFSET $3`,
-      [userId, query.pageSize, (query.page - 1) * query.pageSize],
+      [
+        userId,
+        query.pageSize + (query.includePagination === 'true' ? 1 : 0),
+        (query.page - 1) * query.pageSize,
+      ],
     );
 
     return result.rows.map((row) => ({

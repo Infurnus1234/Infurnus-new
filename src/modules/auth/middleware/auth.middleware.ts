@@ -26,6 +26,7 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
     req.auth = {
       userId: payload.sub,
       role: payload.role,
+      ...(payload.sid ? { sessionId: payload.sid } : {}),
     };
 
     next();

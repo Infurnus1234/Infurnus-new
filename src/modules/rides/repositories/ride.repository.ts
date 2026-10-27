@@ -1,3 +1,5 @@
+import { selectDemandRates } from '../../fares/services/demand-pricing.js';
+import type { VehiclePricing } from '../../fares/types/fare.js';
 import { cityCoverageSql } from '../../maps/city-radius.js';
 import { AppError } from '../../../common/errors/app-error.js';
 import type { FareCalculationResult } from '../../fares/types/fare.js';
@@ -163,6 +165,7 @@ const detailedRideColumns = (tableAlias = 'r') => `
   ${tableAlias}.pickup_address AS "pickupAddress",
   ${tableAlias}.destination_address AS "destinationAddress",
   ${tableAlias}.status,
+  ${tableAlias}.dispatch_expires_at AS "dispatchExpiresAt",
   COALESCE(
     ${tableAlias}.fare_estimate,
     (${tableAlias}.route_metadata->>'fareEstimate')::numeric
@@ -285,6 +288,7 @@ function mapRide(row: Record<string, unknown>, forCustomer = false): Ride {
     destinationAddress: (row.destinationAddress as string) || null,
 
     status: row.status as Ride['status'],
+    dispatchExpiresAt: (row.dispatchExpiresAt as Date | null) ?? null,
 
     fareEstimate: row.fareEstimate != null ? Number(row.fareEstimate) : null,
 
@@ -386,9 +390,10 @@ export class PostgresRideRepository implements RideRepository {
           code,
         ]);
         const config = snapshot.vehicleConfiguration;
-        const locked = await client.query('SELECT * FROM vehicle_types WHERE code=$1 FOR SHARE', [
-          code,
-        ]);
+        const locked = await client.query(
+          'SELECT * FROM vehicle_types WHERE code=$1 AND sector=$2 FOR SHARE',
+          [code, input.sector],
+        );
         const row = locked.rows[0];
         if (!config) {
           if (row && row.sector === input.sector) {
@@ -413,10 +418,19 @@ export class PostgresRideRepository implements RideRepository {
           row.code === 'ftl'
         )
           throw new AppError('FARE_CONFIGURATION_MISSING', VEHICLE_UNAVAILABLE_MESSAGE, 422);
+        const reference = row.pricing_reference as VehiclePricing | null;
+        const rates =
+          reference?.demandPricing && config.demandPricing
+            ? selectDemandRates(reference, config.demandPricing)
+            : {
+                baseFare: row.base_fare_paise === null ? NaN : Number(row.base_fare_paise),
+                distanceRatePerKm:
+                  row.per_km_rate_paise === null ? NaN : Number(row.per_km_rate_paise),
+              };
         if (
           Number(row.version) !== config.version ||
-          Number(row.base_fare_paise) !== config.baseFarePaise ||
-          Number(row.per_km_rate_paise) !== config.perKmRatePaise
+          rates.baseFare !== config.baseFarePaise ||
+          rates.distanceRatePerKm !== config.perKmRatePaise
         )
           throw new AppError(
             'FARE_CONFIGURATION_CHANGED',
@@ -688,7 +702,7 @@ export class PostgresRideRepository implements RideRepository {
            AND EXISTS (
              SELECT 1 FROM driver_profiles dp JOIN users u ON u.id=dp.user_id
              JOIN vehicles v ON v.driver_profile_id=dp.id
-             WHERE dp.id=$2 AND ${driverEligibilitySql("NOW() - ($3::int * INTERVAL '1 second')", 'r.id')}
+             WHERE dp.id=$2 AND ${driverEligibilitySql("NOW() - ($3::int * INTERVAL '1 second')", 'r.id', 'r.customer_id')}
                AND (CASE WHEN r.sector='premium' THEN EXISTS(SELECT 1 FROM ride_dispatch_attempts area_offer CROSS JOIN jsonb_array_elements($5::jsonb) approved WHERE area_offer.ride_id=r.id AND area_offer.driver_profile_id=$2 AND area_offer.status='offered' AND area_offer.city_id=approved->>'cityId' AND area_offer.boundary_geojson=approved->'boundary' AND ${cityCoverageSql('area_offer.boundary_geojson', 'r.pickup_location::geometry')} AND ${cityCoverageSql('area_offer.boundary_geojson', 'dp.last_location::geometry')})
                  WHEN r.sector='service' AND r.vehicle_category='ambulance' THEN TRUE
                  ELSE ST_DWithin(dp.last_location,r.pickup_location,(CASE WHEN r.sector='passenger' THEN 10000 WHEN r.sector='logistics' OR (r.sector='service' AND r.vehicle_category IN ('towing','towing_van')) THEN 20000 ELSE $4 END)+0.000001) END)
@@ -777,7 +791,7 @@ export class PostgresRideRepository implements RideRepository {
              JOIN users u ON u.id = dp.user_id
              JOIN vehicles v ON v.driver_profile_id = dp.id
              WHERE dp.id = $2
-               AND ${driverEligibilitySql("NOW() - ($4::int * INTERVAL '1 second')")}
+               AND ${driverEligibilitySql("NOW() - ($4::int * INTERVAL '1 second')", undefined, 'r.customer_id')}
                AND v.sector=r.sector AND v.category=r.vehicle_category
                AND (CASE WHEN r.sector='premium' THEN $6::text IS NOT NULL AND EXISTS(SELECT 1 FROM jsonb_array_elements($8::jsonb) approved WHERE approved->>'cityId'=$7 AND approved->'boundary'=$6::jsonb AND ${cityCoverageSql('$6', 'r.pickup_location::geometry')} AND ${cityCoverageSql('$6', 'dp.last_location::geometry')})
                  WHEN r.sector='service' AND r.vehicle_category='ambulance' THEN TRUE
@@ -1168,7 +1182,7 @@ export class PostgresRideRepository implements RideRepository {
        EXISTS(SELECT 1 FROM driver_profiles dp JOIN users u ON u.id=dp.user_id
         JOIN vehicles v ON v.id=dp.active_vehicle_id
         WHERE dp.id=r.dispatch_driver_id
-        AND ${driverEligibilitySql("NOW()-($2::int*INTERVAL '1 second')", 'r.id')}
+        AND ${driverEligibilitySql("NOW()-($2::int*INTERVAL '1 second')", 'r.id', 'r.customer_id')}
         AND v.sector=r.sector AND v.category=r.vehicle_category
         AND (r.sector<>'premium' OR EXISTS(
           SELECT 1 FROM ride_dispatch_attempts area_offer CROSS JOIN jsonb_array_elements($3::jsonb) approved

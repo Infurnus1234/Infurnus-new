@@ -141,6 +141,12 @@ function createHandlers() {
 // Test Suite
 // ============================================================
 
+function issuedSessionId(): string {
+  const id = mocks.createAccessToken.mock.calls[0]?.[0]?.sessionId as string;
+  expect(typeof id === 'string' && /^[a-f0-9-]{36}$/i.test(id)).toBe(true);
+  return id;
+}
+
 describe('Auth Controller', () => {
   let handlers: ReturnType<typeof createAuthHandlers>;
 
@@ -363,14 +369,19 @@ describe('Auth Controller', () => {
       expect(mocks.createAccessToken).toHaveBeenCalledWith({
         userId,
         role,
+        sessionId: issuedSessionId(),
       });
 
       expect(mocks.createRefreshToken).toHaveBeenCalledTimes(1);
 
-      expect(mocks.createRefreshToken).toHaveBeenCalledWith(userId, {
-        userAgent: 'Mozilla/5.0',
-        ipAddress: '127.0.0.1',
-      });
+      expect(mocks.createRefreshToken).toHaveBeenCalledWith(
+        userId,
+        {
+          userAgent: 'Mozilla/5.0',
+          ipAddress: '127.0.0.1',
+        },
+        issuedSessionId(),
+      );
 
       expect(mocks.rotate).not.toHaveBeenCalled();
 
@@ -452,10 +463,14 @@ describe('Auth Controller', () => {
 
       expect(mocks.createRefreshToken).toHaveBeenCalledTimes(1);
 
-      expect(mocks.createRefreshToken).toHaveBeenCalledWith(userId, {
-        userAgent: 'Test-Agent',
-        ipAddress: '192.168.1.10',
-      });
+      expect(mocks.createRefreshToken).toHaveBeenCalledWith(
+        userId,
+        {
+          userAgent: 'Test-Agent',
+          ipAddress: '192.168.1.10',
+        },
+        issuedSessionId(),
+      );
 
       expect(mocks.rotate).not.toHaveBeenCalled();
 
@@ -498,12 +513,17 @@ describe('Auth Controller', () => {
       expect(mocks.createAccessToken).toHaveBeenCalledWith({
         userId,
         role: 'driver',
+        sessionId: issuedSessionId(),
       });
 
-      expect(mocks.createRefreshToken).toHaveBeenCalledWith(userId, {
-        userAgent: 'Mozilla/5.0',
-        ipAddress: '127.0.0.1',
-      });
+      expect(mocks.createRefreshToken).toHaveBeenCalledWith(
+        userId,
+        {
+          userAgent: 'Mozilla/5.0',
+          ipAddress: '127.0.0.1',
+        },
+        issuedSessionId(),
+      );
 
       expect(next).not.toHaveBeenCalled();
     });
@@ -575,6 +595,7 @@ describe('Auth Controller', () => {
       expect(mocks.createAccessToken).toHaveBeenCalledWith({
         userId,
         role: 'customer',
+        sessionId: issuedSessionId(),
       });
 
       expect(mocks.createRefreshToken).toHaveBeenCalledTimes(1);
@@ -620,6 +641,7 @@ describe('Auth Controller', () => {
       expect(mocks.createAccessToken).toHaveBeenCalledWith({
         userId,
         role: 'customer',
+        sessionId: issuedSessionId(),
       });
 
       expect(mocks.createRefreshToken).not.toHaveBeenCalled();
@@ -801,6 +823,7 @@ describe('Auth Controller', () => {
       expect(mocks.createAccessToken).toHaveBeenCalledWith({
         userId,
         role: 'customer',
+        sessionId: 'family-id',
       });
 
       expect(cookie).toHaveBeenCalledTimes(1);
@@ -917,6 +940,7 @@ describe('Auth Controller', () => {
       expect(mocks.createAccessToken).toHaveBeenCalledWith({
         userId,
         role: 'driver',
+        sessionId: 'family-id',
       });
 
       expect(next).not.toHaveBeenCalled();
@@ -1172,6 +1196,7 @@ describe('Auth Controller', () => {
       expect(mocks.createAccessToken).toHaveBeenCalledWith({
         userId,
         role: 'customer',
+        sessionId: 'family-id',
       });
 
       expect(next).toHaveBeenCalledTimes(1);

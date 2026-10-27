@@ -120,6 +120,132 @@ describeDatabase('ride PostgreSQL integration', () => {
     if (fixture) await cleanFixture(fixture);
   });
 
+  it('exposes customer contact only after actual acceptance and revokes it on cancellation/reassignment', async () => {
+    const driverService = new DriverService(driverRepository, undefined, repository);
+    const app = express();
+    app.use(
+      '/rides',
+      createRideRouter(
+        new RideController(service),
+        new DriverController(driverService, service, {} as DriverDocumentStorageService),
+      ),
+    );
+    app.use(errorMiddleware);
+    const id = fixture.rideIds[0]!;
+    const token = await signAccessToken({
+      sub: fixture.driverUserId,
+      role: 'driver',
+      type: 'access',
+    });
+    const get = () =>
+      request(app)
+        .get(`/rides/driver/rides/${id}/customer-contact`)
+        .auth(token, { type: 'bearer' });
+    await pool.query('UPDATE users SET phone=$2 WHERE id=$1', [
+      fixture.customerId,
+      '+919876543210',
+    ]);
+    expect((await get()).status).toBe(404); // live offer is not permission
+    await service.acceptRide(fixture.driverProfileId, id);
+    expect((await get()).body.data).toEqual({
+      rideId: id,
+      name: 'Ride Customer',
+      phone: '+919876543210',
+    });
+    await pool.query('UPDATE users SET deleted_at=NOW() WHERE id=$1', [fixture.driverUserId]);
+    expect((await get()).status).toBe(404);
+    await pool.query('UPDATE users SET deleted_at=NULL WHERE id=$1', [fixture.driverUserId]);
+    await pool.query('UPDATE users SET deleted_at=NOW() WHERE id=$1', [fixture.customerId]);
+    expect((await get()).status).toBe(404);
+    await pool.query('UPDATE users SET deleted_at=NULL WHERE id=$1', [fixture.customerId]);
+    const stranger = await signAccessToken({ sub: randomUUID(), role: 'driver', type: 'access' });
+    expect(
+      (
+        await request(app)
+          .get(`/rides/driver/rides/${id}/customer-contact`)
+          .auth(stranger, { type: 'bearer' })
+      ).status,
+    ).toBe(404);
+    // Assignment is checked fresh, even when status remains otherwise eligible.
+    await pool.query(
+      'UPDATE rides SET assigned_driver_id=NULL,assigned_vehicle_id=NULL WHERE id=$1',
+      [id],
+    );
+    expect((await get()).status).toBe(404);
+    await pool.query('UPDATE rides SET assigned_driver_id=$2,assigned_vehicle_id=$3 WHERE id=$1', [
+      id,
+      fixture.driverProfileId,
+      fixture.vehicleId,
+    ]);
+    await pool.query('UPDATE users SET phone=NULL WHERE id=$1', [fixture.customerId]);
+    expect((await get()).body.data.phone).toBeNull();
+    await service.cancelRide(fixture.customerId, id, { reason: 'Contact regression test' });
+    expect((await get()).status).toBe(404);
+    expect(
+      (await driverService.getDriverHistory(fixture.driverUserId, 20, true)).rides,
+    ).not.toEqual(expect.arrayContaining([expect.objectContaining({ phone: expect.anything() })]));
+  });
+
+  it.each(['requested', 'searching', 'completed', 'cancelled'] as const)(
+    'customer contact query denies %s rides even with an assignment',
+    async (status) => {
+      let id = fixture.rideIds[0]!;
+      if (status === 'requested') {
+        const inserted = await pool.query(
+          `INSERT INTO rides(customer_id,vehicle_category,pickup_location,destination_location,
+          assigned_driver_id,assigned_vehicle_id) SELECT customer_id,vehicle_category,pickup_location,destination_location,$2,$3
+          FROM rides WHERE id=$1 RETURNING id`,
+          [id, fixture.driverProfileId, fixture.vehicleId],
+        );
+        id = inserted.rows[0].id;
+        fixture.rideIds.push(id);
+      } else if (status === 'searching') {
+        await pool.query(
+          'UPDATE rides SET assigned_driver_id=$2,assigned_vehicle_id=$3 WHERE id=$1',
+          [id, fixture.driverProfileId, fixture.vehicleId],
+        );
+      } else {
+        await service.acceptRide(fixture.driverProfileId, id);
+        if (status === 'completed') {
+          await service.transitionRide(id, 'driver_arriving', fixture.driverProfileId);
+          await service.transitionRide(id, 'driver_arrived', fixture.driverProfileId);
+          await service.transitionRide(id, 'in_progress', fixture.driverProfileId, '7391');
+          await service.completeRide(id, fixture.driverProfileId);
+        } else if (status === 'cancelled') {
+          await service.cancelRide(fixture.customerId, id, { reason: 'Contact test' });
+        }
+      }
+      const contactService = new DriverService(driverRepository, undefined, repository);
+      await expect(
+        contactService.getCustomerContact(fixture.driverUserId, id),
+      ).rejects.toMatchObject({ statusCode: 404 });
+    },
+  );
+
+  it('allows each real accepted-trip phase and stops exposing contact after completion', async () => {
+    const contactService = new DriverService(driverRepository, undefined, repository);
+    const id = fixture.rideIds[0]!;
+    await pool.query('UPDATE users SET phone=$2 WHERE id=$1', [
+      fixture.customerId,
+      '+919876543210',
+    ]);
+    await service.acceptRide(fixture.driverProfileId, id);
+    for (const status of ['driver_arriving', 'driver_arrived'] as const) {
+      await service.transitionRide(id, status, fixture.driverProfileId);
+      expect((await contactService.getCustomerContact(fixture.driverUserId, id)).phone).toBe(
+        '+919876543210',
+      );
+    }
+    await service.transitionRide(id, 'in_progress', fixture.driverProfileId, '7391');
+    expect((await contactService.getCustomerContact(fixture.driverUserId, id)).phone).toBe(
+      '+919876543210',
+    );
+    await service.completeRide(id, fixture.driverProfileId);
+    await expect(contactService.getCustomerContact(fixture.driverUserId, id)).rejects.toMatchObject(
+      { statusCode: 404 },
+    );
+  });
+
   it('availability writes enum values and preserves eligibility', async () => {
     expect(await driverRepository.updateAvailability(fixture.driverProfileId, 'unavailable')).toBe(
       true,

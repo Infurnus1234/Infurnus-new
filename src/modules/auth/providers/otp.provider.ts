@@ -26,7 +26,10 @@ export interface OtpProvider {
   // EMAIL OTP
   // ============================================================
 
-  sendEmailOtp(email: string): Promise<{
+  sendEmailOtp(
+    email: string,
+    correlationId?: string,
+  ): Promise<{
     provider?: string;
     sessionId: string;
     sessionToken: string;

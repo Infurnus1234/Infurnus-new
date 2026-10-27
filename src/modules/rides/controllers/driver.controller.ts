@@ -90,6 +90,17 @@ export class DriverController {
     }
   };
 
+  customerContact = async (req: Request, res: Response, next: NextFunction) => {
+    res.set('Cache-Control', 'no-store');
+    try {
+      const { id } = rideIdSchema.parse(req.params);
+      const data = await this.driverService.getCustomerContact(req.auth!.userId, id);
+      res.json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   complete = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { id } = rideIdSchema.parse(req.params);

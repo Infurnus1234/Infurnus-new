@@ -30,7 +30,7 @@ export const partnerDocumentStatuses = [
 export type PartnerDocumentStatus = (typeof partnerDocumentStatuses)[number];
 
 export interface PartnerDocumentStorageMetadata {
-  storageProvider: 'cloudinary';
+  storageProvider: 'cloudinary' | 'local';
   storageKey: string;
   resourceType: StorageResourceType;
   accessMode: StorageAccessMode;

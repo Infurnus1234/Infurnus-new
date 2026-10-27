@@ -1,4 +1,5 @@
 import { GoogleAuthService } from '../services/google-auth.service.js';
+import { randomUUID } from 'node:crypto';
 import { googleAuthSchema, googleLinkSchema } from '../schemas/auth.schemas.js';
 import type { NextFunction, Request, Response } from 'express';
 
@@ -254,6 +255,7 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
           signupId: result.signupId,
           contactType: result.contactType,
           expiresAt: result.expiresAt,
+          resendAfterSeconds: env.AUTH_OTP_RESEND_COOLDOWN_SECONDS,
         },
       });
     } catch (error) {
@@ -293,6 +295,7 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
           signupId: result.signupId,
           contactType: result.contactType,
           expiresAt: result.expiresAt,
+          resendAfterSeconds: env.AUTH_OTP_RESEND_COOLDOWN_SECONDS,
         },
       });
     } catch (error) {
@@ -554,6 +557,7 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
       const accessToken = await tokenService.createAccessToken({
         userId: rotated.userId,
         role: identity.role,
+        sessionId: rotated.familyId,
       });
 
       setRefreshTokenCookie(res, rotated.refreshToken);
@@ -667,11 +671,16 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
     userId: string,
     role: string,
   ): Promise<void> {
-    const accessToken = await tokenService.createAccessToken({ userId, role });
-    const refreshToken = await refreshTokenService.create(userId, {
-      userAgent: req.get('user-agent') ?? null,
-      ipAddress: req.ip ?? null,
-    });
+    const familyId = randomUUID();
+    const accessToken = await tokenService.createAccessToken({ userId, role, sessionId: familyId });
+    const refreshToken = await refreshTokenService.create(
+      userId,
+      {
+        userAgent: req.get('user-agent') ?? null,
+        ipAddress: req.ip ?? null,
+      },
+      familyId,
+    );
     setRefreshTokenCookie(res, refreshToken.refreshToken);
     const csrfToken = generateCsrfToken();
     setCsrfTokenCookie(res, csrfToken);

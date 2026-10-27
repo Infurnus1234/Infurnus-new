@@ -12,6 +12,7 @@ import '../../../../core/services/geocoding_service.dart';
 import '../../../../core/services/location_service.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/services/socket_service.dart';
+import '../../../../core/services/notification_service.dart';
 import '../../../../core/storage/secure_storage.dart';
 import '../../data/models/fare_estimate_model.dart';
 import '../../data/models/ride_model.dart' as model;
@@ -203,9 +204,11 @@ class RideState {
 class RideNotifier extends StateNotifier<RideState> {
   final Ref ref;
   StreamSubscription<SocketServerEvent>? _eventSubscription;
+  StreamSubscription<String>? _pushSubscription;
   int _fareEstimateGeneration = 0;
   int _mapGeneration = 0;
   int _locationGeneration = 0;
+  int _rideReadGeneration = 0;
   StreamSubscription<SocketConnectionState>? _socketStateSubscription;
   Future<bool>? _pendingFare;
   String? _pendingFareKey;
@@ -213,6 +216,10 @@ class RideNotifier extends StateNotifier<RideState> {
 
   RideNotifier(this.ref) : super(RideState()) {
     _subscribeToSocketEvents();
+    final notifications = ref.read(notificationServiceProvider);
+    _pushSubscription = notifications.rideUpdates.listen(_refreshFromPush);
+    final pending = notifications.takePendingRide();
+    if (pending != null) Future.microtask(() => _refreshFromPush(pending));
     _socketStateSubscription = ref
         .read(socketServiceProvider)
         .stateStream
@@ -317,6 +324,14 @@ class RideNotifier extends StateNotifier<RideState> {
     return DriverLocation(latitude: lat, longitude: lng, timestamp: timestamp);
   }
 
+  void _refreshFromPush(String id) {
+    if (!mounted ||
+        (state.currentRide != null && state.currentRide!.id != id)) {
+      return;
+    }
+    unawaited(getRideDetails(id));
+  }
+
   void _subscribeToSocketEvents() {
     _eventSubscription?.cancel();
     _eventSubscription = ref.read(socketServiceProvider).eventStream.listen((
@@ -337,6 +352,15 @@ class RideNotifier extends StateNotifier<RideState> {
         if (rideData != null && rideData is Map<String, dynamic>) {
           final updatedRide = model.RideModel.fromJson(rideData);
           if (updatedRide.id == state.currentRide?.id) {
+            final terminal =
+                state.status == RideStatus.completed ||
+                state.status == RideStatus.cancelled;
+            if (terminal &&
+                updatedRide.status != model.RideStatus.completed &&
+                updatedRide.status != model.RideStatus.cancelled) {
+              return;
+            }
+            _rideReadGeneration++;
             state = state.copyWith(
               status: _mapBackendStatus(updatedRide.status),
               currentRide: updatedRide,
@@ -397,6 +421,7 @@ class RideNotifier extends StateNotifier<RideState> {
         break;
       case 'ride:cancelled':
         if (event.data['rideId'] == state.currentRide?.id) {
+          _rideReadGeneration++;
           _mapGeneration++;
           state = state.copyWith(
             status: RideStatus.cancelled,
@@ -952,8 +977,10 @@ class RideNotifier extends StateNotifier<RideState> {
   }
 
   Future<void> getRideDetails(String id) async {
+    final generation = ++_rideReadGeneration;
     try {
       final ride = await ref.read(getRideUseCaseProvider).execute(id);
+      if (!mounted || generation != _rideReadGeneration) return;
       state = state.copyWith(
         status: _mapBackendStatus(ride.status),
         currentRide: ride,
@@ -968,6 +995,7 @@ class RideNotifier extends StateNotifier<RideState> {
       _checkRoomLifecycle(ride.status);
       refreshRideMap();
     } catch (e) {
+      if (!mounted || generation != _rideReadGeneration) return;
       state = state.copyWith(errorMessage: e.toString());
     }
   }
@@ -1168,6 +1196,7 @@ class RideNotifier extends StateNotifier<RideState> {
   void dispose() {
     _socketStateSubscription?.cancel();
     _eventSubscription?.cancel();
+    _pushSubscription?.cancel();
     super.dispose();
   }
 }

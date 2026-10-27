@@ -1,5 +1,6 @@
 import { AppError } from '../../../common/errors/app-error.js';
 import { randomUUID } from 'node:crypto';
+import { assertIdentityCollectionAllowed } from '../../providers/services/identity-collection.js';
 
 import {
   storageService,
@@ -86,6 +87,7 @@ export class DriverDocumentStorageService {
   constructor(private readonly dependencies: DriverDocumentStorageServiceDependencies) {}
 
   async upload(input: UploadDriverDocumentInput): Promise<DriverDocument> {
+    assertIdentityCollectionAllowed(input.documentType, input.documentMetadata);
     if (input.documentType !== 'other' && input.documentMetadata?.documentCode)
       throw new AppError(
         'INVALID_DOCUMENT_TYPE',
@@ -163,6 +165,7 @@ export class DriverDocumentStorageService {
   async uploadPages(
     input: Omit<UploadDriverDocumentInput, 'file'> & { files: StorageFile[] },
   ): Promise<DriverDocument> {
+    assertIdentityCollectionAllowed(input.documentType, input.documentMetadata);
     if (!this.dependencies.repository.saveBundle)
       throw new Error('Document bundle storage is unavailable');
     if (input.documentType === 'profile_photo' || input.files.length < 1 || input.files.length > 5)

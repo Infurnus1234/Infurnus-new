@@ -17,7 +17,10 @@ const payoutSchema = z
 
 export function createProviderFinanceRouter(repository: PostgresProviderFinanceRepository) {
   const router = Router();
+  // This router shares /provider with enrolment and onboarding routers.
+  // Financial authorization must not intercept unrelated provider requests.
   router.use(
+    ['/wallet', '/payouts'],
     requireAuth,
     requireProvider(),
     requireFleetFinancialContext(),

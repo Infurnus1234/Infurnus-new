@@ -124,6 +124,12 @@ export function createRideRouter(controller: RideController, driverController?: 
 
     router.get('/driver/current-trip', requireRoles('driver'), driverController.getCurrentTrip);
 
+    router.get(
+      '/driver/rides/:id/customer-contact',
+      requireRoles('driver'),
+      driverController.customerContact,
+    );
+
     // ==========================================================
     // Driver Vehicle
     // ==========================================================

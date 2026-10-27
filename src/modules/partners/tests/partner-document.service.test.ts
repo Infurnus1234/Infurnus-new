@@ -54,7 +54,7 @@ describe('PartnerDocumentService', () => {
       service.createDocumentMetadata(
         partnerId,
         {
-          documentType: 'AADHAAR',
+          documentType: 'PAN',
           metadata: {
             internalValue: 'secret',
           },

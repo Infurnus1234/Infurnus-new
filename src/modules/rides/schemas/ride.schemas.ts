@@ -22,7 +22,7 @@ export const createRideSchema = z
     destinationAddress: z.string().trim().min(1).max(500).optional(),
     fareEstimate: z.number().positive().optional(),
     waitingMinutes: z.number().finite().nonnegative().optional(),
-    sector: z.enum(['passenger', 'logistics', 'service', 'premium']),
+    sector: z.enum(['passenger', 'logistics', 'service', 'premium', 'rental']),
     vehicleCategory: z.string().trim().min(1).max(50),
     goods: z
       .object({
@@ -72,7 +72,7 @@ export const fareEstimateSchema = z
   .object({
     pickup: location,
     destination: location,
-    sector: z.enum(['passenger', 'logistics', 'service', 'premium']),
+    sector: z.enum(['passenger', 'logistics', 'service', 'premium', 'rental']),
     vehicleCategory: z.string().trim().min(1).max(50),
     waitingMinutes: z.number().nonnegative().optional(),
     weightKg: z.number().nonnegative().optional(),

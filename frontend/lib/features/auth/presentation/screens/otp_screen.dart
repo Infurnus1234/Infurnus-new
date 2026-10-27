@@ -7,8 +7,6 @@ import 'dart:async';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_brand_mark.dart';
 import '../providers/auth_provider.dart';
-import '../../data/models/auth_models.dart';
-import '../providers/user_provider.dart';
 
 class OtpScreen extends ConsumerStatefulWidget {
   const OtpScreen({super.key});
@@ -23,7 +21,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     (_) => TextEditingController(),
   );
   final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
-  int _timerSeconds = 30;
+  int _timerSeconds = 60;
   Timer? _timer;
 
   @override
@@ -34,7 +32,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
 
   void _startTimer() {
     _timer?.cancel();
-    _timerSeconds = 30;
+    setState(() => _timerSeconds = 60);
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       setState(() {
         if (_timerSeconds > 0) {
@@ -69,19 +67,17 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
 
-    ref.listen(authProvider, (previous, next) {
-      if (next.status == AuthStatus.authenticated) {
-        final user = ref.read(userProvider);
-        context.go(authHomeRoute(user?.role));
-      }
-    });
-
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => context.pop(),
+          onPressed: authState.status == AuthStatus.loading
+              ? null
+              : () {
+                  ref.read(authProvider.notifier).cancelOtp();
+                  context.go('/login');
+                },
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -127,6 +123,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                     child: TextField(
                       controller: _controllers[index],
                       focusNode: _focusNodes[index],
+                      enabled: authState.status != AuthStatus.loading,
                       keyboardType: TextInputType.number,
                       textAlign: TextAlign.center,
                       maxLength: 1,
@@ -174,15 +171,19 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                   children: [
                     if (_timerSeconds > 0)
                       Text(
-                        "Didn't receive the code? Resend in 00:${_timerSeconds.toString().padLeft(2, '0')}",
+                        "Didn't receive the code? Resend in ${(_timerSeconds ~/ 60).toString().padLeft(2, '0')}:${(_timerSeconds % 60).toString().padLeft(2, '0')}",
                         style: const TextStyle(color: Colors.grey),
                       )
                     else
                       TextButton(
-                        onPressed: () {
-                          ref.read(authProvider.notifier).resendOtp();
-                          _startTimer();
-                        },
+                        onPressed: authState.status == AuthStatus.loading
+                            ? null
+                            : () async {
+                                final sent = await ref
+                                    .read(authProvider.notifier)
+                                    .resendOtp();
+                                if (sent && mounted) _startTimer();
+                              },
                         child: const Text(
                           'Resend Code',
                           style: TextStyle(

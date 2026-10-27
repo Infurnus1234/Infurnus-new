@@ -3,37 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/user.dart';
 
 class UserNotifier extends StateNotifier<User?> {
-  UserNotifier()
-    : super(
-        User(
-          id: 'dev-customer-id',
-          firstName: 'Abhishek',
-          lastName: 'Arjun',
-          email: 'abhishek@infurnus.com',
-          phone: '+919876543210',
-          role: 'customer',
-          createdAt: DateTime.now(),
-          updatedAt: DateTime.now(),
-        ),
-      );
+  UserNotifier() : super(null);
 
   void setUser(User user) {
     state = user;
-  }
-
-  void switchRole() {
-    if (state == null) return;
-    final newRole = state!.role == 'customer' ? 'driver' : 'customer';
-    state = User(
-      id: state!.id,
-      firstName: state!.firstName,
-      lastName: state!.lastName,
-      email: state!.email,
-      phone: state!.phone,
-      role: newRole,
-      createdAt: state!.createdAt,
-      updatedAt: state!.updatedAt,
-    );
   }
 
   void logout() {

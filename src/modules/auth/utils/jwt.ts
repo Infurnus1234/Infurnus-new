@@ -3,6 +3,7 @@ import { SignJWT, jwtVerify } from 'jose';
 import { env } from '../../../config/env.js';
 import type { AccessTokenPayload } from '../types/token.js';
 import { isDeletedSubject } from '../services/deleted-subjects.js';
+import { activeAccessSession } from '../repositories/access-session.repository.js';
 
 const currentSecret = new TextEncoder().encode(env.JWT_ACCESS_SECRET);
 
@@ -22,6 +23,7 @@ export async function signAccessToken(payload: AccessTokenPayload): Promise<stri
 async function verifyWithSecret(token: string, secret: Uint8Array): Promise<AccessTokenPayload> {
   const { payload } = await jwtVerify(token, secret, {
     algorithms: ['HS256'],
+    requiredClaims: ['sub', 'iat', 'exp'],
   });
 
   if (
@@ -33,10 +35,23 @@ async function verifyWithSecret(token: string, secret: Uint8Array): Promise<Acce
     throw new Error('Invalid access token payload');
   }
 
+  // Legacy signed tokens remain compatible until their expiry. Deployment must
+  // retire pre-session-binding signing keys to revoke those tokens immediately.
+  if (payload.sid !== undefined) {
+    if (
+      typeof payload.sid !== 'string' ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.sid) ||
+      !(await activeAccessSession(payload.sub, payload.sid, payload.role))
+    ) {
+      throw new Error('Access session is not active');
+    }
+  }
+
   return {
     sub: payload.sub,
     role: payload.role,
     type: 'access',
+    ...(typeof payload.sid === 'string' ? { sid: payload.sid } : {}),
   };
 }
 

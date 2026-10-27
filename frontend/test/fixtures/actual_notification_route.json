@@ -1,0 +1,234 @@
+{
+  "stages": [
+    "otpAuthenticated",
+    "deviceRegisteredFixture",
+    "customerBooked",
+    "driverSocketReceived",
+    "driverApiObservedOffer",
+    "driverAccepted",
+    "customerSocketReceived",
+    "duplicateDenied",
+    "outsiderDenied"
+  ],
+  "offer": {
+    "ride": {
+      "id": "aea14246-8895-4035-9ac5-3eab7cfe2436",
+      "customerId": "488be1e6-6c31-48b8-851a-9488d68e9a1f",
+      "assignedDriverId": null,
+      "assignedVehicleId": null,
+      "pickup": {
+        "latitude": 12.9716,
+        "longitude": 77.5946
+      },
+      "pickupAddress": null,
+      "status": "searching",
+      "bookingDistanceMeters": 10000,
+      "bookingPricingVersion": "vehicle-type:cbdbfd13-27ab-4a0f-b819-5e97de9a5834:v1",
+      "actualDistanceMeters": 0,
+      "sector": "passenger",
+      "vehicleCategory": "notify_10b02a1070a94994a4cba5551915bd5c",
+      "goods": null,
+      "serviceDetails": null,
+      "rentalDetails": null,
+      "pinVerified": false,
+      "driverDetails": null,
+      "vehicleDetails": null,
+      "cancellationReason": null,
+      "cancelledAt": null,
+      "completedAt": null,
+      "createdAt": "2026-10-23T15:30:40.791Z",
+      "updatedAt": "2026-10-23T15:30:40.791Z",
+      "serverTime": "2026-10-23T15:30:40.519Z",
+      "destination": null,
+      "destinationAddress": null,
+      "rideInformation": {
+        "fare": {
+          "currency": "INR",
+          "bookedAmount": 138,
+          "finalAmount": null,
+          "amount": 138,
+          "authority": "booked"
+        },
+        "totalDistance": {
+          "meters": 10000,
+          "source": "booking"
+        },
+        "pickup": {
+          "latitude": 12.9716,
+          "longitude": 77.5946,
+          "address": null
+        },
+        "drop": null,
+        "rideType": "passenger",
+        "vehicleCategory": "notify_10b02a1070a94994a4cba5551915bd5c",
+        "rideStatus": "searching"
+      }
+    },
+    "expiresAt": "2026-10-23T15:31:05.828Z"
+  },
+  "available": [
+    {
+      "id": "aea14246-8895-4035-9ac5-3eab7cfe2436",
+      "customerId": "488be1e6-6c31-48b8-851a-9488d68e9a1f",
+      "assignedDriverId": null,
+      "assignedVehicleId": null,
+      "pickup": {
+        "latitude": 12.9716,
+        "longitude": 77.5946
+      },
+      "pickupAddress": null,
+      "status": "searching",
+      "bookingDistanceMeters": 10000,
+      "bookingPricingVersion": "vehicle-type:cbdbfd13-27ab-4a0f-b819-5e97de9a5834:v1",
+      "actualDistanceMeters": 0,
+      "sector": "passenger",
+      "vehicleCategory": "notify_10b02a1070a94994a4cba5551915bd5c",
+      "goods": null,
+      "serviceDetails": null,
+      "rentalDetails": null,
+      "pinVerified": false,
+      "driverDetails": null,
+      "vehicleDetails": null,
+      "cancellationReason": null,
+      "cancelledAt": null,
+      "completedAt": null,
+      "createdAt": "2026-10-23T15:30:40.791Z",
+      "updatedAt": "2026-10-23T15:30:40.828Z",
+      "serverTime": "2026-10-23T15:30:40.527Z",
+      "destination": null,
+      "destinationAddress": null,
+      "rideInformation": {
+        "fare": {
+          "currency": "INR",
+          "bookedAmount": 138,
+          "finalAmount": null,
+          "amount": 138,
+          "authority": "booked"
+        },
+        "totalDistance": {
+          "meters": 10000,
+          "source": "booking"
+        },
+        "pickup": {
+          "latitude": 12.9716,
+          "longitude": 77.5946,
+          "address": null
+        },
+        "drop": null,
+        "rideType": "passenger",
+        "vehicleCategory": "notify_10b02a1070a94994a4cba5551915bd5c",
+        "rideStatus": "searching"
+      }
+    }
+  ],
+  "assignedDriverView": {
+    "id": "aea14246-8895-4035-9ac5-3eab7cfe2436",
+    "customerId": "488be1e6-6c31-48b8-851a-9488d68e9a1f",
+    "assignedDriverId": "81c03e69-20e1-48d5-9de0-1ae4604e7d91",
+    "assignedVehicleId": "2895ac9d-5243-40cd-8e78-cee757489403",
+    "pickup": {
+      "latitude": 12.9716,
+      "longitude": 77.5946
+    },
+    "pickupAddress": null,
+    "status": "driver_assigned",
+    "bookingDistanceMeters": 10000,
+    "bookingPricingVersion": "vehicle-type:cbdbfd13-27ab-4a0f-b819-5e97de9a5834:v1",
+    "actualDistanceMeters": 0,
+    "sector": "passenger",
+    "vehicleCategory": "notify_10b02a1070a94994a4cba5551915bd5c",
+    "goods": null,
+    "serviceDetails": null,
+    "rentalDetails": null,
+    "pinVerified": false,
+    "driverDetails": {
+      "id": "81c03e69-20e1-48d5-9de0-1ae4604e7d91",
+      "name": "Notification Fixture",
+      "phone": null,
+      "rating": null,
+      "photoUrl": null
+    },
+    "vehicleDetails": {
+      "make": "TEST_SAMPLE",
+      "model": "Notification",
+      "color": null,
+      "plateNumber": "a3e53756-d698-472c-a"
+    },
+    "cancellationReason": null,
+    "cancelledAt": null,
+    "completedAt": null,
+    "createdAt": "2026-10-23T15:30:40.791Z",
+    "updatedAt": "2026-10-23T15:30:40.884Z",
+    "serverTime": "2026-10-23T15:30:40.556Z",
+    "destination": null,
+    "destinationAddress": null,
+    "rideInformation": {
+      "fare": {
+        "currency": "INR",
+        "bookedAmount": 138,
+        "finalAmount": null,
+        "amount": 138,
+        "authority": "booked"
+      },
+      "totalDistance": {
+        "meters": 10000,
+        "source": "booking"
+      },
+      "pickup": {
+        "latitude": 12.9716,
+        "longitude": 77.5946,
+        "address": null
+      },
+      "drop": null,
+      "rideType": "passenger",
+      "vehicleCategory": "notify_10b02a1070a94994a4cba5551915bd5c",
+      "rideStatus": "driver_assigned"
+    }
+  },
+  "customerStatus": "driver_assigned",
+  "bookingRide": {
+    "id": "aea14246-8895-4035-9ac5-3eab7cfe2436",
+    "customerId": "488be1e6-6c31-48b8-851a-9488d68e9a1f",
+    "pickup": {
+      "latitude": 12.9716,
+      "longitude": 77.5946
+    },
+    "destination": {
+      "latitude": 12.9352,
+      "longitude": 77.6245
+    },
+    "status": "searching",
+    "createdAt": "2026-10-23T15:30:40.791Z",
+    "updatedAt": "2026-10-23T15:30:40.791Z"
+  },
+  "customerRide": {
+    "id": "aea14246-8895-4035-9ac5-3eab7cfe2436",
+    "customerId": "488be1e6-6c31-48b8-851a-9488d68e9a1f",
+    "assignedDriverId": "81c03e69-20e1-48d5-9de0-1ae4604e7d91",
+    "assignedVehicleId": "2895ac9d-5243-40cd-8e78-cee757489403",
+    "pickup": {
+      "latitude": 12.9716,
+      "longitude": 77.5946
+    },
+    "destination": {
+      "latitude": 12.9352,
+      "longitude": 77.6245
+    },
+    "status": "driver_assigned",
+    "createdAt": "2026-10-23T15:30:40.791Z",
+    "updatedAt": "2026-10-23T15:30:40.884Z",
+    "driverDetails": {
+      "id": "81c03e69-20e1-48d5-9de0-1ae4604e7d91",
+      "name": "Notification Fixture",
+      "phone": null,
+      "rating": null,
+      "photoUrl": null
+    },
+    "vehicleDetails": {
+      "make": "TEST_SAMPLE",
+      "model": "Notification",
+      "color": null,
+      "plateNumber": "a3e53756-d698-472c-a"
+    }
+  }
+}

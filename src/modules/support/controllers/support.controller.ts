@@ -27,11 +27,21 @@ export class SupportController {
 
   listTickets = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const tickets = await this.supportService.listTickets(
-        req.auth!.userId,
-        supportListSchema.parse(req.query),
-      );
-      res.json({ success: true, data: tickets });
+      const query = supportListSchema.parse(req.query);
+      const tickets = await this.supportService.listTickets(req.auth!.userId, query);
+      res.json({
+        success: true,
+        data: query.includePagination === 'true' ? tickets.slice(0, query.pageSize) : tickets,
+        ...(query.includePagination === 'true'
+          ? {
+              pagination: {
+                page: query.page,
+                pageSize: query.pageSize,
+                hasNext: tickets.length > query.pageSize,
+              },
+            }
+          : {}),
+      });
     } catch (error) {
       next(error);
     }

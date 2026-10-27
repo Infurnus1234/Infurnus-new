@@ -63,6 +63,76 @@ afterEach(() => {
 });
 
 describe('generic OTP engine and production configuration safety', () => {
+  it('does not retry a failed missing-primary fallback or return a false challenge', async () => {
+    const sendEmailOtp = vi
+      .fn()
+      .mockRejectedValue(
+        new (await import('../../../common/errors/app-error.js')).AppError(
+          'OTP_PROVIDER_SEND_FAILED',
+          'Unavailable',
+          502,
+        ),
+      );
+    const provider = new GenericHttpOtpProvider(() => ({ emailFallbackOnMissing: true }), {
+      sendEmailOtp,
+    } as unknown as ResendOtpProvider);
+    await expect(provider.sendEmailOtp('fixture@example.com')).rejects.toMatchObject({
+      code: 'OTP_PROVIDER_SEND_FAILED',
+    });
+    expect(sendEmailOtp).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps an accepted pending primary session and never sends a duplicate fallback', async () => {
+    const sendEmailOtp = vi.fn();
+    const request = transport();
+    const provider = new GenericHttpOtpProvider(
+      () => ({ email: profile('primary') }),
+      { sendEmailOtp } as unknown as ResendOtpProvider,
+      request,
+      { OTP_TEST_SECRET: 'fixture' },
+    );
+    const session = await provider.sendEmailOtp(' Fixture@Example.COM ');
+    expect(session.sessionToken).toBe('primary:opaque');
+    expect(JSON.parse(String(request.mock.calls[0]![1]?.body)).to).toBe('fixture@example.com');
+    expect(sendEmailOtp).not.toHaveBeenCalled();
+  });
+
+  it.each(['timeout', 'rejected', 'unexpected'] as const)(
+    'evaluates fallback failure after primary %s',
+    async (failure) => {
+      const sendEmailOtp = vi.fn().mockRejectedValue(new Error('fallback-private-error'));
+      const request = vi.fn<typeof fetch>(async () => {
+        if (failure === 'timeout') throw new DOMException('private timeout', 'TimeoutError');
+        return new Response(failure === 'unexpected' ? 'not-json' : '{}', {
+          status: failure === 'rejected' ? 403 : 200,
+        });
+      });
+      const provider = new GenericHttpOtpProvider(
+        () => ({ email: profile('primary') }),
+        { sendEmailOtp } as unknown as ResendOtpProvider,
+        request,
+        { OTP_TEST_SECRET: 'fixture' },
+      );
+      await expect(provider.sendEmailOtp('fixture@example.com')).rejects.toThrow();
+      expect(sendEmailOtp).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('logs acceptance separately from delivery without recipient, token, code or raw error', async () => {
+    const log = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const request = transport();
+    const provider = new GenericHttpOtpProvider(
+      () => ({ sms: profile('primary') }),
+      undefined,
+      request,
+      { OTP_TEST_SECRET: 'private-key' },
+    );
+    await provider.sendSmsOtp('+919999999999');
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('"deliveryStatus":"unconfirmed"'));
+    const output = JSON.stringify(log.mock.calls);
+    for (const secret of ['9999999999', 'private-key', 'opaque', '123456'])
+      expect(output).not.toContain(secret);
+  });
   it('switches both channels through configuration only with identical consumers and retains original sessions', async () => {
     const request = transport();
     let selected = profile('configurationA');

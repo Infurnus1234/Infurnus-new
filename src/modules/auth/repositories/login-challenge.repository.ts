@@ -274,7 +274,7 @@ export class PostgresLoginChallengeRepository implements LoginChallengeRepositor
             user_id AS "userId",
             verified_at AS "verifiedAt",
             consumed_at AS "consumedAt",
-            (expires_at <= NOW() OR provider_expires_at <= NOW()) AS expired
+            (expires_at <= clock_timestamp() OR provider_expires_at <= clock_timestamp()) AS expired
           FROM login_challenges
           WHERE id = $1
           FOR UPDATE
@@ -350,8 +350,8 @@ export class PostgresLoginChallengeRepository implements LoginChallengeRepositor
             AND u.deleted_at IS NULL
             AND lc.consumed_at IS NULL
             AND lc.verified_at IS NULL
-            AND lc.expires_at > NOW()
-            AND lc.provider_expires_at > NOW()
+            AND lc.expires_at > clock_timestamp()
+            AND lc.provider_expires_at > clock_timestamp()
           RETURNING
             lc.user_id AS "userId",
             u.role

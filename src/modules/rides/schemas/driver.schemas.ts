@@ -31,6 +31,10 @@ export const driverDocumentMetadataSchema = z
       .regex(/^[a-z][a-z0-9_]{0,49}$/)
       .optional(),
     documentNumber: z.string().trim().min(1).max(100).optional(),
+    licenceClasses: z.string().trim().min(1).max(150).optional(),
+    identityConsent: z.literal('true').optional(),
+    maskedIdentity: z.literal('true').optional(),
+    holderName: z.string().trim().min(2).max(150).optional(),
     issuingAuthority: z.string().trim().min(1).max(150).optional(),
     issuedAt: z.iso.date().optional(),
     expiresAt: z.iso.date().optional(),

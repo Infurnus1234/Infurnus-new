@@ -64,12 +64,24 @@ export function createRoleEnrolmentRouter(repo: RoleEnrolmentRepository) {
         .object({ role: z.enum(['driver', 'driver_fleet_owner', 'fleet_owner']) })
         .strict()
         .parse(req.body);
+      if (!req.auth!.sessionId) {
+        throw new AppError(
+          'SESSION_REFRESH_REQUIRED',
+          'Refresh your session before selecting a role',
+          401,
+        );
+      }
       await repo.selectRole(req.auth!.userId, req.auth!.role, role);
       res.json({
         success: true,
         data: {
           role,
-          accessToken: await signAccessToken({ sub: req.auth!.userId, role, type: 'access' }),
+          accessToken: await signAccessToken({
+            sub: req.auth!.userId,
+            role,
+            type: 'access',
+            sid: req.auth!.sessionId,
+          }),
         },
       });
     } catch (e) {

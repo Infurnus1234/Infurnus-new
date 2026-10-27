@@ -562,10 +562,12 @@ export class PostgresDriverRepository implements DriverRepository {
       );
     const values: unknown[] = [longitude, latitude, radiusMeters, staleBefore, limit];
 
-    const conditions: string[] = [driverEligibilitySql('$4')];
+    const conditions: string[] = [];
+    let customerExpression: string | undefined;
     conditions.push('$3::float8 > 0');
     if (dispatch) {
       values.push(dispatch.rideId);
+      customerExpression = `(SELECT scoped_ride.customer_id FROM rides scoped_ride WHERE scoped_ride.id=$${values.length}::uuid)`;
       conditions.push(
         `NOT EXISTS (SELECT 1 FROM ride_dispatch_attempts previous WHERE previous.ride_id=$${values.length} AND previous.driver_profile_id=dp.id)`,
       );
@@ -574,6 +576,8 @@ export class PostgresDriverRepository implements DriverRepository {
         conditions.push(cityCoverageSql(`$${values.length}`, 'dp.last_location::geometry'));
       }
     }
+
+    conditions.unshift(driverEligibilitySql('$4', undefined, customerExpression));
 
     if (sector) {
       values.push(sector);

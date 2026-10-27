@@ -1,4 +1,6 @@
 import { driverDocumentMetadataSchema } from '../../rides/schemas/driver.schemas.js';
+import { AppError } from '../../../common/errors/app-error.js';
+import { fleetVehicleIdSchema } from '../../fleet/schemas/fleet.schemas.js';
 import type { NextFunction, Request, Response } from 'express';
 
 import { partnerIdSchema } from '../schemas/partner.schemas.js';
@@ -43,7 +45,7 @@ export class PartnerDocumentStorageController {
       const file = storageRequest.storageFile ?? storageRequest.storageFiles?.[0];
 
       if (!file) {
-        throw new Error('A file is required');
+        throw new AppError('VALIDATION_ERROR', 'A file is required', 400);
       }
 
       const documentType = parseDocumentType(request.body?.documentType);
@@ -73,6 +75,10 @@ export class PartnerDocumentStorageController {
           uploadSource: request.body?.uploadSource,
           documentCode: request.body?.documentCode,
           documentNumber: request.body?.documentNumber,
+          identityConsent: request.body?.identityConsent,
+          maskedIdentity: request.body?.maskedIdentity,
+          holderName: request.body?.holderName,
+          licenceClasses: request.body?.licenceClasses,
           issuingAuthority: request.body?.issuingAuthority,
           issuedAt: request.body?.issuedAt,
           expiresAt: request.body?.expiresAt,
@@ -128,6 +134,10 @@ export class PartnerDocumentStorageController {
           uploadSource: request.body?.uploadSource,
           documentCode: request.body?.documentCode,
           documentNumber: request.body?.documentNumber,
+          identityConsent: request.body?.identityConsent,
+          maskedIdentity: request.body?.maskedIdentity,
+          holderName: request.body?.holderName,
+          licenceClasses: request.body?.licenceClasses,
           issuingAuthority: request.body?.issuingAuthority,
           issuedAt: request.body?.issuedAt,
           expiresAt: request.body?.expiresAt,
@@ -229,7 +239,7 @@ function parseDocumentType(value: unknown): (typeof partnerDocumentTypes)[number
     typeof value !== 'string' ||
     !partnerDocumentTypes.includes(value as (typeof partnerDocumentTypes)[number])
   ) {
-    throw new Error('Invalid documentType');
+    throw new AppError('VALIDATION_ERROR', 'Invalid document type', 400);
   }
 
   return value as (typeof partnerDocumentTypes)[number];
@@ -241,8 +251,8 @@ function parseOptionalVehicleId(value: unknown): string | null {
   }
 
   if (typeof value !== 'string') {
-    throw new Error('vehicleId must be a string');
+    throw new AppError('VALIDATION_ERROR', 'Vehicle identifier must be a string', 400);
   }
 
-  return value;
+  return fleetVehicleIdSchema.parse({ id: value }).id;
 }

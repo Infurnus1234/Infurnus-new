@@ -17,7 +17,7 @@ import type {
 export interface FleetRepository {
   getDashboard(ownerId: string): Promise<FleetDashboardMetrics>;
   revenue(ownerId: string, filter?: RevenueFilter): ReturnType<FleetRevenueRepository['report']>;
-  catalog(): Promise<{ sectors: string[]; types: Record<string, unknown>[] }>;
+  catalog(ownerId?: string): Promise<{ sectors: string[]; types: Record<string, unknown>[] }>;
 
   listVehicles(ownerId: string, query?: FleetListQuery): Promise<FleetVehicle[]>;
 
@@ -49,12 +49,19 @@ export interface FleetRepository {
 export class PostgresFleetRepository implements FleetRepository {
   constructor(private readonly pool: Pool) {}
 
-  async catalog() {
+  async catalog(ownerId?: string) {
     const types = (
       await this.pool.query(
-        'SELECT id,code,name,sector,active FROM vehicle_types ORDER BY sector,name',
+        `SELECT id::text,code,name,sector,active FROM vehicle_types UNION ALL SELECT ('registration:' || r.sector || ':' || r.code) AS id,r.code,r.name,r.sector,FALSE AS active FROM fleet_registration_vehicle_types r WHERE NOT EXISTS(SELECT 1 FROM vehicle_types t WHERE t.code=r.code AND t.sector=r.sector) ORDER BY sector,name`,
       )
     ).rows;
+    if (ownerId) {
+      const custom = await this.pool.query(
+        'SELECT id,code,name,sector,FALSE AS active,TRUE AS custom FROM fleet_custom_vehicle_types WHERE owner_id=$1 ORDER BY sector,name',
+        [ownerId],
+      );
+      types.push(...custom.rows);
+    }
     return { sectors: ['passenger', 'logistics', 'service', 'premium', 'rental'], types };
   }
   async revenue(ownerId: string, filter: RevenueFilter = {}) {
@@ -189,6 +196,8 @@ export class PostgresFleetRepository implements FleetRepository {
       registrationExpiry: string | null;
       isCommercial: boolean;
       permitDetails: string | null;
+      ownershipType: string;
+      ownerNotes: string | null;
       verificationStatus: string;
       isActive: boolean;
       driverUserId: string | null;
@@ -229,6 +238,7 @@ export class PostgresFleetRepository implements FleetRepository {
            TRUE
          ) AS "isCommercial",
          v.permit_details AS "permitDetails",
+         v.ownership_type AS "ownershipType",v.owner_notes AS "ownerNotes",
          COALESCE(
            v.verification_status,
            'pending'
@@ -297,6 +307,8 @@ export class PostgresFleetRepository implements FleetRepository {
       registrationExpiry: row.registrationExpiry,
       isCommercial: row.isCommercial,
       permitDetails: row.permitDetails,
+      ownershipType: row.ownershipType,
+      ownerNotes: row.ownerNotes,
       verificationStatus: row.verificationStatus,
       isActive: row.isActive,
       assignedDriver:
@@ -322,8 +334,8 @@ export class PostgresFleetRepository implements FleetRepository {
     try {
       await client.query('BEGIN');
       const configuredType = await client.query(
-        `SELECT id FROM vehicle_types WHERE code=$1 AND (sector=$2 OR ($2='rental' AND sector IN ('passenger','premium')))`,
-        [input.category, input.sector],
+        `SELECT id FROM vehicle_types WHERE code=$1 AND (sector=$2 OR ($2='rental' AND sector IN ('passenger','premium'))) UNION ALL SELECT NULL::uuid AS id FROM fleet_registration_vehicle_types WHERE code=$1 AND (sector=$2 OR ($2='rental' AND sector IN ('passenger','premium'))) UNION ALL SELECT id FROM fleet_custom_vehicle_types WHERE code=$1 AND sector=$2 AND owner_id=$3`,
+        [input.category, input.sector, ownerId],
       );
       if (!configuredType.rowCount)
         throw new AppError(
@@ -350,6 +362,7 @@ export class PostgresFleetRepository implements FleetRepository {
          registration_expiry,
          is_commercial,
          permit_details,
+         ownership_type, owner_notes,
          verification_status,
          is_active
        )
@@ -370,6 +383,7 @@ export class PostgresFleetRepository implements FleetRepository {
          $14,
          $15,
          $16,
+         $17, $18,
          'pending',
          FALSE
        )
@@ -398,6 +412,7 @@ export class PostgresFleetRepository implements FleetRepository {
          registration_expiry::text AS "registrationExpiry",
          is_commercial AS "isCommercial",
          permit_details AS "permitDetails",
+         ownership_type AS "ownershipType", owner_notes AS "ownerNotes",
          verification_status AS "verificationStatus",
          is_active AS "isActive",
          created_at AS "createdAt",
@@ -419,6 +434,8 @@ export class PostgresFleetRepository implements FleetRepository {
           input.registrationExpiry ?? null,
           input.isCommercial,
           input.permitDetails ?? null,
+          input.ownershipType ?? 'OWNED',
+          input.ownerNotes ?? null,
         ],
       );
 
@@ -468,6 +485,8 @@ export class PostgresFleetRepository implements FleetRepository {
         registrationExpiry: 'registration_expiry',
         isCommercial: 'is_commercial',
         permitDetails: 'permit_details',
+        ownershipType: 'ownership_type',
+        ownerNotes: 'owner_notes',
       };
 
       if (input.sector != null || input.category != null) {
@@ -486,8 +505,8 @@ export class PostgresFleetRepository implements FleetRepository {
         if (
           !(
             await client.query(
-              "SELECT id FROM vehicle_types WHERE code=$1 AND (sector=$2 OR ($2='rental' AND sector IN ('passenger','premium')))",
-              [category, sector],
+              "SELECT id FROM vehicle_types WHERE code=$1 AND (sector=$2 OR ($2='rental' AND sector IN ('passenger','premium'))) UNION ALL SELECT NULL::uuid AS id FROM fleet_registration_vehicle_types WHERE code=$1 AND (sector=$2 OR ($2='rental' AND sector IN ('passenger','premium'))) UNION ALL SELECT id FROM fleet_custom_vehicle_types WHERE code=$1 AND sector=$2 AND owner_id=$3",
+              [category, sector, ownerId],
             )
           ).rowCount
         )
@@ -690,8 +709,8 @@ export class PostgresFleetRepository implements FleetRepository {
         driverProfileId &&
         !(
           await client.query(
-            `SELECT dp.id FROM driver_profiles dp JOIN partner_drivers pd ON pd.driver_profile_id=dp.id JOIN partners p ON p.id=pd.partner_id JOIN users u ON u.id=dp.user_id WHERE dp.id=$1 AND p.user_id=$2 AND pd.status='ACTIVE' AND dp.verification_status='approved' AND dp.license_expiry>=CURRENT_DATE AND dp.active_vehicle_id IS NULL AND u.status='active' AND u.deleted_at IS NULL FOR SHARE OF dp,pd,u`,
-            [driverProfileId, ownerId],
+            `SELECT dp.id FROM driver_profiles dp JOIN partner_drivers pd ON pd.driver_profile_id=dp.id JOIN partners p ON p.id=pd.partner_id JOIN users u ON u.id=dp.user_id WHERE dp.id=$1 AND p.user_id=$2 AND pd.status='ACTIVE' AND dp.verification_status='approved' AND dp.license_expiry>=CURRENT_DATE AND dp.active_vehicle_id IS NULL AND u.status='active' AND u.deleted_at IS NULL AND EXISTS(SELECT 1 FROM vehicles class_vehicle WHERE class_vehicle.id=$3 AND driver_licence_category_satisfied(dp.id,class_vehicle.category)) FOR SHARE OF dp,pd,u`,
+            [driverProfileId, ownerId, vehicleId],
           )
         ).rowCount
       )

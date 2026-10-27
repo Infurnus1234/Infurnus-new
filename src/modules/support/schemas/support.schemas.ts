@@ -13,6 +13,7 @@ export const supportListSchema = z
   .object({
     page: z.coerce.number().int().min(1).max(4000).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(25),
+    includePagination: z.literal('true').optional(),
   })
   .strict();
 export type SupportListQuery = z.infer<typeof supportListSchema>;

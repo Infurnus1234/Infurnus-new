@@ -29,6 +29,8 @@ export interface FleetVehicle {
   registrationExpiry?: string | null;
   isCommercial: boolean;
   permitDetails?: string | null;
+  ownershipType?: string;
+  ownerNotes?: string | null;
   verificationStatus: string;
   isActive: boolean;
   assignedDriver?: {

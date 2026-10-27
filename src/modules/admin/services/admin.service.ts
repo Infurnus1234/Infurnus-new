@@ -55,7 +55,7 @@ export class AdminService {
         (input.pricingReference?.routeBased !== true ||
           input.baseFare !== null ||
           input.perKmRate !== null)) ||
-      Object.values(VEHICLE_PRICING_ALIASES).some((a) => Object.hasOwn(a, input.code))
+      Object.hasOwn(VEHICLE_PRICING_ALIASES[input.sector] ?? {}, input.code)
     )
       throw new AppError(
         'VEHICLE_TYPE_INVALID',

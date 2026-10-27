@@ -38,7 +38,6 @@ export async function groupedApprovals(client: PoolClient, actorId: string, stat
     SELECT r.*,dp.id AS driver_profile_id,COALESCE(dp.user_id,r.requester_id) AS owner_id,
       CASE WHEN dp.id IS NOT NULL THEN 'driver:'||dp.id::text ELSE r.id::text END AS group_id
     FROM provider_approval_requests r ${onboardingJoinsSql}
-    WHERE r.target_type<>'bank_account'
   ), ranked AS (
     SELECT s.*,row_number() OVER(PARTITION BY group_id ORDER BY (status='PENDING') DESC,
       (target_type='driver_profile') DESC,submitted_at DESC,id DESC) AS position,

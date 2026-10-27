@@ -6,6 +6,8 @@ import '../../data/models/auth_models.dart';
 import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
 import '../widgets/google_sign_in_button.dart';
+import '../utils/phone_number.dart';
+import '../widgets/auth_phone_field.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -240,37 +242,46 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                           const SizedBox(height: 14),
 
                           // Remember me + Use Email toggle
-                          Row(
+                          Wrap(
+                            alignment: WrapAlignment.spaceBetween,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 16,
+                            runSpacing: 10,
                             children: [
-                              SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: Checkbox(
-                                  value: _rememberMe,
-                                  activeColor: _green,
-                                  checkColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(5),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: Checkbox(
+                                      value: _rememberMe,
+                                      activeColor: _green,
+                                      checkColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(5),
+                                      ),
+                                      side: const BorderSide(
+                                        color: _green,
+                                        width: 2,
+                                      ),
+                                      onChanged: (val) {
+                                        setState(
+                                          () => _rememberMe = val ?? true,
+                                        );
+                                      },
+                                    ),
                                   ),
-                                  side: const BorderSide(
-                                    color: _green,
-                                    width: 2,
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'Remember me',
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      color: Color(0xFF374151),
+                                      fontWeight: FontWeight.w500,
+                                    ),
                                   ),
-                                  onChanged: (val) {
-                                    setState(() => _rememberMe = val ?? true);
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              const Expanded(
-                                child: Text(
-                                  'Remember me',
-                                  style: TextStyle(
-                                    fontSize: 12.5,
-                                    color: Color(0xFF374151),
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
+                                ],
                               ),
                               GestureDetector(
                                 onTap: () {
@@ -390,6 +401,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
                           const SizedBox(height: 20),
 
+                          if (authState.errorMessage != null &&
+                              authState.status == AuthStatus.unauthenticated)
+                            TextButton(
+                              onPressed: ref
+                                  .read(authProvider.notifier)
+                                  .checkAuthStatus,
+                              child: const Text('Retry saved session'),
+                            ),
+
                           // OR Divider
                           Row(
                             children: [
@@ -447,12 +467,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                           Center(
                             child: GestureDetector(
                               onTap: () => context.push('/signup'),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 6,
-                                ),
-                                child: RichText(
-                                  text: const TextSpan(
+                              child: const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 6),
+                                child: Text.rich(
+                                  TextSpan(
                                     style: TextStyle(
                                       fontSize: 14,
                                       color: Color(0xFF6B7280),
@@ -503,76 +521,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
   // ── Input Fields ──
 
-  Widget _buildPhoneInputField() {
-    return Container(
-      key: const ValueKey('phone_input'),
-      height: 56,
-      decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5E7EB), width: 1.5),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('🇮🇳', style: TextStyle(fontSize: 18)),
-                SizedBox(width: 4),
-                Text(
-                  '+91',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF111827),
-                  ),
-                ),
-                Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: Color(0xFF9CA3AF),
-                  size: 18,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Container(width: 1, height: 28, color: const Color(0xFFE5E7EB)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: TextField(
-              controller: _phoneController,
-              keyboardType: TextInputType.phone,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF111827),
-              ),
-              decoration: const InputDecoration(
-                hintText: 'Enter Phone Number',
-                hintStyle: TextStyle(
-                  color: Color(0xFFBBBBBB),
-                  fontSize: 15,
-                  fontWeight: FontWeight.normal,
-                ),
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: EdgeInsets.symmetric(vertical: 14),
-              ),
-              onSubmitted: (_) => _handleContinue(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildPhoneInputField() => AuthPhoneField(
+    key: const ValueKey('phone_input'),
+    controller: _phoneController,
+    onSubmitted: (_) => _handleContinue(),
+  );
 
   Widget _buildEmailInputField() {
     return Container(
@@ -623,7 +576,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
     return Container(
       width: double.infinity,
-      height: 54,
+      constraints: const BoxConstraints(minHeight: 54),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [Color(0xFF013A1D), Color(0xFF01501E)],
@@ -693,7 +646,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
     return Container(
       width: double.infinity,
-      height: 54,
+      constraints: const BoxConstraints(minHeight: 54),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
@@ -730,12 +683,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
               ),
             ),
             const SizedBox(width: 12),
-            const Text(
-              'Sign in with Google',
-              style: TextStyle(
-                fontSize: 15.5,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF111827),
+            const Flexible(
+              child: Text(
+                'Sign in with Google',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 15.5,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF111827),
+                ),
               ),
             ),
           ],
@@ -769,8 +725,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           .login(LoginRequest(email: email), 'email');
     } else {
       final raw = _phoneController.text.trim();
-      final clean = raw.replaceAll(RegExp(r'[^\d+]'), '');
-      if (clean.isEmpty || clean.length < 10) {
+      final fullPhone = normalizeAuthPhone(raw);
+      if (fullPhone == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Please enter a valid 10-digit phone number.'),
@@ -783,7 +739,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         );
         return;
       }
-      final fullPhone = clean.startsWith('+') ? clean : '+91$clean';
       ref
           .read(authProvider.notifier)
           .login(LoginRequest(phone: fullPhone), 'phone');

@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:infurnus/core/network/dio_client.dart';
+import 'package:infurnus/core/network/session_events.dart';
 import 'package:infurnus/core/storage/secure_storage.dart';
 
 void main() {
@@ -131,6 +132,7 @@ void main() {
           await container.read(secureStorageProvider).read(key: 'auth_token'),
           status == 401 ? isNull : 'old-fixture',
         );
+        expect(container.read(sessionRejectionProvider), status == 401 ? 1 : 0);
       },
     );
   }

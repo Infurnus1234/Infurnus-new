@@ -1,3 +1,5 @@
+import { FleetOwnerOverviewRepository } from '../repositories/fleet-owner-overview.repository.js';
+import { createProviderAccountRouter } from './provider-account.routes.js';
 import { PostgresFleetRepository } from '../../fleet/repositories/fleet.repository.js';
 import { pool } from '../../../infrastructure/database/postgres.js';
 import { createManagedDriverRouter } from './managed-driver.routes.js';
@@ -29,9 +31,13 @@ export function createProviderOperationsRouter(repository: PostgresProviderOpera
       keyGenerator: (req) => req.auth!.userId,
     }),
   );
+  router.use(createProviderAccountRouter(pool));
   router.get('/vehicle-catalog', async (_req, res, next) => {
     try {
-      res.json({ success: true, data: await new PostgresFleetRepository(pool).catalog() });
+      res.json({
+        success: true,
+        data: await new PostgresFleetRepository(pool).catalog(_req.auth!.userId),
+      });
     } catch (e) {
       next(e);
     }
@@ -316,6 +322,48 @@ export function createProviderApprovalRouter(repository: PostgresProviderOperati
       keyGenerator: (req) => req.auth!.userId,
     }),
   );
+  router.get('/fleet-owners/:id/overview', async (req, res, next) => {
+    try {
+      const query = z
+        .object({
+          section: z
+            .enum(['profile', 'documents', 'bank', 'vehicles', 'drivers', 'activity'])
+            .default('profile'),
+          limit: z.coerce.number().int().min(1).max(100).default(25),
+          offset: z.coerce.number().int().min(0).max(100000).default(0),
+          search: z.string().trim().max(100).default(''),
+          status: z
+            .enum([
+              'ALL',
+              'PENDING',
+              'SUBMITTED',
+              'APPROVED',
+              'VERIFIED',
+              'REJECTED',
+              'EXPIRED',
+              'CANCELLED',
+              'ACTION_REQUIRED',
+            ])
+            .default('ALL'),
+        })
+        .strict()
+        .parse(req.query);
+      res.json({
+        success: true,
+        data: await new FleetOwnerOverviewRepository(pool).read(
+          req.auth!.userId,
+          z.string().uuid().parse(req.params.id),
+          query.section,
+          query.limit,
+          query.offset,
+          query.search,
+          query.status,
+        ),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
   router.get('/document-policies', async (req, res, next) => {
     try {
       res.json({ success: true, data: await repository.documentPolicies(req.auth!.userId) });
@@ -333,6 +381,16 @@ export function createProviderApprovalRouter(repository: PostgresProviderOperati
           required: z.boolean(),
           requiresExpiry: z.boolean(),
           minimumPages: z.number().int().min(1).max(5),
+          requiredLicenceClasses: z
+            .array(
+              z
+                .string()
+                .trim()
+                .toUpperCase()
+                .regex(/^[A-Z0-9_-]{1,30}$/),
+            )
+            .max(20)
+            .optional(),
           onboardingDeferrable: z.boolean().optional(),
           active: z.boolean(),
         })

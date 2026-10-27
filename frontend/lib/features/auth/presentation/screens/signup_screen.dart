@@ -7,6 +7,8 @@ import '../providers/auth_provider.dart';
 import '../providers/user_provider.dart';
 import '../widgets/auth_hero_banner.dart';
 import '../widgets/google_sign_in_button.dart';
+import '../utils/phone_number.dart';
+import '../widgets/auth_phone_field.dart';
 
 class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
@@ -63,8 +65,14 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     if (_isEmail) {
       email = _emailController.text.trim();
     } else {
-      final p = _phoneController.text.trim().replaceAll(RegExp(r'[^\d+]'), '');
-      phone = p.startsWith('+') ? p : '+91$p';
+      phone = normalizeAuthPhone(_phoneController.text);
+      if (phone == null) {
+        setState(
+          () => _validationError =
+              'Please enter a valid phone number with country code.',
+        );
+        return;
+      }
     }
 
     final request = SignupRequest(
@@ -172,66 +180,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
                   // Phone or Email Input
                   if (!_isEmail)
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: const Color(0xFFD1D5DB),
-                          width: 1.2,
-                        ),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 4,
-                      ),
-                      child: Row(
-                        children: [
-                          const Text('🇮🇳', style: TextStyle(fontSize: 18)),
-                          const SizedBox(width: 8),
-                          const Text(
-                            '+91',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF111827),
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          const Icon(
-                            Icons.keyboard_arrow_down_rounded,
-                            color: Color(0xFF6B7280),
-                            size: 20,
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            height: 24,
-                            width: 1,
-                            color: const Color(0xFFE5E7EB),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: TextField(
-                              controller: _phoneController,
-                              keyboardType: TextInputType.phone,
-                              decoration: const InputDecoration(
-                                hintText: 'Enter Phone Number',
-                                border: InputBorder.none,
-                                isDense: true,
-                                hintStyle: TextStyle(
-                                  color: Color(0xFF9CA3AF),
-                                  fontSize: 15,
-                                ),
-                              ),
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF111827),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                    AuthPhoneField(
+                      controller: _phoneController,
+                      backgroundColor: Colors.white,
+                      borderRadius: 12,
                     )
                   else
                     _buildInputBox(
@@ -393,8 +345,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Image.network(
-                            'https://fonts.gstatic.com/s/i/productlogos/googleg/v6/24px.svg',
+                          Image.asset(
+                            'assets/images/google_logo.png',
                             width: 20,
                             height: 20,
                             errorBuilder: (_, __, ___) => const Icon(

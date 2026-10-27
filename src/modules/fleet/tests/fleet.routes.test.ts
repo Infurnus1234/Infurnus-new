@@ -11,6 +11,32 @@ class MockFleetRepository implements FleetRepository {
   }
   async revenue() {
     return {
+      analytics: {
+        currency: 'INR',
+        timeZone: 'Asia/Kolkata',
+        period: {},
+        inventory: {},
+        summary: {},
+        status: [],
+        vehicles: [],
+        history: [],
+        trends: [],
+        pagination: {
+          limit: 25,
+          history: { offset: 0, total: 0 },
+          vehicles: { offset: 0, total: 0 },
+          trends: { offset: 0, total: 0 },
+        },
+        availability: {
+          fare: 'fixture',
+          ownerNetEarnings: 'fixture',
+          settlement: 'fixture',
+          distance: 'fixture',
+          operatingTime: 'fixture',
+          payments: 'fixture',
+          attribution: 'fixture',
+        },
+      },
       currency: 'INR',
       timeZone: 'Asia/Kolkata',
       period: { from: null, to: null },

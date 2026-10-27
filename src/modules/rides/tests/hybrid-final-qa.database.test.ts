@@ -141,7 +141,7 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
       r = await ride(c);
     expect(await repo.offerDispatch(r.id, d.profileId, 1)).toBe(true);
     await pool.query(
-      "UPDATE rides SET dispatch_expires_at=clock_timestamp()+INTERVAL '250 milliseconds' WHERE id=$1",
+      "UPDATE rides SET dispatch_expires_at=clock_timestamp()+INTERVAL '60 seconds' WHERE id=$1",
       [r.id],
     );
     await pool.query(
@@ -149,6 +149,7 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
       [r.id],
     );
     const locker = await pool.connect();
+    let unlocked = false;
     await locker.query('BEGIN');
     await locker.query('SELECT id FROM rides WHERE id=$1 FOR UPDATE', [r.id]);
     const acceptance = service.acceptRide(d.profileId, r.id).then(
@@ -162,15 +163,26 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
         );
         expect(blocked.rows[0].n).toBeGreaterThan(0);
       });
-      await vi.waitFor(async () => {
-        const expired = await pool.query(
-          'SELECT dispatch_expires_at<clock_timestamp() AS expired FROM rides WHERE id=$1',
-          [r.id],
-        );
-        expect(expired.rows[0].expired).toBe(true);
-      });
+      // Expire the offer only after acceptance is blocked on our row lock.
+      // This exercises the post-lock deadline check without depending on the
+      // host scheduling the acceptance within a 250 ms wall-clock window.
+      await locker.query(
+        "UPDATE rides SET dispatch_expires_at=clock_timestamp()-INTERVAL '1 millisecond' WHERE id=$1",
+        [r.id],
+      );
+      await locker.query(
+        'UPDATE ride_dispatch_attempts SET expires_at=(SELECT dispatch_expires_at FROM rides WHERE id=$1) WHERE ride_id=$1',
+        [r.id],
+      );
+      const expired = await locker.query(
+        'SELECT dispatch_expires_at<clock_timestamp() AS expired FROM rides WHERE id=$1',
+        [r.id],
+      );
+      expect(expired.rows[0].expired).toBe(true);
+      await locker.query('COMMIT');
+      unlocked = true;
     } finally {
-      await locker.query('ROLLBACK');
+      if (!unlocked) await locker.query('ROLLBACK');
       locker.release();
     }
     const result = await acceptance;
@@ -441,7 +453,15 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
       await worker.schedule(r.id, d.profileId, deadline);
       await worker.close();
       worker = startRideDispatchQueue(url, repo, progress, name);
-      await vi.waitFor(() => expect(progress.dispatch).toHaveBeenCalledTimes(1));
+      // Observe the replacement worker completing this exact persisted job,
+      // rather than assuming its Redis connection is ready within one second.
+      const deadlineId = `${r.id}-${d.profileId}-${deadline.getTime()}`;
+      await vi.waitFor(
+        async () =>
+          expect(await (await inspection.getJob(deadlineId))?.getState()).toBe('completed'),
+        { timeout: 5000 },
+      );
+      expect(progress.dispatch).toHaveBeenCalledTimes(1);
       const history = await pool.query(
         'SELECT status FROM ride_dispatch_attempts WHERE ride_id=$1',
         [r.id],

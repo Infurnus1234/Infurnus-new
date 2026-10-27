@@ -13,7 +13,7 @@ export async function actor(role: string) {
 }
 export async function fixture() {
   await pool.query(
-    "INSERT INTO vehicle_types(name,code,sector,base_fare_paise,per_km_rate_paise) VALUES('TEST_SAMPLE Sedan','sedan','passenger',100,100),('TEST_SAMPLE Goods','mini_truck','logistics',100,100) ON CONFLICT(code) DO NOTHING",
+    "INSERT INTO vehicle_types(name,code,sector,base_fare_paise,per_km_rate_paise) VALUES('TEST_SAMPLE Sedan','sedan','passenger',100,100),('TEST_SAMPLE Goods','mini_truck','logistics',100,100) ON CONFLICT(sector,code) DO NOTHING",
   );
   const admin = await actor('admin'),
     owner = await actor('fleet_owner'),

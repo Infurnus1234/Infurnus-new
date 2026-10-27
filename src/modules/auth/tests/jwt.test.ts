@@ -7,6 +7,21 @@ import { env } from '../../../config/env.js';
 import { signAccessToken, verifyAccessToken } from '../utils/jwt.js';
 
 describe('JWT utilities', () => {
+  it.each(['exp', 'iat', 'sub'])('rejects signed tokens missing required %s', async (claim) => {
+    const claims: Record<string, unknown> = {
+      sub: '00000000-0000-0000-0000-000000000001',
+      role: 'customer',
+      type: 'access',
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + 900,
+    };
+    delete claims[claim];
+    const token = await new SignJWT(claims)
+      .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
+      .sign(new TextEncoder().encode(env.JWT_ACCESS_SECRET));
+    await expect(verifyAccessToken(token)).rejects.toThrow();
+  });
+
   it('creates and verifies an access token', async () => {
     const userId = '00000000-0000-0000-0000-000000000001';
 

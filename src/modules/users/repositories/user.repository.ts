@@ -1,4 +1,5 @@
 import type { Pool } from 'pg';
+import { AppError } from '../../../common/errors/app-error.js';
 import type {
   CreateAddressData,
   CreateUserData,
@@ -153,16 +154,36 @@ export class PostgresUserRepository implements UserRepository {
 
     values.push(id);
 
+    // The generic profile editor is not an identity-verification workflow.
+    // Evaluate the guard in the UPDATE itself so concurrent edits cannot race it.
+    const identityGuards = fields.flatMap((field, index) => {
+      if (field !== 'email' && field !== 'phone') return [];
+      const parameter = `$${index + 1}`;
+      return [
+        field === 'email'
+          ? `(NOT email_verified OR lower(btrim(email)) IS NOT DISTINCT FROM lower(btrim(${parameter}::text)))`
+          : `(NOT phone_verified OR ltrim(btrim(phone),'+') IS NOT DISTINCT FROM ltrim(btrim(${parameter}::text),'+'))`,
+      ];
+    });
+
     const result = await this.pool.query<PublicUser>(
       `UPDATE users
        SET ${assignments.join(', ')},
            updated_at = NOW()
        WHERE id = $${values.length}
          AND deleted_at IS NULL
+         ${identityGuards.length ? `AND ${identityGuards.join(' AND ')}` : ''}
        RETURNING ${PUBLIC_USER_PROJECTION}`,
       values,
     );
 
+    if (!result.rows[0] && identityGuards.length && (await this.findById(id))) {
+      throw new AppError(
+        'VERIFIED_IDENTITY_CHANGE_REQUIRED',
+        'Use a verified identity-change workflow to change a verified login contact',
+        409,
+      );
+    }
     return result.rows[0] ?? null;
   }
 

@@ -117,7 +117,7 @@ export interface VehicleType {
   id: string;
   name: string;
   code: string;
-  sector: 'passenger' | 'logistics' | 'service' | 'premium';
+  sector: 'passenger' | 'logistics' | 'service' | 'premium' | 'rental';
   baseFare: number | null;
   perKmRate: number | null;
   pricingReference?: import('../../fares/types/fare.js').VehiclePricing | null;
@@ -134,4 +134,5 @@ export interface VehicleFareSnapshot {
   version: number;
   baseFarePaise: number;
   perKmRatePaise: number;
+  demandPricing?: import('../../fares/types/fare.js').DemandPricingProvenance;
 }

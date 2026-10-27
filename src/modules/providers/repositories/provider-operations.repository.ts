@@ -45,7 +45,7 @@ export class PostgresProviderOperationsRepository {
       await this.authorizeReviewer(client, actorId);
       return (
         await client.query(
-          'SELECT id,provider_role,vehicle_category,document_code,required,requires_expiry,minimum_pages,onboarding_deferrable,active,updated_at FROM provider_document_requirements ORDER BY provider_role,vehicle_category,document_code LIMIT 1000',
+          'SELECT id,provider_role,vehicle_category,document_code,required,requires_expiry,minimum_pages,required_licence_classes,onboarding_deferrable,active,updated_at FROM provider_document_requirements ORDER BY provider_role,vehicle_category,document_code LIMIT 1000',
         )
       ).rows;
     } finally {
@@ -63,7 +63,7 @@ export class PostgresProviderOperationsRepository {
           `SELECT r.id,r.requester_id,r.requester_role,r.fleet_id,r.request_type,r.target_type,r.target_id,r.status,r.submitted_at,
            ${approvalIdentityFields},${approvalReviewPermission('$2')}
            FROM provider_approval_requests r ${approvalIdentityJoins}
-           WHERE ($1::text='ALL' OR r.status=$1) AND r.target_type<>'bank_account'
+           WHERE ($1::text='ALL' OR r.status=$1)
            ORDER BY CASE WHEN $1='PENDING' THEN r.submitted_at END ASC,
              CASE WHEN $1='PENDING' THEN r.id END ASC,r.submitted_at DESC,r.id DESC LIMIT 100`,
           [status, actorId],
@@ -84,7 +84,7 @@ export class PostgresProviderOperationsRepository {
            CASE WHEN u.deleted_at IS NULL THEN u.email END AS requester_email,
            CASE WHEN u.deleted_at IS NULL THEN u.phone END AS requester_phone
            FROM provider_approval_requests r ${approvalIdentityJoins}
-           WHERE r.id=$1 AND r.target_type<>'bank_account'`,
+           WHERE r.id=$1`,
           [id, actorId],
         )
       ).rows[0];
@@ -95,10 +95,13 @@ export class PostgresProviderOperationsRepository {
         partner: 'partners',
         partner_document: 'partner_documents',
         vehicle: 'vehicles',
+        bank_account: 'provider_bank_accounts',
       };
       const target = (
         await client.query(
-          `SELECT to_jsonb(t) AS data FROM ${tables[row.target_type]} t WHERE id=$1`,
+          row.target_type === 'bank_account'
+            ? `SELECT jsonb_build_object('id',id,'user_id',user_id,'account_holder_name',account_holder_name,'account_number_last4',account_number_last4,'ifsc_code',ifsc_code,'bank_name',bank_name,'branch_name',branch_name,'account_type',account_type,'ownership_type',ownership_type,'legal_entity_name',legal_entity_name,'supporting_document_id',supporting_document_id,'is_verified',is_verified,'updated_at',updated_at,'verification_blocker',CASE WHEN is_verified THEN NULL ELSE 'Bank ownership verification is not configured. Submission does not enable payouts.' END) AS data FROM provider_bank_accounts WHERE id=$1`
+            : `SELECT to_jsonb(t) AS data FROM ${tables[row.target_type]} t WHERE id=$1`,
           [row.target_id],
         )
       ).rows[0]?.data;
@@ -119,6 +122,11 @@ export class PostgresProviderOperationsRepository {
           [row.target_type, row.target_id, actorId],
         )
       ).rows;
+      const bankPartnerId =
+        row.target_type === 'bank_account'
+          ? ((await client.query('SELECT id FROM partners WHERE user_id=$1', [target.user_id]))
+              .rows[0]?.id ?? null)
+          : null;
       const documentScope =
         row.target_type === 'driver_profile' || row.target_type === 'driver_document'
           ? {
@@ -129,7 +137,10 @@ export class PostgresProviderOperationsRepository {
           : {
               table: 'partner_documents',
               column: row.target_type === 'vehicle' ? 'vehicle_id' : 'partner_id',
-              value: target.partner_id ?? target.id,
+              value:
+                row.target_type === 'bank_account'
+                  ? bankPartnerId
+                  : (target.partner_id ?? target.id),
             };
       const documents = (
         await client.query(
@@ -137,8 +148,13 @@ export class PostgresProviderOperationsRepository {
             documentScope.table +
             ' d WHERE ' +
             documentScope.column +
-            '=$1 ORDER BY id LIMIT 100',
-          [documentScope.value],
+            '=$1 AND ($2::uuid IS NULL OR d.id=$2) ORDER BY id LIMIT 100',
+          [
+            documentScope.value,
+            row.target_type === 'bank_account'
+              ? (target.supporting_document_id ?? '00000000-0000-0000-0000-000000000000')
+              : null,
+          ],
         )
       ).rows.map((row) => {
         const doc = row.data;
@@ -409,10 +425,7 @@ export class PostgresProviderOperationsRepository {
       const reviewerRole = await this.authorizeReviewer(client, actorId);
       await client.query("SELECT set_config('infurnus.actor_id',$1,TRUE)", [actorId]);
       const request = (
-        await client.query(
-          "SELECT * FROM provider_approval_requests WHERE id=$1 AND target_type<>'bank_account'",
-          [id],
-        )
+        await client.query('SELECT * FROM provider_approval_requests WHERE id=$1', [id])
       ).rows[0];
       if (!request) throw new AppError('APPROVAL_NOT_FOUND', 'Approval not found', 404);
       if (request.requester_id === actorId)
@@ -427,6 +440,7 @@ export class PostgresProviderOperationsRepository {
         partner: 'partners',
         partner_document: 'partner_documents',
         vehicle: 'vehicles',
+        bank_account: 'provider_bank_accounts',
       };
       const target = (
         await client.query(`SELECT * FROM ${tables[request.target_type]} WHERE id=$1 FOR UPDATE`, [
@@ -467,8 +481,13 @@ export class PostgresProviderOperationsRepository {
         throw new AppError('SELF_REVIEW_FORBIDDEN', 'Cannot review your own resource', 403);
       const approved = input.status === 'APPROVED',
         state = approved ? 'approved' : 'rejected';
-      if (approved && request.target_type === 'vehicle')
-        await this.requireVehicleFrontPhoto(client, owner, target.id);
+      if (request.target_type === 'bank_account' && approved && !target.is_verified) {
+        throw new AppError(
+          'BANK_VERIFICATION_NOT_CONFIGURED',
+          'Bank ownership must be verified by an authorized verification process before approval',
+          409,
+        );
+      }
       if (approved && ['driver_document', 'partner_document'].includes(request.target_type)) {
         const isDriver = request.target_type === 'driver_document';
         const code = isDriver
@@ -543,7 +562,14 @@ export class PostgresProviderOperationsRepository {
             409,
           );
       }
-      if (request.request_type === 'driver_association') {
+      if (request.target_type === 'bank_account') {
+        // Review never fabricates bank ownership or changes payout eligibility.
+        if (!approved)
+          await client.query(
+            'UPDATE provider_bank_accounts SET is_verified=FALSE,verified_by=NULL,verified_at=NULL,updated_at=NOW() WHERE id=$1',
+            [target.id],
+          );
+      } else if (request.request_type === 'driver_association') {
         if (approved) {
           const fleet = (
             await client.query(
@@ -1087,7 +1113,6 @@ export class PostgresProviderOperationsRepository {
         if (!deferred.has('vehicle'))
           for (const vehicle of vehicles) {
             if (vehicle.verification_status === 'approved') continue;
-            await this.requireVehicleFrontPhoto(client, userId, vehicle.id);
             targets.push({
               type: 'vehicle',
               id: vehicle.id,
@@ -1159,7 +1184,10 @@ export class PostgresProviderOperationsRepository {
         ...result,
         dashboardAccessible: !!result.receipt_id,
         verificationStatus,
-        requirements: policy,
+        requirements: policy.map((rule) => ({
+          ...rule,
+          aadhaar_collection_allowed: Boolean(env.AADHAAR_COLLECTION_AUTHORIZATION),
+        })),
         review: statuses,
       };
     } catch (error) {
@@ -1170,25 +1198,12 @@ export class PostgresProviderOperationsRepository {
     }
   }
 
-  private async requireVehicleFrontPhoto(client: PoolClient, userId: string, vehicleId: string) {
-    const photo = await client.query(
-      `SELECT d.id FROM partner_documents d JOIN partners p ON p.id=d.partner_id JOIN vehicles v ON v.id=d.vehicle_id WHERE d.vehicle_id=$1 AND p.user_id=$2 AND v.owner_id=$2 AND d.metadata->>'documentCode'='vehicle_front_photo' AND d.status NOT IN ('REJECTED','EXPIRED') AND d.metadata->'storage'->>'mimeType' IN ('image/jpeg','image/png','image/webp') AND COALESCE(d.metadata->'storage'->>'storageKey','')<>''`,
-      [vehicleId, userId],
-    );
-    if (!photo.rowCount)
-      throw new AppError(
-        'VEHICLE_PHOTO_REQUIRED',
-        'Upload a front photograph showing the whole vehicle and registration plate, or defer vehicle submission',
-        400,
-      );
-  }
-
   async documentRequirements(userId: string, role: string, category: string) {
     await this.authorize(userId, role);
     return (
       await this.pool.query(
-        `SELECT document_code,required,requires_expiry,minimum_pages,onboarding_deferrable,vehicle_category FROM provider_document_requirements WHERE active=TRUE AND provider_role=$1 AND vehicle_category IN ('*',$2) ORDER BY document_code`,
-        [role, category],
+        `SELECT document_code,required,requires_expiry,minimum_pages,onboarding_deferrable,vehicle_category,$3::boolean AS aadhaar_collection_allowed FROM provider_document_requirements WHERE active=TRUE AND provider_role=$1 AND vehicle_category IN ('*',$2) ORDER BY document_code`,
+        [role, category, Boolean(env.AADHAAR_COLLECTION_AUTHORIZATION)],
       )
     ).rows;
   }
@@ -1251,8 +1266,6 @@ export class PostgresProviderOperationsRepository {
     try {
       await client.query('BEGIN');
       await client.query("SELECT set_config('infurnus.actor_id',$1,TRUE)", [userId]);
-      if (input.targetType === 'vehicle')
-        await this.requireVehicleFrontPhoto(client, userId, input.targetId);
       const fleet = (
         await client.query<{ id: string; approval_status: string }>(
           'SELECT id,approval_status::text FROM partners WHERE user_id=$1 FOR SHARE',
@@ -1477,6 +1490,7 @@ export class PostgresProviderOperationsRepository {
       requiresExpiry: boolean;
       minimumPages: number;
       onboardingDeferrable?: boolean | undefined;
+      requiredLicenceClasses?: string[] | undefined;
       active: boolean;
     },
   ) {
@@ -1504,9 +1518,19 @@ export class PostgresProviderOperationsRepository {
         input.minimumPages > 5
       )
         throw new AppError('INVALID_DOCUMENT_POLICY', 'Invalid document policy', 400);
+      if (
+        input.requiredLicenceClasses?.length &&
+        (input.documentCode !== 'driver_license' || input.providerRole === 'fleet_owner')
+      ) {
+        throw new AppError(
+          'INVALID_DOCUMENT_POLICY',
+          'Licence class restrictions apply to Driver licence policies only',
+          400,
+        );
+      }
       const result = await client.query(
-        `INSERT INTO provider_document_requirements(provider_role,vehicle_category,document_code,required,requires_expiry,minimum_pages,active,updated_by,onboarding_deferrable)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(provider_role,vehicle_category,document_code) DO UPDATE SET required=EXCLUDED.required,requires_expiry=EXCLUDED.requires_expiry,minimum_pages=EXCLUDED.minimum_pages,active=EXCLUDED.active,onboarding_deferrable=EXCLUDED.onboarding_deferrable,updated_by=EXCLUDED.updated_by,updated_at=NOW() RETURNING id`,
+        `INSERT INTO provider_document_requirements(provider_role,vehicle_category,document_code,required,requires_expiry,minimum_pages,active,updated_by,onboarding_deferrable,required_licence_classes)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(provider_role,vehicle_category,document_code) DO UPDATE SET required=EXCLUDED.required,requires_expiry=EXCLUDED.requires_expiry,minimum_pages=EXCLUDED.minimum_pages,active=EXCLUDED.active,onboarding_deferrable=EXCLUDED.onboarding_deferrable,required_licence_classes=EXCLUDED.required_licence_classes,updated_by=EXCLUDED.updated_by,updated_at=NOW() RETURNING id`,
         [
           input.providerRole,
           input.category,
@@ -1517,6 +1541,7 @@ export class PostgresProviderOperationsRepository {
           input.active,
           actorId,
           input.documentCode === 'driver_license' ? false : (input.onboardingDeferrable ?? true),
+          input.requiredLicenceClasses ?? [],
         ],
       );
       await client.query(

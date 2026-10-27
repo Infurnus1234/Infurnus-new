@@ -19,8 +19,8 @@ export class FleetService {
   ) {
     return this.fleetRepo.revenue(ownerId, filter);
   }
-  async catalog() {
-    return this.fleetRepo.catalog();
+  async catalog(ownerId?: string) {
+    return this.fleetRepo.catalog(ownerId);
   }
 
   async getDashboard(ownerId: string): Promise<FleetDashboardMetrics> {

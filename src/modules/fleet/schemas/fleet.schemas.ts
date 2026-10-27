@@ -31,6 +31,8 @@ export const createFleetVehicleSchema = z
     registrationExpiry: z.iso.date().optional(),
     isCommercial: z.boolean().default(true),
     permitDetails: z.string().trim().max(500).optional(),
+    ownershipType: z.enum(['OWNED', 'LEASED', 'FINANCED', 'OTHER']).optional(),
+    ownerNotes: z.string().trim().max(1000).optional(),
   })
   .strict();
 
@@ -53,6 +55,8 @@ export const updateFleetVehicleSchema = z
     registrationExpiry: z.iso.date().optional(),
     isCommercial: z.boolean().optional(),
     permitDetails: z.string().trim().max(500).optional(),
+    ownershipType: z.enum(['OWNED', 'LEASED', 'FINANCED', 'OTHER']).optional(),
+    ownerNotes: z.string().trim().max(1000).optional(),
   })
   .strict();
 

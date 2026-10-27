@@ -10,6 +10,7 @@ import 'dart:async';
 
 import '../config/env_config.dart';
 import '../storage/secure_storage.dart';
+import 'session_events.dart';
 
 const String _csrfCookieName = 'infurnus_csrf_token';
 
@@ -28,10 +29,8 @@ final cookieJarProvider = FutureProvider<PersistCookieJar>((ref) async {
   );
 });
 
-// For concurrent refresh handling
-Future<bool?>? _refreshFuture;
-
 final dioProvider = Provider<Dio>((ref) {
+  Future<bool?>? refreshFuture;
   final dio = Dio(
     BaseOptions(
       baseUrl: envConfigProvider.baseUrl,
@@ -47,7 +46,7 @@ final dioProvider = Provider<Dio>((ref) {
   dio.interceptors.add(
     InterceptorsWrapper(
       onRequest: (options, handler) async {
-        debugPrint('Dio: Requesting ${options.method} ${options.uri}');
+        debugPrint('Dio: Requesting ${options.method}');
         debugPrint('Dio: Base URL is ${options.baseUrl}');
         // Browsers own HttpOnly cookies; native requests use the persistent jar below.
         if (kIsWeb) options.extra['withCredentials'] = true;
@@ -102,12 +101,12 @@ final dioProvider = Provider<Dio>((ref) {
       onError: (error, handler) async {
         if (_shouldAttemptRefresh(error)) {
           // Prevent multiple simultaneous refresh calls
-          _refreshFuture ??= _performTokenRefresh(dio, ref);
+          refreshFuture ??= _performTokenRefresh(dio, ref);
 
-          final isRefreshed = await _refreshFuture;
+          final isRefreshed = await refreshFuture;
 
           // Clear future after completion
-          _refreshFuture = null;
+          refreshFuture = null;
 
           if (isRefreshed == true) {
             final requestOptions = error.requestOptions;
@@ -139,6 +138,8 @@ final dioProvider = Provider<Dio>((ref) {
             await storage.delete(key: 'auth_token');
             await storage.delete(key: 'user_id');
             await storage.delete(key: 'user_role');
+            await storage.delete(key: 'auth_csrf_token');
+            ref.read(sessionRejectionProvider.notifier).state++;
           }
         }
         handler.next(error);

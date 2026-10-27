@@ -1,3 +1,5 @@
+import { demandProvenance } from './demand-pricing.js';
+import { VEHICLE_PRICING_ALIASES } from '../config/fare.config.js';
 import type { VehicleRepository } from '../../vehicles/repositories/vehicle.repository.js';
 import { canonicalVehicleCode, VEHICLE_UNAVAILABLE_MESSAGE } from '../config/fare.config.js';
 import { geographicDistance } from '../../maps/geometry.js';
@@ -32,7 +34,7 @@ export class FareEstimateService {
     origin: Coordinates,
     destination: Coordinates,
     options?: {
-      sector?: 'passenger' | 'logistics' | 'service' | 'premium' | undefined;
+      sector?: 'passenger' | 'logistics' | 'service' | 'premium' | 'rental' | undefined;
       vehicleCategory?: string | undefined;
       waitingMinutes?: number | undefined;
       weightKg?: number | undefined;
@@ -160,7 +162,7 @@ export class FareEstimateService {
   }) {
     const code = canonicalVehicleCode(input.sector ?? '', input.vehicleCategory ?? '');
     const configured = this.vehicles?.findTypeByCode
-      ? await this.vehicles.findTypeByCode(code)
+      ? await this.vehicles.findTypeByCode(code, input.sector)
       : null;
     // A shared legacy identifier (e.g. passenger/goods bike) keeps its own sector tariff.
     if (configured && configured.sector === input.sector) {
@@ -168,6 +170,9 @@ export class FareEstimateService {
         throw new AppError('FARE_CONFIGURATION_MISSING', VEHICLE_UNAVAILABLE_MESSAGE, 422);
       return configured;
     }
+    // Production repository callers never fall back to unpersisted compatibility tariffs.
+    if (this.vehicles)
+      throw new AppError('FARE_CONFIGURATION_MISSING', VEHICLE_UNAVAILABLE_MESSAGE, 422);
     this.fareCalculator.validateEstimateCategory(
       input as Parameters<FareCalculatorService['validateEstimateCategory']>[0],
     );
@@ -179,8 +184,38 @@ export class FareEstimateService {
   ): Promise<FareEstimateResult> {
     const configured =
       mode === 'vehicle_range' ? await this.resolveConfiguration(input) : undefined;
+    let demand;
+    if (configured?.pricingReference?.demandPricing) {
+      const settings = configured.pricingReference.demandPricing;
+      let sample = null;
+      try {
+        const aliases = VEHICLE_PRICING_ALIASES[configured.sector] ?? {};
+        const codes = [
+          configured.code,
+          ...Object.keys(aliases).filter((key) => aliases[key] === configured.code),
+        ];
+        sample =
+          (await this.vehicles?.measureBookingDemand?.(
+            configured.sector,
+            codes,
+            settings.windowSeconds,
+          )) ?? null;
+      } catch {
+        /* unavailable measurement fails to minimum, never to a higher tariff */
+      }
+      demand = demandProvenance(settings, sample);
+      if (demand.source === 'minimum_fallback')
+        console.warn(
+          JSON.stringify({
+            event: 'fare_demand_fallback',
+            sector: configured.sector,
+            code: configured.code,
+            reason: demand.reason,
+          }),
+        );
+    }
     return mode === 'vehicle_range'
-      ? this.fareCalculator.calculateEstimate(input, configured ?? undefined)
+      ? this.fareCalculator.calculateEstimate(input, configured ?? undefined, undefined, demand)
       : this.fareCalculator.calculate(input);
   }
 }

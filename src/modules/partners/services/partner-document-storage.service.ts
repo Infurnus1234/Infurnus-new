@@ -1,4 +1,6 @@
+import { validateDocumentMetadata } from '../../providers/services/document-metadata-policy.js';
 import { randomUUID } from 'node:crypto';
+import { assertIdentityCollectionAllowed } from '../../providers/services/identity-collection.js';
 import type { Buffer } from 'node:buffer';
 
 import { AppError } from '../../../common/errors/app-error.js';
@@ -55,24 +57,36 @@ export interface DeletePartnerDocumentInput {
 
 export type SafePartnerDocument = Omit<PartnerDocument, 'metadata'>;
 
+function isVehiclePhoto(code: unknown) {
+  return [
+    'vehicle_front_photo',
+    'vehicle_rear_photo',
+    'vehicle_left_photo',
+    'vehicle_right_photo',
+  ].includes(String(code));
+}
+
 export class PartnerDocumentStorageService {
   constructor(private readonly partnerDocumentService: PartnerDocumentService) {}
 
   async uploadDocument(input: UploadPartnerDocumentInput): Promise<SafePartnerDocument> {
     await this.partnerDocumentService.assertAccess(input.partnerId, input.actor);
+    assertIdentityCollectionAllowed(input.documentType, input.documentMetadata);
+    validateDocumentMetadata(input.documentType, input.documentMetadata);
+    if (input.vehicleId)
+      await this.partnerDocumentService.assertVehicleAccess(input.partnerId, input.vehicleId);
     if (
-      input.documentMetadata?.documentCode === 'vehicle_front_photo' &&
+      isVehiclePhoto(input.documentMetadata?.documentCode) &&
       (!input.vehicleId || input.documentType !== 'OTHER')
     )
       throw new AppError(
         'VEHICLE_PHOTO_SCOPE_REQUIRED',
-        'Select an owned vehicle for its front photo',
+        'Select an owned vehicle for its photograph',
         400,
       );
-    const category =
-      input.documentMetadata?.documentCode === 'vehicle_front_photo'
-        ? 'partner-vehicle-photo'
-        : getDocumentCategory(input.documentType);
+    const category = isVehiclePhoto(input.documentMetadata?.documentCode)
+      ? 'partner-vehicle-photo'
+      : getDocumentCategory(input.documentType);
 
     const accessMode = getStorageAccessMode(category);
 
@@ -144,11 +158,13 @@ export class PartnerDocumentStorageService {
       input.actor,
     );
 
-    const category =
-      (input.documentMetadata?.documentCode ?? existing.metadata?.documentCode) ===
-      'vehicle_front_photo'
-        ? 'partner-vehicle-photo'
-        : getDocumentCategory(existing.documentType);
+    assertIdentityCollectionAllowed(existing.documentType, input.documentMetadata);
+    validateDocumentMetadata(existing.documentType, input.documentMetadata);
+    const category = isVehiclePhoto(
+      input.documentMetadata?.documentCode ?? existing.metadata?.documentCode,
+    )
+      ? 'partner-vehicle-photo'
+      : getDocumentCategory(existing.documentType);
 
     const accessMode = getStorageAccessMode(category);
 
@@ -299,7 +315,17 @@ export class PartnerDocumentStorageService {
       return;
     }
 
-    await cleanupUploadedFile(storage.storageKey, storage.resourceType, storage.accessMode);
+    const pages = Array.isArray(existing.metadata?.pages) ? existing.metadata.pages : [];
+    const seen = new Set<string>();
+    for (const page of [storage, ...pages]) {
+      if (!page || typeof page.storageKey !== 'string' || seen.has(page.storageKey)) continue;
+      seen.add(page.storageKey);
+      await cleanupUploadedFile(
+        page.storageKey,
+        page.resourceType ?? storage.resourceType,
+        page.accessMode ?? storage.accessMode,
+      );
+    }
   }
 
   async deleteDocumentStorage(document: PartnerDocument): Promise<void> {

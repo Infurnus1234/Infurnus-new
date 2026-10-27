@@ -98,7 +98,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   }
 
   Future<void> _handleNavigation(AuthStatus status) async {
-    if (_navigated || !mounted) return;
+    if (_navigated ||
+        !mounted ||
+        status == AuthStatus.initial ||
+        status == AuthStatus.restoring) {
+      return;
+    }
     _navigated = true;
 
     if (status == AuthStatus.authenticated) {

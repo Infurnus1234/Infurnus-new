@@ -13,6 +13,7 @@ import {
 import { GoogleMapsProvider } from './modules/rides/providers/google.maps.provider.js';
 import { RouteRecalculationService } from './modules/rides/services/route-recalculation.service.js';
 import { createApp } from './app.js';
+import { localStorageProvider } from './infrastructure/storage/index.js';
 import { env } from './config/env.js';
 import { createConfiguredOtpProvider } from './modules/auth/providers/otp-provider.factory.js';
 import {
@@ -21,7 +22,6 @@ import {
   pool,
 } from './infrastructure/database/postgres.js';
 import { createSocketServer } from './infrastructure/socket/socket.server.js';
-import { notificationWorker, closeNotificationQueue } from './infrastructure/queue/index.js';
 
 import { PostgresPartnerRepository } from './modules/partners/repositories/partner.repository.js';
 import { PostgresPartnerDocumentRepository } from './modules/partners/repositories/partner-document.repository.js';
@@ -63,6 +63,13 @@ async function startServer() {
   // ==========================================================
 
   await checkDatabaseConnection();
+
+  // Push delivery is optional for the API. Loading the worker eagerly requires
+  // Redis and Firebase even when neither service is configured locally.
+  const notifications =
+    env.REDIS_URL && env.FIREBASE_PROJECT_ID
+      ? await import('./infrastructure/queue/index.js')
+      : undefined;
 
   if (env.NODE_ENV === 'production' || env.NODE_ENV === 'staging') {
     await serviceArea.assertSupported([]);
@@ -213,6 +220,7 @@ async function startServer() {
   // HTTP server
   // ==========================================================
 
+  localStorageProvider?.attach(app);
   let active = false;
   const ownershipWait = new AbortController();
   const server = createServer((req, res) => {
@@ -230,7 +238,7 @@ async function startServer() {
   process.once('SIGTERM', stopStandby);
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
-    server.listen(env.PORT, '0.0.0.0', () => {
+    server.listen(env.PORT, env.SERVER_HOST, () => {
       server.off('error', reject);
       resolve();
     });
@@ -346,7 +354,7 @@ async function startServer() {
   active = true;
   process.off('SIGINT', stopStandby);
   process.off('SIGTERM', stopStandby);
-  console.log(`INFURNUS API active on port ${env.PORT} (0.0.0.0)`);
+  console.log(`INFURNUS API active on port ${env.PORT} (${env.SERVER_HOST})`);
 
   // ==========================================================
   // Graceful shutdown
@@ -366,8 +374,8 @@ async function startServer() {
         await disconnectRedis().catch(() => {});
       }
 
-      await notificationWorker.close().catch(() => {});
-      await closeNotificationQueue().catch(() => {});
+      await notifications?.notificationWorker.close().catch(() => {});
+      await notifications?.closeNotificationQueue().catch(() => {});
 
       await pool.end();
 

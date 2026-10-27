@@ -1,3 +1,4 @@
+import { vehiclePricingReferenceSchema } from '../schemas/vehicle.schemas.js';
 import { AppError } from '../../../common/errors/app-error.js';
 import type { VehicleType } from '../types/vehicle.js';
 import type { CreateVehicleTypeInput, UpdateVehicleTypeInput } from '../schemas/vehicle.schemas.js';
@@ -21,7 +22,12 @@ export interface VehicleRepository {
   createType?(actorId: string, input: CreateVehicleTypeInput): Promise<VehicleType>;
   updateType?(actorId: string, id: string, input: UpdateVehicleTypeInput): Promise<VehicleType>;
   getType?(id: string): Promise<VehicleType | null>;
-  findTypeByCode?(code: string): Promise<VehicleType | null>;
+  findTypeByCode?(code: string, sector?: string): Promise<VehicleType | null>;
+  measureBookingDemand?(
+    sector: string,
+    codes: string[],
+    windowSeconds: number,
+  ): Promise<import('../../fares/services/demand-pricing.js').BookingDemandSample>;
   listTypes?(limit: number, offset: number): Promise<VehicleType[]>;
   driverProfileExists(id: string): Promise<boolean>;
 
@@ -53,8 +59,8 @@ const vehicleProjection = `
   manufacturing_year AS "manufacturingYear",
   fuel_type AS "fuelType",
   seating_capacity AS "seatingCapacity",
-  registration_date AS "registrationDate",
-  registration_expiry AS "registrationExpiry",
+  registration_date::text AS "registrationDate",
+  registration_expiry::text AS "registrationExpiry",
   is_commercial AS "isCommercial",
   permit_details AS "permitDetails",
   verification_status AS "verificationStatus",
@@ -89,9 +95,24 @@ export class PostgresVehicleRepository implements VehicleRepository {
     const result = await this.pool.query('SELECT * FROM vehicle_types WHERE id=$1', [id]);
     return result.rows[0] ? mapType(result.rows[0]) : null;
   }
-  async findTypeByCode(code: string): Promise<VehicleType | null> {
-    const result = await this.pool.query('SELECT * FROM vehicle_types WHERE code=$1', [code]);
+  async findTypeByCode(code: string, sector?: string): Promise<VehicleType | null> {
+    const result = await this.pool.query(
+      'SELECT * FROM vehicle_types WHERE code=$1 AND ($2::text IS NULL OR sector=$2)',
+      [code, sector ?? null],
+    );
+    if (result.rows.length > 1)
+      throw new AppError('VEHICLE_TYPE_AMBIGUOUS', 'Sector is required for this vehicle code', 422);
     return result.rows[0] ? mapType(result.rows[0]) : null;
+  }
+  async measureBookingDemand(sector: string, codes: string[], windowSeconds: number) {
+    const result = await this.pool.query(
+      `SELECT COUNT(*)::int count, NOW() measured_at FROM rides WHERE sector=$1 AND vehicle_category=ANY($2::text[]) AND created_at >= NOW()-make_interval(secs => $3::int)`,
+      [sector, codes, windowSeconds],
+    );
+    return {
+      count: Number(result.rows[0].count),
+      measuredAt: new Date(result.rows[0].measured_at).toISOString(),
+    };
   }
   async listTypes(limit: number, offset: number): Promise<VehicleType[]> {
     const result = await this.pool.query(
@@ -147,6 +168,18 @@ export class PostgresVehicleRepository implements VehicleRepository {
             'Configuration changed; reload before updating.',
             409,
           );
+        let reference =
+          update.pricingReference === undefined ? old.pricingReference : update.pricingReference;
+        if (old.pricingReference?.demandPricing) {
+          if (!reference)
+            throw new AppError(
+              'VEHICLE_TYPE_INVALID',
+              'Demand pricing cannot be removed through a scalar update.',
+              422,
+            );
+          if (!reference.demandPricing)
+            reference = { ...reference, demandPricing: old.pricingReference.demandPricing };
+        }
         result = await client.query(
           'UPDATE vehicle_types SET name=$2,base_fare_paise=$3,per_km_rate_paise=$4,active=$5,pricing_reference=$6::jsonb,version=version+1 WHERE id=$1 RETURNING *',
           [
@@ -163,11 +196,7 @@ export class PostgresVehicleRepository implements VehicleRepository {
                   (update.perKmRate === undefined ? old.perKmRate! : update.perKmRate!) * 100,
                 ),
             update.active ?? old.active,
-            JSON.stringify(
-              update.pricingReference === undefined
-                ? (old.pricingReference ?? null)
-                : update.pricingReference,
-            ),
+            reference ? JSON.stringify(reference) : null,
           ],
         );
       } else {
@@ -182,11 +211,20 @@ export class PostgresVehicleRepository implements VehicleRepository {
             create.perKmRate === null ? null : Math.round(create.perKmRate * 100),
             create.currency,
             create.active,
-            JSON.stringify(create.pricingReference ?? null),
+            create.pricingReference ? JSON.stringify(create.pricingReference) : null,
           ],
         );
       }
       const vehicle = mapType(result.rows[0]);
+      if (vehicle.pricingReference) {
+        vehiclePricingReferenceSchema.parse(vehicle.pricingReference);
+        if (vehicle.baseFare !== null || vehicle.perKmRate !== null)
+          throw new AppError(
+            'VEHICLE_TYPE_INVALID',
+            'Use either exact scalar rates or a pricing reference, not both',
+            422,
+          );
+      }
       if (
         (vehicle.baseFare === null || vehicle.perKmRate === null) &&
         (!vehicle.pricingReference || vehicle.baseFare !== null || vehicle.perKmRate !== null)

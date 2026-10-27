@@ -13,6 +13,10 @@ import type { DriverRepository } from '../repositories/driver.repository.js';
 import type { DriverProfile } from '../types/driver.js';
 import type { RideRepository } from '../repositories/ride.repository.js';
 import { sanitizeRideForDriver } from '../utils/ride-sanitizer.js';
+import {
+  PostgresRideCustomerContactRepository,
+  type RideCustomerContactRepository,
+} from '../repositories/ride-customer-contact.repository.js';
 
 export class DriverService {
   private readonly locationUpdates = new Map<string, number>();
@@ -20,7 +24,37 @@ export class DriverService {
     private readonly repository: DriverRepository,
     private readonly clock: () => Date = () => new Date(),
     private readonly rideRepository?: RideRepository,
+    private readonly contactRepository: RideCustomerContactRepository = new PostgresRideCustomerContactRepository(),
   ) {}
+
+  async getCustomerContact(driverUserId: string, rideId: string) {
+    let row;
+    try {
+      row = await this.contactRepository.forAssignedDriver(rideId, driverUserId);
+    } catch {
+      // Database errors can contain customer values; do not pass them to logs.
+      throw new AppError(
+        'RIDE_CONTACT_UNAVAILABLE',
+        'Customer contact is temporarily unavailable',
+        503,
+      );
+    }
+    if (!row || !row.customerId) {
+      // Identical response for nonexistent, other-driver and ineligible rides.
+      throw new AppError(
+        'RIDE_CONTACT_UNAVAILABLE',
+        'Customer contact is not available for this ride',
+        404,
+      );
+    }
+    const phone = row.phone?.trim().replace(/[\s().-]/g, '') ?? '';
+    return {
+      rideId: row.rideId,
+      name: [row.firstName, row.lastName].filter(Boolean).join(' ').trim() || 'Customer',
+      // Preserve legacy national numbers; adding '+' would change their dialling meaning.
+      phone: /^\+?[1-9]\d{7,14}$/.test(phone) ? phone : null,
+    };
+  }
 
   async profileForUser(userId: string): Promise<string> {
     const profileId = await this.repository.findProfileIdByUserId(userId);

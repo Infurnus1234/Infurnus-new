@@ -308,7 +308,8 @@ describe('Driver document storage routes', () => {
       .post('/rides/driver/documents/profile_photo')
       .set('Authorization', `Bearer ${driverToken}`);
 
-    expect(response.status).toBe(500);
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('VALIDATION_ERROR');
 
     expect(driverDocumentStorageService.upload).not.toHaveBeenCalled();
   });

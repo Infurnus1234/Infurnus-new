@@ -1,4 +1,6 @@
+import { validateDocumentMetadata } from '../../providers/services/document-metadata-policy.js';
 import { AppError } from '../../../common/errors/app-error.js';
+import { assertIdentityCollectionAllowed } from '../../providers/services/identity-collection.js';
 
 import type {
   CreatePartnerDocumentInput,
@@ -13,6 +15,10 @@ import type { PartnerDocument, PartnerDocumentStatus } from '../types/partner-do
 
 export class PartnerDocumentService {
   constructor(private readonly repository: PartnerDocumentRepository) {}
+  async assertVehicleAccess(partnerId: string, vehicleId: string) {
+    if (!(await this.repository.vehicleBelongsToPartner(vehicleId, partnerId)))
+      throw new AppError('VEHICLE_NOT_FOUND', 'Vehicle does not belong to partner', 404);
+  }
 
   async createDocumentMetadata(
     partnerId: string,
@@ -20,6 +26,8 @@ export class PartnerDocumentService {
     actor: AuthenticatedUser,
   ) {
     await this.assertAccess(partnerId, actor);
+    assertIdentityCollectionAllowed(data.documentType, data.metadata ?? undefined);
+    validateDocumentMetadata(data.documentType, data.metadata ?? undefined);
 
     if (!(await this.repository.partnerExists(partnerId))) {
       throw new AppError('PARTNER_NOT_FOUND', 'Partner not found', 404);
@@ -115,6 +123,12 @@ export class PartnerDocumentService {
 
     if (expectedVersion !== undefined && current.version !== expectedVersion)
       throw new AppError('DOCUMENT_CHANGED', 'Document changed; retry replacement', 409);
+    if (data.metadata)
+      assertIdentityCollectionAllowed(current.documentType, {
+        ...current.metadata,
+        ...data.metadata,
+      });
+    validateDocumentMetadata(current.documentType, { ...current.metadata, ...data.metadata });
     const replacementStorage = data.metadata?.storage;
     const replacingStorage = Boolean(
       replacementStorage &&
@@ -209,11 +223,21 @@ export class PartnerDocumentService {
     actor: AuthenticatedUser,
   ): Promise<PartnerDocument> {
     await this.assertAccess(partnerId, actor);
-
+    const current = await this.getDocument(partnerId, documentId, actor);
+    if (current.status !== 'PENDING' || (current.version ?? 1) > 1)
+      throw new AppError(
+        'DOCUMENT_RETENTION_REQUIRED',
+        'Reviewed, submitted or replaced documents must be retained. Replace or resubmit this document instead.',
+        409,
+      );
     const document = await this.repository.delete(documentId, partnerId);
 
     if (!document) {
-      throw new AppError('DOCUMENT_NOT_FOUND', 'Document not found', 404);
+      throw new AppError(
+        'DOCUMENT_CHANGED',
+        'Document changed or has review history; refresh before retrying',
+        409,
+      );
     }
 
     return document;
@@ -269,6 +293,8 @@ function toSafeDocument(
       [
         'documentCode',
         'documentNumber',
+        'holderName',
+        'licenceClasses',
         'issuingAuthority',
         'issuedAt',
         'expiresAt',

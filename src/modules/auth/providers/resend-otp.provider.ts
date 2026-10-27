@@ -1,4 +1,4 @@
-import { createHmac, randomBytes } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID } from 'node:crypto';
 
 import { Resend, type CreateEmailOptions } from 'resend';
 
@@ -6,6 +6,7 @@ import { env } from '../../../config/env.js';
 import { AppError } from '../../../common/errors/app-error.js';
 import { generateOtp, hashOtp } from '../utils/otp.js';
 import type { ResendOtpSessionRepository } from '../types/resend-otp.js';
+import { otpDiagnostic } from './otp-diagnostics.js';
 
 const OTP_EXPIRY_MINUTES = (env.AUTH_EMAIL_OTP_TTL_SECONDS ?? 600) / 60;
 
@@ -29,16 +30,42 @@ export class ResendOtpProvider {
     this.client = new Resend(env.RESEND_API_KEY);
   }
 
-  private async send(message: CreateEmailOptions) {
+  private async send(
+    message: CreateEmailOptions,
+    correlationId: string = randomUUID(),
+    operation: 'send' | 'resend' = 'send',
+  ) {
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let timedOut = false;
     try {
-      return await Promise.race([
+      const result = await Promise.race([
         this.client.emails.send(message),
         new Promise<never>((_, reject) => {
-          timer = setTimeout(() => reject(new Error('timeout')), this.timeoutMs);
+          timer = setTimeout(() => {
+            timedOut = true;
+            reject(new Error('timeout'));
+          }, this.timeoutMs);
         }),
       ]);
+      otpDiagnostic({
+        correlationId,
+        channel: 'email',
+        provider: 'resend',
+        operation,
+        outcome: result.error || !result.data?.id ? 'failed' : 'accepted',
+        ...(result.error || !result.data?.id ? { failureCategory: 'rejected' as const } : {}),
+        messageId: result.data?.id,
+      });
+      return result;
     } catch {
+      otpDiagnostic({
+        correlationId,
+        channel: 'email',
+        provider: 'resend',
+        operation,
+        outcome: 'failed',
+        failureCategory: timedOut ? 'timeout' : 'network',
+      });
       throw new AppError(
         'OTP_PROVIDER_SEND_FAILED',
         'Email verification service is temporarily unavailable',
@@ -53,23 +80,28 @@ export class ResendOtpProvider {
   // Send Email OTP
   // ==========================================================
 
-  async sendEmailOtp(email: string): Promise<{
+  async sendEmailOtp(
+    email: string,
+    correlationId?: string,
+  ): Promise<{
     sessionId: string;
     sessionToken: string;
     expiresAt: string;
   }> {
+    email = email.trim().toLowerCase();
     const otp = generateOtp();
     const sessionToken = randomBytes(32).toString('hex');
 
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
     const lastSentAt = new Date();
 
-    const result = await this.send({
-      from: env.RESEND_FROM_EMAIL,
-      to: email,
-      subject: 'INFURNUS Email Verification OTP',
-      text: `Your INFURNUS verification OTP is ${otp}. This OTP expires in ${OTP_EXPIRY_MINUTES} minutes.`,
-      html: `
+    const result = await this.send(
+      {
+        from: env.RESEND_FROM_EMAIL,
+        to: email,
+        subject: 'INFURNUS Email Verification OTP',
+        text: `Your INFURNUS verification OTP is ${otp}. This OTP expires in ${OTP_EXPIRY_MINUTES} minutes.`,
+        html: `
         <div>
           <h2>INFURNUS Email Verification</h2>
           <p>Your verification OTP is:</p>
@@ -78,7 +110,9 @@ export class ResendOtpProvider {
           <p>If you did not request this OTP, you can ignore this email.</p>
         </div>
       `,
-    });
+      },
+      correlationId,
+    );
 
     if (result.error || !result.data?.id) {
       throw new AppError(
@@ -119,6 +153,13 @@ export class ResendOtpProvider {
       this.hashCode(sessionToken, otp),
       hashOtp(otp),
     );
+    otpDiagnostic({
+      correlationId: randomUUID(),
+      channel: 'email',
+      provider: 'resend',
+      operation: 'verify',
+      outcome: result.status === 'verified' ? 'verified' : 'invalid',
+    });
 
     if (result.status === 'not_found') {
       throw new AppError('OTP_SESSION_NOT_FOUND', 'OTP session not found', 404);

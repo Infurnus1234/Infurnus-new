@@ -2,6 +2,7 @@ import multer from 'multer';
 import type { NextFunction, Request, Response, RequestHandler } from 'express';
 
 import type { StorageFile } from './types.js';
+import { AppError } from '../../common/errors/app-error.js';
 
 const DEFAULT_MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024;
 
@@ -120,7 +121,7 @@ export function requireStorageFile(req: Request, _res: Response, next: NextFunct
   const storageRequest = req as StorageRequest;
 
   if (!storageRequest.storageFile) {
-    next(new Error('A file is required'));
+    next(new AppError('VALIDATION_ERROR', 'A file is required', 400));
     return;
   }
 
@@ -131,7 +132,7 @@ export function requireStorageFiles(req: Request, _res: Response, next: NextFunc
   const storageRequest = req as StorageRequest;
 
   if (!storageRequest.storageFiles || storageRequest.storageFiles.length === 0) {
-    next(new Error('At least one file is required'));
+    next(new AppError('VALIDATION_ERROR', 'At least one file is required', 400));
     return;
   }
 

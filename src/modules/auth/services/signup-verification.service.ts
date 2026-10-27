@@ -149,6 +149,9 @@ export class SignupVerificationService {
     const result = await this.completionRepository.completeVerifiedSignup(signupId);
 
     switch (result.status) {
+      case 'expired':
+        throw new AppError('OTP_EXPIRED', 'OTP has expired', 400);
+
       case 'not_found':
         throw new AppError('INVALID_SIGNUP', 'Invalid or expired signup', 400);
 

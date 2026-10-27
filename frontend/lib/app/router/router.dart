@@ -14,6 +14,7 @@ import '../../features/auth/presentation/screens/location_permission_screen.dart
 import '../../features/auth/presentation/screens/notifications_permission_screen.dart';
 import '../../features/auth/presentation/screens/setup_complete_screen.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
+import '../../features/auth/presentation/providers/user_provider.dart';
 import '../../features/customer/presentation/screens/passenger_rides_screen.dart';
 import '../../features/customer/presentation/screens/specialty_emergency_screen.dart';
 import '../../features/customer/presentation/screens/customer_home_screen.dart';
@@ -34,19 +35,41 @@ import '../../features/driver/presentation/screens/support_tickets_screen.dart';
 import '../../features/customer/presentation/screens/ui_kit_presentation_board_screen.dart';
 
 class RouterNotifier extends ChangeNotifier {
-  final Ref _ref;
-  AuthStatus _status = AuthStatus.initial;
-
-  RouterNotifier(this._ref) {
-    _ref.listen(authProvider, (previous, next) {
-      if (_status != next.status) {
-        _status = next.status;
-        notifyListeners();
-      }
-    });
+  RouterNotifier(Ref ref) {
+    ref.listen(authProvider, (previous, next) => notifyListeners());
+    ref.listen(userProvider, (previous, next) => notifyListeners());
   }
+}
 
-  AuthStatus get status => _status;
+String? authRedirect(AuthState auth, String path, String? role) {
+  final publicAuth = {
+    '/login',
+    '/signup',
+    '/forgot-password',
+    '/welcome',
+    '/onboarding',
+  };
+  final publicLegal = path.startsWith('/legal/');
+  switch (auth.status) {
+    case AuthStatus.initial:
+    case AuthStatus.restoring:
+      return path == '/splash' ? null : '/splash';
+    case AuthStatus.authenticated:
+      // The Customer app cannot turn a Driver/Fleet/Admin identity into a customer.
+      if (role != 'customer') return path == '/login' ? null : '/login';
+      return publicAuth.contains(path) || path == '/otp' || path == '/splash'
+          ? '/customer-home'
+          : null;
+    case AuthStatus.otpRequired:
+      return path == '/otp' ? null : '/otp';
+    case AuthStatus.loading:
+      // Keep the in-progress form; never expose a protected route while verifying.
+      final verifying = auth.signupId != null || auth.loginChallengeId != null;
+      if (verifying && path == '/otp') return null;
+      return publicAuth.contains(path) || publicLegal ? null : '/login';
+    case AuthStatus.unauthenticated:
+      return publicAuth.contains(path) || publicLegal ? null : '/login';
+  }
 }
 
 final routerNotifierProvider = ChangeNotifierProvider(
@@ -146,10 +169,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const LogisticsScreen(),
       ),
       GoRoute(
-        path: '/passenger-rides',
-        builder: (context, state) => const PassengerRidesScreen(),
-      ),
-      GoRoute(
         path: '/specialty-emergency',
         builder: (context, state) => const SpecialtyEmergencyScreen(),
       ),
@@ -195,8 +214,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
     ],
     redirect: (context, state) {
-      // Direct testing mode: Allow unrestricted access to dashboard & all screens
-      return null;
+      return authRedirect(
+        ref.read(authProvider),
+        state.uri.path,
+        ref.read(userProvider)?.role,
+      );
     },
   );
 });

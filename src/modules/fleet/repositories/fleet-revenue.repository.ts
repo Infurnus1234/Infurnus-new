@@ -1,7 +1,14 @@
 import type { Pool } from 'pg';
+import { fleetAnalytics } from './fleet-analytics.repository.js';
 import { AppError } from '../../../common/errors/app-error.js';
 import { env } from '../../../config/env.js';
 export interface RevenueFilter {
+  period?: 'today' | 'this_week' | 'this_month' | 'custom' | 'all_time' | undefined;
+  interval?: 'day' | 'week' | 'month' | undefined;
+  limit?: number | undefined;
+  historyOffset?: number | undefined;
+  vehicleOffset?: number | undefined;
+  trendOffset?: number | undefined;
   from?: string | undefined;
   to?: string | undefined;
   vehicleId?: string | undefined;
@@ -56,11 +63,12 @@ export class FleetRevenueRepository {
         ).rowCount
       )
         throw new AppError('VEHICLE_NOT_FOUND', 'Owned vehicle not found', 404);
+      const analytics = await fleetAnalytics(c, owner, filter);
       const args = [
         owner,
         filter.vehicleId ?? null,
-        filter.from ?? null,
-        filter.to ?? null,
+        analytics.period.from,
+        analytics.period.to,
         env.FLEET_REPORT_TIME_ZONE,
       ];
       const sums = `COUNT(DISTINCT (kind,id)) FILTER(WHERE gross>refunded)::int AS "completedJobs",COALESCE(SUM(gross),0)::text AS "grossRevenuePaise",COALESCE(SUM(refunded),0)::text AS "refundPaise",
@@ -74,15 +82,15 @@ export class FleetRevenueRepository {
           revenueSql +
             'SELECT vehicle_id AS "vehicleId",' +
             sums +
-            ' FROM owned GROUP BY vehicle_id',
-          args,
+            ' FROM owned WHERE vehicle_id IN (SELECT id FROM vehicles WHERE owner_id=$1 AND ($2::uuid IS NULL OR id=$2) ORDER BY created_at,id LIMIT $6 OFFSET $7) GROUP BY vehicle_id',
+          [...args, filter.limit ?? 25, filter.vehicleOffset ?? 0],
         )
       ).rows;
       const inventory = (
         await c.query(
           `SELECT id AS "vehicleId",make,model,plate_number AS "plateNumber",sector,category
-    FROM vehicles WHERE owner_id=$1 AND ($2::uuid IS NULL OR id=$2) ORDER BY created_at,id`,
-          [owner, filter.vehicleId ?? null],
+    FROM vehicles WHERE owner_id=$1 AND ($2::uuid IS NULL OR id=$2) ORDER BY created_at,id LIMIT $3 OFFSET $4`,
+          [owner, filter.vehicleId ?? null, filter.limit ?? 25, filter.vehicleOffset ?? 0],
         )
       ).rows;
       const vehicles = inventory.map((v) => ({
@@ -100,15 +108,16 @@ export class FleetRevenueRepository {
       const history = (
         await c.query(
           revenueSql +
-            `SELECT id,receipt_id AS "paymentId",kind,vehicle_id AS "vehicleId",earned_at AS "earnedAt",gross::text AS "grossRevenuePaise",refunded::text AS "refundPaise",(gross-refunded)::text AS "netRevenuePaise" FROM owned ORDER BY earned_at DESC,id DESC LIMIT 100`,
-          args,
+            `SELECT id,receipt_id AS "paymentId",kind,vehicle_id AS "vehicleId",earned_at AS "earnedAt",gross::text AS "grossRevenuePaise",refunded::text AS "refundPaise",(gross-refunded)::text AS "netRevenuePaise" FROM owned ORDER BY earned_at DESC,id DESC LIMIT $6 OFFSET $7`,
+          [...args, filter.limit ?? 25, filter.historyOffset ?? 0],
         )
       ).rows;
       await c.query('COMMIT');
       return {
+        analytics,
         currency: 'INR',
         timeZone: env.FLEET_REPORT_TIME_ZONE,
-        period: { from: filter.from ?? null, to: filter.to ?? null },
+        period: { from: analytics.period.from, to: analytics.period.to },
         summary,
         vehicles,
         history,

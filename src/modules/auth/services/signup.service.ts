@@ -231,6 +231,18 @@ export class SignupService {
       if (!phone || !PHONE_PATTERN.test(phone)) {
         throw new AppError('INVALID_SIGNUP_CONTACT', 'Invalid phone number', 400);
       }
+      if (input.role !== 'customer') {
+        // Legacy Driver clients may omit '+', but must never omit the country.
+        // Do not guess a country from a national number at the SMS boundary.
+        if (/^91\d{10}$/.test(phone)) phone = `+${phone}`;
+        if (!phone.startsWith('+')) {
+          throw new AppError(
+            'PHONE_COUNTRY_CODE_REQUIRED',
+            'Include the phone country code, for example +91 followed by your Indian mobile number',
+            400,
+          );
+        }
+      }
     }
 
     // ========================================================
@@ -300,7 +312,6 @@ export class SignupService {
     );
     if (
       existingPendingSignup &&
-      (input.role === 'customer' || input.role === 'driver') &&
       existingPendingSignup.otpProviderExpiresAt &&
       existingPendingSignup.otpProviderExpiresAt.getTime() <= Date.now() &&
       (await this.repository.deleteExpiredById(existingPendingSignup.id))
@@ -313,7 +324,7 @@ export class SignupService {
     if (existingPendingSignup) {
       throw new AppError(
         'SIGNUP_ALREADY_PENDING',
-        `A signup is already pending for this ${contactType}`,
+        'A verification request is still active. Return to its verification screen to resend, or wait for the code to expire before starting again.',
         409,
       );
     }

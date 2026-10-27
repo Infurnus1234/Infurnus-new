@@ -15,6 +15,7 @@ export type DriverSafeRide = Omit<
   destination: Ride['destination'] | null;
   destinationAddress: string | null;
   rideInformation: RideInformation;
+  serverTime: string;
 };
 
 export function sanitizeRideForDriver(ride: Ride): DriverSafeRide {
@@ -31,6 +32,7 @@ export function sanitizeRideForDriver(ride: Ride): DriverSafeRide {
   const reveal = driverDestinationAllowed(ride);
   return {
     ...driverSafe,
+    serverTime: new Date().toISOString(),
     destination: reveal ? destination : null,
     destinationAddress: reveal ? destinationAddress : null,
     goods: reveal ? (ride.goods ?? null) : null,

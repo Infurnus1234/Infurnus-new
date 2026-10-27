@@ -20,6 +20,7 @@ afterAll(async () => {
     await pool.query('DELETE FROM user_credentials WHERE user_id=$1', [id]);
     await pool.query('DELETE FROM driver_profiles WHERE user_id=$1', [id]);
     await pool.query('DELETE FROM provider_onboarding WHERE user_id=$1', [id]);
+    await pool.query('DELETE FROM partners WHERE user_id=$1', [id]);
     await pool.query('DELETE FROM users WHERE id=$1', [id]);
   }
   for (const id of signups) await pool.query('DELETE FROM pending_signups WHERE id=$1', [id]);
@@ -45,9 +46,56 @@ function fixture() {
   const app = createApp(new PostgresUserRepository(pool), provider, {
     enableAuthRateLimiting: false,
   });
-  return { app, verify };
+  return { app, verify, send };
 }
 describe('provider-independent OTP attempt budgets and passwordless identities', () => {
+  it.each(['fleet_owner', 'driver_fleet_owner'])(
+    '%s restarts an expired signup without altering live requests or registered accounts',
+    async (role) => {
+      const { app, send } = fixture();
+      const email = `expired-provider-${randomUUID()}@example.com`;
+      const payload = {
+        firstName: 'Expired',
+        lastName: 'Provider',
+        email,
+        role,
+        password: 'Fixture123!',
+        confirmPassword: 'Fixture123!',
+        businessName: 'Test Fleet',
+        ...(role === 'driver_fleet_owner' ? { onboardingLicencePending: true } : {}),
+      };
+      const first = await request(app).post('/auth/signup').send(payload).expect(201);
+      const oldId = first.body.data.signupId;
+      signups.push(oldId);
+      expect(send).toHaveBeenCalledTimes(1);
+      await request(app).post('/auth/signup').send(payload).expect(409);
+      expect(send).toHaveBeenCalledTimes(1);
+      await pool.query(
+        "UPDATE pending_signups SET otp_provider_expires_at=NOW()-INTERVAL '1 second' WHERE id=$1",
+        [oldId],
+      );
+      const retry = await request(app).post('/auth/signup').send(payload).expect(201);
+      const newId = retry.body.data.signupId;
+      signups.push(newId);
+      expect(newId).not.toBe(oldId);
+      expect(send).toHaveBeenCalledTimes(2);
+      expect(
+        (await pool.query('SELECT 1 FROM pending_signups WHERE id=$1', [oldId])).rowCount,
+      ).toBe(0);
+      await request(app)
+        .post('/auth/signup/verify')
+        .send({ signupId: oldId, otp: '123456' })
+        .expect(400);
+      await request(app).post('/auth/signup/resend').send({ signupId: newId }).expect(429);
+      const verified = await request(app)
+        .post('/auth/signup/verify')
+        .send({ signupId: newId, otp: '123456' })
+        .expect(200);
+      users.push(verified.body.data.userId);
+      await request(app).post('/auth/signup').send(payload).expect(409);
+      expect(send).toHaveBeenCalledTimes(2);
+    },
+  );
   it.each(['email', 'phone'])(
     'default application fails closed without configured %s delivery',
     async (channel) => {

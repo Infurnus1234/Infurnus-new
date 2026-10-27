@@ -113,9 +113,11 @@ class _GoogleSignInButtonState extends State<GoogleSignInButton> {
   Widget build(BuildContext context) {
     final text = widget.signUp ? 'Sign up with Google' : 'Sign in with Google';
 
-    return SizedBox(
-      width: double.infinity,
-      height: 52,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(
+        minWidth: double.infinity,
+        minHeight: 52,
+      ),
       child: OutlinedButton(
         onPressed: !_busy && !_launching && widget.enabled
             ? _authenticate
@@ -153,12 +155,15 @@ class _GoogleSignInButtonState extends State<GoogleSignInButton> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                Text(
-                  text,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF0B0B0B),
+                Flexible(
+                  child: Text(
+                    text,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF0B0B0B),
+                    ),
                   ),
                 ),
               ],

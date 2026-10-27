@@ -4,6 +4,7 @@ import type { AccessTokenPayload } from '../types/token.js';
 export interface AccessTokenInput {
   userId: string;
   role: string;
+  sessionId?: string;
 }
 
 export class TokenService {
@@ -12,6 +13,7 @@ export class TokenService {
       sub: input.userId,
       role: input.role,
       type: 'access',
+      ...(input.sessionId ? { sid: input.sessionId } : {}),
     };
 
     return signAccessToken(payload);

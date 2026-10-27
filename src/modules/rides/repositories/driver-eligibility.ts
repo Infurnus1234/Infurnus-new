@@ -1,3 +1,5 @@
+import { env } from '../../../config/env.js';
+
 // Internal SQL fragments only; no request input is interpolated into this definition.
 // All aliases are fixed dp/u/v. Acceptance may exclude its own pending offer.
 export function driverOperationalEligibilitySql(selectOwned = false) {
@@ -7,6 +9,8 @@ export function driverOperationalEligibilitySql(selectOwned = false) {
       SELECT 1 FROM driver_documents ld WHERE ld.driver_profile_id=dp.id AND ld.document_type='driver_license' AND ld.verification_status='approved'))
     AND dp.verification_status = 'approved' AND dp.license_expiry >= CURRENT_DATE
     AND ${selectOwned ? '(v.driver_profile_id=dp.id OR (v.owner_id=dp.user_id AND v.driver_profile_id IS NULL))' : 'dp.active_vehicle_id = v.id AND v.driver_profile_id = dp.id'}
+    AND driver_licence_category_satisfied(dp.id,v.category)
+    AND left(v.category,7) <> 'custom_'
     AND v.is_active = TRUE AND v.verification_status = 'approved'
     AND (v.registration_expiry IS NULL OR v.registration_expiry >= CURRENT_DATE)
     AND (v.owner_id = dp.user_id OR EXISTS (
@@ -17,8 +21,25 @@ export function driverOperationalEligibilitySql(selectOwned = false) {
       (SELECT p.id FROM partners p WHERE p.user_id=dp.user_id),v.id,v.category)`;
 }
 
-export function driverEligibilitySql(freshAfter: string, pendingRideException?: string) {
+/** Fixed internal customer SQL only; IDs are operator config validated as UUIDs.
+ * Private test pairs cannot match ordinary users in either direction. */
+export function dispatchTestScopeSql(customerExpression?: string): string {
+  const customer = env.DISPATCH_TEST_CUSTOMER_ID;
+  const driver = env.DISPATCH_TEST_DRIVER_USER_ID;
+  if (!customer && !driver) return 'TRUE';
+  if (!customer || !driver) return 'FALSE';
+  if (!customerExpression) return `dp.user_id <> '${driver}'::uuid`;
+  return `((dp.user_id = '${driver}'::uuid AND ${customerExpression} = '${customer}'::uuid)
+    OR (dp.user_id <> '${driver}'::uuid AND ${customerExpression} <> '${customer}'::uuid))`;
+}
+
+export function driverEligibilitySql(
+  freshAfter: string,
+  pendingRideException?: string,
+  customerExpression?: string,
+) {
   return `${driverOperationalEligibilitySql()}
+    AND ${dispatchTestScopeSql(customerExpression)}
     AND NOT EXISTS(SELECT 1 FROM provider_onboarding enrolment WHERE enrolment.user_id=dp.user_id AND u.role='driver' AND enrolment.role_flow_active AND (enrolment.dashboard_deferred_at IS NULL AND enrolment.flow_completed_at IS NULL))
     AND dp.availability_status = 'available'
     AND dp.last_location IS NOT NULL

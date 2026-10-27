@@ -25,7 +25,7 @@ export interface FareCalculationInput {
   distanceMeters: number;
   durationSeconds: number;
   currency?: FareCurrency;
-  sector?: 'passenger' | 'logistics' | 'service' | 'premium' | undefined;
+  sector?: 'passenger' | 'logistics' | 'service' | 'premium' | 'rental' | undefined;
   vehicleCategory?: string | undefined;
   waitingMinutes?: number | undefined;
   weightKg?: number | undefined;
@@ -70,6 +70,7 @@ export interface FareCalculationResult extends FareBreakdown {
   billableDistanceMeters?: number;
   distanceMultiplier?: 2;
   vehicleConfiguration?: VehicleFareSnapshot;
+  demandPricing?: DemandPricingProvenance;
   distanceMeters: number;
   durationSeconds: number;
   currency: FareCurrency;
@@ -98,11 +99,26 @@ export interface FarePricingConfig {
 }
 
 /** Original approximate rates, in paise. Null maximum means an open upper bound. */
+export interface DemandPricingSettings {
+  windowSeconds: number;
+  lowBookingCount: number;
+  highBookingCount: number;
+  staleAfterSeconds: number;
+}
+export interface DemandPricingProvenance {
+  scoreBasisPoints: number;
+  source: 'booking_window' | 'minimum_fallback';
+  measuredAt: string | null;
+  bookingCount: number | null;
+  windowSeconds: number;
+  reason?: string;
+}
 export interface VehiclePricing {
   displayName: string;
   baseFare: { minimum: number; maximum: number | null } | null;
   perKmRate: { minimum: number; maximum: number };
   routeBased?: boolean;
+  demandPricing?: DemandPricingSettings;
   /** Explicit operational decision; never derived automatically from the range. */
   fixedRates?: { baseFare: number; distanceRatePerKm: number };
 }
@@ -112,6 +128,7 @@ export interface VehicleFareEstimate {
   billableDistanceMeters?: number;
   distanceMultiplier?: 2;
   estimateType: 'range' | 'quote_required';
+  demandPricing?: DemandPricingProvenance;
   vehicleCategory: string;
   pricing: VehiclePricing;
   currency: FareCurrency;

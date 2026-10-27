@@ -1,3 +1,5 @@
+import { demandProvenance, selectDemandRates } from './demand-pricing.js';
+import type { DemandPricingProvenance } from '../types/fare.js';
 import type { VehicleType } from '../../vehicles/types/vehicle.js';
 import {
   DEFAULT_FARE_PRICING,
@@ -72,6 +74,7 @@ export class FareCalculatorService {
     input: FareCalculationInput,
     configured?: VehicleType,
     explicitReference?: VehiclePricing,
+    demand?: DemandPricingProvenance,
   ): FareEstimateResult {
     if (configured) {
       this.validateInput(input);
@@ -80,6 +83,52 @@ export class FareCalculatorService {
       if (configured.baseFare === null || configured.perKmRate === null) {
         if (!configured.pricingReference)
           throw new AppError('FARE_CONFIGURATION_MISSING', VEHICLE_UNAVAILABLE_MESSAGE, 422);
+        if (configured.pricingReference.demandPricing) {
+          const tariff = configured.pricingReference;
+          this.validateVehiclePricing(tariff);
+          const provenance = demand ?? demandProvenance(tariff.demandPricing!);
+          const pricingVersion = 'vehicle-type:' + configured.id + ':v' + configured.version;
+          const common = {
+            oneWayDistanceMeters: input.distanceMeters,
+            billableDistanceMeters: input.distanceMeters * 2,
+            distanceMultiplier: 2 as const,
+            vehicleCategory: configured.code,
+            pricing: tariff,
+            currency: 'INR' as const,
+            pricingVersion,
+            distanceMeters: input.distanceMeters,
+            durationSeconds: input.durationSeconds,
+            demandPricing: provenance,
+          };
+          if (tariff.routeBased || !tariff.baseFare)
+            return {
+              ...common,
+              estimateType: 'quote_required',
+              bookable: false,
+              message: FIXED_QUOTE_REQUIRED_MESSAGE,
+            };
+          const rates = selectDemandRates(tariff, provenance);
+          const bookingFare = this.calculateResolved(input, rates, true);
+          bookingFare.pricingVersion = pricingVersion;
+          bookingFare.demandPricing = provenance;
+          bookingFare.vehicleConfiguration = {
+            id: configured.id,
+            code: configured.code,
+            sector: configured.sector,
+            version: configured.version,
+            baseFarePaise: rates.baseFare,
+            perKmRatePaise: rates.distanceRatePerKm,
+            demandPricing: provenance,
+          };
+          return {
+            ...common,
+            estimateType: 'range',
+            estimatedFare: { minimum: bookingFare, maximum: bookingFare },
+            bookingFare,
+            bookable: true,
+            message: 'Fare uses saved booking-demand pricing.',
+          };
+        }
         const referenceCalculator = new FareCalculatorService(this.pricing, {
           ...this.vehiclePricing,
           [configured.sector]: {
@@ -312,7 +361,7 @@ export class FareCalculatorService {
         baseAmount = 60000;
         distanceAmount = this.roundMoney((billableDistanceMeters * 3000) / 1000, 'distanceAmount');
       } else if (input.vehicleCategory === 'jcb') {
-        // JCB trip-based pricing: Flat mobilization/base charge (120,000 paise / ₹1,200) + distance charge (4,000 paise/km / ₹40/km)
+        // JCB trip-based pricing: Flat mobilization/base charge (120,000 paise / â‚¹1,200) + distance charge (4,000 paise/km / â‚¹40/km)
         baseAmount = 120000;
         distanceAmount = this.roundMoney((billableDistanceMeters * 4000) / 1000, 'distanceAmount');
       } else {

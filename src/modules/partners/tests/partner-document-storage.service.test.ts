@@ -58,7 +58,7 @@ function createPdfFile(): PartnerDocumentUploadFile {
   return {
     buffer,
     mimetype: 'application/pdf',
-    originalname: 'aadhaar.pdf',
+    originalname: 'pan.pdf',
     size: buffer.length,
   };
 }
@@ -103,12 +103,12 @@ function createDocument(overrides: Partial<PartnerDocument> = {}): PartnerDocume
     id: '750e8400-e29b-41d4-a716-446655440000',
     partnerId,
     vehicleId: null,
-    documentType: 'AADHAAR',
+    documentType: 'PAN',
     status: 'PENDING',
     metadata: {
       storage: {
         storageProvider: 'cloudinary',
-        storageKey: 'infurnus/partners/test/aadhaar',
+        storageKey: 'infurnus/partners/test/pan',
         resourceType: 'raw',
         accessMode: 'authenticated',
         mimeType: 'application/pdf',
@@ -141,6 +141,7 @@ function createSafeDocument(
 function createServiceMock() {
   return {
     assertAccess: vi.fn().mockResolvedValue(undefined),
+    assertVehicleAccess: vi.fn().mockResolvedValue(undefined),
     createDocumentMetadata: vi.fn(),
     getDocument: vi.fn(),
     getDocuments: vi.fn(),
@@ -162,7 +163,7 @@ describe('PartnerDocumentStorageService', () => {
 
     storageUploadMock.mockResolvedValue({
       storageProvider: 'cloudinary',
-      storageKey: 'infurnus/partners/550e8400-e29b-41d4-a716-446655440000/documents/aadhaar/test',
+      storageKey: 'infurnus/partners/550e8400-e29b-41d4-a716-446655440000/documents/pan/test',
       resourceType: 'raw',
       accessMode: 'authenticated',
       mimeType: 'application/pdf',
@@ -195,7 +196,7 @@ describe('PartnerDocumentStorageService', () => {
 
     const result = await service.uploadDocument({
       partnerId,
-      documentType: 'AADHAAR',
+      documentType: 'PAN',
       file,
       actor,
     });
@@ -218,7 +219,7 @@ describe('PartnerDocumentStorageService', () => {
     expect(partnerDocumentService.createDocumentMetadata).toHaveBeenCalledWith(
       partnerId,
       expect.objectContaining({
-        documentType: 'AADHAAR',
+        documentType: 'PAN',
         status: 'PENDING',
         metadata: expect.objectContaining({
           uploadedBy: userId,
@@ -239,6 +240,55 @@ describe('PartnerDocumentStorageService', () => {
     expect(result).toEqual(safeDocument);
 
     expect(result).not.toHaveProperty('metadata');
+  });
+
+  it('stores optional front photos with vehicle scope and rejects fake image bytes', async () => {
+    const vehicleId = '750e8400-e29b-41d4-a716-446655440000';
+    vi.mocked(partnerDocumentService.createDocumentMetadata).mockResolvedValue(
+      createSafeDocument({ vehicleId, documentType: 'OTHER' }),
+    );
+    const photo = createPngFile();
+    storageUploadMock.mockResolvedValue({
+      storageProvider: 'cloudinary',
+      storageKey: 'synthetic/optional-front',
+      resourceType: 'image',
+      accessMode: 'authenticated',
+      mimeType: 'image/png',
+      fileSize: photo.size,
+    });
+    await service.uploadDocument({
+      partnerId,
+      vehicleId,
+      documentType: 'OTHER',
+      file: photo,
+      actor,
+      documentMetadata: { documentCode: 'vehicle_front_photo' },
+    });
+    expect(partnerDocumentService.assertVehicleAccess).toHaveBeenCalledWith(partnerId, vehicleId);
+    expect(partnerDocumentService.createDocumentMetadata).toHaveBeenCalledWith(
+      partnerId,
+      expect.objectContaining({
+        vehicleId,
+        metadata: expect.objectContaining({
+          documentCode: 'vehicle_front_photo',
+          storage: expect.objectContaining({ storageKey: 'synthetic/optional-front' }),
+        }),
+      }),
+      actor,
+    );
+    storageUploadMock.mockClear();
+    const buffer = Buffer.from('not an image');
+    await expect(
+      service.uploadDocument({
+        partnerId,
+        vehicleId,
+        documentType: 'OTHER',
+        file: { ...photo, buffer, size: buffer.length },
+        actor,
+        documentMetadata: { documentCode: 'vehicle_front_photo' },
+      }),
+    ).rejects.toThrow();
+    expect(storageUploadMock).not.toHaveBeenCalled();
   });
 
   it('uses authenticated access for profile photo uploads', async () => {
@@ -387,14 +437,14 @@ describe('PartnerDocumentStorageService', () => {
     const fakeFile: PartnerDocumentUploadFile = {
       buffer,
       mimetype: 'application/pdf',
-      originalname: 'aadhaar.pdf',
+      originalname: 'pan.pdf',
       size: buffer.length,
     };
 
     await expect(
       service.uploadDocument({
         partnerId,
-        documentType: 'AADHAAR',
+        documentType: 'PAN',
         file: fakeFile,
         actor,
       }),
@@ -463,7 +513,7 @@ describe('PartnerDocumentStorageService', () => {
     await expect(
       service.uploadDocument({
         partnerId,
-        documentType: 'AADHAAR',
+        documentType: 'PAN',
         file,
         actor,
       }),
@@ -489,7 +539,7 @@ describe('PartnerDocumentStorageService', () => {
     expect(url).toBe('https://secure.example.com/document');
 
     expect(storageAccessUrlMock).toHaveBeenCalledWith({
-      storageKey: 'infurnus/partners/test/aadhaar',
+      storageKey: 'infurnus/partners/test/pan',
       resourceType: 'raw',
       accessMode: 'authenticated',
       options: {
@@ -529,7 +579,7 @@ describe('PartnerDocumentStorageService', () => {
     await service.deleteDocumentStorage(document);
 
     expect(storageDeleteMock).toHaveBeenCalledWith({
-      storageKey: 'infurnus/partners/test/aadhaar',
+      storageKey: 'infurnus/partners/test/pan',
       resourceType: 'raw',
       accessMode: 'authenticated',
     });
@@ -549,7 +599,7 @@ describe('PartnerDocumentStorageService', () => {
       Object.assign(new Error('Forbidden'), { statusCode: 403 }),
     );
     await expect(
-      service.uploadDocument({ partnerId, documentType: 'AADHAAR', file, actor }),
+      service.uploadDocument({ partnerId, documentType: 'PAN', file, actor }),
     ).rejects.toMatchObject({ statusCode: 403 });
     expect(storageUploadMock).not.toHaveBeenCalled();
   });
@@ -559,10 +609,10 @@ describe('PartnerDocumentStorageService', () => {
     );
     await service.uploadDocument({
       partnerId,
-      documentType: 'AADHAAR',
+      documentType: 'PAN',
       file: createJpegFile(),
       files: [createJpegFile(), createJpegFile()],
-      documentMetadata: { uploadSource: 'CAMERA', documentNumber: 'identity' },
+      documentMetadata: { uploadSource: 'CAMERA', documentNumber: 'ABCDE1234F' },
       actor,
     });
     expect(storageUploadMock).toHaveBeenCalledTimes(2);
@@ -571,7 +621,7 @@ describe('PartnerDocumentStorageService', () => {
       expect.objectContaining({
         metadata: expect.objectContaining({
           uploadSource: 'CAMERA',
-          documentNumber: 'identity',
+          documentNumber: 'ABCDE1234F',
           pages: [
             expect.objectContaining({ side: 'FRONT' }),
             expect.objectContaining({ side: 'BACK' }),
@@ -586,7 +636,7 @@ describe('PartnerDocumentStorageService', () => {
     await expect(
       service.uploadDocument({
         partnerId,
-        documentType: 'AADHAAR',
+        documentType: 'PAN',
         file: createJpegFile(),
         files: [createJpegFile(), invalid],
         actor,
@@ -595,7 +645,7 @@ describe('PartnerDocumentStorageService', () => {
     await expect(
       service.uploadDocument({
         partnerId,
-        documentType: 'AADHAAR',
+        documentType: 'PAN',
         file: createJpegFile(),
         files: Array.from({ length: 6 }, () => createJpegFile()),
         actor,
@@ -604,7 +654,7 @@ describe('PartnerDocumentStorageService', () => {
     await expect(
       service.uploadDocument({
         partnerId,
-        documentType: 'AADHAAR',
+        documentType: 'PAN',
         file: { ...file, size: 50 * 1024 * 1024 },
         actor,
       }),

@@ -1,3 +1,4 @@
+import { PostgresVehicleRepository } from '../../vehicles/repositories/vehicle.repository.js';
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { pool, withTransaction } from '../../../infrastructure/database/postgres.js';
@@ -40,11 +41,15 @@ function estimator(fixed: boolean) {
           }
         : VEHICLE_FARE_PRICING,
     ),
+    undefined,
+    fixed ? new PostgresVehicleRepository(pool) : undefined,
   );
 }
 live('fare-to-booking PostgreSQL persistence and transactions', () => {
   let customerId: string;
+  let configuredCode: string | undefined;
   beforeEach(async () => {
+    configuredCode = undefined;
     const result = await pool.query<{ id: string }>(
       "INSERT INTO users(first_name,last_name,phone,role) VALUES('Fare','Audit',$1,'customer') RETURNING id",
       [`+95${randomUUID().replaceAll('-', '').slice(0, 10)}`],
@@ -54,19 +59,30 @@ live('fare-to-booking PostgreSQL persistence and transactions', () => {
   afterEach(async () => {
     await pool.query('DELETE FROM rides WHERE customer_id=$1', [customerId]);
     await pool.query('DELETE FROM users WHERE id=$1', [customerId]);
+    if (configuredCode)
+      await pool.query('DELETE FROM vehicle_types WHERE code=$1', [configuredCode]);
   });
   it('persists the server estimate including waiting and ignores client fare', async () => {
+    // Use a real, isolated catalog configuration. The seeded Bike is deliberately
+    // inactive; an in-memory fixed quote must never bypass that production guard.
+    configuredCode = 'qa_bike_' + randomUUID().replaceAll('-', '');
+    await pool.query(
+      `INSERT INTO vehicle_types(name,code,sector,base_fare_paise,per_km_rate_paise,active)
+      VALUES('TEST_SAMPLE Bike',$1,'passenger',1800,600,TRUE)`,
+      [configuredCode],
+    );
+    const bookingInput = { ...input, vehicleCategory: configuredCode };
     const fare = estimator(true);
     const estimate = await fare.estimate(input.pickup, input.destination, {
       pricingMode: 'vehicle_range',
       sector: input.sector,
-      vehicleCategory: input.vehicleCategory,
+      vehicleCategory: bookingInput.vehicleCategory,
       waitingMinutes: 3,
     });
     if (!('estimateType' in estimate) || estimate.estimateType !== 'range' || !estimate.bookingFare)
       throw new Error('Expected test-only configured fixed quote');
     const service = new RideService(new PostgresRideRepository(pool), undefined, undefined, fare);
-    const ride = await service.createRide(customerId, input);
+    const ride = await service.createRide(customerId, bookingInput);
     const row = await pool.query('SELECT fare_estimate FROM rides WHERE id=$1', [ride.id]);
     expect(Number(row.rows[0].fare_estimate)).toBe(estimate.bookingFare.grossAmount / 100);
     expect(Number(row.rows[0].fare_estimate)).not.toBe(input.fareEstimate);

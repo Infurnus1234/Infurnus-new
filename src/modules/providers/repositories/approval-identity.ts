@@ -7,6 +7,7 @@ export const approvalIdentityFields = `
     WHEN 'driver_profile' THEN 'Driver Profile'
     WHEN 'partner' THEN COALESCE(NULLIF(btrim(target_partner.business_name), ''), 'Partner Profile')
     WHEN 'vehicle' THEN COALESCE(NULLIF(btrim(v.plate_number), ''), 'Vehicle')
+    WHEN 'bank_account' THEN 'Bank account'
     WHEN 'driver_document' THEN COALESCE(NULLIF(dd.document_metadata->>'documentCode',''),dd.document_type::text)
     WHEN 'partner_document' THEN COALESCE(NULLIF(pd.metadata->>'documentCode',''),pd.document_type::text)
     ELSE NULL
