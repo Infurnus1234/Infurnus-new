@@ -65,10 +65,13 @@ String? authRedirect(AuthState auth, String path, String? role) {
             ? '/customer-home'
             : null;
       } else {
-        if (path == '/customer-home' || path == '/ride-booking' || path == '/passenger-rides') {
+        if (path == '/customer-home' ||
+            path == '/ride-booking' ||
+            path == '/passenger-rides') {
           return '/login';
         }
-        if (path == '/driver-onboarding' || path.startsWith('/driver-')) return null;
+        if (path == '/driver-onboarding' || path.startsWith('/driver-'))
+          return null;
         return publicAuth.contains(path) || path == '/otp' || path == '/splash'
             ? '/driver-onboarding'
             : null;

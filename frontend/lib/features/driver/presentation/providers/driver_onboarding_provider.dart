@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -59,7 +60,10 @@ class DriverOnboardingNotifier extends StateNotifier<DriverOnboardingState> {
   DriverOnboardingNotifier(this.ref) : super(DriverOnboardingState());
 
   Future<void> loadOnboardingData() async {
-    if (const bool.fromEnvironment('dart.vm.test_environment', defaultValue: false) ||
+    if (const bool.fromEnvironment(
+          'dart.vm.test_environment',
+          defaultValue: false,
+        ) ||
         (!kIsWeb && Platform.environment['FLUTTER_TEST'] == 'true')) {
       return;
     }

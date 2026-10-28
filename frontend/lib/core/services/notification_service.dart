@@ -169,10 +169,9 @@ class NotificationService {
                     : 'You have a new update.');
 
             showNotification(
-              id:
-                  message.hashCode != 0
-                      ? message.hashCode
-                      : DateTime.now().millisecondsSinceEpoch % 100000,
+              id: message.hashCode != 0
+                  ? message.hashCode
+                  : DateTime.now().millisecondsSinceEpoch % 100000,
               title: title,
               body: body,
               payload: jsonEncode(message.data),

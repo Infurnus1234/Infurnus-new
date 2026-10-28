@@ -792,8 +792,10 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
                 ),
                 const SizedBox(height: 10),
                 () {
-                  final bool isCancelled = ride.status == model.RideStatus.cancelled;
-                  final bool isCompleted = ride.status == model.RideStatus.completed;
+                  final bool isCancelled =
+                      ride.status == model.RideStatus.cancelled;
+                  final bool isCompleted =
+                      ride.status == model.RideStatus.completed;
                   final bool isCaptured =
                       ride.paymentStatus?.toLowerCase() == 'captured' ||
                       ride.paymentStatus?.toLowerCase() == 'settled';
@@ -801,18 +803,15 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
                   final String fareLabel = isCancelled
                       ? 'Estimated Fare (Cancelled)'
                       : isCompleted && isCaptured
-                          ? 'Total Fare Settled'
-                          : isCompleted && !isCaptured
-                              ? 'Payment Due'
-                              : 'Estimated Fare';
+                      ? 'Total Fare Settled'
+                      : isCompleted && !isCaptured
+                      ? 'Payment Due'
+                      : 'Estimated Fare';
 
                   return Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        fareLabel,
-                        style: const TextStyle(color: textGray),
-                      ),
+                      Text(fareLabel, style: const TextStyle(color: textGray)),
                       Text(
                         '₹${ride.displayFare.toStringAsFixed(2)}',
                         style: const TextStyle(

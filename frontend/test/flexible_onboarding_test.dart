@@ -4,13 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:infurnus/features/driver/presentation/screens/driver_onboarding_screen.dart';
 
 void main() {
-  testWidgets('Flexible onboarding skip defers step and advances', (WidgetTester tester) async {
+  testWidgets('Flexible onboarding skip defers step and advances', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(
-          home: DriverOnboardingScreen(),
-        ),
-      ),
+      const ProviderScope(child: MaterialApp(home: DriverOnboardingScreen())),
     );
     await tester.pump();
 

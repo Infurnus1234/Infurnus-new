@@ -87,14 +87,16 @@ class DriverRideNotifier extends StateNotifier<DriverRideState> {
             currentList.insert(0, newRide);
             state = state.copyWith(availableRides: currentList);
 
-            ref.read(notificationServiceProvider).showNotification(
-              id: newRide.id.hashCode,
-              title: 'New Ride Request Available!',
-              body:
-                  'Fare: ₹${(newRide.fareEstimate ?? 0.0).toStringAsFixed(2)} • Pickup: ${newRide.pickupAddress ?? ''}',
-              payload: jsonEncode({'rideId': newRide.id}),
-              isRideRequest: true,
-            );
+            ref
+                .read(notificationServiceProvider)
+                .showNotification(
+                  id: newRide.id.hashCode,
+                  title: 'New Ride Request Available!',
+                  body:
+                      'Fare: ₹${(newRide.fareEstimate ?? 0.0).toStringAsFixed(2)} • Pickup: ${newRide.pickupAddress ?? ''}',
+                  payload: jsonEncode({'rideId': newRide.id}),
+                  isRideRequest: true,
+                );
           } catch (_) {}
         }
         break;
