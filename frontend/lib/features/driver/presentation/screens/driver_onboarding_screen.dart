@@ -235,6 +235,7 @@ class _DriverOnboardingScreenState
           ),
           const SizedBox(height: 16),
           DropdownButtonFormField<String>(
+            isExpanded: true,
             initialValue: _selectedProviderType,
             decoration: const InputDecoration(
               labelText: 'Provider Category',
@@ -520,6 +521,7 @@ class _DriverOnboardingScreenState
           const SizedBox(height: 16),
 
           DropdownButtonFormField<String>(
+            isExpanded: true,
             initialValue: _selectedDocType,
             decoration: const InputDecoration(
               labelText: 'Document Type',
@@ -540,38 +542,79 @@ class _DriverOnboardingScreenState
             },
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: InfurnusTextField(
-                  label: 'Issued At (YYYY-MM-DD)',
-                  hintText: '2023-01-01',
-                  controller: _issuedAtController,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: InfurnusTextField(
-                  label: 'Expires At (YYYY-MM-DD)',
-                  hintText: '2028-01-01',
-                  controller: _expiresAtController,
-                ),
-              ),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth < 400) {
+                return Column(
+                  children: [
+                    InfurnusTextField(
+                      label: 'Issued At (YYYY-MM-DD)',
+                      hintText: '2023-01-01',
+                      controller: _issuedAtController,
+                    ),
+                    const SizedBox(height: 12),
+                    InfurnusTextField(
+                      label: 'Expires At (YYYY-MM-DD)',
+                      hintText: '2028-01-01',
+                      controller: _expiresAtController,
+                    ),
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(
+                    child: InfurnusTextField(
+                      label: 'Issued At (YYYY-MM-DD)',
+                      hintText: '2023-01-01',
+                      controller: _issuedAtController,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: InfurnusTextField(
+                      label: 'Expires At (YYYY-MM-DD)',
+                      hintText: '2028-01-01',
+                      controller: _expiresAtController,
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 16),
-          InfurnusButton(
-            text: 'Add Document Record',
-            isLoading: state.isSubmitting,
-            onPressed: () {
-              ref
-                  .read(driverOnboardingProvider.notifier)
-                  .addDocumentMetadata(
-                    documentType: _selectedDocType,
-                    issuedAt: _issuedAtController.text.trim(),
-                    expiresAt: _expiresAtController.text.trim(),
-                  );
-            },
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: 200,
+                child: InfurnusButton(
+                  text: 'Upload Document / Capture Photo',
+                  isLoading: state.isSubmitting,
+                  onPressed: () {
+                    ref
+                        .read(driverOnboardingProvider.notifier)
+                        .addDocumentMetadata(
+                          documentType: _selectedDocType,
+                          issuedAt: _issuedAtController.text.trim().isNotEmpty
+                              ? _issuedAtController.text.trim()
+                              : '2026-01-01',
+                          expiresAt: _expiresAtController.text.trim().isNotEmpty
+                              ? _expiresAtController.text.trim()
+                              : '2030-01-01',
+                        );
+                  },
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  ref.read(driverOnboardingProvider.notifier).deferStep('kyc');
+                },
+                child: const Text('Skip for now'),
+              ),
+            ],
           ),
 
           if (state.documents.isNotEmpty) ...[
@@ -705,6 +748,7 @@ class _DriverOnboardingScreenState
 
           // Sector selection (Passenger, Logistics, Service, Premium)
           DropdownButtonFormField<String>(
+            isExpanded: true,
             initialValue: _selectedSector,
             decoration: const InputDecoration(
               labelText: 'Vehicle Sector / Category',

@@ -123,6 +123,22 @@ class NotificationService {
         sound: true,
       );
 
+      const AndroidNotificationChannel rideRequestChannel =
+          AndroidNotificationChannel(
+            'infurnus_ride_requests',
+            'Infurnus Ride Requests',
+            description: 'Audible notifications for incoming ride requests',
+            importance: Importance.max,
+            playSound: true,
+            enableVibration: true,
+          );
+
+      await _notificationsPlugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >()
+          ?.createNotificationChannel(rideRequestChannel);
+
       if (settings.authorizationStatus == AuthorizationStatus.authorized) {
         debugPrint('User granted push notification permission');
 
@@ -139,19 +155,29 @@ class NotificationService {
 
         _subscriptions.add(
           FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-            if (!handleRideMessage(message.data) &&
-                message.data['rideId'] != null) {
-              return;
-            }
-            final notification = message.notification;
-            if (notification != null) {
-              showNotification(
-                id: notification.hashCode,
-                title: notification.title ?? 'Infurnus',
-                body: notification.body ?? '',
-                payload: jsonEncode(message.data),
-              );
-            }
+            handleRideMessage(message.data);
+            final isRideReq =
+                message.data['rideId'] != null ||
+                message.data['type'] == 'ride.incoming';
+            final title =
+                message.notification?.title ??
+                (isRideReq ? 'New Ride Request!' : 'Infurnus Notification');
+            final body =
+                message.notification?.body ??
+                (isRideReq
+                    ? 'Tap to view new ride offer.'
+                    : 'You have a new update.');
+
+            showNotification(
+              id:
+                  message.hashCode != 0
+                      ? message.hashCode
+                      : DateTime.now().millisecondsSinceEpoch % 100000,
+              title: title,
+              body: body,
+              payload: jsonEncode(message.data),
+              isRideRequest: isRideReq,
+            );
           }),
         );
       } else {
@@ -240,6 +266,7 @@ class NotificationService {
     required String title,
     required String body,
     String? payload,
+    bool isRideRequest = false,
   }) async {
     const AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
@@ -247,11 +274,27 @@ class NotificationService {
           'Infurnus Notifications',
           importance: Importance.max,
           priority: Priority.high,
+          playSound: true,
+          enableVibration: true,
         );
 
-    const NotificationDetails platformDetails = NotificationDetails(
-      android: androidDetails,
-      iOS: DarwinNotificationDetails(),
+    const AndroidNotificationDetails rideRequestAndroidDetails =
+        AndroidNotificationDetails(
+          'infurnus_ride_requests',
+          'Infurnus Ride Requests',
+          importance: Importance.max,
+          priority: Priority.max,
+          playSound: true,
+          enableVibration: true,
+        );
+
+    final NotificationDetails platformDetails = NotificationDetails(
+      android: isRideRequest ? rideRequestAndroidDetails : androidDetails,
+      iOS: const DarwinNotificationDetails(
+        presentSound: true,
+        presentAlert: true,
+        presentBadge: true,
+      ),
     );
 
     await _notificationsPlugin.show(

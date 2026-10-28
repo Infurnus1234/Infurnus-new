@@ -100,6 +100,7 @@ class RideModel {
   final DriverDetails? driverDetails;
   final VehicleDetails? vehicleDetails;
   final RideStatus status;
+  final String? paymentStatus;
   final String? cancellationReason;
   final DateTime? cancelledAt;
   final DateTime? completedAt;
@@ -119,6 +120,7 @@ class RideModel {
     this.destinationAddress,
     this.fareEstimate,
     this.finalFare,
+    this.paymentStatus,
     this.actualDistanceMeters,
     this.actualFuelCost,
     this.sector,
@@ -186,6 +188,11 @@ class RideModel {
             )
           : null,
       status: _parseStatus(json['status'] as String),
+      paymentStatus:
+          json['paymentStatus'] as String? ??
+          (json['payment'] is Map
+              ? (json['payment'] as Map)['status'] as String?
+              : null),
       cancellationReason: json['cancellationReason'] as String?,
       cancelledAt: json['cancelledAt'] != null
           ? DateTime.parse(json['cancelledAt'] as String)

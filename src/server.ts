@@ -307,20 +307,81 @@ async function startServer() {
             ride: import('./modules/rides/types/ride.js').Ride,
             type: import('./modules/notifications/types/notification.types.js').NotificationType,
           ) => {
-            if (!ride.assignedDriverId) return;
-            const driver = await driverRepository.findProfileById(ride.assignedDriverId);
-            if (!driver) return;
             const { NotificationService } =
               await import('./modules/notifications/services/notification.service.js');
-            await new NotificationService().send({
-              userId: driver.userId,
-              type,
-              title: 'Trip status updated',
-              body: 'Open INFURNUS to view the current trip status.',
-              resourceId: ride.id,
-              eventVersion: new Date(ride.updatedAt).getTime(),
-              data: { rideId: ride.id, eventOccurredAt: new Date(ride.updatedAt).toISOString() },
-            });
+            const service = new NotificationService();
+            const nowIso = new Date().toISOString();
+
+            console.log(
+              JSON.stringify({
+                event: 'pin_delivery_trace',
+                rideId: ride.id,
+                type,
+                customerId: ride.customerId,
+                assignedDriverId: ride.assignedDriverId,
+                timestamp: nowIso,
+              }),
+            );
+
+            // 1. Notify Assigned Driver
+            if (ride.assignedDriverId) {
+              const driver = await driverRepository.findProfileById(ride.assignedDriverId);
+              if (driver) {
+                await service.send({
+                  userId: driver.userId,
+                  type,
+                  title: 'Trip status updated',
+                  body: 'Open INFURNUS to view the current trip status.',
+                  resourceId: ride.id,
+                  eventVersion: new Date(ride.updatedAt).getTime(),
+                  data: { rideId: ride.id, eventOccurredAt: nowIso },
+                }).catch((err) =>
+                  console.warn(
+                    JSON.stringify({
+                      event: 'driver_push_notify_failed',
+                      rideId: ride.id,
+                      error: err instanceof Error ? err.message : String(err),
+                    }),
+                  ),
+                );
+              }
+            }
+
+            // 2. Notify Customer (Passenger) for ride lifecycle & PIN prompt
+            if (ride.customerId) {
+              const isPinReady = type === 'ride.accepted' || type === 'ride.driver_arrived';
+              const title =
+                type === 'ride.accepted'
+                  ? 'Driver Assigned'
+                  : type === 'ride.driver_arrived'
+                    ? 'Driver Arrived'
+                    : 'Trip Status Updated';
+              const body = isPinReady
+                ? 'Your driver is heading to pickup. Open INFURNUS to view your verification PIN.'
+                : 'Open INFURNUS to view trip updates.';
+
+              await service.send({
+                userId: ride.customerId,
+                type,
+                title,
+                body,
+                resourceId: ride.id,
+                eventVersion: new Date(ride.updatedAt).getTime(),
+                data: {
+                  rideId: ride.id,
+                  eventOccurredAt: nowIso,
+                  pinDeliveryRequestedAt: nowIso,
+                },
+              }).catch((err) =>
+                console.warn(
+                  JSON.stringify({
+                    event: 'customer_push_notify_failed',
+                    rideId: ride.id,
+                    error: err instanceof Error ? err.message : String(err),
+                  }),
+                ),
+              );
+            }
           },
         }
       : {}),

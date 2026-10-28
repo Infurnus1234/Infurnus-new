@@ -791,23 +791,39 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Total Fare Settled',
-                      style: TextStyle(color: textGray),
-                    ),
-                    Text(
-                      '₹${ride.displayFare.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: textBlack,
+                () {
+                  final bool isCancelled = ride.status == model.RideStatus.cancelled;
+                  final bool isCompleted = ride.status == model.RideStatus.completed;
+                  final bool isCaptured =
+                      ride.paymentStatus?.toLowerCase() == 'captured' ||
+                      ride.paymentStatus?.toLowerCase() == 'settled';
+
+                  final String fareLabel = isCancelled
+                      ? 'Estimated Fare (Cancelled)'
+                      : isCompleted && isCaptured
+                          ? 'Total Fare Settled'
+                          : isCompleted && !isCaptured
+                              ? 'Payment Due'
+                              : 'Estimated Fare';
+
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        fareLabel,
+                        style: const TextStyle(color: textGray),
                       ),
-                    ),
-                  ],
-                ),
+                      Text(
+                        '₹${ride.displayFare.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: textBlack,
+                        ),
+                      ),
+                    ],
+                  );
+                }(),
                 if (ride.actualDistanceMeters != null) ...[
                   const SizedBox(height: 6),
                   Row(

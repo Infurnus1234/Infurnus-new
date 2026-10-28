@@ -99,18 +99,42 @@ export function createSocketServer(
   });
 
   if (rideDependencies) {
+    const authCache = new Map<string, number>();
+
+    const checkAuthorization = async (socketId: string, userId: string, role: string) => {
+      const now = Date.now();
+      const last = authCache.get(socketId);
+      if (last && now - last < 15000) return;
+      if (rideDependencies.authorizeAccount) {
+        await rideDependencies.authorizeAccount(userId, role);
+      }
+      authCache.set(socketId, now);
+    };
+
     const emitRide = (event: string, ride: Ride, payload: Record<string, unknown>) => {
       void io
         .in(rideRoom(ride.id))
         .fetchSockets()
         .then(async (sockets) => {
+          if (event === 'ride:driver_assigned' || event === 'ride:lifecycle_updated') {
+            console.log(
+              JSON.stringify({
+                event: 'pin_socket_emitted',
+                rideId: ride.id,
+                socketEvent: event,
+                recipientSockets: sockets.length,
+                timestamp: new Date().toISOString(),
+              }),
+            );
+          }
           await Promise.all(
             sockets.map(async (socket) => {
               const auth = socket.data.auth;
               if (!auth) return;
               try {
-                await rideDependencies.authorizeAccount?.(auth.userId, auth.role);
+                await checkAuthorization(socket.id, auth.userId, auth.role);
               } catch {
+                authCache.delete(socket.id);
                 socket.disconnect(true);
                 return;
               }

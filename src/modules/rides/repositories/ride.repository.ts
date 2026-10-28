@@ -171,6 +171,9 @@ const detailedRideColumns = (tableAlias = 'r') => `
     (${tableAlias}.route_metadata->>'fareEstimate')::numeric
   ) AS "fareEstimate",
   ${tableAlias}.final_fare AS "finalFare",
+  ${tableAlias}.commission_amount AS "commissionAmount",
+  ${tableAlias}.driver_earning_amount AS "driverEarningAmount",
+  (SELECT status FROM payments WHERE payments.ride_id = ${tableAlias}.id ORDER BY created_at DESC LIMIT 1) AS "paymentStatus",
   ${tableAlias}.route_metadata->>'bookingDistanceMeters' AS "bookingDistanceMeters",
   ${tableAlias}.route_metadata->'bookingFareSnapshot'->>'pricingVersion' AS "bookingPricingVersion",
   ${tableAlias}.actual_distance_meters AS "actualDistanceMeters",
@@ -297,6 +300,9 @@ function mapRide(row: Record<string, unknown>, forCustomer = false): Ride {
 
     bookingPricingVersion: (row.bookingPricingVersion as string | null) ?? null,
     finalFare: row.finalFare != null ? Number(row.finalFare) : null,
+    commissionAmount: row.commissionAmount != null ? Number(row.commissionAmount) : null,
+    driverEarningAmount: row.driverEarningAmount != null ? Number(row.driverEarningAmount) : null,
+    paymentStatus: (row.paymentStatus as string | null) ?? null,
 
     actualDistanceMeters: row.actualDistanceMeters != null ? Number(row.actualDistanceMeters) : 0,
 

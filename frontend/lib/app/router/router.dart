@@ -32,6 +32,7 @@ import '../../features/customer/presentation/screens/delete_account_screen.dart'
 import '../../features/customer/presentation/screens/booking_history_screen.dart';
 import '../../features/support/presentation/screens/support_screen.dart';
 import '../../features/driver/presentation/screens/support_tickets_screen.dart';
+import '../../features/driver/presentation/screens/driver_onboarding_screen.dart';
 import '../../features/customer/presentation/screens/ui_kit_presentation_board_screen.dart';
 
 class RouterNotifier extends ChangeNotifier {
@@ -48,6 +49,7 @@ String? authRedirect(AuthState auth, String path, String? role) {
     '/forgot-password',
     '/welcome',
     '/onboarding',
+    '/driver-onboarding',
   };
   final publicLegal = path.startsWith('/legal/');
   switch (auth.status) {
@@ -55,15 +57,25 @@ String? authRedirect(AuthState auth, String path, String? role) {
     case AuthStatus.restoring:
       return path == '/splash' ? null : '/splash';
     case AuthStatus.authenticated:
-      // The Customer app cannot turn a Driver/Fleet/Admin identity into a customer.
-      if (role != 'customer') return path == '/login' ? null : '/login';
-      return publicAuth.contains(path) || path == '/otp' || path == '/splash'
-          ? '/customer-home'
-          : null;
+      if (role == null) {
+        return publicAuth.contains(path) || publicLegal ? null : '/login';
+      }
+      if (role == 'customer') {
+        return publicAuth.contains(path) || path == '/otp' || path == '/splash'
+            ? '/customer-home'
+            : null;
+      } else {
+        if (path == '/customer-home' || path == '/ride-booking' || path == '/passenger-rides') {
+          return '/login';
+        }
+        if (path == '/driver-onboarding' || path.startsWith('/driver-')) return null;
+        return publicAuth.contains(path) || path == '/otp' || path == '/splash'
+            ? '/driver-onboarding'
+            : null;
+      }
     case AuthStatus.otpRequired:
       return path == '/otp' ? null : '/otp';
     case AuthStatus.loading:
-      // Keep the in-progress form; never expose a protected route while verifying.
       final verifying = auth.signupId != null || auth.loginChallengeId != null;
       if (verifying && path == '/otp') return null;
       return publicAuth.contains(path) || publicLegal ? null : '/login';
@@ -102,6 +114,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/onboarding',
         builder: (context, state) => const OnboardingScreen(),
+      ),
+      GoRoute(
+        path: '/driver-onboarding',
+        builder: (context, state) => const DriverOnboardingScreen(),
       ),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(

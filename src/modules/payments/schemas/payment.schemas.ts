@@ -3,16 +3,34 @@ import { z } from 'zod';
 const uuid = z.string().uuid();
 
 export const initiatePaymentSchema = z
-  .object({
-    rideId: uuid.optional(),
-    rentalId: uuid.optional(),
-    logisticsOrderId: uuid.optional(),
-    amount: z.number().positive().optional(),
-    currency: z.string().default('INR').optional(),
-    provider: z.enum(['wallet', 'cash', 'upi', 'card', 'razorpay', 'cashfree']).default('wallet'),
-    idempotencyKey: z.string().trim().min(1).max(255).optional(),
-  })
-  .strict()
+  .preprocess(
+    (val) => {
+      if (typeof val === 'object' && val !== null) {
+        const obj = { ...(val as Record<string, unknown>) };
+        if ('paymentMethod' in obj && !('provider' in obj)) {
+          obj.provider = String(obj.paymentMethod).toLowerCase();
+          delete obj.paymentMethod;
+        } else if ('paymentMethod' in obj && 'provider' in obj) {
+          delete obj.paymentMethod;
+        }
+        return obj;
+      }
+      return val;
+    },
+    z
+      .object({
+        rideId: uuid.optional(),
+        rentalId: uuid.optional(),
+        logisticsOrderId: uuid.optional(),
+        amount: z.number().positive().optional(),
+        currency: z.string().default('INR').optional(),
+        provider: z
+          .enum(['wallet', 'cash', 'upi', 'card', 'razorpay', 'cashfree'])
+          .default('wallet'),
+        idempotencyKey: z.string().trim().min(1).max(255).optional(),
+      })
+      .strict(),
+  )
   .refine(
     (data) => {
       const count =

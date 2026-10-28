@@ -241,10 +241,21 @@ export class PaymentController {
         return;
       }
 
-      // Authorization check: User owns this payment or is admin
+      // Authorization check: User owns this payment, is admin, or is assigned driver for the ride (restricted to cash)
       const isOwner = payment.userId === userId;
       const isAdmin = role === 'admin';
-      if (!isOwner && !isAdmin) {
+      let isAssignedDriver = false;
+      if (payment.rideId && this.rideRepository) {
+        isAssignedDriver = await this.rideRepository.isAssignedDriver(payment.rideId, userId);
+      }
+      if (isAssignedDriver && payment.provider !== 'cash') {
+        res.status(403).json({
+          success: false,
+          message: 'Forbidden: Drivers can only capture cash payments',
+        });
+        return;
+      }
+      if (!isOwner && !isAdmin && !isAssignedDriver) {
         res.status(403).json({
           success: false,
           message: 'Forbidden: Access denied to capture this payment',

@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/services/location_service.dart';
+import '../../../../core/services/notification_service.dart';
 import '../../../../core/services/socket_service.dart';
 import '../../../customer/data/models/ride_model.dart';
 import '../../../customer/data/models/route_model.dart';
@@ -84,6 +86,15 @@ class DriverRideNotifier extends StateNotifier<DriverRideState> {
             currentList.removeWhere((r) => r.id == newRide.id);
             currentList.insert(0, newRide);
             state = state.copyWith(availableRides: currentList);
+
+            ref.read(notificationServiceProvider).showNotification(
+              id: newRide.id.hashCode,
+              title: 'New Ride Request Available!',
+              body:
+                  'Fare: ₹${(newRide.fareEstimate ?? 0.0).toStringAsFixed(2)} • Pickup: ${newRide.pickupAddress ?? ''}',
+              payload: jsonEncode({'rideId': newRide.id}),
+              isRideRequest: true,
+            );
           } catch (_) {}
         }
         break;

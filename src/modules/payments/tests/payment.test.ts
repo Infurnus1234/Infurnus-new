@@ -847,5 +847,113 @@ describe('INFURNUS Payments Module - Security & Reconciliation', () => {
         }),
       );
     });
+
+    it('correctly maps paymentMethod to provider in initiatePaymentSchema', async () => {
+      (mockRideRepo.findById as any).mockResolvedValue(createMockRide());
+
+      const req: any = {
+        auth: { userId: customerId, role: 'customer' },
+        body: {
+          rideId: mockPayment.rideId,
+          paymentMethod: 'cash', // Customer App contract format
+        },
+      };
+      const res: any = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+      const next = vi.fn();
+
+      await controller.initiate(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(mockRepo.initiate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider: 'cash',
+        }),
+      );
+    });
+
+    it('authorizes assigned driver to capture Cash payment for their ride', async () => {
+      const cashPayment: Payment = {
+        ...mockPayment,
+        provider: 'cash',
+        status: 'INITIATED',
+      };
+      (mockRepo.findById as any).mockResolvedValue(cashPayment);
+      (mockRideRepo.isAssignedDriver as any).mockResolvedValue(true);
+
+      const req: any = {
+        auth: { userId: driverUserId, role: 'driver' },
+        params: { paymentId: cashPayment.id },
+        body: {},
+      };
+      const res: any = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+      const next = vi.fn();
+
+      await controller.capture(req, res, next);
+
+      expect(mockRepo.capture).toHaveBeenCalledTimes(1);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+        }),
+      );
+    });
+
+    it('forbids assigned driver from capturing non-cash payments (returns 403)', async () => {
+      const upiPayment: Payment = {
+        ...mockPayment,
+        provider: 'upi',
+        status: 'INITIATED',
+      };
+      (mockRepo.findById as any).mockResolvedValue(upiPayment);
+      (mockRideRepo.isAssignedDriver as any).mockResolvedValue(true);
+
+      const req: any = {
+        auth: { userId: driverUserId, role: 'driver' },
+        params: { paymentId: upiPayment.id },
+        body: {},
+      };
+      const res: any = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+      const next = vi.fn();
+
+      await controller.capture(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          message: 'Forbidden: Drivers can only capture cash payments',
+        }),
+      );
+    });
+
+    it('rejects duplicate payment initiation when an active payment already exists', async () => {
+      (mockRideRepo.findById as any).mockResolvedValue(createMockRide());
+      (mockRepo.findByRideId as any).mockResolvedValue([
+        {
+          ...mockPayment,
+          status: 'INITIATED',
+        },
+      ]);
+
+      const req: any = {
+        auth: { userId: customerId, role: 'customer' },
+        body: {
+          rideId: mockPayment.rideId,
+          provider: 'wallet',
+        },
+      };
+      const res: any = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+      const next = vi.fn();
+
+      await controller.initiate(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(409);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          message: 'An active payment already exists for this ride',
+        }),
+      );
+    });
   });
 });

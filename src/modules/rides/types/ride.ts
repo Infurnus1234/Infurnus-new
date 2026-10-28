@@ -63,6 +63,9 @@ export interface Ride {
   bookingPricingVersion?: string | null;
   fareEstimate?: number | null;
   finalFare?: number | null;
+  commissionAmount?: number | null;
+  driverEarningAmount?: number | null;
+  paymentStatus?: string | null;
   actualDistanceMeters?: number | null;
   actualFuelCost?: number | null;
   sector?: string | null;
