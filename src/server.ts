@@ -327,23 +327,25 @@ async function startServer() {
             if (ride.assignedDriverId) {
               const driver = await driverRepository.findProfileById(ride.assignedDriverId);
               if (driver) {
-                await service.send({
-                  userId: driver.userId,
-                  type,
-                  title: 'Trip status updated',
-                  body: 'Open INFURNUS to view the current trip status.',
-                  resourceId: ride.id,
-                  eventVersion: new Date(ride.updatedAt).getTime(),
-                  data: { rideId: ride.id, eventOccurredAt: nowIso },
-                }).catch((err) =>
-                  console.warn(
-                    JSON.stringify({
-                      event: 'driver_push_notify_failed',
-                      rideId: ride.id,
-                      error: err instanceof Error ? err.message : String(err),
-                    }),
-                  ),
-                );
+                await service
+                  .send({
+                    userId: driver.userId,
+                    type,
+                    title: 'Trip status updated',
+                    body: 'Open INFURNUS to view the current trip status.',
+                    resourceId: ride.id,
+                    eventVersion: new Date(ride.updatedAt).getTime(),
+                    data: { rideId: ride.id, eventOccurredAt: nowIso },
+                  })
+                  .catch((err) =>
+                    console.warn(
+                      JSON.stringify({
+                        event: 'driver_push_notify_failed',
+                        rideId: ride.id,
+                        error: err instanceof Error ? err.message : String(err),
+                      }),
+                    ),
+                  );
               }
             }
 
@@ -360,27 +362,29 @@ async function startServer() {
                 ? 'Your driver is heading to pickup. Open INFURNUS to view your verification PIN.'
                 : 'Open INFURNUS to view trip updates.';
 
-              await service.send({
-                userId: ride.customerId,
-                type,
-                title,
-                body,
-                resourceId: ride.id,
-                eventVersion: new Date(ride.updatedAt).getTime(),
-                data: {
-                  rideId: ride.id,
-                  eventOccurredAt: nowIso,
-                  pinDeliveryRequestedAt: nowIso,
-                },
-              }).catch((err) =>
-                console.warn(
-                  JSON.stringify({
-                    event: 'customer_push_notify_failed',
+              await service
+                .send({
+                  userId: ride.customerId,
+                  type,
+                  title,
+                  body,
+                  resourceId: ride.id,
+                  eventVersion: new Date(ride.updatedAt).getTime(),
+                  data: {
                     rideId: ride.id,
-                    error: err instanceof Error ? err.message : String(err),
-                  }),
-                ),
-              );
+                    eventOccurredAt: nowIso,
+                    pinDeliveryRequestedAt: nowIso,
+                  },
+                })
+                .catch((err) =>
+                  console.warn(
+                    JSON.stringify({
+                      event: 'customer_push_notify_failed',
+                      rideId: ride.id,
+                      error: err instanceof Error ? err.message : String(err),
+                    }),
+                  ),
+                );
             }
           },
         }

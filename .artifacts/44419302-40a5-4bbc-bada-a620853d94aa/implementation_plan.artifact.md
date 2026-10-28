@@ -19,22 +19,27 @@ Enable direct access to the existing INFURNUS User Dashboard in the Flutter fron
 ### Backend (`src/`)
 
 #### [NEW] [dev-auth.routes.ts](file:///C:/Users/abhis/AndroidStudioProjects/Infurnus-new/src/modules/auth/routes/dev-auth.routes.ts)
+
 - Add a local-development-only endpoint (`POST /auth/dev-token`) that checks if `NODE_ENV !== 'production'`, provisions or finds `developer@infurnus.local`, and issues a valid JWT access token.
 
 ### Frontend (`frontend/lib/`)
 
 #### [MODIFY] [auth_provider.dart](file:///C:/Users/abhis/AndroidStudioProjects/Infurnus-new/frontend/lib/features/auth/presentation/providers/auth_provider.dart)
+
 - Add a `devBypassLogin()` method that calls `POST /auth/dev-token`, stores the token securely, and authenticates the session.
 
 #### [MODIFY] [login_screen.dart](file:///C:/Users/abhis/AndroidStudioProjects/Infurnus-new/frontend/lib/features/auth/presentation/screens/login_screen.dart)
+
 - In debug mode (`kDebugMode`), add a subtle "Developer Direct Access" button that invokes `devBypassLogin()`.
 
 ## Verification Plan
 
 ### Automated Tests
+
 - Run backend unit/integration tests and Flutter analysis.
 
 ### Manual Verification
+
 - Launch the app in debug mode on the device/emulator.
 - Tap the development bypass button on the Login screen.
 - Verify that the real User Dashboard (`/customer-home`) opens immediately without requiring OTP entry.

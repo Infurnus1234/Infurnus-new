@@ -2,13 +2,13 @@
 
 **Project:** INFURNUS Mobility Platform (Frontend Flutter App & Node.js/TypeScript Express Backend)  
 **Date:** October 2026  
-**Scope:** Diagnosis and Root Cause Analysis of Sign-Up, Sign-In, OTP, and Google Authentication Flows  
+**Scope:** Diagnosis and Root Cause Analysis of Sign-Up, Sign-In, OTP, and Google Authentication Flows
 
 ---
 
 ## 1. Executive Summary
 
-This report provides a comprehensive diagnosis of authentication failures and friction points within the INFURNUS customer application signup and sign-in workflows. Following code inspections across both the Flutter client (`frontend/lib/features/auth/`) and the Node.js/Express backend (`src/modules/auth/`), several architectural, configuration, and flow-matching challenges were uncovered. 
+This report provides a comprehensive diagnosis of authentication failures and friction points within the INFURNUS customer application signup and sign-in workflows. Following code inspections across both the Flutter client (`frontend/lib/features/auth/`) and the Node.js/Express backend (`src/modules/auth/`), several architectural, configuration, and flow-matching challenges were uncovered.
 
 While the backend robustly supports passwordless OTP authentication and JWT issuance, discrepancies between frontend payloads, strict database constraints (such as unique phone/email indexes and foreign key relationships), and device network resolution (`localhost` vs LAN IP / emulator loopback) previously caused signup and login requests to timeout or fail. This report documents confirmed root causes, sanitized logs, and a prioritized remediation plan.
 
@@ -26,10 +26,12 @@ While the backend robustly supports passwordless OTP authentication and JWT issu
 ## 3. Sign-Up and Sign-In Flow Analysis
 
 ### A. Frontend Signup & Login Payloads
+
 - **Signup Request (`SignupRequest`):** Transmits `firstName`, `lastName`, `email`/`phone`, `role`, and optional passwords. In recent passwordless updates, passwords are optional for OTP initiation.
 - **Login Request (`LoginRequest`):** Transmits `email` or `phone` to `POST /auth/login`, expecting a `challengeId` for subsequent OTP verification (`POST /auth/login/verify`).
 
 ### B. Flow Trajectory & Friction Points
+
 1. **API Base URL Resolution:** Hardcoded or environment-based `baseUrl` in `EnvConfig` (`http://10.99.55.230:3000` or `localhost:3000`) caused connection timeouts on physical test devices due to local network isolation or missing `adb reverse` port forwarding.
 2. **Database Unique Constraints & Validation:** Strict Zod validation schemas (`signupSchema`, `loginSchema`) require valid formats for phone numbers (E.164 format with country code) and email addresses. Attempting registration with existing phone/email without proper conflict handling resulted in 409 Conflict errors.
 
@@ -46,7 +48,7 @@ While the backend robustly supports passwordless OTP authentication and JWT issu
 ## 5. OTP Authentication Findings
 
 - **Mechanism:** Passwordless OTP workflow (`POST /auth/login` -> challengeId -> `POST /auth/login/verify`).
-- **Findings:** 
+- **Findings:**
   - OTP provider (`DevOtpProvider` or SMS/Email providers) successfully dispatches challenges in development.
   - Failure occurs when frontend requests time out due to incorrect base URLs or network routing between physical test devices and the host machine running the Express server.
 
@@ -85,11 +87,11 @@ While the backend robustly supports passwordless OTP authentication and JWT issu
 
 ## 10. Recommended Fixes in Priority Order
 
-| Priority | Area | Recommended Fix |
-| :--- | :--- | :--- |
+| Priority     | Area                  | Recommended Fix                                                                                                                                                             |
+| :----------- | :-------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Critical** | Network / Environment | Ensure local development configuration (`EnvConfig.dev`) uses `http://127.0.0.1:3000` and execute `adb reverse tcp:3000 tcp:3000` before running tests on physical devices. |
-| **High** | Client Validation | Ensure phone number normalization on the frontend always formats numbers into E.164 standard (`+91...`) before submission. |
-| **Medium** | Error Handling | Enhance user-facing error messages in `auth_provider.dart` to clearly distinguish network unreachable errors from server validation failures. |
+| **High**     | Client Validation     | Ensure phone number normalization on the frontend always formats numbers into E.164 standard (`+91...`) before submission.                                                  |
+| **Medium**   | Error Handling        | Enhance user-facing error messages in `auth_provider.dart` to clearly distinguish network unreachable errors from server validation failures.                               |
 
 ---
 
