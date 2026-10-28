@@ -245,7 +245,7 @@ export class PaymentController {
       const isOwner = payment.userId === userId;
       const isAdmin = role === 'admin';
       let isAssignedDriver = false;
-      if (payment.rideId && this.rideRepository) {
+      if (payment.rideId && this.rideRepository && typeof this.rideRepository.isAssignedDriver === 'function') {
         isAssignedDriver = await this.rideRepository.isAssignedDriver(payment.rideId, userId);
       }
       if (isAssignedDriver && payment.provider !== 'cash') {
