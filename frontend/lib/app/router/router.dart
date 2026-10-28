@@ -70,8 +70,9 @@ String? authRedirect(AuthState auth, String path, String? role) {
             path == '/passenger-rides') {
           return '/login';
         }
-        if (path == '/driver-onboarding' || path.startsWith('/driver-'))
+        if (path == '/driver-onboarding' || path.startsWith('/driver-')) {
           return null;
+        }
         return publicAuth.contains(path) || path == '/otp' || path == '/splash'
             ? '/driver-onboarding'
             : null;
@@ -80,7 +81,9 @@ String? authRedirect(AuthState auth, String path, String? role) {
       return path == '/otp' ? null : '/otp';
     case AuthStatus.loading:
       final verifying = auth.signupId != null || auth.loginChallengeId != null;
-      if (verifying && path == '/otp') return null;
+      if (verifying && path == '/otp') {
+        return null;
+      }
       return publicAuth.contains(path) || publicLegal ? null : '/login';
     case AuthStatus.unauthenticated:
       return publicAuth.contains(path) || publicLegal ? null : '/login';
