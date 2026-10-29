@@ -25,7 +25,7 @@ export const initiatePaymentSchema = z
         amount: z.number().positive().optional(),
         currency: z.string().default('INR').optional(),
         provider: z
-          .enum(['wallet', 'cash', 'upi', 'card', 'razorpay', 'cashfree'])
+          .enum(['wallet', 'cash', 'upi', 'phonepe', 'gpay', 'paytm', 'card', 'razorpay', 'cashfree'])
           .default('wallet'),
         idempotencyKey: z.string().trim().min(1).max(255).optional(),
       })

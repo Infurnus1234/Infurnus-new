@@ -304,6 +304,40 @@ class NotificationService {
       payload: payload,
     );
   }
+
+  Future<void> showRideRequestNotification({
+    required String title,
+    required String body,
+    String? payload,
+  }) async {
+    const AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+          'infurnus_ride_request_channel',
+          'Ride Request Alerts',
+          channelDescription: 'High priority sound notifications for incoming ride offers',
+          importance: Importance.max,
+          priority: Priority.high,
+          playSound: true,
+          enableVibration: true,
+        );
+
+    const NotificationDetails platformDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: DarwinNotificationDetails(
+        presentSound: true,
+        presentAlert: true,
+        presentBadge: true,
+      ),
+    );
+
+    await _notificationsPlugin.show(
+      DateTime.now().millisecondsSinceEpoch % 100000,
+      title,
+      body,
+      platformDetails,
+      payload: payload,
+    );
+  }
 }
 
 final notificationServiceProvider = Provider((ref) {

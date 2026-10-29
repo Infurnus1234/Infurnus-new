@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../../core/services/cashfree_checkout_service.dart';
+import '../../../../core/services/upi_payment_service.dart';
 import '../../../../core/services/geocoding_service.dart';
 import '../../../../core/services/location_service.dart';
 import '../../../../core/network/dio_client.dart';
@@ -350,16 +351,25 @@ class RideNotifier extends StateNotifier<RideState> {
       case 'ride:completed':
         final rideData = event.data['ride'];
         if (rideData != null && rideData is Map<String, dynamic>) {
-          final updatedRide = model.RideModel.fromJson(rideData);
-          if (updatedRide.id == state.currentRide?.id) {
+          final rawUpdatedRide = model.RideModel.fromJson(rideData);
+          if (rawUpdatedRide.id == state.currentRide?.id) {
             final terminal =
                 state.status == RideStatus.completed ||
                 state.status == RideStatus.cancelled;
             if (terminal &&
-                updatedRide.status != model.RideStatus.completed &&
-                updatedRide.status != model.RideStatus.cancelled) {
+                rawUpdatedRide.status != model.RideStatus.completed &&
+                rawUpdatedRide.status != model.RideStatus.cancelled) {
               return;
             }
+            final preservedPin = rawUpdatedRide.pin ??
+                (rawUpdatedRide.pinVerified == true
+                    ? null
+                    : state.currentRide?.pin);
+            final updatedRide =
+                rawUpdatedRide.pin == null && preservedPin != null
+                    ? rawUpdatedRide.copyWith(pin: preservedPin)
+                    : rawUpdatedRide;
+
             _rideReadGeneration++;
             state = state.copyWith(
               status: _mapBackendStatus(updatedRide.status),
@@ -1069,7 +1079,9 @@ class RideNotifier extends StateNotifier<RideState> {
         paymentMethod: paymentMethod,
       );
 
-      if (paymentMethod.toLowerCase() == 'cashfree') {
+      final method = paymentMethod.toLowerCase();
+
+      if (method == 'cashfree') {
         final paymentSessionId = initiateResult['paymentSessionId']?.toString();
         final providerOrderId = initiateResult['providerOrderId']?.toString();
 
@@ -1119,8 +1131,58 @@ class RideNotifier extends StateNotifier<RideState> {
           );
           return false;
         }
+      } else if (method == 'phonepe' ||
+          method == 'gpay' ||
+          method == 'paytm' ||
+          method == 'upi') {
+        // Direct UPI app payment via upi_india
+        final upiApp = method == 'phonepe'
+            ? UpiPaymentApp.phonePe
+            : method == 'gpay'
+                ? UpiPaymentApp.googlePay
+                : method == 'paytm'
+                    ? UpiPaymentApp.paytm
+                    : UpiPaymentApp.any;
+
+        final upiService = ref.read(upiPaymentServiceProvider);
+        final upiResult = await upiService.pay(
+          // TODO: Replace with your merchant UPI VPA (e.g. infurnus@ybl)
+          merchantVpa: 'infurnus@ybl',
+          merchantName: 'INFURNUS',
+          amount: amount,
+          transactionId: paymentId,
+          app: upiApp,
+        );
+
+        if (!upiResult.success) {
+          state = state.copyWith(
+            paymentStatus: 'unpaid',
+            errorMessage: upiResult.errorMessage ?? 'UPI payment failed',
+          );
+          return false;
+        }
+
+        // Server-side capture with UPI transaction ID for reconciliation
+        final captureResult = await ref
+            .read(capturePaymentUseCaseProvider)
+            .execute(
+              paymentId: paymentId,
+              providerPaymentId: upiResult.transactionId,
+            );
+
+        if (captureResult['status'] == 'CAPTURED') {
+          state = state.copyWith(paymentStatus: 'paid', errorMessage: null);
+          fetchPaymentHistory();
+          return true;
+        } else {
+          state = state.copyWith(
+            paymentStatus: 'unpaid',
+            errorMessage: 'Payment verification failed at server',
+          );
+          return false;
+        }
       } else {
-        // Non-Cashfree provider (e.g. wallet/cash)
+        // Non-UPI provider (wallet/cash) — capture immediately
         final captureResult = await ref
             .read(capturePaymentUseCaseProvider)
             .execute(paymentId: paymentId);

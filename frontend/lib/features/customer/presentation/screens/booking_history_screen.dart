@@ -814,10 +814,11 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
                       Text(fareLabel, style: const TextStyle(color: textGray)),
                       Text(
                         '₹${ride.displayFare.toStringAsFixed(2)}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
-                          color: textBlack,
+                          color: isCancelled ? textGray : textBlack,
+                          decoration: isCancelled ? TextDecoration.lineThrough : null,
                         ),
                       ),
                     ],

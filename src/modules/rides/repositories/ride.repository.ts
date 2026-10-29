@@ -303,7 +303,6 @@ function mapRide(row: Record<string, unknown>, forCustomer = false): Ride {
     commissionAmount: row.commissionAmount != null ? Number(row.commissionAmount) : null,
     driverEarningAmount: row.driverEarningAmount != null ? Number(row.driverEarningAmount) : null,
     paymentStatus: (row.paymentStatus as string | null) ?? null,
-
     actualDistanceMeters: row.actualDistanceMeters != null ? Number(row.actualDistanceMeters) : 0,
 
     actualFuelCost: row.actualFuelCost != null ? Number(row.actualFuelCost) : null,

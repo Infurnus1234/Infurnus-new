@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../shared/widgets/infurnus_button.dart';
+import '../../../../core/services/upi_payment_service.dart';
 import '../providers/ride_provider.dart';
 
 class WalletScreen extends ConsumerStatefulWidget {
@@ -557,6 +558,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
   void _showAddMoneyModal() {
     final amountController = TextEditingController(text: '500');
     int selectedPreset = 500;
+    UpiPaymentApp selectedUpiApp = UpiPaymentApp.phonePe;
 
     showModalBottomSheet(
       context: context,
@@ -691,7 +693,53 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                         );
                       }).toList(),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 18),
+                    const Text(
+                      'Pay Using UPI App',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: textBlack,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        _buildUpiAppChip(
+                          label: 'PhonePe',
+                          app: UpiPaymentApp.phonePe,
+                          icon: Icons.phone_android_rounded,
+                          color: const Color(0xFF5F259F),
+                          selectedApp: selectedUpiApp,
+                          onTap: () => setModalState(
+                            () => selectedUpiApp = UpiPaymentApp.phonePe,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        _buildUpiAppChip(
+                          label: 'Google Pay',
+                          app: UpiPaymentApp.googlePay,
+                          icon: Icons.g_mobiledata_rounded,
+                          color: const Color(0xFF1A73E8),
+                          selectedApp: selectedUpiApp,
+                          onTap: () => setModalState(
+                            () => selectedUpiApp = UpiPaymentApp.googlePay,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        _buildUpiAppChip(
+                          label: 'Paytm',
+                          app: UpiPaymentApp.paytm,
+                          icon: Icons.payment_rounded,
+                          color: const Color(0xFF00B9F1),
+                          selectedApp: selectedUpiApp,
+                          onTap: () => setModalState(
+                            () => selectedUpiApp = UpiPaymentApp.paytm,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
 
                     // Payment Gateway Note
                     Container(
@@ -706,7 +754,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                           SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'Powered by RBI-authorized Payment Gateway with 256-bit encryption.',
+                              'Powered by RBI-authorized UPI Deep Linking with 256-bit encryption.',
                               style: TextStyle(fontSize: 11, color: textGray),
                             ),
                           ),
@@ -717,7 +765,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
 
                     InfurnusButton(
                       text: 'Proceed to Pay',
-                      onPressed: () {
+                      onPressed: () async {
                         final enteredAmount =
                             double.tryParse(amountController.text.trim()) ??
                             0.0;
@@ -731,28 +779,60 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                         }
 
                         Navigator.pop(ctx);
-                        setState(() {
-                          _walletBalance += enteredAmount;
-                          _mockCredits.insert(0, {
-                            'id':
-                                'topup_${DateTime.now().millisecondsSinceEpoch}',
-                            'amount': enteredAmount,
-                            'type': 'credit',
-                            'payment_method': 'UPI Payment',
-                            'status': 'completed',
-                            'title': 'Wallet Top-Up',
-                            'created_at': DateTime.now().toIso8601String(),
-                          });
-                        });
+                        final topUpTxnId =
+                            'topup_${DateTime.now().millisecondsSinceEpoch}';
+                        final upiService = ref.read(upiPaymentServiceProvider);
+                        final appName = selectedUpiApp == UpiPaymentApp.phonePe
+                            ? 'PhonePe'
+                            : selectedUpiApp == UpiPaymentApp.googlePay
+                                ? 'Google Pay'
+                                : 'Paytm';
 
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            backgroundColor: darkGreen,
-                            content: Text(
-                              '₹${enteredAmount.toStringAsFixed(2)} added to INFURNUS Wallet successfully!',
-                            ),
-                          ),
+                        final result = await upiService.pay(
+                          merchantVpa: 'infurnus@ybl',
+                          merchantName: 'INFURNUS Wallet',
+                          amount: enteredAmount,
+                          transactionId: topUpTxnId,
+                          app: selectedUpiApp,
                         );
+
+                        if (result.success) {
+                          setState(() {
+                            _walletBalance += enteredAmount;
+                            _mockCredits.insert(0, {
+                              'id': topUpTxnId,
+                              'amount': enteredAmount,
+                              'type': 'credit',
+                              'payment_method': appName,
+                              'status': 'completed',
+                              'title': 'Wallet Top-Up ($appName)',
+                              'created_at': DateTime.now().toIso8601String(),
+                            });
+                          });
+
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                backgroundColor: darkGreen,
+                                content: Text(
+                                  '₹${enteredAmount.toStringAsFixed(2)} added to INFURNUS Wallet via $appName!',
+                                ),
+                              ),
+                            );
+                          }
+                        } else {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                backgroundColor: Colors.red.shade700,
+                                content: Text(
+                                  result.errorMessage ??
+                                      'Payment was cancelled or failed.',
+                                ),
+                              ),
+                            );
+                          }
+                        }
                       },
                       isFullWidth: true,
                     ),
@@ -998,6 +1078,64 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildUpiAppChip({
+    required String label,
+    required UpiPaymentApp app,
+    required IconData icon,
+    required Color color,
+    required UpiPaymentApp selectedApp,
+    required VoidCallback onTap,
+  }) {
+    final isSelected = selectedApp == app;
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? color : Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected ? color : borderCard,
+              width: isSelected ? 1.5 : 1,
+            ),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.25),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : [],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 20,
+                color: isSelected ? Colors.white : color,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: isSelected ? Colors.white : textBlack,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
