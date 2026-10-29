@@ -95,7 +95,7 @@ export class PostgresPaymentRepository implements PaymentRepository {
            WHERE id = $1`,
           [captured.rideId, amountNum, comm, earn],
         );
-      } catch (_) {}
+      } catch (_) { /* ignore ride-amount update errors on capture */ }
     }
 
     return captured;
