@@ -818,7 +818,9 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
                           color: isCancelled ? textGray : textBlack,
-                          decoration: isCancelled ? TextDecoration.lineThrough : null,
+                          decoration: isCancelled
+                              ? TextDecoration.lineThrough
+                              : null,
                         ),
                       ),
                     ],

@@ -785,8 +785,8 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                         final appName = selectedUpiApp == UpiPaymentApp.phonePe
                             ? 'PhonePe'
                             : selectedUpiApp == UpiPaymentApp.googlePay
-                                ? 'Google Pay'
-                                : 'Paytm';
+                            ? 'Google Pay'
+                            : 'Paytm';
 
                         final result = await upiService.pay(
                           merchantVpa: 'infurnus@ybl',
@@ -1116,11 +1116,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                icon,
-                size: 20,
-                color: isSelected ? Colors.white : color,
-              ),
+              Icon(icon, size: 20, color: isSelected ? Colors.white : color),
               const SizedBox(height: 4),
               Text(
                 label,

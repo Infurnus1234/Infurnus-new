@@ -85,7 +85,7 @@ export class PostgresPaymentRepository implements PaymentRepository {
     if (captured?.rideId) {
       try {
         const amountNum = Number(captured.amount);
-        const comm = Math.round(amountNum * 0.10 * 100) / 100;
+        const comm = Math.round(amountNum * 0.1 * 100) / 100;
         const earn = Math.round((amountNum - comm) * 100) / 100;
         await this.pool.query(
           `UPDATE rides

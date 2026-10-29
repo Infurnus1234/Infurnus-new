@@ -314,7 +314,8 @@ class NotificationService {
         AndroidNotificationDetails(
           'infurnus_ride_request_channel',
           'Ride Request Alerts',
-          channelDescription: 'High priority sound notifications for incoming ride offers',
+          channelDescription:
+              'High priority sound notifications for incoming ride offers',
           importance: Importance.max,
           priority: Priority.high,
           playSound: true,

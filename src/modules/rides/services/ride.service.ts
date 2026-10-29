@@ -460,8 +460,10 @@ export class RideService {
         };
       }
 
-      const completedFare = Number(ride.billing?.finalFare ?? ride.finalFare ?? ride.fareEstimate ?? 0);
-      const commissionAmount = Math.round(completedFare * 0.10 * 100) / 100;
+      const completedFare = Number(
+        ride.billing?.finalFare ?? ride.finalFare ?? ride.fareEstimate ?? 0,
+      );
+      const commissionAmount = Math.round(completedFare * 0.1 * 100) / 100;
       const driverEarningAmount = Math.round((completedFare - commissionAmount) * 100) / 100;
 
       await client.query(

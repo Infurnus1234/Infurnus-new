@@ -1244,7 +1244,10 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
             GestureDetector(
               onTap: _showPaymentMethodPicker,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
@@ -3265,11 +3268,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              size: 16,
-              color: isSelected ? Colors.white : textGray,
-            ),
+            Icon(icon, size: 16, color: isSelected ? Colors.white : textGray),
             const SizedBox(width: 6),
             Text(
               label,
@@ -3284,7 +3283,6 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
       ),
     );
   }
-
 
   // --- Step 7: Ride Cancelled ---
   Widget _buildRideCancelledPanel(RideState state) {

@@ -361,14 +361,15 @@ class RideNotifier extends StateNotifier<RideState> {
                 rawUpdatedRide.status != model.RideStatus.cancelled) {
               return;
             }
-            final preservedPin = rawUpdatedRide.pin ??
+            final preservedPin =
+                rawUpdatedRide.pin ??
                 (rawUpdatedRide.pinVerified == true
                     ? null
                     : state.currentRide?.pin);
             final updatedRide =
                 rawUpdatedRide.pin == null && preservedPin != null
-                    ? rawUpdatedRide.copyWith(pin: preservedPin)
-                    : rawUpdatedRide;
+                ? rawUpdatedRide.copyWith(pin: preservedPin)
+                : rawUpdatedRide;
 
             _rideReadGeneration++;
             state = state.copyWith(
@@ -1139,10 +1140,10 @@ class RideNotifier extends StateNotifier<RideState> {
         final upiApp = method == 'phonepe'
             ? UpiPaymentApp.phonePe
             : method == 'gpay'
-                ? UpiPaymentApp.googlePay
-                : method == 'paytm'
-                    ? UpiPaymentApp.paytm
-                    : UpiPaymentApp.any;
+            ? UpiPaymentApp.googlePay
+            : method == 'paytm'
+            ? UpiPaymentApp.paytm
+            : UpiPaymentApp.any;
 
         final upiService = ref.read(upiPaymentServiceProvider);
         final upiResult = await upiService.pay(
