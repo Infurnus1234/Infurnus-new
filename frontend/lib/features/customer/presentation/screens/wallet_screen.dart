@@ -782,6 +782,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                         final topUpTxnId =
                             'topup_${DateTime.now().millisecondsSinceEpoch}';
                         final upiService = ref.read(upiPaymentServiceProvider);
+                        final messenger = ScaffoldMessenger.of(context);
                         final appName = selectedUpiApp == UpiPaymentApp.phonePe
                             ? 'PhonePe'
                             : selectedUpiApp == UpiPaymentApp.googlePay
@@ -811,7 +812,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                           });
 
                           if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
+                            messenger.showSnackBar(
                               SnackBar(
                                 backgroundColor: darkGreen,
                                 content: Text(
@@ -822,7 +823,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                           }
                         } else {
                           if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
+                            messenger.showSnackBar(
                               SnackBar(
                                 backgroundColor: Colors.red.shade700,
                                 content: Text(
