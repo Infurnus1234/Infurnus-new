@@ -118,7 +118,7 @@ class RideRepositoryImpl implements RideRepository {
       return await remoteDataSource.initiatePayment({
         'rideId': rideId,
         'amount': amount,
-        'paymentMethod': paymentMethod,
+        'provider': paymentMethod.toLowerCase(),
       });
     } on DioException catch (e) {
       throw _handleDioException(e);

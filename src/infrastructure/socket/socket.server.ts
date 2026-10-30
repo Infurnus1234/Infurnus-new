@@ -149,7 +149,30 @@ export function createSocketServer(
                 for (const key of ['pin', 'billing', 'finalFare', 'fareEstimate', 'actualFuelCost'])
                   delete (safe as Record<string, unknown>)[key];
                 socket.emit(event, safe);
-              } else socket.emit(event, payload);
+              } else {
+                let customerPayload = payload;
+                if (
+                  !ride.pin &&
+                  !ride.pinVerified &&
+                  ride.status !== 'completed' &&
+                  ride.status !== 'cancelled' &&
+                  rideDependencies.rideRepository.findByIdForCustomer
+                ) {
+                  try {
+                    const customerRide = await rideDependencies.rideRepository.findByIdForCustomer(
+                      ride.id,
+                      auth.userId,
+                    );
+                    if (customerRide?.pin) {
+                      customerPayload = {
+                        ...payload,
+                        ride: { ...ride, pin: customerRide.pin },
+                      };
+                    }
+                  } catch (_) { /* ignore pin-enrichment errors */ }
+                }
+                socket.emit(event, customerPayload);
+              }
             }),
           );
         })

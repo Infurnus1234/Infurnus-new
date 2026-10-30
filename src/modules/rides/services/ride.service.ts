@@ -460,6 +460,23 @@ export class RideService {
         };
       }
 
+      const completedFare = Number(
+        ride.billing?.finalFare ?? ride.finalFare ?? ride.fareEstimate ?? 0,
+      );
+      const commissionAmount = Math.round(completedFare * 0.1 * 100) / 100;
+      const driverEarningAmount = Math.round((completedFare - commissionAmount) * 100) / 100;
+
+      await client.query(
+        `UPDATE rides
+         SET commission_amount = CASE WHEN commission_amount IS NULL OR commission_amount = 0 THEN $2 ELSE commission_amount END,
+             driver_earning_amount = CASE WHEN driver_earning_amount IS NULL OR driver_earning_amount = 0 THEN $3 ELSE driver_earning_amount END
+         WHERE id = $1`,
+        [id, commissionAmount, driverEarningAmount],
+      );
+
+      ride.commissionAmount = commissionAmount;
+      ride.driverEarningAmount = driverEarningAmount;
+
       return this.hydrateDriverPhoto(ride);
     });
   }

@@ -1240,37 +1240,43 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
         // Payment Method & Coupon Row
         Row(
           children: [
-            // Cash selector
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFFE5E7EB)),
-              ),
-              child: const Row(
-                children: [
-                  Icon(
-                    Icons.payments_outlined,
-                    size: 16,
-                    color: Color(0xFF16A34A),
-                  ),
-                  SizedBox(width: 6),
-                  Text(
-                    'Cash',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF111827),
+            // Interactive Payment method selector
+            GestureDetector(
+              onTap: _showPaymentMethodPicker,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _getPaymentMethodIcon(_selectedPaymentMethod),
+                      size: 16,
+                      color: _getPaymentMethodColor(_selectedPaymentMethod),
                     ),
-                  ),
-                  SizedBox(width: 4),
-                  Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    size: 16,
-                    color: Color(0xFF6B7280),
-                  ),
-                ],
+                    const SizedBox(width: 6),
+                    Text(
+                      _getPaymentMethodLabel(_selectedPaymentMethod),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 16,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(width: 12),
@@ -2906,18 +2912,37 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                   children: [
                     _buildPaymentChip(
                       'cashfree',
-                      'Cashfree PG',
+                      'Cashfree',
                       Icons.credit_card_rounded,
+                      chipColor: const Color(0xFF1A1A2E),
+                    ),
+                    _buildPaymentChip(
+                      'phonepe',
+                      'PhonePe',
+                      Icons.phone_android_rounded,
+                      chipColor: const Color(0xFF5F259F),
+                    ),
+                    _buildPaymentChip(
+                      'gpay',
+                      'Google Pay',
+                      Icons.g_mobiledata_rounded,
+                      chipColor: const Color(0xFF1A73E8),
+                    ),
+                    _buildPaymentChip(
+                      'paytm',
+                      'Paytm',
+                      Icons.payment_rounded,
+                      chipColor: const Color(0xFF00B9F1),
                     ),
                     _buildPaymentChip(
                       'wallet',
                       'Wallet',
                       Icons.account_balance_wallet_rounded,
                     ),
-                    _buildPaymentChip('upi', 'UPI', Icons.qr_code_rounded),
                     _buildPaymentChip('cash', 'Cash', Icons.money_rounded),
                   ],
                 ),
+
                 const SizedBox(height: 14),
                 InfurnusButton(
                   text: 'Pay ₹${fare.toStringAsFixed(2)}',
@@ -3040,26 +3065,215 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
     );
   }
 
-  Widget _buildPaymentChip(String id, String label, IconData icon) {
+  String _getPaymentMethodLabel(String method) {
+    switch (method.toLowerCase()) {
+      case 'phonepe':
+        return 'PhonePe';
+      case 'gpay':
+        return 'Google Pay';
+      case 'paytm':
+        return 'Paytm';
+      case 'cashfree':
+        return 'Card / NetBanking';
+      case 'wallet':
+        return 'Wallet';
+      case 'cash':
+      default:
+        return 'Cash';
+    }
+  }
+
+  IconData _getPaymentMethodIcon(String method) {
+    switch (method.toLowerCase()) {
+      case 'phonepe':
+        return Icons.phone_android_rounded;
+      case 'gpay':
+        return Icons.g_mobiledata_rounded;
+      case 'paytm':
+        return Icons.payment_rounded;
+      case 'cashfree':
+        return Icons.credit_card_rounded;
+      case 'wallet':
+        return Icons.account_balance_wallet_rounded;
+      case 'cash':
+      default:
+        return Icons.payments_outlined;
+    }
+  }
+
+  Color _getPaymentMethodColor(String method) {
+    switch (method.toLowerCase()) {
+      case 'phonepe':
+        return const Color(0xFF5F259F);
+      case 'gpay':
+        return const Color(0xFF1A73E8);
+      case 'paytm':
+        return const Color(0xFF00B9F1);
+      case 'cashfree':
+        return const Color(0xFF1A1A2E);
+      case 'wallet':
+        return const Color(0xFF10B981);
+      case 'cash':
+      default:
+        return const Color(0xFF16A34A);
+    }
+  }
+
+  void _showPaymentMethodPicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+          decoration: const BoxDecoration(
+            color: cardElevated,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFCBD5E1),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Select Payment Method',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: textWhite,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Choose how you want to pay for this trip',
+                style: TextStyle(fontSize: 12, color: textGray),
+              ),
+              const SizedBox(height: 18),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _buildPaymentChip(
+                    'phonepe',
+                    'PhonePe',
+                    Icons.phone_android_rounded,
+                    chipColor: const Color(0xFF5F259F),
+                    onSelect: (id) {
+                      setModalState(() {});
+                      Navigator.pop(ctx);
+                    },
+                  ),
+                  _buildPaymentChip(
+                    'gpay',
+                    'Google Pay',
+                    Icons.g_mobiledata_rounded,
+                    chipColor: const Color(0xFF1A73E8),
+                    onSelect: (id) {
+                      setModalState(() {});
+                      Navigator.pop(ctx);
+                    },
+                  ),
+                  _buildPaymentChip(
+                    'paytm',
+                    'Paytm',
+                    Icons.payment_rounded,
+                    chipColor: const Color(0xFF00B9F1),
+                    onSelect: (id) {
+                      setModalState(() {});
+                      Navigator.pop(ctx);
+                    },
+                  ),
+                  _buildPaymentChip(
+                    'wallet',
+                    'Wallet',
+                    Icons.account_balance_wallet_rounded,
+                    onSelect: (id) {
+                      setModalState(() {});
+                      Navigator.pop(ctx);
+                    },
+                  ),
+                  _buildPaymentChip(
+                    'cash',
+                    'Cash',
+                    Icons.money_rounded,
+                    onSelect: (id) {
+                      setModalState(() {});
+                      Navigator.pop(ctx);
+                    },
+                  ),
+                  _buildPaymentChip(
+                    'cashfree',
+                    'Card / NetBanking',
+                    Icons.credit_card_rounded,
+                    chipColor: const Color(0xFF1A1A2E),
+                    onSelect: (id) {
+                      setModalState(() {});
+                      Navigator.pop(ctx);
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPaymentChip(
+    String id,
+    String label,
+    IconData icon, {
+    Color? chipColor,
+    ValueChanged<String>? onSelect,
+  }) {
     final isSelected = _selectedPaymentMethod == id;
+    final activeColor = chipColor ?? brandGreen;
     return GestureDetector(
-      onTap: () => setState(() => _selectedPaymentMethod = id),
-      child: Container(
+      onTap: () {
+        setState(() => _selectedPaymentMethod = id);
+        if (onSelect != null) onSelect(id);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? brandGreen : cardElevated,
+          color: isSelected ? activeColor : cardElevated,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: borderCard),
+          border: Border.all(
+            color: isSelected ? activeColor : borderCard,
+            width: isSelected ? 1.5 : 1,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: activeColor.withValues(alpha: 0.3),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : [],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 16, color: isSelected ? Colors.black : textWhite),
+            Icon(icon, size: 16, color: isSelected ? Colors.white : textGray),
             const SizedBox(width: 6),
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? Colors.black : textWhite,
+                color: isSelected ? Colors.white : textWhite,
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
               ),

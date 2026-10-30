@@ -146,7 +146,25 @@ export class PostgresPaymentRepository implements PaymentRepository {
       [data.paymentId, data.providerPaymentId ?? null],
     );
 
-    return result.rows[0] ?? null;
+    const captured = result.rows[0] ?? null;
+
+    if (captured?.rideId) {
+      try {
+        const amountNum = Number(captured.amount);
+        const comm = Math.round(amountNum * 0.1 * 100) / 100;
+        const earn = Math.round((amountNum - comm) * 100) / 100;
+        await this.pool.query(
+          `UPDATE rides
+           SET final_fare = COALESCE(final_fare, $2),
+               commission_amount = CASE WHEN commission_amount IS NULL OR commission_amount = 0 THEN $3 ELSE commission_amount END,
+               driver_earning_amount = CASE WHEN driver_earning_amount IS NULL OR driver_earning_amount = 0 THEN $4 ELSE driver_earning_amount END
+           WHERE id = $1`,
+          [captured.rideId, amountNum, comm, earn],
+        );
+      } catch (_) { /* ignore ride-amount update errors on capture */ }
+    }
+
+    return captured;
   }
 
   async findById(id: string): Promise<Payment | null> {
