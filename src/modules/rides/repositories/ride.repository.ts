@@ -1029,6 +1029,16 @@ export class PostgresRideRepository implements RideRepository {
                  r.fare_estimate
                )
            END,
+           commission_amount = CASE
+             WHEN cr.route_metadata->'bookingFareSnapshot'->>'commissionAmount' IS NOT NULL THEN
+               ROUND(((cr.route_metadata->'bookingFareSnapshot'->>'commissionAmount')::numeric / 100.0), 2)
+             ELSE r.commission_amount
+           END,
+           driver_earning_amount = CASE
+             WHEN cr.route_metadata->'bookingFareSnapshot'->>'driverEarnings' IS NOT NULL THEN
+               ROUND(((cr.route_metadata->'bookingFareSnapshot'->>'driverEarnings')::numeric / 100.0), 2)
+             ELSE r.driver_earning_amount
+           END,
            updated_at = NOW()
          FROM current_ride cr
          WHERE r.id = cr.id
