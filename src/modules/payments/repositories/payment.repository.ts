@@ -1,9 +1,11 @@
 import type { Pool } from 'pg';
+import { AppError } from '../../../common/errors/app-error.js';
 import type { CapturePaymentData, InitiatePaymentData, Payment } from '../types/payment.js';
 
 export interface PaymentRepository {
   initiate(data: InitiatePaymentData): Promise<Payment>;
   capture(data: CapturePaymentData): Promise<Payment | null>;
+  captureWallet?(paymentId: string, userId: string, amount: number): Promise<Payment>;
   findById(id: string): Promise<Payment | null>;
   findByRideId(rideId: string): Promise<Payment[]>;
   findActiveByRideId(rideId: string): Promise<Payment | null>;
@@ -65,6 +67,70 @@ export class PostgresPaymentRepository implements PaymentRepository {
     );
 
     return result.rows[0] ?? null;
+  }
+
+  async captureWallet(paymentId: string, userId: string, amount: number): Promise<Payment> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        'INSERT INTO provider_wallets(user_id) VALUES ($1) ON CONFLICT DO NOTHING',
+        [userId],
+      );
+      const walletRes = await client.query<{ balance_paise: string }>(
+        'SELECT balance_paise FROM provider_wallets WHERE user_id = $1 FOR UPDATE',
+        [userId],
+      );
+      const balancePaise = BigInt(walletRes.rows[0]?.balance_paise ?? '0');
+      const amountPaise = BigInt(Math.round(amount * 100));
+      if (balancePaise < amountPaise) {
+        await client.query(
+          `UPDATE payments
+           SET status = 'FAILED',
+               failed_at = NOW(),
+               failure_reason = 'Insufficient wallet balance',
+               updated_at = NOW()
+           WHERE id = $1 AND status != 'CAPTURED'`,
+          [paymentId],
+        );
+        await client.query('COMMIT');
+        throw new AppError('INSUFFICIENT_BALANCE', 'Insufficient wallet balance', 409);
+      }
+      const nextBalance = balancePaise - amountPaise;
+      await client.query(
+        'UPDATE provider_wallets SET balance_paise = $2, updated_at = NOW() WHERE user_id = $1',
+        [userId, nextBalance.toString()],
+      );
+      await client.query(
+        `INSERT INTO provider_wallet_entries(user_id, actor_id, amount_paise, balance_after_paise, entry_type, reference, idempotency_key)
+         VALUES ($1, $1, $2, $3, 'ADJUSTMENT', $4, $5)`,
+        [
+          userId,
+          (-amountPaise).toString(),
+          nextBalance.toString(),
+          `payment:${paymentId}`,
+          `wallet_debit:${paymentId}`,
+        ],
+      );
+      const paymentRes = await client.query<Payment>(
+        `UPDATE payments
+         SET status = 'CAPTURED',
+             captured_at = NOW(),
+             authorized_at = COALESCE(authorized_at, NOW()),
+             provider_payment_id = COALESCE(provider_payment_id, gen_random_uuid()::text),
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING ${paymentProjection}`,
+        [paymentId],
+      );
+      await client.query('COMMIT');
+      return paymentRes.rows[0]!;
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
   async capture(data: CapturePaymentData): Promise<Payment | null> {

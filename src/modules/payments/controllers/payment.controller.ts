@@ -295,6 +295,22 @@ export class PaymentController {
 
       let effectiveProviderPaymentId = input.providerPaymentId;
 
+      if (payment.provider === 'wallet') {
+        if (this.paymentRepository.captureWallet) {
+          const capturedWalletPayment = await this.paymentRepository.captureWallet(
+            payment.id,
+            payment.userId,
+            payment.amount,
+          );
+          res.json({
+            success: true,
+            data: capturedWalletPayment,
+            message: 'Payment captured successfully',
+          });
+          return;
+        }
+      }
+
       if (payment.provider === 'cashfree' && this.paymentProvider && payment.providerOrderId) {
         try {
           const statusResult = await this.paymentProvider.getPaymentStatus(payment.providerOrderId);
