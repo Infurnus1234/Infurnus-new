@@ -466,13 +466,16 @@ export class RideService {
       const commissionAmount = Math.round(completedFare * 0.1 * 100) / 100;
       const driverEarningAmount = Math.round((completedFare - commissionAmount) * 100) / 100;
 
-      await client.query(
-        `UPDATE rides
-         SET commission_amount = CASE WHEN commission_amount IS NULL OR commission_amount = 0 THEN $2 ELSE commission_amount END,
-             driver_earning_amount = CASE WHEN driver_earning_amount IS NULL OR driver_earning_amount = 0 THEN $3 ELSE driver_earning_amount END
-         WHERE id = $1`,
-        [id, commissionAmount, driverEarningAmount],
-      );
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+      if (isUuid) {
+        await client.query(
+          `UPDATE rides
+           SET commission_amount = CASE WHEN commission_amount IS NULL OR commission_amount = 0 THEN $2 ELSE commission_amount END,
+               driver_earning_amount = CASE WHEN driver_earning_amount IS NULL OR driver_earning_amount = 0 THEN $3 ELSE driver_earning_amount END
+           WHERE id = $1`,
+          [id, commissionAmount, driverEarningAmount],
+        );
+      }
 
       ride.commissionAmount = commissionAmount;
       ride.driverEarningAmount = driverEarningAmount;
