@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../shared/widgets/infurnus_button.dart';
+import '../../../../core/services/payment_gateway.dart';
 import '../../../../core/services/upi_payment_service.dart';
-import '../providers/ride_provider.dart';
+import '../../../../core/utils/currency_formatter.dart';
+import '../../../../shared/widgets/infurnus_button.dart';
+import '../../../../shared/widgets/infurnus_error_view.dart';
+import '../../../../shared/widgets/infurnus_loader.dart';
+import '../../data/models/wallet_model.dart';
+import '../providers/wallet_provider.dart';
+import '../widgets/scan_and_pay_sheet.dart';
 
 class WalletScreen extends ConsumerStatefulWidget {
   const WalletScreen({super.key});
@@ -23,192 +28,148 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
   static const Color brandGreen = Color(0xFF10B981);
   static const Color darkGreen = Color(0xFF065F46);
 
-  String _filter = 'all'; // 'all', 'debit', 'credit'
-  double _walletBalance = 850.00;
-  bool _isLoading = false;
-
-  final List<Map<String, dynamic>> _mockCredits = [
-    {
-      'id': 'topup_001',
-      'amount': 1000.00,
-      'type': 'credit',
-      'payment_method': 'UPI (Google Pay)',
-      'status': 'completed',
-      'title': 'Wallet Top-Up',
-      'created_at': DateTime.now()
-          .subtract(const Duration(days: 1))
-          .toIso8601String(),
-    },
-    {
-      'id': 'topup_002',
-      'amount': 250.00,
-      'type': 'credit',
-      'payment_method': 'Cashback Bonus',
-      'status': 'completed',
-      'title': 'Promotional Cashback',
-      'created_at': DateTime.now()
-          .subtract(const Duration(days: 3))
-          .toIso8601String(),
-    },
-  ];
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadData();
+      ref.read(walletProvider.notifier).loadData();
     });
   }
 
-  Future<void> _loadData() async {
-    setState(() => _isLoading = true);
-    await ref.read(rideProvider.notifier).fetchPaymentHistory();
-    if (mounted) setState(() => _isLoading = false);
+  Future<void> _refresh() async {
+    await ref.read(walletProvider.notifier).loadData();
   }
 
   @override
   Widget build(BuildContext context) {
-    final rideState = ref.watch(rideProvider);
-    final serverPayments = rideState.recentPayments;
-
-    // Combine server payments with top-up credits
-    final List<Map<String, dynamic>> allTransactions = [
-      ..._mockCredits,
-      ...serverPayments.map(
-        (p) => {
-          'id': p['id']?.toString() ?? 'tx_${p.hashCode}',
-          'amount': (p['amount'] as num?)?.toDouble() ?? 0.0,
-          'type': 'debit',
-          'payment_method':
-              p['provider']?.toString().toUpperCase() ??
-              p['payment_method']?.toString().toUpperCase() ??
-              'UPI / CARD',
-          'status':
-              (p['status']?.toString().toLowerCase() == 'captured' ||
-                  p['status']?.toString().toLowerCase() == 'completed')
-              ? 'completed'
-              : (p['status']?.toString().toLowerCase() ?? 'completed'),
-          'title': p['rideId'] != null
-              ? 'Mobility Fare Payment'
-              : 'Service Payment',
-          'created_at':
-              p['createdAt']?.toString() ??
-              p['created_at']?.toString() ??
-              DateTime.now().toIso8601String(),
-        },
-      ),
-    ];
-
-    // Sort newest first
-    allTransactions.sort((a, b) {
-      final dateA =
-          DateTime.tryParse(a['created_at']?.toString() ?? '') ??
-          DateTime.now();
-      final dateB =
-          DateTime.tryParse(b['created_at']?.toString() ?? '') ??
-          DateTime.now();
-      return dateB.compareTo(dateA);
-    });
-
-    final filtered = allTransactions.where((tx) {
-      if (_filter == 'debit') return tx['type'] == 'debit';
-      if (_filter == 'credit') return tx['type'] == 'credit';
-      return true;
-    }).toList();
+    final state = ref.watch(walletProvider);
 
     return Scaffold(
       backgroundColor: mainBg,
       appBar: AppBar(
-        title: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'INFURNUS Wallet & Pay',
-              style: TextStyle(
-                color: textBlack,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
-            ),
-            Text(
-              'Instant payments, balance & QR scan',
-              style: TextStyle(
-                color: textGray,
-                fontSize: 12,
-                fontWeight: FontWeight.normal,
-              ),
-            ),
-          ],
+        title: const Text(
+          'INFURNUS Wallet & Pay',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: textBlack,
+          ),
         ),
-        elevation: 0.5,
+        centerTitle: true,
         backgroundColor: cardBg,
-        foregroundColor: textBlack,
+        elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: textBlack),
-          onPressed: () => context.pop(),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: textBlack),
+          onPressed: () => Navigator.maybePop(context),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: textBlack),
-            tooltip: 'Refresh',
-            onPressed: _loadData,
+            icon: state.isLoading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.refresh_rounded, size: 20, color: textBlack),
+            tooltip: 'Refresh Wallet',
+            onPressed: state.isLoading ? null : _refresh,
           ),
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: _loadData,
-        color: brandGreen,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildBalanceCard(),
-              const SizedBox(height: 24),
-
-              // Quick Actions Row
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Transaction History',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: textBlack,
-                    ),
-                  ),
-                  Text(
-                    '${filtered.length} activities',
-                    style: const TextStyle(color: textGray, fontSize: 12),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              _buildFilterTabs(),
-              const SizedBox(height: 14),
-
-              if (_isLoading)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 40),
-                  child: Center(
-                    child: CircularProgressIndicator(color: brandGreen),
-                  ),
-                )
-              else if (filtered.isEmpty)
-                _buildEmptyTransactions()
-              else
-                ...filtered.map((tx) => _buildTransactionCard(tx)),
-            ],
-          ),
-        ),
+        onRefresh: _refresh,
+        child: _buildBody(state),
       ),
     );
   }
 
-  Widget _buildBalanceCard() {
+  Widget _buildBody(WalletState state) {
+    // 1. Initial Loading State
+    if (state.isLoading && state.wallet == null) {
+      return const InfurnusLoader(message: 'Loading your wallet...');
+    }
+
+    // 2. Offline State
+    if (state.isOffline && state.wallet == null) {
+      return InfurnusErrorView(
+        message: 'You are currently offline. Please check your internet connection.',
+        onRetry: _refresh,
+      );
+    }
+
+    // 3. Error State
+    if (state.errorMessage != null && state.wallet == null) {
+      return InfurnusErrorView(
+        message: state.errorMessage!,
+        onRetry: _refresh,
+      );
+    }
+
+    final wallet = state.wallet ?? WalletModel.empty();
+    final transactions = state.transactions;
+    final totalCount = state.totalCount > 0 ? state.totalCount : wallet.activityCount;
+
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Available Balance Card
+          _buildBalanceCard(wallet),
+          const SizedBox(height: 20),
+
+          // Activity Header with Real Count
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Activity & Transactions',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: textBlack,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '$totalCount activities',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: textGray,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Real Filter Tabs
+          _buildFilterTabs(state.filter),
+          const SizedBox(height: 14),
+
+          // Transaction List or States
+          if (state.isHistoryLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 40),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (transactions.isEmpty)
+            _buildEmptyTransactions()
+          else
+            ...transactions.map((tx) => _buildTransactionCard(tx)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBalanceCard(WalletModel wallet) {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -238,7 +199,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.all(22.0),
+            padding: const EdgeInsets.all(20.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -270,12 +231,14 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                         vertical: 3,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.15),
+                        color: wallet.isActive
+                            ? Colors.white.withValues(alpha: 0.15)
+                            : Colors.orange.withValues(alpha: 0.25),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Text(
-                        'Active',
-                        style: TextStyle(
+                      child: Text(
+                        wallet.isActive ? 'Active' : 'Unactivated',
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
@@ -294,16 +257,19 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  '₹${_walletBalance.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 36,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.5,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    CurrencyFormatter.format(wallet.balance),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 34,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -0.5,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 22),
+                const SizedBox(height: 20),
                 Row(
                   children: [
                     Expanded(
@@ -370,22 +336,25 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
     );
   }
 
-  Widget _buildFilterTabs() {
-    return Row(
-      children: [
-        _buildFilterChip('All Transactions', 'all'),
-        const SizedBox(width: 8),
-        _buildFilterChip('Debits', 'debit'),
-        const SizedBox(width: 8),
-        _buildFilterChip('Credits', 'credit'),
-      ],
+  Widget _buildFilterTabs(String currentFilter) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _buildFilterChip('All Transactions', 'all', currentFilter),
+          const SizedBox(width: 8),
+          _buildFilterChip('Debits', 'debit', currentFilter),
+          const SizedBox(width: 8),
+          _buildFilterChip('Credits', 'credit', currentFilter),
+        ],
+      ),
     );
   }
 
-  Widget _buildFilterChip(String label, String value) {
-    final isSelected = _filter == value;
+  Widget _buildFilterChip(String label, String value, String currentFilter) {
+    final isSelected = currentFilter == value;
     return GestureDetector(
-      onTap: () => setState(() => _filter = value),
+      onTap: () => ref.read(walletProvider.notifier).setFilter(value),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
@@ -405,17 +374,10 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
     );
   }
 
-  Widget _buildTransactionCard(Map<String, dynamic> tx) {
-    final isCredit = tx['type'] == 'credit';
-    final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
-    final title = tx['title']?.toString() ?? 'Transaction';
-    final method = tx['payment_method']?.toString() ?? 'UPI';
-    final status = tx['status']?.toString() ?? 'completed';
-    final rawDate = tx['created_at']?.toString();
-    final date = rawDate != null
-        ? DateFormat('dd MMM yyyy • hh:mm a')
-              .format(DateTime.tryParse(rawDate) ?? DateTime.now())
-        : 'Recent';
+  Widget _buildTransactionCard(WalletTransactionModel tx) {
+    final isCredit = tx.type == 'credit';
+    final amountStr = CurrencyFormatter.format(tx.amount);
+    final dateStr = DateFormat('dd MMM yyyy • hh:mm a').format(tx.createdAt);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -454,7 +416,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                     isCredit
                         ? Icons.arrow_downward_rounded
                         : Icons.arrow_upward_rounded,
-                    color: isCredit ? darkGreen : textGray,
+                    color: isCredit ? darkGreen : const Color(0xFFE11D48),
                     size: 20,
                   ),
                 ),
@@ -464,55 +426,39 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        title,
+                        tx.description,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: 14,
+                          fontSize: 13,
                           fontWeight: FontWeight.bold,
                           color: textBlack,
                         ),
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        '$method • $date',
+                        '${tx.paymentMethod} • $dateStr',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontSize: 11, color: textGray),
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(width: 8),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      '${isCredit ? "+" : "-"}₹${amount.toStringAsFixed(2)}',
+                      '${isCredit ? "+" : "-"}$amountStr',
                       style: TextStyle(
-                        fontSize: 15,
+                        fontSize: 14,
                         fontWeight: FontWeight.w900,
                         color: isCredit ? brandGreen : textBlack,
                       ),
                     ),
-                    const SizedBox(height: 3),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: status == 'completed'
-                            ? const Color(0xFFD1FAE5)
-                            : const Color(0xFFFEF3C7),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        status.toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
-                          color: status == 'completed'
-                              ? const Color(0xFF065F46)
-                              : const Color(0xFF92400E),
-                        ),
-                      ),
-                    ),
+                    const SizedBox(height: 4),
+                    _buildStatusBadge(tx.status),
                   ],
                 ),
               ],
@@ -523,30 +469,79 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
     );
   }
 
+  Widget _buildStatusBadge(String status) {
+    Color bg;
+    Color fg;
+
+    switch (status.toUpperCase()) {
+      case 'COMPLETED':
+      case 'CAPTURED':
+        bg = const Color(0xFFD1FAE5);
+        fg = darkGreen;
+        break;
+      case 'PENDING':
+        bg = const Color(0xFFFEF3C7);
+        fg = const Color(0xFF92400E);
+        break;
+      case 'FAILED':
+        bg = const Color(0xFFFEE2E2);
+        fg = const Color(0xFF991B1B);
+        break;
+      case 'REFUNDED':
+        bg = const Color(0xFFE0E7FF);
+        fg = const Color(0xFF3730A3);
+        break;
+      default:
+        bg = const Color(0xFFF1F5F9);
+        fg = textGray;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        status.toUpperCase(),
+        style: TextStyle(
+          fontSize: 9,
+          fontWeight: FontWeight.bold,
+          color: fg,
+        ),
+      ),
+    );
+  }
+
   Widget _buildEmptyTransactions() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: borderCard),
       ),
       child: const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.receipt_long_rounded, size: 48, color: textGray),
-          SizedBox(height: 14),
+          Icon(
+            Icons.receipt_long_outlined,
+            size: 48,
+            color: textGray,
+          ),
+          SizedBox(height: 12),
           Text(
-            'No Transactions Found',
+            'No transactions yet',
             style: TextStyle(
-              fontSize: 16,
+              fontSize: 15,
               fontWeight: FontWeight.bold,
               color: textBlack,
             ),
           ),
-          SizedBox(height: 6),
+          SizedBox(height: 4),
           Text(
-            'Your ride payments, wallet top-ups, and refunds will appear here.',
+            'Your wallet deposits and scan-and-pay activities will appear here.',
             style: TextStyle(fontSize: 12, color: textGray),
             textAlign: TextAlign.center,
           ),
@@ -567,6 +562,8 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            final isProcessing = ref.watch(walletProvider).isTopUpProcessing;
+
             return Container(
               padding: EdgeInsets.only(
                 left: 20,
@@ -602,7 +599,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                         color: textBlack,
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     const Text(
                       'Instant balance update via UPI, Cards, or Net Banking',
                       style: TextStyle(fontSize: 12, color: textGray),
@@ -612,7 +609,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                     // Amount input field
                     TextField(
                       controller: amountController,
-                      keyboardType: TextInputType.number,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       onChanged: (val) {
                         setModalState(() {
                           selectedPreset = int.tryParse(val) ?? 0;
@@ -694,8 +691,9 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                       }).toList(),
                     ),
                     const SizedBox(height: 18),
+
                     const Text(
-                      'Pay Using UPI App',
+                      'Select Payment Method',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.bold,
@@ -739,102 +737,57 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 18),
-
-                    // Payment Gateway Note
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Row(
-                        children: [
-                          Icon(Icons.lock_rounded, size: 16, color: darkGreen),
-                          SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Powered by RBI-authorized UPI Deep Linking with 256-bit encryption.',
-                              style: TextStyle(fontSize: 11, color: textGray),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                     const SizedBox(height: 20),
 
                     InfurnusButton(
-                      text: 'Proceed to Pay',
-                      onPressed: () async {
-                        final enteredAmount =
-                            double.tryParse(amountController.text.trim()) ??
-                            0.0;
-                        if (enteredAmount <= 0) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Please enter a valid amount'),
-                            ),
-                          );
-                          return;
-                        }
+                      text: isProcessing ? 'Processing Checkout...' : 'Proceed to Pay',
+                      isLoading: isProcessing,
+                      onPressed: isProcessing
+                          ? null
+                          : () async {
+                              final amt = double.tryParse(amountController.text.trim()) ?? 0.0;
+                              if (amt < 10) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Minimum top-up is ₹10.00')),
+                                );
+                                return;
+                              }
 
-                        Navigator.pop(ctx);
-                        final topUpTxnId =
-                            'topup_${DateTime.now().millisecondsSinceEpoch}';
-                        final upiService = ref.read(upiPaymentServiceProvider);
-                        final messenger = ScaffoldMessenger.of(context);
-                        final appName = selectedUpiApp == UpiPaymentApp.phonePe
-                            ? 'PhonePe'
-                            : selectedUpiApp == UpiPaymentApp.googlePay
-                            ? 'Google Pay'
-                            : 'Paytm';
+                              final gateway = ref.read(upiPaymentGatewayProvider);
+                              final success = await ref.read(walletProvider.notifier).topUp(
+                                    amount: amt,
+                                    gateway: gateway,
+                                    paymentMethod: selectedUpiApp.name.toUpperCase(),
+                                    extraData: {'app': selectedUpiApp},
+                                  );
 
-                        final result = await upiService.pay(
-                          merchantVpa: 'infurnus@ybl',
-                          merchantName: 'INFURNUS Wallet',
-                          amount: enteredAmount,
-                          transactionId: topUpTxnId,
-                          app: selectedUpiApp,
-                        );
+                              if (ctx.mounted) {
+                                Navigator.pop(ctx);
+                              }
 
-                        if (result.success) {
-                          setState(() {
-                            _walletBalance += enteredAmount;
-                            _mockCredits.insert(0, {
-                              'id': topUpTxnId,
-                              'amount': enteredAmount,
-                              'type': 'credit',
-                              'payment_method': appName,
-                              'status': 'completed',
-                              'title': 'Wallet Top-Up ($appName)',
-                              'created_at': DateTime.now().toIso8601String(),
-                            });
-                          });
-
-                          if (mounted) {
-                            messenger.showSnackBar(
-                              SnackBar(
-                                backgroundColor: darkGreen,
-                                content: Text(
-                                  '₹${enteredAmount.toStringAsFixed(2)} added to INFURNUS Wallet via $appName!',
-                                ),
-                              ),
-                            );
-                          }
-                        } else {
-                          if (mounted) {
-                            messenger.showSnackBar(
-                              SnackBar(
-                                backgroundColor: Colors.red.shade700,
-                                content: Text(
-                                  result.errorMessage ??
-                                      'Payment was cancelled or failed.',
-                                ),
-                              ),
-                            );
-                          }
-                        }
-                      },
+                              if (mounted) {
+                                if (success) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'Top-up of ${CurrencyFormatter.format(amt)} successful! Wallet updated.',
+                                      ),
+                                      backgroundColor: darkGreen,
+                                    ),
+                                  );
+                                } else {
+                                  final err = ref.read(walletProvider).errorMessage;
+                                  if (err != null) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(err),
+                                        backgroundColor: Colors.red.shade700,
+                                      ),
+                                    );
+                                  }
+                                }
+                              }
+                            },
                       isFullWidth: true,
                     ),
                   ],
@@ -847,144 +800,64 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
     );
   }
 
-  void _showScanAndPayModal() {
-    final codeController = TextEditingController();
+  Widget _buildUpiAppChip({
+    required String label,
+    required UpiPaymentApp app,
+    required IconData icon,
+    required Color color,
+    required UpiPaymentApp selectedApp,
+    required VoidCallback onTap,
+  }) {
+    final isSelected = selectedApp == app;
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? color.withValues(alpha: 0.12) : cardBg,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected ? color : borderCard,
+              width: isSelected ? 1.5 : 1.0,
+            ),
+          ),
+          child: Column(
+            children: [
+              Icon(icon, color: color, size: 24),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                  color: isSelected ? color : textBlack,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
+  void _showScanAndPayModal() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
-        return Container(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            top: 20,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-          ),
-          decoration: const BoxDecoration(
-            color: cardBg,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFCBD5E1),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Scan & Pay',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: textBlack,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Scan driver or merchant QR to pay from your wallet',
-                  style: TextStyle(fontSize: 12, color: textGray),
-                ),
-                const SizedBox(height: 20),
-
-                // Mock QR Scanner Viewfinder
-                Container(
-                  width: 200,
-                  height: 200,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0F172A),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: brandGreen, width: 2),
-                  ),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      const Icon(
-                        Icons.qr_code_scanner_rounded,
-                        size: 90,
-                        color: Color(0xFFA7F3D0),
-                      ),
-                      Positioned(
-                        bottom: 12,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.6),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Text(
-                            'Align QR code inside box',
-                            style: TextStyle(color: Colors.white, fontSize: 10),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                const Text(
-                  'Or enter UPI ID / Merchant Code manually',
-                  style: TextStyle(fontSize: 12, color: textGray),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: codeController,
-                  decoration: InputDecoration(
-                    hintText: 'e.g. infurnus.driver@upi',
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 12,
-                    ),
-                    filled: true,
-                    fillColor: mainBg,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: borderCard),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                InfurnusButton(
-                  text: 'Pay via Wallet',
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Scanned merchant code verified. Payment ready.',
-                        ),
-                      ),
-                    );
-                  },
-                  isFullWidth: true,
-                ),
-              ],
-            ),
-          ),
+        return ScanAndPaySheet(
+          onAddMoneyRequested: _showAddMoneyModal,
         );
       },
     );
   }
 
-  void _showReceiptModal(Map<String, dynamic> tx) {
-    final isCredit = tx['type'] == 'credit';
-    final amount = (tx['amount'] as num?)?.toDouble() ?? 0.0;
-    final title = tx['title']?.toString() ?? 'Transaction';
-    final method = tx['payment_method']?.toString() ?? 'UPI';
-    final status = tx['status']?.toString() ?? 'completed';
-    final txId = tx['id']?.toString() ?? 'tx_ref';
+  void _showReceiptModal(WalletTransactionModel tx) {
+    final isCredit = tx.type == 'credit';
+    final amountStr = CurrencyFormatter.format(tx.amount);
+    final dateStr = DateFormat('dd MMM yyyy • hh:mm a').format(tx.createdAt);
 
     showModalBottomSheet(
       context: context,
@@ -1026,7 +899,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
               ),
               const SizedBox(height: 12),
               Text(
-                '${isCredit ? "+" : "-"}₹${amount.toStringAsFixed(2)}',
+                '${isCredit ? "+" : "-"}$amountStr',
                 style: TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.w900,
@@ -1035,7 +908,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                title,
+                tx.description,
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
@@ -1046,11 +919,17 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
               const Divider(color: borderCard),
               const SizedBox(height: 12),
 
-              _buildReceiptRow('Transaction ID', txId.toUpperCase()),
+              _buildReceiptRow('Transaction ID', tx.id.toUpperCase()),
               const SizedBox(height: 10),
-              _buildReceiptRow('Payment Method', method),
+              _buildReceiptRow('Reference', tx.reference),
               const SizedBox(height: 10),
-              _buildReceiptRow('Status', status.toUpperCase()),
+              _buildReceiptRow('Payment Method', tx.paymentMethod),
+              const SizedBox(height: 10),
+              _buildReceiptRow('Status', tx.status),
+              const SizedBox(height: 10),
+              _buildReceiptRow('Date & Time', dateStr),
+              const SizedBox(height: 10),
+              _buildReceiptRow('Balance After', CurrencyFormatter.format(tx.balanceAfter)),
               const SizedBox(height: 24),
 
               InfurnusButton(
@@ -1069,70 +948,23 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(color: textGray, fontSize: 13)),
         Text(
-          value,
-          style: const TextStyle(
-            color: textBlack,
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
+          label,
+          style: const TextStyle(fontSize: 12, color: textGray),
+        ),
+        Flexible(
+          child: Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: textBlack,
+            ),
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildUpiAppChip({
-    required String label,
-    required UpiPaymentApp app,
-    required IconData icon,
-    required Color color,
-    required UpiPaymentApp selectedApp,
-    required VoidCallback onTap,
-  }) {
-    final isSelected = selectedApp == app;
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-          decoration: BoxDecoration(
-            color: isSelected ? color : Colors.white,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: isSelected ? color : borderCard,
-              width: isSelected ? 1.5 : 1,
-            ),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: color.withValues(alpha: 0.25),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : [],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 20, color: isSelected ? Colors.white : color),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: isSelected ? Colors.white : textBlack,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
