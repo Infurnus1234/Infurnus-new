@@ -59,7 +59,11 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
         backgroundColor: cardBg,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: textBlack),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            size: 18,
+            color: textBlack,
+          ),
           onPressed: () => Navigator.maybePop(context),
         ),
         actions: [
@@ -76,10 +80,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _refresh,
-        child: _buildBody(state),
-      ),
+      body: RefreshIndicator(onRefresh: _refresh, child: _buildBody(state)),
     );
   }
 
@@ -92,22 +93,22 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
     // 2. Offline State
     if (state.isOffline && state.wallet == null) {
       return InfurnusErrorView(
-        message: 'You are currently offline. Please check your internet connection.',
+        message:
+            'You are currently offline. Please check your internet connection.',
         onRetry: _refresh,
       );
     }
 
     // 3. Error State
     if (state.errorMessage != null && state.wallet == null) {
-      return InfurnusErrorView(
-        message: state.errorMessage!,
-        onRetry: _refresh,
-      );
+      return InfurnusErrorView(message: state.errorMessage!, onRetry: _refresh);
     }
 
     final wallet = state.wallet ?? WalletModel.empty();
     final transactions = state.transactions;
-    final totalCount = state.totalCount > 0 ? state.totalCount : wallet.activityCount;
+    final totalCount = state.totalCount > 0
+        ? state.totalCount
+        : wallet.activityCount;
 
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -504,11 +505,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
       ),
       child: Text(
         status.toUpperCase(),
-        style: TextStyle(
-          fontSize: 9,
-          fontWeight: FontWeight.bold,
-          color: fg,
-        ),
+        style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: fg),
       ),
     );
   }
@@ -525,11 +522,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
       child: const Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.receipt_long_outlined,
-            size: 48,
-            color: textGray,
-          ),
+          Icon(Icons.receipt_long_outlined, size: 48, color: textGray),
           SizedBox(height: 12),
           Text(
             'No transactions yet',
@@ -609,7 +602,9 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                     // Amount input field
                     TextField(
                       controller: amountController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       onChanged: (val) {
                         setModalState(() {
                           selectedPreset = int.tryParse(val) ?? 0;
@@ -740,24 +735,37 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                     const SizedBox(height: 20),
 
                     InfurnusButton(
-                      text: isProcessing ? 'Processing Checkout...' : 'Proceed to Pay',
+                      text: isProcessing
+                          ? 'Processing Checkout...'
+                          : 'Proceed to Pay',
                       isLoading: isProcessing,
                       onPressed: isProcessing
                           ? null
                           : () async {
-                              final amt = double.tryParse(amountController.text.trim()) ?? 0.0;
+                              final amt =
+                                  double.tryParse(
+                                    amountController.text.trim(),
+                                  ) ??
+                                  0.0;
                               if (amt < 10) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Minimum top-up is ₹10.00')),
+                                  const SnackBar(
+                                    content: Text('Minimum top-up is ₹10.00'),
+                                  ),
                                 );
                                 return;
                               }
 
-                              final gateway = ref.read(upiPaymentGatewayProvider);
-                              final success = await ref.read(walletProvider.notifier).topUp(
+                              final gateway = ref.read(
+                                upiPaymentGatewayProvider,
+                              );
+                              final success = await ref
+                                  .read(walletProvider.notifier)
+                                  .topUp(
                                     amount: amt,
                                     gateway: gateway,
-                                    paymentMethod: selectedUpiApp.name.toUpperCase(),
+                                    paymentMethod: selectedUpiApp.name
+                                        .toUpperCase(),
                                     extraData: {'app': selectedUpiApp},
                                   );
 
@@ -776,7 +784,9 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                                     ),
                                   );
                                 } else {
-                                  final err = ref.read(walletProvider).errorMessage;
+                                  final err = ref
+                                      .read(walletProvider)
+                                      .errorMessage;
                                   if (err != null) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
@@ -847,9 +857,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
-        return ScanAndPaySheet(
-          onAddMoneyRequested: _showAddMoneyModal,
-        );
+        return ScanAndPaySheet(onAddMoneyRequested: _showAddMoneyModal);
       },
     );
   }
@@ -929,7 +937,10 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
               const SizedBox(height: 10),
               _buildReceiptRow('Date & Time', dateStr),
               const SizedBox(height: 10),
-              _buildReceiptRow('Balance After', CurrencyFormatter.format(tx.balanceAfter)),
+              _buildReceiptRow(
+                'Balance After',
+                CurrencyFormatter.format(tx.balanceAfter),
+              ),
               const SizedBox(height: 24),
 
               InfurnusButton(
@@ -948,10 +959,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontSize: 12, color: textGray),
-        ),
+        Text(label, style: const TextStyle(fontSize: 12, color: textGray)),
         Flexible(
           child: Text(
             value,

@@ -3,12 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'cashfree_checkout_service.dart';
 import 'upi_payment_service.dart';
 
-enum PaymentGatewayStatus {
-  success,
-  pending,
-  cancelled,
-  failed,
-}
+enum PaymentGatewayStatus { success, pending, cancelled, failed }
 
 class PaymentGatewayCheckoutResult {
   final PaymentGatewayStatus status;

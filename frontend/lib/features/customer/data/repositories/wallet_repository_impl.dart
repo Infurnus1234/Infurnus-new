@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -39,7 +40,8 @@ class WalletRepositoryImpl implements WalletRepository {
                 WalletTransactionModel.fromJson(item as Map<String, dynamic>),
           )
           .toList();
-      final totalCount = (data['totalCount'] as num?)?.toInt() ?? transactions.length;
+      final totalCount =
+          (data['totalCount'] as num?)?.toInt() ?? transactions.length;
 
       return (transactions: transactions, totalCount: totalCount);
     } on DioException catch (e) {

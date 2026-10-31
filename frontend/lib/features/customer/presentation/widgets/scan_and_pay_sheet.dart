@@ -12,10 +12,7 @@ import '../providers/wallet_provider.dart';
 class ScanAndPaySheet extends ConsumerStatefulWidget {
   final VoidCallback? onAddMoneyRequested;
 
-  const ScanAndPaySheet({
-    super.key,
-    this.onAddMoneyRequested,
-  });
+  const ScanAndPaySheet({super.key, this.onAddMoneyRequested});
 
   @override
   ConsumerState<ScanAndPaySheet> createState() => _ScanAndPaySheetState();
@@ -121,10 +118,10 @@ class _ScanAndPaySheetState extends ConsumerState<ScanAndPaySheet> {
     final targetType = payload.type == QrPayloadType.infurnusLogisticsOrder
         ? 'order'
         : payload.type == QrPayloadType.infurnusDriver
-            ? 'driver'
-            : payload.type == QrPayloadType.infurnusMerchant
-                ? 'merchant'
-                : 'upi';
+        ? 'driver'
+        : payload.type == QrPayloadType.infurnusMerchant
+        ? 'merchant'
+        : 'upi';
 
     final targetId = payload.targetId ?? payload.payeeVpa ?? '';
 
@@ -200,20 +197,26 @@ class _ScanAndPaySheetState extends ConsumerState<ScanAndPaySheet> {
 
     setState(() => _isSubmittingPayment = true);
 
-    final targetType = _confirmedPayload!.type == QrPayloadType.infurnusLogisticsOrder
+    final targetType =
+        _confirmedPayload!.type == QrPayloadType.infurnusLogisticsOrder
         ? 'order'
         : _confirmedPayload!.type == QrPayloadType.infurnusDriver
-            ? 'driver'
-            : _confirmedPayload!.type == QrPayloadType.infurnusMerchant
-                ? 'merchant'
-                : 'upi';
+        ? 'driver'
+        : _confirmedPayload!.type == QrPayloadType.infurnusMerchant
+        ? 'merchant'
+        : 'upi';
 
     // Returns the real server transaction reference, or null on failure.
-    final serverRef = await ref.read(walletProvider.notifier).payViaWallet(
+    final serverRef = await ref
+        .read(walletProvider.notifier)
+        .payViaWallet(
           targetType: targetType,
-          targetId: _confirmedPayload!.targetId ?? _confirmedPayload!.payeeVpa ?? '',
+          targetId:
+              _confirmedPayload!.targetId ?? _confirmedPayload!.payeeVpa ?? '',
           amount: amount,
-          note: _noteController.text.trim().isNotEmpty ? _noteController.text.trim() : null,
+          note: _noteController.text.trim().isNotEmpty
+              ? _noteController.text.trim()
+              : null,
         );
 
     if (mounted) {
@@ -319,7 +322,7 @@ class _ScanAndPaySheetState extends ConsumerState<ScanAndPaySheet> {
                               BoxShadow(
                                 color: Colors.black.withValues(alpha: 0.05),
                                 blurRadius: 4,
-                              )
+                              ),
                             ]
                           : null,
                     ),
@@ -328,7 +331,9 @@ class _ScanAndPaySheetState extends ConsumerState<ScanAndPaySheet> {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 12,
-                        fontWeight: _tabIndex == 0 ? FontWeight.bold : FontWeight.w500,
+                        fontWeight: _tabIndex == 0
+                            ? FontWeight.bold
+                            : FontWeight.w500,
                         color: _tabIndex == 0 ? darkGreen : textGray,
                       ),
                     ),
@@ -348,7 +353,7 @@ class _ScanAndPaySheetState extends ConsumerState<ScanAndPaySheet> {
                               BoxShadow(
                                 color: Colors.black.withValues(alpha: 0.05),
                                 blurRadius: 4,
-                              )
+                              ),
                             ]
                           : null,
                     ),
@@ -357,7 +362,9 @@ class _ScanAndPaySheetState extends ConsumerState<ScanAndPaySheet> {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 12,
-                        fontWeight: _tabIndex == 1 ? FontWeight.bold : FontWeight.w500,
+                        fontWeight: _tabIndex == 1
+                            ? FontWeight.bold
+                            : FontWeight.w500,
                         color: _tabIndex == 1 ? darkGreen : textGray,
                       ),
                     ),
@@ -473,10 +480,7 @@ class _ScanAndPaySheetState extends ConsumerState<ScanAndPaySheet> {
         alignment: Alignment.center,
         children: [
           if (_scannerController != null)
-            MobileScanner(
-              controller: _scannerController!,
-              onDetect: _onDetect,
-            ),
+            MobileScanner(controller: _scannerController!, onDetect: _onDetect),
           // Viewfinder box
           Container(
             width: 170,
@@ -535,7 +539,11 @@ class _ScanAndPaySheetState extends ConsumerState<ScanAndPaySheet> {
       children: [
         const Text(
           'Enter UPI ID, Merchant Code, or Order ID',
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: textBlack),
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: textBlack,
+          ),
         ),
         const SizedBox(height: 8),
         TextField(
@@ -543,10 +551,17 @@ class _ScanAndPaySheetState extends ConsumerState<ScanAndPaySheet> {
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
             hintText: 'e.g. driver@okhdfcbank or STORE123',
-            prefixIcon: const Icon(Icons.alternate_email_rounded, color: textGray, size: 20),
+            prefixIcon: const Icon(
+              Icons.alternate_email_rounded,
+              color: textGray,
+              size: 20,
+            ),
             filled: true,
             fillColor: mainBg,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: borderCard),
@@ -595,8 +610,12 @@ class _ScanAndPaySheetState extends ConsumerState<ScanAndPaySheet> {
 
     final wallet = ref.watch(walletProvider).wallet;
     final balance = wallet?.balance ?? 0.0;
-    final payeeName = _recipientDetails?.displayName ?? _confirmedPayload?.payeeName ?? 'Payee';
-    final targetId = _confirmedPayload?.targetId ?? _confirmedPayload?.payeeVpa ?? '';
+    final payeeName =
+        _recipientDetails?.displayName ??
+        _confirmedPayload?.payeeName ??
+        'Payee';
+    final targetId =
+        _confirmedPayload?.targetId ?? _confirmedPayload?.payeeVpa ?? '';
     final isFixed = _confirmedPayload?.isAmountFixed == true;
     final enteredAmount = double.tryParse(_amountController.text.trim()) ?? 0.0;
     final isInsufficient = enteredAmount > balance;
@@ -609,7 +628,11 @@ class _ScanAndPaySheetState extends ConsumerState<ScanAndPaySheet> {
           children: [
             const Text(
               'Confirm Payment',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textBlack),
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: textBlack,
+              ),
             ),
             IconButton(
               icon: const Icon(Icons.close_rounded, size: 20),
@@ -633,7 +656,11 @@ class _ScanAndPaySheetState extends ConsumerState<ScanAndPaySheet> {
               CircleAvatar(
                 backgroundColor: darkGreen,
                 radius: 22,
-                child: const Icon(Icons.verified_user_rounded, color: Colors.white, size: 24),
+                child: const Icon(
+                  Icons.verified_user_rounded,
+                  color: Colors.white,
+                  size: 24,
+                ),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -664,7 +691,11 @@ class _ScanAndPaySheetState extends ConsumerState<ScanAndPaySheet> {
         // Amount Field
         const Text(
           'Payment Amount',
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: textBlack),
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: textBlack,
+          ),
         ),
         const SizedBox(height: 6),
         TextField(
@@ -672,10 +703,18 @@ class _ScanAndPaySheetState extends ConsumerState<ScanAndPaySheet> {
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           readOnly: isFixed,
           onChanged: (_) => setState(() {}),
-          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: textBlack),
+          style: const TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w900,
+            color: textBlack,
+          ),
           decoration: InputDecoration(
             prefixText: '₹ ',
-            prefixStyle: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: textBlack),
+            prefixStyle: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              color: textBlack,
+            ),
             suffixIcon: isFixed
                 ? const Tooltip(
                     message: 'Amount is bound to order and cannot be edited',
@@ -684,7 +723,10 @@ class _ScanAndPaySheetState extends ConsumerState<ScanAndPaySheet> {
                 : null,
             filled: true,
             fillColor: isFixed ? const Color(0xFFF1F5F9) : mainBg,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           ),
         ),
@@ -697,7 +739,10 @@ class _ScanAndPaySheetState extends ConsumerState<ScanAndPaySheet> {
             hintText: 'Add an optional note (e.g. Delivery tip)',
             filled: true,
             fillColor: mainBg,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 10,
+            ),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
           ),
         ),
@@ -707,7 +752,9 @@ class _ScanAndPaySheetState extends ConsumerState<ScanAndPaySheet> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            color: isInsufficient ? const Color(0xFFFEF2F2) : const Color(0xFFF8FAFC),
+            color: isInsufficient
+                ? const Color(0xFFFEF2F2)
+                : const Color(0xFFF8FAFC),
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
               color: isInsufficient ? const Color(0xFFFCA5A5) : borderCard,
@@ -719,7 +766,9 @@ class _ScanAndPaySheetState extends ConsumerState<ScanAndPaySheet> {
               Row(
                 children: [
                   Icon(
-                    isInsufficient ? Icons.error_outline : Icons.account_balance_wallet_rounded,
+                    isInsufficient
+                        ? Icons.error_outline
+                        : Icons.account_balance_wallet_rounded,
                     size: 16,
                     color: isInsufficient ? Colors.red : textGray,
                   ),
@@ -742,7 +791,11 @@ class _ScanAndPaySheetState extends ConsumerState<ScanAndPaySheet> {
                   },
                   child: const Text(
                     '+ Add Money',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: brandGreen),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: brandGreen,
+                    ),
                   ),
                 ),
             ],
@@ -753,7 +806,8 @@ class _ScanAndPaySheetState extends ConsumerState<ScanAndPaySheet> {
         InfurnusButton(
           text: _isSubmittingPayment ? 'Processing...' : 'Pay via Wallet',
           isLoading: _isSubmittingPayment,
-          onPressed: (enteredAmount > 0 && !isInsufficient && !_isSubmittingPayment)
+          onPressed:
+              (enteredAmount > 0 && !isInsufficient && !_isSubmittingPayment)
               ? _submitPayment
               : null,
           isFullWidth: true,
@@ -769,7 +823,11 @@ class _ScanAndPaySheetState extends ConsumerState<ScanAndPaySheet> {
         const SizedBox(height: 14),
         const Text(
           'Payment Successful!',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textBlack),
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: textBlack,
+          ),
         ),
         const SizedBox(height: 6),
         Text(
@@ -786,7 +844,11 @@ class _ScanAndPaySheetState extends ConsumerState<ScanAndPaySheet> {
           ),
           child: Text(
             'Ref: $_paymentSuccessRef',
-            style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: textGray),
+            style: const TextStyle(
+              fontSize: 11,
+              fontFamily: 'monospace',
+              color: textGray,
+            ),
           ),
         ),
         const SizedBox(height: 24),

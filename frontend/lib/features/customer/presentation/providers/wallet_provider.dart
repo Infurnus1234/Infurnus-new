@@ -18,6 +18,7 @@ class WalletState {
   final String? errorMessage;
   final bool isOffline;
   final bool isUnauthenticated;
+
   /// Real transaction reference returned by the server after a successful pay().
   final String? lastPaymentRef;
 
@@ -64,7 +65,9 @@ class WalletState {
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       isOffline: isOffline ?? this.isOffline,
       isUnauthenticated: isUnauthenticated ?? this.isUnauthenticated,
-      lastPaymentRef: clearLastPaymentRef ? null : (lastPaymentRef ?? this.lastPaymentRef),
+      lastPaymentRef: clearLastPaymentRef
+          ? null
+          : (lastPaymentRef ?? this.lastPaymentRef),
     );
   }
 }
@@ -163,7 +166,9 @@ class WalletNotifier extends StateNotifier<WalletState> {
       return false;
     }
     if (amount > 100000.0) {
-      state = state.copyWith(errorMessage: 'Maximum top-up amount is ₹1,00,000.00');
+      state = state.copyWith(
+        errorMessage: 'Maximum top-up amount is ₹1,00,000.00',
+      );
       return false;
     }
 
@@ -262,7 +267,11 @@ class WalletNotifier extends StateNotifier<WalletState> {
       return null;
     }
 
-    state = state.copyWith(isPaymentProcessing: true, clearError: true, clearLastPaymentRef: true);
+    state = state.copyWith(
+      isPaymentProcessing: true,
+      clearError: true,
+      clearLastPaymentRef: true,
+    );
 
     try {
       final idempotencyKey =
@@ -279,11 +288,12 @@ class WalletNotifier extends StateNotifier<WalletState> {
 
       // Extract the real transaction reference from the server response.
       // Backend may return it as transactionId, reference, txnId, or id.
-      final serverRef = responseData['transactionId']?.toString()
-          ?? responseData['reference']?.toString()
-          ?? responseData['txnId']?.toString()
-          ?? responseData['id']?.toString()
-          ?? idempotencyKey;
+      final serverRef =
+          responseData['transactionId']?.toString() ??
+          responseData['reference']?.toString() ??
+          responseData['txnId']?.toString() ??
+          responseData['id']?.toString() ??
+          idempotencyKey;
 
       await fetchWallet(showLoading: false);
       await fetchHistory(showLoading: false);
@@ -321,8 +331,9 @@ class WalletNotifier extends StateNotifier<WalletState> {
   }
 }
 
-final walletProvider =
-    StateNotifierProvider<WalletNotifier, WalletState>((ref) {
+final walletProvider = StateNotifierProvider<WalletNotifier, WalletState>((
+  ref,
+) {
   final repository = ref.read(walletRepositoryProvider);
   return WalletNotifier(repository);
 });

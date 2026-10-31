@@ -32,8 +32,8 @@ class WalletModel {
       activityCount: json['activityCount'] is num
           ? (json['activityCount'] as num).toInt()
           : (json['activity_count'] is num
-              ? (json['activity_count'] as num).toInt()
-              : 0),
+                ? (json['activity_count'] as num).toInt()
+                : 0),
     );
   }
 
@@ -99,39 +99,50 @@ class WalletTransactionModel {
   factory WalletTransactionModel.fromJson(Map<String, dynamic> json) {
     final amountPaise = json['amountPaise'] is num
         ? (json['amountPaise'] as num).toInt()
-        : ((json['amount_paise'] is num ? (json['amount_paise'] as num).toInt() : 0));
+        : ((json['amount_paise'] is num
+              ? (json['amount_paise'] as num).toInt()
+              : 0));
     final amount = json['amount'] is num
         ? (json['amount'] as num).toDouble()
         : (amountPaise / 100.0);
 
     final balanceAfterPaise = json['balanceAfterPaise'] is num
         ? (json['balanceAfterPaise'] as num).toInt()
-        : ((json['balance_after_paise'] is num ? (json['balance_after_paise'] as num).toInt() : 0));
+        : ((json['balance_after_paise'] is num
+              ? (json['balance_after_paise'] as num).toInt()
+              : 0));
     final balanceAfter = json['balanceAfter'] is num
         ? (json['balanceAfter'] as num).toDouble()
         : (balanceAfterPaise / 100.0);
 
-    final rawDate = json['createdAt']?.toString() ?? json['created_at']?.toString();
+    final rawDate =
+        json['createdAt']?.toString() ?? json['created_at']?.toString();
     final parsedDate = rawDate != null
         ? (DateTime.tryParse(rawDate)?.toLocal() ?? DateTime.now())
         : DateTime.now();
 
     return WalletTransactionModel(
       id: json['id']?.toString() ?? '',
-      type: (json['type']?.toString().toLowerCase() == 'credit') ? 'credit' : 'debit',
+      type: (json['type']?.toString().toLowerCase() == 'credit')
+          ? 'credit'
+          : 'debit',
       amount: amount,
       amountPaise: amountPaise,
       balanceAfter: balanceAfter,
       balanceAfterPaise: balanceAfterPaise,
       status: json['status']?.toString().toUpperCase() ?? 'PENDING',
-      paymentMethod: json['paymentMethod']?.toString() ??
+      paymentMethod:
+          json['paymentMethod']?.toString() ??
           json['payment_method']?.toString() ??
           'UPI',
-      description: json['description']?.toString() ??
+      description:
+          json['description']?.toString() ??
           (json['type'] == 'credit' ? 'Wallet Top-Up' : 'Payment Debit'),
       reference: json['reference']?.toString() ?? '',
       createdAt: parsedDate,
-      metadata: json['metadata'] is Map ? Map<String, dynamic>.from(json['metadata'] as Map) : null,
+      metadata: json['metadata'] is Map
+          ? Map<String, dynamic>.from(json['metadata'] as Map)
+          : null,
     );
   }
 }
@@ -157,7 +168,8 @@ class RecipientDetailsModel {
     return RecipientDetailsModel(
       targetId: json['targetId']?.toString() ?? '',
       targetType: json['targetType']?.toString() ?? 'upi',
-      displayName: json['displayName']?.toString() ?? json['targetId']?.toString() ?? '',
+      displayName:
+          json['displayName']?.toString() ?? json['targetId']?.toString() ?? '',
       isVerified: json['isVerified'] == true,
       orderAmount: (json['orderAmount'] as num?)?.toDouble(),
       orderAmountPaise: (json['orderAmountPaise'] as num?)?.toInt(),

@@ -117,14 +117,19 @@ class QrParser {
       final pa = params['pa']?.trim();
 
       if (pa == null || pa.isEmpty) {
-        return QrPaymentPayload.invalid(uriString, 'UPI QR missing payee address (pa)');
+        return QrPaymentPayload.invalid(
+          uriString,
+          'UPI QR missing payee address (pa)',
+        );
       }
 
       if (!_upiIdRegex.hasMatch(pa)) {
         return QrPaymentPayload.invalid(uriString, 'Invalid UPI ID in QR: $pa');
       }
 
-      final pn = params['pn'] != null ? Uri.decodeComponent(params['pn']!) : pa.split('@')[0].toUpperCase();
+      final pn = params['pn'] != null
+          ? Uri.decodeComponent(params['pn']!)
+          : pa.split('@')[0].toUpperCase();
       final amStr = params['am']?.trim();
       double? amount;
       int? amountPaise;
@@ -163,9 +168,13 @@ class QrParser {
       final params = uri.queryParameters;
 
       if (host == 'logistics' || host == 'order') {
-        final orderId = params['orderId'] ?? params['id'] ?? uri.pathSegments.firstOrNull;
+        final orderId =
+            params['orderId'] ?? params['id'] ?? uri.pathSegments.firstOrNull;
         if (orderId == null || orderId.isEmpty) {
-          return QrPaymentPayload.invalid(uriString, 'Logistics QR missing order reference');
+          return QrPaymentPayload.invalid(
+            uriString,
+            'Logistics QR missing order reference',
+          );
         }
         final amStr = params['amount'];
         final amount = amStr != null ? double.tryParse(amStr) : null;
@@ -186,9 +195,13 @@ class QrParser {
       }
 
       if (host == 'driver') {
-        final driverId = params['id'] ?? params['driverId'] ?? uri.pathSegments.firstOrNull;
+        final driverId =
+            params['id'] ?? params['driverId'] ?? uri.pathSegments.firstOrNull;
         if (driverId == null || driverId.isEmpty) {
-          return QrPaymentPayload.invalid(uriString, 'Driver QR missing driver ID');
+          return QrPaymentPayload.invalid(
+            uriString,
+            'Driver QR missing driver ID',
+          );
         }
         final amStr = params['amount'];
         final amount = amStr != null ? double.tryParse(amStr) : null;
@@ -207,9 +220,15 @@ class QrParser {
       }
 
       if (host == 'merchant') {
-        final code = params['code'] ?? params['merchantCode'] ?? uri.pathSegments.firstOrNull;
+        final code =
+            params['code'] ??
+            params['merchantCode'] ??
+            uri.pathSegments.firstOrNull;
         if (code == null || code.isEmpty) {
-          return QrPaymentPayload.invalid(uriString, 'Merchant QR missing merchant code');
+          return QrPaymentPayload.invalid(
+            uriString,
+            'Merchant QR missing merchant code',
+          );
         }
         return QrPaymentPayload(
           type: QrPayloadType.infurnusMerchant,
@@ -221,7 +240,10 @@ class QrParser {
         );
       }
 
-      return QrPaymentPayload.invalid(uriString, 'Unsupported INFURNUS QR action: $host');
+      return QrPaymentPayload.invalid(
+        uriString,
+        'Unsupported INFURNUS QR action: $host',
+      );
     } catch (e) {
       return QrPaymentPayload.invalid(uriString, 'Malformed INFURNUS QR code');
     }
@@ -273,7 +295,10 @@ class QrParser {
       if (type == 'infurnus_merchant') {
         final merchantCode = data['merchantCode']?.toString();
         if (merchantCode == null || merchantCode.isEmpty) {
-          return QrPaymentPayload.invalid(jsonStr, 'Missing merchantCode in JSON');
+          return QrPaymentPayload.invalid(
+            jsonStr,
+            'Missing merchantCode in JSON',
+          );
         }
         return QrPaymentPayload(
           type: QrPayloadType.infurnusMerchant,
@@ -285,7 +310,10 @@ class QrParser {
         );
       }
 
-      return QrPaymentPayload.invalid(jsonStr, 'Unsupported JSON payload type: $type');
+      return QrPaymentPayload.invalid(
+        jsonStr,
+        'Unsupported JSON payload type: $type',
+      );
     } catch (_) {
       return QrPaymentPayload.invalid(jsonStr, 'Invalid JSON QR content');
     }
@@ -297,7 +325,9 @@ class QrParser {
       final category = parts[1].toUpperCase();
       final id = parts[2];
       if (category == 'DRIVER') {
-        final double? amt = parts.length >= 4 ? double.tryParse(parts[3]) : null;
+        final double? amt = parts.length >= 4
+            ? double.tryParse(parts[3])
+            : null;
         return QrPaymentPayload(
           type: QrPayloadType.infurnusDriver,
           isValid: true,

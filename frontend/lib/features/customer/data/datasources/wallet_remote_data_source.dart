@@ -134,10 +134,7 @@ class WalletRemoteDataSourceImpl implements WalletRemoteDataSource {
   }) async {
     final response = await _dio.post(
       '/wallet/resolve-recipient',
-      data: {
-        'targetType': targetType,
-        'targetId': targetId,
-      },
+      data: {'targetType': targetType, 'targetId': targetId},
     );
     final data = response.data['data'] as Map<String, dynamic>;
     return RecipientDetailsModel.fromJson(data);
