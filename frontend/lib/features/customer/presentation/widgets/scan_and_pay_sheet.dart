@@ -653,10 +653,10 @@ class _ScanAndPaySheetState extends ConsumerState<ScanAndPaySheet> {
           ),
           child: Row(
             children: [
-              CircleAvatar(
+              const CircleAvatar(
                 backgroundColor: darkGreen,
                 radius: 22,
-                child: const Icon(
+                child: Icon(
                   Icons.verified_user_rounded,
                   color: Colors.white,
                   size: 24,

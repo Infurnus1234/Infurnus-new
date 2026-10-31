@@ -61,32 +61,34 @@ class CashfreePaymentGateway implements PaymentGateway {
       paymentSessionId: paymentSessionId,
     );
 
-    switch (res.status) {
-      case CashfreeCheckoutStatus.success:
-        return PaymentGatewayCheckoutResult(
-          status: PaymentGatewayStatus.success,
-          orderId: orderId,
-          referenceId: res.referenceId,
-        );
-      case CashfreeCheckoutStatus.pending:
-        return PaymentGatewayCheckoutResult(
-          status: PaymentGatewayStatus.pending,
-          orderId: orderId,
-          referenceId: res.referenceId,
-        );
-      case CashfreeCheckoutStatus.cancelled:
-        return PaymentGatewayCheckoutResult(
-          status: PaymentGatewayStatus.cancelled,
-          orderId: orderId,
-          errorMessage: 'Checkout cancelled by user',
-        );
-      case CashfreeCheckoutStatus.failed:
-        return PaymentGatewayCheckoutResult(
-          status: PaymentGatewayStatus.failed,
-          orderId: orderId,
-          errorMessage: res.errorMessage ?? 'Payment failed at gateway',
-        );
+    if (res.status == CashfreeCheckoutStatus.success) {
+      return PaymentGatewayCheckoutResult(
+        status: PaymentGatewayStatus.success,
+        orderId: orderId,
+        referenceId: res.referenceId,
+      );
     }
+    if (res.status == CashfreeCheckoutStatus.cancelled) {
+      return PaymentGatewayCheckoutResult(
+        status: PaymentGatewayStatus.cancelled,
+        orderId: orderId,
+        errorMessage: 'Checkout cancelled by user',
+      );
+    }
+    if (res.status == CashfreeCheckoutStatus.failed) {
+      return PaymentGatewayCheckoutResult(
+        status: PaymentGatewayStatus.failed,
+        orderId: orderId,
+        errorMessage: res.errorMessage ?? 'Payment failed at gateway',
+      );
+    }
+    // SDK mein 'pending' nahi hai, baaki sab pending maana jayega.
+    // Wallet credit hamesha backend verification ke baad hi hota hai.
+    return PaymentGatewayCheckoutResult(
+      status: PaymentGatewayStatus.pending,
+      orderId: orderId,
+      referenceId: res.referenceId,
+    );
   }
 }
 

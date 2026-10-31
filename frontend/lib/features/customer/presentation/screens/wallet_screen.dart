@@ -773,7 +773,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                                 Navigator.pop(ctx);
                               }
 
-                              if (mounted) {
+                              if (context.mounted) {
                                 if (success) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
