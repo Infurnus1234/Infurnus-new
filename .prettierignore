@@ -5,3 +5,12 @@ coverage
 frontend
 
 frontend
+# Flutter generated files and build artifacts
+Infurnus-driver/
+Infurnus-driver/.artifacts/
+Infurnus-driver/.dart_tool/
+Infurnus-driver/**/.cxx/
+Infurnus-driver/build/
+Infurnus-driver/.flutter-plugins
+Infurnus-driver/.flutter-plugins-dependencies
+Infurnus-driver/.packages
