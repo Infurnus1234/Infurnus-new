@@ -51,8 +51,8 @@ describe('PostgresWalletRepository', () => {
 
     const history = await repo.getHistory(testUserId);
     expect(history.totalCount).toBe(1);
-    expect(history.transactions[0].type).toBe('credit');
-    expect(history.transactions[0].amount).toBe(500.0);
+    expect(history.transactions[0]!.type).toBe('credit');
+    expect(history.transactions[0]!.amount).toBe(500.0);
   });
 
   it('prevents duplicate top-up credits on identical idempotency key replay', async () => {
@@ -130,8 +130,8 @@ describe('PostgresWalletRepository', () => {
 
     const history = await repo.getHistory(testUserId, { type: 'debit' });
     expect(history.totalCount).toBe(1);
-    expect(history.transactions[0].type).toBe('debit');
-    expect(history.transactions[0].amount).toBe(350.0);
+    expect(history.transactions[0]!.type).toBe('debit');
+    expect(history.transactions[0]!.amount).toBe(350.0);
   });
 
   it('resolves valid and invalid recipient identifiers properly', async () => {

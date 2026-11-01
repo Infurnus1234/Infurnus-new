@@ -1,3 +1,4 @@
+import { rideEvents } from '../../rides/events/ride.events.js';
 import type { NextFunction, Request, Response } from 'express';
 import type { PaymentRepository } from '../repositories/payment.repository.js';
 import type { RideRepository } from '../../rides/repositories/ride.repository.js';
@@ -63,54 +64,126 @@ export class PaymentController {
           return;
         }
 
-        // 3. Duplicate/conflicting payment protection
+        // 3. Duplicate/conflicting payment protection & fare derivation
         const existingPayments = await this.paymentRepository.findByRideId(input.rideId);
-        const capturedPayment = existingPayments.find((p) => p.status === 'CAPTURED');
-        if (capturedPayment) {
-          res.status(409).json({
-            success: false,
-            message: 'Payment has already been captured for this ride',
-          });
-          return;
-        }
 
-        const activePayment = existingPayments.find(
-          (p) => p.status === 'INITIATED' || p.status === 'AUTHORIZED',
-        );
-        if (activePayment) {
-          if (input.idempotencyKey && activePayment.idempotencyKey === input.idempotencyKey) {
-            res.status(200).json({
-              success: true,
-              data: activePayment,
-              message: 'Payment already initiated',
+        if (ride.sector === 'logistics') {
+          // Logistics upfront (40%) and post-delivery (60%) payment flow
+          const totalFare =
+            Math.round(Number(ride.finalFare ?? ride.fareEstimate ?? 0) * 100) / 100;
+          const upfrontAmount = Math.round(totalFare * 0.4 * 100) / 100;
+          const remainingAmount = Math.round((totalFare - upfrontAmount) * 100) / 100;
+
+          if (ride.status !== 'completed') {
+            // Upfront payment phase (40%)
+            const capturedUpfront = existingPayments.find((p) => p.status === 'CAPTURED');
+            if (capturedUpfront) {
+              // Idempotency: return existing captured payment on re-attempt
+              res.status(200).json({
+                success: true,
+                data: capturedUpfront,
+                message: 'Upfront payment already verified',
+              });
+              return;
+            }
+
+            const activePayment = existingPayments.find(
+              (p) => p.status === 'INITIATED' || p.status === 'AUTHORIZED',
+            );
+            if (activePayment) {
+              if (input.idempotencyKey && activePayment.idempotencyKey === input.idempotencyKey) {
+                res.status(200).json({
+                  success: true,
+                  data: activePayment,
+                  message: 'Payment already initiated',
+                });
+                return;
+              }
+              res.status(409).json({
+                success: false,
+                message: 'An active payment already exists for this ride',
+              });
+              return;
+            }
+
+            amountToCharge = upfrontAmount;
+          } else {
+            // Post-delivery remaining phase (60%)
+            const capturedPayments = existingPayments.filter((p) => p.status === 'CAPTURED');
+            if (capturedPayments.length >= 2) {
+              res.status(409).json({
+                success: false,
+                message: 'All payments have already been captured for this logistics booking',
+              });
+              return;
+            }
+
+            const activePayment = existingPayments.find(
+              (p) => p.status === 'INITIATED' || p.status === 'AUTHORIZED',
+            );
+            if (activePayment) {
+              if (input.idempotencyKey && activePayment.idempotencyKey === input.idempotencyKey) {
+                res.status(200).json({
+                  success: true,
+                  data: activePayment,
+                  message: 'Payment already initiated',
+                });
+                return;
+              }
+              res.status(409).json({
+                success: false,
+                message: 'An active payment already exists for this ride',
+              });
+              return;
+            }
+
+            amountToCharge = remainingAmount;
+          }
+        } else {
+          // Standard flow for Passenger, Service, Premium, Rental
+          const capturedPayment = existingPayments.find((p) => p.status === 'CAPTURED');
+          if (capturedPayment) {
+            res.status(409).json({
+              success: false,
+              message: 'Payment has already been captured for this ride',
             });
             return;
           }
-          res.status(409).json({
-            success: false,
-            message: 'An active payment already exists for this ride',
-          });
-          return;
-        }
 
-        // 4. Server-side authoritative fare derivation (NEVER trust client amount)
-        if (ride.sector === 'premium') {
-          // For Premium rides, reconcile final fare including actual GPS distance-based fuel cost
-          const bookedHours = Math.max(
-            1,
-            Number(ride.rentalDetails?.rentalHours ?? ride.rentalDetails?.hours ?? 1),
+          const activePayment = existingPayments.find(
+            (p) => p.status === 'INITIATED' || p.status === 'AUTHORIZED',
           );
-          const hourlyRate = 1000;
-          const hourlyBase = bookedHours * hourlyRate;
-          const actualFuelCost = Number(ride.actualFuelCost ?? 0);
-          const subtotal = hourlyBase + actualFuelCost;
-          const taxAmount = Math.round(subtotal * 0.05 * 100) / 100;
-          const reconciledFare = Math.round((subtotal + taxAmount) * 100) / 100;
+          if (activePayment) {
+            if (input.idempotencyKey && activePayment.idempotencyKey === input.idempotencyKey) {
+              res.status(200).json({
+                success: true,
+                data: activePayment,
+                message: 'Payment already initiated',
+              });
+              return;
+            }
+            res.status(409).json({
+              success: false,
+              message: 'An active payment already exists for this ride',
+            });
+            return;
+          }
 
-          amountToCharge = Number(ride.finalFare ?? reconciledFare);
-        } else {
-          // For Passenger, Logistics, Service
-          amountToCharge = Number(ride.finalFare ?? ride.fareEstimate);
+          if (ride.sector === 'premium') {
+            const bookedHours = Math.max(
+              1,
+              Number(ride.rentalDetails?.rentalHours ?? ride.rentalDetails?.hours ?? 1),
+            );
+            const hourlyRate = 1000;
+            const hourlyBase = bookedHours * hourlyRate;
+            const actualFuelCost = Number(ride.actualFuelCost ?? 0);
+            const subtotal = hourlyBase + actualFuelCost;
+            const taxAmount = Math.round(subtotal * 0.05 * 100) / 100;
+            const reconciledFare = Math.round((subtotal + taxAmount) * 100) / 100;
+            amountToCharge = Number(ride.finalFare ?? reconciledFare);
+          } else {
+            amountToCharge = Number(ride.finalFare ?? ride.fareEstimate);
+          }
         }
 
         if (isNaN(amountToCharge) || amountToCharge <= 0) {
@@ -371,6 +444,17 @@ export class PaymentController {
         return;
       }
 
+      if (payment.rideId && this.rideRepository) {
+        try {
+          const updatedRide = await this.rideRepository.findById(payment.rideId);
+          if (updatedRide) {
+            rideEvents.emit('ride:lifecycle_updated', updatedRide);
+          }
+        } catch {
+          // Non-blocking event emission
+        }
+      }
+
       res.json({
         success: true,
         data: captured,
@@ -550,6 +634,17 @@ export class PaymentController {
           providerPaymentId: cfPaymentId,
         });
 
+        if (payment.rideId && this.rideRepository) {
+          try {
+            const updatedRide = await this.rideRepository.findById(payment.rideId);
+            if (updatedRide) {
+              rideEvents.emit('ride:lifecycle_updated', updatedRide);
+            }
+          } catch {
+            // Non-blocking event emission
+          }
+        }
+
         res.status(200).json({
           success: true,
           data: captured,
@@ -573,6 +668,17 @@ export class PaymentController {
             payment.id,
             event.data?.payment?.payment_message || 'Payment failed at gateway',
           );
+        }
+
+        if (payment.rideId && this.rideRepository) {
+          try {
+            const updatedRide = await this.rideRepository.findById(payment.rideId);
+            if (updatedRide) {
+              rideEvents.emit('ride:lifecycle_updated', updatedRide);
+            }
+          } catch {
+            // Non-blocking event emission
+          }
         }
 
         res.status(200).json({

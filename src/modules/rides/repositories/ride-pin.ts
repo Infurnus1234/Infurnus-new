@@ -29,7 +29,7 @@ export function matchesPinVerifier(rideId: string, supplied: string, verifier: s
 }
 
 export type PinAttemptResult =
-  'verified' | 'invalid' | 'locked' | 'not_found' | 'forbidden' | 'invalid_state';
+  'verified' | 'invalid' | 'locked' | 'not_found' | 'forbidden' | 'invalid_state' | 'upfront_payment_required';
 export const PIN_MAX_ATTEMPTS = 5;
 export const PIN_LOCK_MS = 10 * 60 * 1000;
 

@@ -2536,6 +2536,32 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
             ),
           ),
         ],
+        // ── Logistics 40% Upfront Payment Card ─────────────────────────────────
+        if (ride != null && ride.isLogistics && !ride.upfrontPaid) ...[
+          const SizedBox(height: 12),
+          _LogisticsUpfrontCard(ride: ride),
+        ] else if (ride != null && ride.isLogistics && ride.upfrontPaid) ...[
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0D2B0D),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: brandGreen.withValues(alpha: 0.5)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.check_circle_rounded, color: brandGreen, size: 18),
+                SizedBox(width: 8),
+                Text(
+                  '40% Upfront Payment Confirmed',
+                  style: TextStyle(color: brandGreen, fontWeight: FontWeight.w600, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 16),
 
         Row(
@@ -3329,6 +3355,189 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
       child: Text(
         message,
         style: const TextStyle(color: textWhite, fontSize: 13),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Logistics 40% Upfront Payment Card
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _LogisticsUpfrontCard extends ConsumerStatefulWidget {
+  final model.RideModel ride;
+  const _LogisticsUpfrontCard({required this.ride});
+
+  @override
+  ConsumerState<_LogisticsUpfrontCard> createState() =>
+      _LogisticsUpfrontCardState();
+}
+
+class _LogisticsUpfrontCardState extends ConsumerState<_LogisticsUpfrontCard> {
+  bool _processing = false;
+
+  Color _statusColor(String? s) {
+    switch (s) {
+      case 'PAID_VERIFIED':
+        return brandGreen;
+      case 'FAILED':
+        return serviceRed;
+      default:
+        return goldAccent;
+    }
+  }
+
+  String _statusLabel(String? s) {
+    switch (s) {
+      case 'PAID_VERIFIED':
+        return 'Paid ✓';
+      case 'FAILED':
+        return 'Failed';
+      case 'PENDING':
+        return 'Pending';
+      default:
+        return 'Pending';
+    }
+  }
+
+  Future<void> _pay() async {
+    if (_processing) return;
+    setState(() => _processing = true);
+    try {
+      final ok = await ref
+          .read(rideProvider.notifier)
+          .initiateLogisticsUpfrontPayment(paymentMethod: 'cashfree');
+      if (!ok && mounted) {
+        final err = ref.read(rideProvider).errorMessage ?? 'Payment failed';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(err),
+            backgroundColor: serviceRed,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _processing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ride = widget.ride;
+    final totalFare = ride.fareEstimate ?? 0.0;
+    final upfrontAmt = ride.upfrontAmount;
+    final status = ride.upfrontPaymentStatus;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cardElevated,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: brandGreen.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.local_shipping_rounded, color: brandGreen, size: 16),
+              SizedBox(width: 6),
+              Text(
+                'Logistics – 40% Upfront Payment Required',
+                style: TextStyle(
+                  color: textWhite,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Total Fare', style: TextStyle(color: textGray, fontSize: 12)),
+              Text(
+                '₹${totalFare.toStringAsFixed(2)}',
+                style: const TextStyle(color: textWhite, fontSize: 12),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Pay Now (40%)', style: TextStyle(color: textGray, fontSize: 12)),
+              Text(
+                '₹${upfrontAmt.toStringAsFixed(2)}',
+                style: const TextStyle(
+                  color: brandGreen,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Status', style: TextStyle(color: textGray, fontSize: 12)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: _statusColor(status).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  _statusLabel(status),
+                  style: TextStyle(
+                    color: _statusColor(status),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: _processing
+                ? const Center(
+                    child: SizedBox(
+                      height: 22,
+                      width: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: brandGreen,
+                      ),
+                    ),
+                  )
+                : InfurnusButton(
+                    text: status == 'FAILED'
+                        ? 'Retry Payment (₹${upfrontAmt.toStringAsFixed(2)})'
+                        : 'Pay ₹${upfrontAmt.toStringAsFixed(2)} Now',
+                    onPressed: _pay,
+                  ),
+          ),
+          if (status == 'FAILED') ...[
+            const SizedBox(height: 6),
+            const Text(
+              'Previous payment failed. Please retry.',
+              style: TextStyle(color: serviceRed, fontSize: 11),
+              textAlign: TextAlign.center,
+            ),
+          ],
+          if (status == 'PENDING') ...[
+            const SizedBox(height: 6),
+            const Text(
+              'Driver can start only after this payment is verified.',
+              style: TextStyle(color: textGray, fontSize: 11),
+            ),
+          ],
+        ],
       ),
     );
   }

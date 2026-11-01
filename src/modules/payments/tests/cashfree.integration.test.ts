@@ -467,7 +467,7 @@ describe('INFURNUS Payments - Cashfree Provider Integration', () => {
       );
     });
 
-    it('Logistics Sector: client sending amount=1 is ignored; authoritative fareEstimate=850 is charged', async () => {
+    it('Logistics Sector: client sending amount=1 is ignored; authoritative 40% upfront amount=340 is charged', async () => {
       vi.mocked(mockRideRepo.findById).mockResolvedValueOnce(
         createMockRide({ sector: 'logistics', fareEstimate: 850.0, finalFare: null }),
       );
@@ -479,9 +479,9 @@ describe('INFURNUS Payments - Cashfree Provider Integration', () => {
 
       await controller.initiate(req, res, vi.fn());
 
-      expect(mockRepo.initiate).toHaveBeenCalledWith(expect.objectContaining({ amount: 850.0 }));
+      expect(mockRepo.initiate).toHaveBeenCalledWith(expect.objectContaining({ amount: 340.0 }));
       expect(mockProvider.createOrder).toHaveBeenCalledWith(
-        expect.objectContaining({ amount: 850.0 }),
+        expect.objectContaining({ amount: 340.0 }),
       );
     });
 

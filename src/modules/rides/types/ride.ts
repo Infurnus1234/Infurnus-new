@@ -48,6 +48,17 @@ export interface RideBillingItemization {
   finalFare: number;
 }
 
+export type LogisticsPaymentStatus = 'NOT_REQUIRED' | 'PENDING' | 'PAID_VERIFIED' | 'FAILED';
+
+export interface LogisticsPaymentDetails {
+  totalFare: number;
+  upfrontAmount: number;
+  remainingAmount: number;
+  status: LogisticsPaymentStatus;
+  paidAt?: string | null;
+  paymentId?: string | null;
+}
+
 export interface Ride {
   id: string;
   customerId: string;
@@ -66,6 +77,8 @@ export interface Ride {
   commissionAmount?: number | null;
   driverEarningAmount?: number | null;
   paymentStatus?: string | null;
+  upfrontPaymentStatus?: LogisticsPaymentStatus | null;
+  logisticsPayment?: LogisticsPaymentDetails | null;
   actualDistanceMeters?: number | null;
   actualFuelCost?: number | null;
   sector?: string | null;

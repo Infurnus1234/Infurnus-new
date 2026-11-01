@@ -504,6 +504,11 @@ export class RideService {
       not_found: ['RIDE_NOT_FOUND', 'Ride not found or PIN not generated', 404],
       forbidden: ['FORBIDDEN', 'Not assigned to this ride', 403],
       invalid_state: ['INVALID_RIDE_STATE', 'Cannot verify PIN in this ride state', 409],
+      upfront_payment_required: [
+        'UPFRONT_PAYMENT_REQUIRED',
+        'Logistics booking requires 40% upfront payment before starting the trip',
+        409,
+      ],
     } as const;
     const [code, message, status] = errors[result];
     throw new AppError(code, message, status);
@@ -531,6 +536,23 @@ export class RideService {
           'Ride pickup PIN must be verified before starting the trip',
           409,
         );
+
+      const existingRide = await this.repository.findById(id);
+      if (!existingRide) throw new AppError('RIDE_NOT_FOUND', 'Ride not found', 404);
+
+      if (existingRide.sector === 'logistics') {
+        const isPaid =
+          existingRide.upfrontPaymentStatus === 'PAID_VERIFIED' ||
+          existingRide.logisticsPayment?.status === 'PAID_VERIFIED';
+        if (!isPaid) {
+          throw new AppError(
+            'UPFRONT_PAYMENT_REQUIRED',
+            'Logistics booking requires 40% upfront payment before starting the trip',
+            409,
+          );
+        }
+      }
+
       await this.verifyRidePin(id, assignedDriverId, pin);
       const ride = await this.repository.findById(id);
       if (!ride) throw new AppError('RIDE_NOT_FOUND', 'Ride not found', 404);

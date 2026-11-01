@@ -101,6 +101,9 @@ class RideModel {
   final VehicleDetails? vehicleDetails;
   final RideStatus status;
   final String? paymentStatus;
+  // Logistics upfront payment fields
+  final String? upfrontPaymentStatus; // NOT_REQUIRED | PENDING | PAID_VERIFIED | FAILED
+  final Map<String, dynamic>? logisticsPayment; // {upfrontAmount, remainingAmount, status, ...}
   final String? cancellationReason;
   final DateTime? cancelledAt;
   final DateTime? completedAt;
@@ -108,6 +111,15 @@ class RideModel {
   final DateTime updatedAt;
 
   double get displayFare => finalFare ?? fareEstimate ?? 0.0;
+
+  bool get isLogistics => sector == 'logistics';
+  bool get upfrontPaid => upfrontPaymentStatus == 'PAID_VERIFIED';
+  double get upfrontAmount {
+    final fromBackend = (logisticsPayment?['upfrontAmount'] as num?)?.toDouble();
+    if (fromBackend != null) return fromBackend;
+    final fare = fareEstimate ?? 0.0;
+    return (fare * 0.4 * 100).roundToDouble() / 100;
+  }
 
   RideModel({
     required this.id,
@@ -121,6 +133,8 @@ class RideModel {
     this.fareEstimate,
     this.finalFare,
     this.paymentStatus,
+    this.upfrontPaymentStatus,
+    this.logisticsPayment,
     this.actualDistanceMeters,
     this.actualFuelCost,
     this.sector,
@@ -163,6 +177,8 @@ class RideModel {
     DriverDetails? driverDetails,
     VehicleDetails? vehicleDetails,
     RideStatus? status,
+    String? upfrontPaymentStatus,
+    Map<String, dynamic>? logisticsPayment,
     String? cancellationReason,
     DateTime? cancelledAt,
     DateTime? completedAt,
@@ -192,6 +208,8 @@ class RideModel {
       driverDetails: driverDetails ?? this.driverDetails,
       vehicleDetails: vehicleDetails ?? this.vehicleDetails,
       status: status ?? this.status,
+      upfrontPaymentStatus: upfrontPaymentStatus ?? this.upfrontPaymentStatus,
+      logisticsPayment: logisticsPayment ?? this.logisticsPayment,
       cancellationReason: cancellationReason ?? this.cancellationReason,
       cancelledAt: cancelledAt ?? this.cancelledAt,
       completedAt: completedAt ?? this.completedAt,
@@ -253,6 +271,10 @@ class RideModel {
           (json['payment'] is Map
               ? (json['payment'] as Map)['status'] as String?
               : null),
+      upfrontPaymentStatus: json['upfrontPaymentStatus'] as String?,
+      logisticsPayment: json['logisticsPayment'] != null
+          ? Map<String, dynamic>.from(json['logisticsPayment'] as Map)
+          : null,
       cancellationReason: json['cancellationReason'] as String?,
       cancelledAt: json['cancelledAt'] != null
           ? DateTime.parse(json['cancelledAt'] as String)
