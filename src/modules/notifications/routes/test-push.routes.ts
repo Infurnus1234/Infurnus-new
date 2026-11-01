@@ -27,11 +27,7 @@ const testPushSchema = z
     userId: z.string().uuid('userId must be a valid UUID'),
     audience: z.enum(['driver', 'customer']).default('customer'),
     title: z.string().min(1).max(120).default('ðŸ”” Infurnus test notification'),
-    body: z
-      .string()
-      .min(1)
-      .max(300)
-      .default('If you hear the custom sound, setup is correct! âœ…'),
+    body: z.string().min(1).max(300).default('If you hear the custom sound, setup is correct! âœ…'),
   })
   .strict();
 
@@ -47,9 +43,7 @@ export function createTestPushRouter(): Router {
 
       // Channel IDs must match what the Flutter apps register.
       const androidChannelId =
-        input.audience === 'driver'
-          ? 'infurnus_driver_channel_v2'
-          : 'infurnus_ride_updates_v2';
+        input.audience === 'driver' ? 'infurnus_driver_channel_v2' : 'infurnus_ride_updates_v2';
 
       const service = new NotificationService();
       const notificationId = await service.send({
@@ -86,4 +80,3 @@ export function createTestPushRouter(): Router {
 
   return router;
 }
-

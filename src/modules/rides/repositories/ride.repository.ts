@@ -337,8 +337,8 @@ function mapRide(row: Record<string, unknown>, forCustomer = false): Ride {
             const upfrontAmount = Math.round(totalFare * 0.4 * 100) / 100;
             const remainingAmount = Math.round((totalFare - upfrontAmount) * 100) / 100;
             const status =
-              (row.upfrontPaymentStatus as import('../types/ride.js').LogisticsPaymentStatus | null) ??
-              'PENDING';
+              (row.upfrontPaymentStatus as
+                import('../types/ride.js').LogisticsPaymentStatus | null) ?? 'PENDING';
             return {
               totalFare,
               upfrontAmount,
