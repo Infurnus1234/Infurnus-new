@@ -336,7 +336,11 @@ async function startServer() {
                     body: 'Open INFURNUS to view the current trip status.',
                     resourceId: ride.id,
                     eventVersion: new Date(ride.updatedAt).getTime(),
-                    data: { rideId: ride.id, eventOccurredAt: nowIso, channelId: 'infurnus_driver_channel_v2' },
+                    data: {
+                      rideId: ride.id,
+                      eventOccurredAt: nowIso,
+                      channelId: 'infurnus_driver_channel_v2',
+                    },
                   })
                   .catch((err) =>
                     console.warn(
