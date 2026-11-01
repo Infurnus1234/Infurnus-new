@@ -112,13 +112,10 @@ import { VehicleService } from './modules/vehicles/services/vehicle.service.js';
 
 import { createDeviceTokenRouter } from './modules/notifications/device-tokens/routes/device-token.routes.js';
 import { createNotificationInboxRouter } from './modules/notifications/routes/notification-inbox.routes.js';
-<<<<<<< HEAD
 import { createTestPushRouter } from './modules/notifications/routes/test-push.routes.js';
-=======
 import { PostgresWalletRepository } from './modules/wallet/repositories/wallet.repository.js';
 import { WalletController } from './modules/wallet/controllers/wallet.controller.js';
 import { createWalletRouter } from './modules/wallet/routes/wallet.routes.js';
->>>>>>> origin/main
 
 export interface AppOptions {
   enableAuthRateLimiting?: boolean;
@@ -594,7 +591,7 @@ export function createApp(
 
   app.use('/notifications/devices', createDeviceTokenRouter());
   app.use('/notifications/inbox', createNotificationInboxRouter());
-  // Admin-only test push — verifies custom sound on real devices.
+  // Admin-only test push â€” verifies custom sound on real devices.
   // Protected by requireAuth + requireRoles('admin','super_admin') inside the router.
   app.use('/notifications/test-push', createTestPushRouter());
 
