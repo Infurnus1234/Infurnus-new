@@ -88,6 +88,7 @@ describe('Logistics 40% Upfront Payment Confirmation Flow', () => {
 
   beforeEach(() => {
     mockPaymentRepo = {
+      findActiveByRideId: vi.fn(),
       initiate: vi.fn().mockImplementation((input) =>
         Promise.resolve({
           id: 'pay-1',
@@ -127,14 +128,13 @@ describe('Logistics 40% Upfront Payment Confirmation Flow', () => {
       isAssignedDriver: vi.fn().mockResolvedValue(false),
       verifyPinAttempt: vi.fn().mockResolvedValue('verified'),
       create: vi.fn(),
-      listForUser: vi.fn(),
       findActiveForDriver: vi.fn(),
       cancel: vi.fn(),
       complete: vi.fn(),
-    };
+    } as unknown as RideRepository;
 
     mockProvider = {
-      name: 'cashfree',
+      providerName: 'cashfree',
       createOrder: vi.fn().mockResolvedValue({
         providerOrderId: 'order_pay-1',
         paymentSessionId: 'sess_123',
@@ -425,6 +425,8 @@ describe('Logistics 40% Upfront Payment Confirmation Flow', () => {
 
       vi.mocked(mockPaymentRepo.findById).mockResolvedValue(payment);
       vi.mocked(mockProvider.getPaymentStatus).mockResolvedValue({
+        providerOrderId: 'order_pay-1',
+        orderCurrency: 'INR',
         orderStatus: 'ACTIVE',
         orderAmount: 340.0,
       });
