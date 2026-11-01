@@ -169,7 +169,9 @@ export function createSocketServer(
                         ride: { ...ride, pin: customerRide.pin },
                       };
                     }
-                  } catch (_) { /* ignore pin-enrichment errors */ }
+                  } catch (_) {
+                    /* ignore pin-enrichment errors */
+                  }
                 }
                 socket.emit(event, customerPayload);
               }

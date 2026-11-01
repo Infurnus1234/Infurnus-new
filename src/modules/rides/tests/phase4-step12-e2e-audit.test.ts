@@ -27,7 +27,7 @@ describe('Phase 4 Step 12: End-to-End Validation & Final Audit Suite', () => {
   const fareCalculator = new FareCalculatorService(defaultPricing);
 
   const mockRide = (overrides: Partial<Ride> = {}): Ride => ({
-    id: 'ride-e2e-001',
+    id: '11111111-1111-4111-8111-111111111111',
     customerId: 'cust-e2e-1',
     assignedDriverId: 'driver-e2e-1',
     assignedVehicleId: 'veh-e2e-1',
@@ -95,28 +95,35 @@ describe('Phase 4 Step 12: End-to-End Validation & Final Audit Suite', () => {
     };
 
     const commissionQuery = vi.fn().mockResolvedValue({ rowCount: 1, rows: [] });
-    const transaction = async <T>(callback: (client: never) => Promise<T>) =>
-      callback({ query: commissionQuery } as never);
+    const mockTransactionRunner = vi.fn(async (callback) =>
+      callback({
+        query: commissionQuery,
+      } as never),
+    );
+
     const rideService = new RideService(
       mockRideRepo as RideRepository,
       mockDriverRepo as DriverRepository,
       undefined,
       undefined,
-      transaction as never,
+      mockTransactionRunner,
     );
     const started = await rideService.transitionRide(
-      'ride-e2e-001',
+      '11111111-1111-4111-8111-111111111111',
       'in_progress',
       'driver-e2e-1',
       '5678',
     );
     expect(started.status).toBe('in_progress');
 
-    const completed = await rideService.completeRide('ride-e2e-001', 'driver-e2e-1');
+    const completed = await rideService.completeRide(
+      '11111111-1111-4111-8111-111111111111',
+      'driver-e2e-1',
+    );
     expect(completed.status).toBe('completed');
     expect(completed.finalFare).toBe(350.0);
     expect(commissionQuery).toHaveBeenCalledWith(expect.stringContaining('UPDATE rides'), [
-      'ride-e2e-001',
+      '11111111-1111-4111-8111-111111111111',
       35,
       315,
     ]);
@@ -245,7 +252,7 @@ describe('Phase 4 Step 12: End-to-End Validation & Final Audit Suite', () => {
 
     const service = new RideService(mockRideRepo as RideRepository);
     await expect(
-      service.transitionRide('ride-e2e-001', 'in_progress', 'driver-e2e-1'),
+      service.transitionRide('11111111-1111-4111-8111-111111111111', 'in_progress', 'driver-e2e-1'),
     ).rejects.toThrow('Ride pickup PIN must be verified before starting the trip');
 
     expect(mockRideRepo.transition).not.toHaveBeenCalled();

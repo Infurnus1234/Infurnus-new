@@ -26,6 +26,7 @@ const tempDir = resolve('tmp/auth-test-runtime');
 await mkdir(tempDir, { recursive: true });
 const childEnv = {
   ...process.env,
+  NODE_ENV: 'test',
   DATABASE_URL: testUrl.toString(),
   DISPATCH_QA_REDIS_URL: process.env.DISPATCH_QA_REDIS_URL ?? 'redis://127.0.0.1:6379',
   // Automated suites must never inherit live delivery credentials from dotenv.

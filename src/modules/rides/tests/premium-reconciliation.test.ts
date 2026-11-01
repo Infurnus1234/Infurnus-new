@@ -176,13 +176,18 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
         releaseBusy: vi.fn().mockResolvedValue(true),
       };
 
+      const mockTransactionRunner = vi.fn(async (callback) =>
+        callback({
+          query: vi.fn().mockResolvedValue({ rows: [], rowCount: 1 }),
+        } as never),
+      );
+
       const service = new RideService(
         mockRideRepo as never,
         mockDriverRepo as never,
         undefined,
         undefined,
-        async (work) =>
-          work({ query: vi.fn().mockResolvedValue({ rows: [], rowCount: 1 }) } as never),
+        mockTransactionRunner,
       );
 
       const completed = await service.completeRide('premium-ride-1', 'driver-1');
@@ -242,13 +247,18 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
         releaseBusy: vi.fn().mockResolvedValue(true),
       };
 
+      const mockTransactionRunner = vi.fn(async (callback) =>
+        callback({
+          query: vi.fn().mockResolvedValue({ rows: [], rowCount: 1 }),
+        } as never),
+      );
+
       const service = new RideService(
         mockRideRepo as never,
         mockDriverRepo as never,
         undefined,
         undefined,
-        async (work) =>
-          work({ query: vi.fn().mockResolvedValue({ rows: [], rowCount: 1 }) } as never),
+        mockTransactionRunner,
       );
 
       const completed = await service.completeRide('passenger-ride-1', 'driver-1');
@@ -312,13 +322,18 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
         releaseBusy: vi.fn().mockResolvedValue(true),
       };
 
+      const mockTransactionRunner = vi.fn(async (callback) =>
+        callback({
+          query: vi.fn().mockResolvedValue({ rows: [], rowCount: 1 }),
+        } as never),
+      );
+
       const service = new RideService(
         mockRideRepo as never,
         mockDriverRepo as never,
         undefined,
         undefined,
-        async (work) =>
-          work({ query: vi.fn().mockResolvedValue({ rows: [], rowCount: 1 }) } as never),
+        mockTransactionRunner,
       );
 
       const completed = await service.completeRide('premium-ride-sec', 'driver-1');
