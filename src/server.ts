@@ -300,6 +300,7 @@ async function startServer() {
                 rideId: ride.id,
                 expiresAt: expiresAt.toISOString(),
                 dispatchNotificationRequestedAt: new Date().toISOString(),
+                channelId: 'infurnus_driver_channel_v2',
               },
             });
           },
@@ -335,7 +336,11 @@ async function startServer() {
                     body: 'Open INFURNUS to view the current trip status.',
                     resourceId: ride.id,
                     eventVersion: new Date(ride.updatedAt).getTime(),
-                    data: { rideId: ride.id, eventOccurredAt: nowIso },
+                    data: {
+                      rideId: ride.id,
+                      eventOccurredAt: nowIso,
+                      channelId: 'infurnus_driver_channel_v2',
+                    },
                   })
                   .catch((err) =>
                     console.warn(
@@ -374,6 +379,7 @@ async function startServer() {
                     rideId: ride.id,
                     eventOccurredAt: nowIso,
                     pinDeliveryRequestedAt: nowIso,
+                    channelId: 'infurnus_ride_updates_v2',
                   },
                 })
                 .catch((err) =>
