@@ -112,6 +112,7 @@ import { VehicleService } from './modules/vehicles/services/vehicle.service.js';
 
 import { createDeviceTokenRouter } from './modules/notifications/device-tokens/routes/device-token.routes.js';
 import { createNotificationInboxRouter } from './modules/notifications/routes/notification-inbox.routes.js';
+import { createTestPushRouter } from './modules/notifications/routes/test-push.routes.js';
 
 export interface AppOptions {
   enableAuthRateLimiting?: boolean;
@@ -579,6 +580,9 @@ export function createApp(
 
   app.use('/notifications/devices', createDeviceTokenRouter());
   app.use('/notifications/inbox', createNotificationInboxRouter());
+  // Admin-only test push — verifies custom sound on real devices.
+  // Protected by requireAuth + requireRoles('admin','super_admin') inside the router.
+  app.use('/notifications/test-push', createTestPushRouter());
 
   // ==========================================================
   // Authentication

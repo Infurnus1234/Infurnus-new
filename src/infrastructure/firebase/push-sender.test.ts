@@ -29,7 +29,7 @@ describe('FCM adapter request contract (mock SDK, no FCM network acceptance)', (
       android: {
         priority: 'high',
         collapseKey: 'notification',
-        notification: { channelId: 'infurnus_driver_channel', tag: 'notification' },
+        notification: { channelId: 'infurnus_driver_channel_v2', tag: 'notification' },
       },
     });
     expect(sendEachForMulticast.mock.calls[0]![0].android.ttl).toBeGreaterThan(0);

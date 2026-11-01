@@ -123,15 +123,49 @@ class NotificationService {
         sound: true,
       );
 
-      const AndroidNotificationChannel rideRequestChannel =
+      // Delete v1 channels so old installs get the new sound on v2 channels.
+      await _notificationsPlugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >()
+          ?.deleteNotificationChannel('infurnus_ride_updates');
+      await _notificationsPlugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >()
+          ?.deleteNotificationChannel('infurnus_ride_requests');
+      await _notificationsPlugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >()
+          ?.deleteNotificationChannel('infurnus_channel');
+      const AndroidNotificationChannel rideUpdatesChannel =
           AndroidNotificationChannel(
-            'infurnus_ride_requests',
-            'Infurnus Ride Requests',
-            description: 'Audible notifications for incoming ride requests',
+            'infurnus_ride_updates_v2',
+            'Infurnus Ride Updates',
+            description: 'Notifications for ride lifecycle updates (accepted, arrived, etc.) — v2',
             importance: Importance.max,
             playSound: true,
+            sound: RawResourceAndroidNotificationSound('infurnus_alert'),
             enableVibration: true,
           );
+
+      const AndroidNotificationChannel rideRequestChannel =
+          AndroidNotificationChannel(
+            'infurnus_ride_requests_v2',
+            'Infurnus Ride Requests',
+            description: 'Audible notifications for incoming ride requests — v2',
+            importance: Importance.max,
+            playSound: true,
+            sound: RawResourceAndroidNotificationSound('infurnus_alert'),
+            enableVibration: true,
+          );
+
+      await _notificationsPlugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >()
+          ?.createNotificationChannel(rideUpdatesChannel);
 
       await _notificationsPlugin
           .resolvePlatformSpecificImplementation<
@@ -269,20 +303,22 @@ class NotificationService {
   }) async {
     const AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
-          'infurnus_channel',
-          'Infurnus Notifications',
+          'infurnus_ride_updates_v2',
+          'Infurnus Ride Updates',
           importance: Importance.max,
           priority: Priority.high,
+          sound: RawResourceAndroidNotificationSound('infurnus_alert'),
           playSound: true,
           enableVibration: true,
         );
 
     const AndroidNotificationDetails rideRequestAndroidDetails =
         AndroidNotificationDetails(
-          'infurnus_ride_requests',
+          'infurnus_ride_requests_v2',
           'Infurnus Ride Requests',
           importance: Importance.max,
           priority: Priority.max,
+          sound: RawResourceAndroidNotificationSound('infurnus_alert'),
           playSound: true,
           enableVibration: true,
         );
@@ -290,6 +326,7 @@ class NotificationService {
     final NotificationDetails platformDetails = NotificationDetails(
       android: isRideRequest ? rideRequestAndroidDetails : androidDetails,
       iOS: const DarwinNotificationDetails(
+        sound: 'infurnus_alert.wav',
         presentSound: true,
         presentAlert: true,
         presentBadge: true,
@@ -312,12 +349,13 @@ class NotificationService {
   }) async {
     const AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
-          'infurnus_ride_request_channel',
-          'Ride Request Alerts',
+          'infurnus_ride_requests_v2',
+          'Infurnus Ride Requests',
           channelDescription:
               'High priority sound notifications for incoming ride offers',
           importance: Importance.max,
           priority: Priority.high,
+          sound: RawResourceAndroidNotificationSound('infurnus_alert'),
           playSound: true,
           enableVibration: true,
         );
@@ -325,6 +363,7 @@ class NotificationService {
     const NotificationDetails platformDetails = NotificationDetails(
       android: androidDetails,
       iOS: DarwinNotificationDetails(
+        sound: 'infurnus_alert.wav',
         presentSound: true,
         presentAlert: true,
         presentBadge: true,

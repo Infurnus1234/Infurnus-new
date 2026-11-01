@@ -16,12 +16,21 @@ export function createFirebasePushSender(
           priority: 'high',
           ...(lifetime ? { ttl: lifetime.ttl } : {}),
           collapseKey: job.notificationId,
-          notification: { tag: job.notificationId, channelId: 'infurnus_driver_channel' },
+          notification: {
+            tag: job.notificationId,
+            channelId: job.data?.androidChannelId ?? 'infurnus_driver_channel_v2',
+            sound: 'infurnus_alert',
+          },
         },
         apns: {
           headers: {
             'apns-collapse-id': job.notificationId,
             ...(lifetime ? { 'apns-expiration': lifetime.apnsExpiration } : {}),
+          },
+          payload: {
+            aps: {
+              sound: 'infurnus_alert.wav',
+            },
           },
         },
       });
