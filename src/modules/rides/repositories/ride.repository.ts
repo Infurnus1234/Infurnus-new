@@ -174,6 +174,29 @@ const detailedRideColumns = (tableAlias = 'r') => `
   ${tableAlias}.commission_amount AS "commissionAmount",
   ${tableAlias}.driver_earning_amount AS "driverEarningAmount",
   (SELECT status FROM payments WHERE payments.ride_id = ${tableAlias}.id ORDER BY created_at DESC LIMIT 1) AS "paymentStatus",
+  CASE
+    WHEN COALESCE(${tableAlias}.sector, ${tableAlias}.route_metadata->>'sector', 'passenger') != 'logistics' THEN 'NOT_REQUIRED'
+    WHEN EXISTS (
+      SELECT 1 FROM payments p
+      WHERE p.ride_id = ${tableAlias}.id AND p.status = 'CAPTURED'
+    ) THEN 'PAID_VERIFIED'
+    WHEN (
+      SELECT status FROM payments p
+      WHERE p.ride_id = ${tableAlias}.id
+      ORDER BY created_at DESC LIMIT 1
+    ) = 'FAILED' THEN 'FAILED'
+    ELSE 'PENDING'
+  END AS "upfrontPaymentStatus",
+  (
+    SELECT p.captured_at FROM payments p
+    WHERE p.ride_id = ${tableAlias}.id AND p.status = 'CAPTURED'
+    ORDER BY p.captured_at ASC LIMIT 1
+  ) AS "upfrontPaidAt",
+  (
+    SELECT p.id FROM payments p
+    WHERE p.ride_id = ${tableAlias}.id AND p.status = 'CAPTURED'
+    ORDER BY p.captured_at ASC LIMIT 1
+  ) AS "upfrontPaymentId",
   ${tableAlias}.route_metadata->>'bookingDistanceMeters' AS "bookingDistanceMeters",
   ${tableAlias}.route_metadata->'bookingFareSnapshot'->>'pricingVersion' AS "bookingPricingVersion",
   ${tableAlias}.actual_distance_meters AS "actualDistanceMeters",
@@ -303,6 +326,31 @@ function mapRide(row: Record<string, unknown>, forCustomer = false): Ride {
     commissionAmount: row.commissionAmount != null ? Number(row.commissionAmount) : null,
     driverEarningAmount: row.driverEarningAmount != null ? Number(row.driverEarningAmount) : null,
     paymentStatus: (row.paymentStatus as string | null) ?? null,
+    upfrontPaymentStatus:
+      (row.upfrontPaymentStatus as import('../types/ride.js').LogisticsPaymentStatus | null) ??
+      (row.sector === 'logistics' ? 'PENDING' : 'NOT_REQUIRED'),
+    logisticsPayment:
+      row.sector === 'logistics'
+        ? (() => {
+            const totalFare =
+              Math.round(Number(row.finalFare ?? row.fareEstimate ?? 0) * 100) / 100;
+            const upfrontAmount = Math.round(totalFare * 0.4 * 100) / 100;
+            const remainingAmount = Math.round((totalFare - upfrontAmount) * 100) / 100;
+            const status =
+              (row.upfrontPaymentStatus as import('../types/ride.js').LogisticsPaymentStatus | null) ??
+              'PENDING';
+            return {
+              totalFare,
+              upfrontAmount,
+              remainingAmount,
+              status,
+              paidAt: row.upfrontPaidAt
+                ? new Date(row.upfrontPaidAt as string).toISOString()
+                : null,
+              paymentId: (row.upfrontPaymentId as string) || null,
+            };
+          })()
+        : null,
     actualDistanceMeters: row.actualDistanceMeters != null ? Number(row.actualDistanceMeters) : 0,
 
     actualFuelCost: row.actualFuelCost != null ? Number(row.actualFuelCost) : null,
@@ -1454,6 +1502,7 @@ export class PostgresRideRepository implements RideRepository {
         await client.query(
           `SELECT assigned_driver_id,status,COALESCE(pin,route_metadata->>'pin') AS pin,
           pin_ciphertext,pin_verifier,pin_verified,COALESCE(route_metadata,'{}'::jsonb) AS metadata,
+          COALESCE(sector,route_metadata->>'sector','passenger') AS sector,
           extract(epoch FROM clock_timestamp())*1000 AS now_ms
           FROM rides WHERE id=$1 FOR UPDATE`,
           [id],
@@ -1464,6 +1513,16 @@ export class PostgresRideRepository implements RideRepository {
       else if (ride.assigned_driver_id !== driverProfileId || !eligible) result = 'forbidden';
       else if (ride.status !== 'driver_arrived' || ride.pin_verified === true)
         result = 'invalid_state';
+      else if (
+        ride.sector === 'logistics' &&
+        !(
+          await client.query(
+            `SELECT 1 FROM payments WHERE ride_id=$1 AND status='CAPTURED' LIMIT 1`,
+            [id],
+          )
+        ).rowCount
+      )
+        result = 'upfront_payment_required';
       else if (!ride.pin && !ride.pin_verifier) result = 'not_found';
       else {
         const correct = ride.pin_verifier

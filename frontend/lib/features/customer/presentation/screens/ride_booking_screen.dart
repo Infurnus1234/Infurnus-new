@@ -14,11 +14,20 @@ import '../../../../shared/widgets/infurnus_button.dart';
 import '../../../../shared/widgets/infurnus_map.dart';
 import '../../../../shared/widgets/infurnus_outlined_button.dart';
 import '../../data/models/fleet_vehicle_model.dart';
+import '../../data/models/ride_model.dart' as model;
 import '../providers/ride_provider.dart';
 import '../widgets/fare_range_details.dart';
 import '../widgets/waiting_timer_widget.dart';
 import '../providers/ride_use_case_providers.dart';
 import '../../domain/utils/passenger_vehicle_filter.dart';
+
+// Top-level color constants (shared between _RideBookingScreenState and sub-widgets)
+const Color _kCardElevated = Color(0xFFFFFFFF);
+const Color _kTextWhite = Color(0xFF111827);
+const Color _kTextGray = Color(0xFF4B5563);
+const Color _kBrandGreen = Color(0xFF16A34A);
+const Color _kServiceRed = Color(0xFFDC2626);
+const Color _kGoldAccent = Color(0xFFCA8A04);
 
 class RideBookingScreen extends ConsumerStatefulWidget {
   const RideBookingScreen({super.key});
@@ -2536,6 +2545,36 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
             ),
           ),
         ],
+        // ── Logistics 40% Upfront Payment Card ─────────────────────────────────
+        if (ride != null && ride.isLogistics && !ride.upfrontPaid) ...[
+          const SizedBox(height: 12),
+          _LogisticsUpfrontCard(ride: ride),
+        ] else if (ride != null && ride.isLogistics && ride.upfrontPaid) ...[
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0D2B0D),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: brandGreen.withValues(alpha: 0.5)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.check_circle_rounded, color: brandGreen, size: 18),
+                SizedBox(width: 8),
+                Text(
+                  '40% Upfront Payment Confirmed',
+                  style: TextStyle(
+                    color: brandGreen,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 16),
 
         Row(
@@ -3329,6 +3368,196 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
       child: Text(
         message,
         style: const TextStyle(color: textWhite, fontSize: 13),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Logistics 40% Upfront Payment Card
+// Uses top-level _k* color constants so it compiles outside _RideBookingScreenState
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _LogisticsUpfrontCard extends ConsumerStatefulWidget {
+  final model.RideModel ride;
+  const _LogisticsUpfrontCard({required this.ride});
+
+  @override
+  ConsumerState<_LogisticsUpfrontCard> createState() =>
+      _LogisticsUpfrontCardState();
+}
+
+class _LogisticsUpfrontCardState extends ConsumerState<_LogisticsUpfrontCard> {
+  bool _processing = false;
+
+  Color _statusColor(String? s) {
+    switch (s) {
+      case 'PAID_VERIFIED':
+        return _kBrandGreen;
+      case 'FAILED':
+        return _kServiceRed;
+      default:
+        return _kGoldAccent;
+    }
+  }
+
+  String _statusLabel(String? s) {
+    switch (s) {
+      case 'PAID_VERIFIED':
+        return 'Paid \u2713';
+      case 'FAILED':
+        return 'Failed';
+      case 'PENDING':
+        return 'Pending';
+      default:
+        return 'Pending';
+    }
+  }
+
+  Future<void> _pay() async {
+    if (_processing) return;
+    setState(() => _processing = true);
+    try {
+      final ok = await ref
+          .read(rideProvider.notifier)
+          .initiateLogisticsUpfrontPayment(paymentMethod: 'cashfree');
+      if (!ok && mounted) {
+        final err = ref.read(rideProvider).errorMessage ?? 'Payment failed';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(err), backgroundColor: _kServiceRed),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _processing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ride = widget.ride;
+    final totalFare = ride.fareEstimate ?? 0.0;
+    final upfrontAmt = ride.upfrontAmount;
+    final status = ride.upfrontPaymentStatus;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _kCardElevated,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _kBrandGreen.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.local_shipping_rounded, color: _kBrandGreen, size: 16),
+              SizedBox(width: 6),
+              Text(
+                'Logistics \u2013 40% Upfront Payment Required',
+                style: TextStyle(
+                  color: _kTextWhite,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Total Fare',
+                style: TextStyle(color: _kTextGray, fontSize: 12),
+              ),
+              Text(
+                '\u20B9${totalFare.toStringAsFixed(2)}',
+                style: const TextStyle(color: _kTextWhite, fontSize: 12),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Pay Now (40%)',
+                style: TextStyle(color: _kTextGray, fontSize: 12),
+              ),
+              Text(
+                '\u20B9${upfrontAmt.toStringAsFixed(2)}',
+                style: const TextStyle(
+                  color: _kBrandGreen,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Status',
+                style: TextStyle(color: _kTextGray, fontSize: 12),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: _statusColor(status).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  _statusLabel(status),
+                  style: TextStyle(
+                    color: _statusColor(status),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: _processing
+                ? const Center(
+                    child: SizedBox(
+                      height: 22,
+                      width: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: _kBrandGreen,
+                      ),
+                    ),
+                  )
+                : InfurnusButton(
+                    text: status == 'FAILED'
+                        ? 'Retry Payment (\u20B9${upfrontAmt.toStringAsFixed(2)})'
+                        : 'Pay \u20B9${upfrontAmt.toStringAsFixed(2)} Now',
+                    onPressed: _pay,
+                  ),
+          ),
+          if (status == 'FAILED') ...[
+            const SizedBox(height: 6),
+            const Text(
+              'Previous payment failed. Please retry.',
+              style: TextStyle(color: _kServiceRed, fontSize: 11),
+              textAlign: TextAlign.center,
+            ),
+          ],
+          if (status == 'PENDING') ...[
+            const SizedBox(height: 6),
+            const Text(
+              'Driver can start only after this payment is verified.',
+              style: TextStyle(color: _kTextGray, fontSize: 11),
+            ),
+          ],
+        ],
       ),
     );
   }

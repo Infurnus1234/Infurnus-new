@@ -296,7 +296,7 @@ describe('INFURNUS Payments Module - Security & Reconciliation', () => {
       expect(res.status).toHaveBeenCalledWith(201);
       expect(mockRepo.initiate).toHaveBeenCalledWith(
         expect.objectContaining({
-          amount: 850.0,
+          amount: 340.0,
         }),
       );
     });

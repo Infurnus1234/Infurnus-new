@@ -56,6 +56,7 @@ dependencies:
   dio_cookie_manager: ^3.5.0
   path_provider: ^2.1.6
   flutter_cashfree_pg_sdk: ^2.4.0+52
+  mobile_scanner: ^7.4.2
 dev_dependencies:
   google_sign_in_platform_interface: ^3.1.0
   flutter_test:
@@ -79,9 +80,13 @@ flutter_launcher_icons:
 flutter_native_splash:
   color: "#000000"
   image: "assets/images/infurnus_logo_square.png"
+  # Android 12+ wraps the splash icon in a circle mask that cuts ~33% of edges.
+  # image_padding_percent adds padding so the full logo stays inside the circle.
   android_12:
     color: "#000000"
-    image: "assets/images/infurnus_logo_square.png"
+    # 960x960 canvas with logo inside 640px center circle = fits Android 12 circle mask
+    image: "assets/images/infurnus_android12_splash.png"
+    icon_background_color: "#000000"
   web: false
 
 # For information on the generic Dart part of this file, see the

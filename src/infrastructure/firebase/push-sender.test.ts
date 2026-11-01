@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { Messaging } from 'firebase-admin/messaging';
 import { createFirebasePushSender } from './push-sender.js';
+
 describe('FCM adapter request contract (mock SDK, no FCM network acceptance)', () => {
   it('sends ride navigation data, high priority, offer expiry and the established Android channel', async () => {
     const sendEachForMulticast = vi.fn().mockResolvedValue({
@@ -25,11 +26,28 @@ describe('FCM adapter request contract (mock SDK, no FCM network acceptance)', (
     expect(sendEachForMulticast).toHaveBeenCalledOnce();
     expect(sendEachForMulticast.mock.calls[0]![0]).toMatchObject({
       tokens: ['fixture-token-1', 'fixture-token-2'],
-      data: { rideId: 'ride', notificationId: 'notification', type: 'ride.created', expiresAt },
+      data: {
+        rideId: 'ride',
+        notificationId: 'notification',
+        type: 'ride.created',
+        expiresAt,
+        channelId: 'infurnus_driver_channel_v2',
+      },
       android: {
         priority: 'high',
         collapseKey: 'notification',
-        notification: { channelId: 'infurnus_driver_channel_v2', tag: 'notification' },
+        notification: {
+          channelId: 'infurnus_driver_channel_v2',
+          tag: 'notification',
+          sound: 'infurnus_alert',
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'infurnus_alert.wav',
+          },
+        },
       },
     });
     expect(sendEachForMulticast.mock.calls[0]![0].android.ttl).toBeGreaterThan(0);
@@ -38,6 +56,34 @@ describe('FCM adapter request contract (mock SDK, no FCM network acceptance)', (
       { success: false, code: 'messaging/registration-token-not-registered' },
     ]);
   });
+
+  it('selects customer channel for customer ride updates', async () => {
+    const sendEachForMulticast = vi.fn().mockResolvedValue({
+      responses: [{ success: true, messageId: 'fixture-id' }],
+    });
+    const sender = createFirebasePushSender({ sendEachForMulticast } as unknown as Pick<
+      Messaging,
+      'sendEachForMulticast'
+    >);
+    await sender.send(['fixture-token-1'], {
+      notificationId: 'cust-notif',
+      userId: 'customer-1',
+      title: 'Driver Arrived',
+      body: 'Your driver is here',
+      type: 'ride.driver_arrived',
+      data: { rideId: 'ride-123' },
+    });
+    expect(sendEachForMulticast).toHaveBeenCalledOnce();
+    expect(sendEachForMulticast.mock.calls[0]![0]).toMatchObject({
+      android: {
+        notification: {
+          channelId: 'infurnus_ride_updates_v2',
+          sound: 'infurnus_alert',
+        },
+      },
+    });
+  });
+
   it('propagates SDK failures to the delivery retry policy without claiming acceptance', async () => {
     const sender = createFirebasePushSender({
       sendEachForMulticast: vi.fn().mockRejectedValue(new Error('fixture outage')),

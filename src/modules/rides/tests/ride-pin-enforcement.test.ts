@@ -44,6 +44,7 @@ describe('atomic four-digit ride PIN contract', () => {
       const transition = vi.fn();
       const service = new RideService({
         verifyPinAttempt: vi.fn().mockResolvedValue(result),
+        findById: vi.fn().mockResolvedValue({ id: 'ride', status: 'accepted' }),
         transition,
       } as unknown as RideRepository);
       await expect(

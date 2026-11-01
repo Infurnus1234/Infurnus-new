@@ -8,18 +8,27 @@ export function createFirebasePushSender(
   return {
     async send(tokens, job) {
       const lifetime = offerTransportPolicy(job.data?.expiresAt);
+      const channelId =
+        job.data?.channelId ??
+        (job.type === 'ride.created' || job.type === 'driver.offer'
+          ? 'infurnus_driver_channel_v2'
+          : job.type.startsWith('ride.')
+            ? 'infurnus_ride_updates_v2'
+            : 'infurnus_driver_channel_v2');
+
       const result = await messaging.sendEachForMulticast({
         tokens,
         notification: { title: job.title, body: job.body },
-        data: { ...job.data, notificationId: job.notificationId, type: job.type },
+        data: { ...job.data, notificationId: job.notificationId, type: job.type, channelId },
         android: {
           priority: 'high',
           ...(lifetime ? { ttl: lifetime.ttl } : {}),
           collapseKey: job.notificationId,
           notification: {
             tag: job.notificationId,
-            channelId: job.data?.androidChannelId ?? 'infurnus_driver_channel_v2',
+            channelId,
             sound: 'infurnus_alert',
+            defaultSound: false,
           },
         },
         apns: {
