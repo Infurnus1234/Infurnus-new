@@ -154,7 +154,8 @@ class NotificationService {
           AndroidNotificationChannel(
             'infurnus_ride_requests_v2',
             'Infurnus Ride Requests',
-            description: 'Audible notifications for incoming ride requests — v2',
+            description:
+                'Audible notifications for incoming ride requests — v2',
             importance: Importance.max,
             playSound: true,
             sound: RawResourceAndroidNotificationSound('infurnus_alert'),
