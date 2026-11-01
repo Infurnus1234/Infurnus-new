@@ -1,3 +1,5 @@
+import {LogisticsPaymentService} from '../../payments/services/logistics-payment.service.js';
+import {PostgresPaymentRepository} from '../../payments/repositories/payment.repository.js';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import express from 'express';
@@ -41,7 +43,6 @@ const booking = {
   destination: { latitude: 12.9352, longitude: 77.6245 },
   sector: 'passenger' as const,
   vehicleCategory: 'xyz',
-  fareEstimate: 1,
 };
 const routes: MapProvider = {
   calculateRoute: async () => ({ distanceMeters: 10000, durationSeconds: 1200 }),
@@ -100,7 +101,7 @@ live(
     async function token(role = 'admin', id = adminId) {
       return signAccessToken({ sub: id, role, type: 'access' });
     }
-    async function create(data = payload): Promise<VehicleType> {
+    async function create(data: unknown = payload): Promise<VehicleType> {
       const t = await admin.createVehicleType(adminId, data);
       ids.push(t.id);
       return t;
@@ -137,6 +138,7 @@ live(
       app.use(errorMiddleware);
     });
     afterEach(async () => {
+      await pool.query('DELETE FROM payments WHERE user_id=$1',[customerId]);
       await pool.query('DELETE FROM rides WHERE customer_id=$1', [customerId]);
       await pool.query('DELETE FROM vehicles WHERE id=$1', [vehicleId]);
       await pool.query('DELETE FROM driver_profiles WHERE id=$1', [profileId]);
@@ -150,7 +152,9 @@ live(
       ]);
     });
     it('approved chart seed persists all ranges, versions and activation including FTL', async () => {
-      const rows = await pool.query('SELECT id,code,sector FROM vehicle_types');
+      const rows = await pool.query(
+        'SELECT id,code,sector FROM vehicle_types WHERE pricing_reference IS NOT NULL',
+      );
       ids.push(...rows.rows.map((row) => row.id));
       expect(rows.rows).toHaveLength(10);
       for (const row of rows.rows) {
@@ -171,6 +175,7 @@ live(
           },
         });
         expect(type!.version).toBeGreaterThan(1);
+        if(type!.sector==='logistics'){expect(()=>new FareCalculatorService().calculateEstimate({distanceMeters:10000,durationSeconds:600,sector:'logistics',vehicleCategory:row.code},type!)).toThrow(/Configure both Logistics distance slabs/);continue;}
         const quote = new FareCalculatorService().calculateEstimate(
           {
             distanceMeters: 10000,
@@ -314,7 +319,7 @@ live(
       expect(
         (
           await request(app)
-            .get('/admin/vehicle-types')
+            .get('/admin/vehicle-types?limit=100')
             .set('authorization', 'Bearer ' + auth)
         ).body.data.some((v: VehicleType) => v.id === type.id),
       ).toBe(true);
@@ -330,10 +335,10 @@ live(
       const estimate = await request(app)
         .post('/fares/estimate')
         .set('authorization', 'Bearer ' + customerAuth)
-        .send(booking);
+        .send({ ...booking, fareEstimate: 1 });
       // The estimate API deliberately rejects booking-only client fareEstimate.
       expect(estimate.status).toBe(400);
-      const { fareEstimate: _ignored, ...estimateInput } = booking;
+      const estimateInput = booking;
       const valid = await request(app)
         .post('/fares/estimate')
         .set('authorization', 'Bearer ' + customerAuth)
@@ -444,8 +449,11 @@ live(
     it.each(['passenger', 'logistics', 'service', 'premium'] as const)(
       'dynamic %s uses same exact model and matching',
       async (sector) => {
-        const type = await create({ ...payload, sector, active: true });
-        await pool.query('UPDATE vehicles SET sector=$2 WHERE id=$1', [vehicleId, sector]);
+        const type = await create({ ...payload, sector, active: true, ...(sector==='service'?{baseFare:null,perKmRate:null,serviceFixedFare:400}:{}), ...(sector==='logistics'?{baseFare:null,perKmRate:null,logisticsSlabs:{below_15:{baseFare:100,perKmRate:30},from_15:{baseFare:200,perKmRate:40}}}:{}) });
+        await pool.query(
+          "UPDATE vehicles SET sector=$2,operating_city_id='TEST_ONLY_CITY' WHERE id=$1",
+          [vehicleId, sector],
+        );
         // Changing vehicle identity invalidates approval; model the completed re-review.
         if (sector !== 'passenger') {
           const changed = await pool.query(
@@ -464,6 +472,7 @@ live(
         const ride = await service.createRide(customerId, {
           ...booking,
           sector,
+          ...(sector==='service'?{clientRequestId:randomUUID()}:{}),
           goods: { weightKg: 100, hasLoadingAssistance: true },
           rentalDetails: { hours: 4, fuelRatePerKm: 999 },
         });
@@ -480,9 +489,10 @@ live(
         expect((await service.getDriverMap(driverId, ride.id)).fare.bookedAmount).toBe(400);
         await rides.transition(ride.id, 'driver_arriving', profileId);
         await rides.transition(ride.id, 'driver_arrived', profileId);
+        if(sector==='logistics'){const money=new LogisticsPaymentService(pool,new PostgresPaymentRepository(pool));const due=await money.initiate(ride.id,customerId,'customer',{provider:'cash'});await money.claim(due.id,customerId);await money.confirmCash(due.id,driverId,'driver');}
         const pin = (await rides.findByIdForCustomer(ride.id, customerId))!.pin!;
         expect(await rides.verifyPinAttempt(ride.id, profileId, pin)).toBe('verified');
-        await admin.updateVehicleType(adminId, type.id, { baseFare: 120, expectedVersion: 1 });
+        await admin.updateVehicleType(adminId, type.id, sector==='logistics'?{logisticsSlabs:{below_15:{baseFare:120,perKmRate:30},from_15:{baseFare:200,perKmRate:40}},expectedVersion:1}:sector==='service'?{serviceFixedFare:500,expectedVersion:1}:{ baseFare: 120, expectedVersion: 1 });
         const complete = await service.completeRide(ride.id, profileId);
         expect(complete.finalFare).toBe(400);
         expect(complete.billing).toEqual({ currency: 'INR', finalFare: 400 });
@@ -700,7 +710,7 @@ live(
     });
     it('unknown/missing/wrong-sector and FTL never acquire fallback fares; ranges preserved', async () => {
       for (const sector of ['passenger', 'logistics', 'service', 'premium'] as const) {
-        await expect(service.createRide(customerId, { ...booking, sector })).rejects.toMatchObject({
+        await expect(service.createRide(customerId, { ...booking, sector, ...(sector==='service'?{clientRequestId:randomUUID()}: {}) })).rejects.toMatchObject({
           code: 'FARE_CONFIGURATION_MISSING',
         });
       }

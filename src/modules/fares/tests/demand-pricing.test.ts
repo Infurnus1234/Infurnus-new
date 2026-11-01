@@ -93,6 +93,7 @@ describe('validated booking-demand pricing', () => {
       Object.entries(types).map(([code, pricing]) => ({ sector, code, pricing })),
     ),
   )('honors all chart boundaries $sector/$code', ({ sector, code, pricing }) => {
+    if(sector==='logistics'){expect(()=>calc.calculateEstimate({...input,sector,vehicleCategory:code},vehicle(sector,code,pricing))).toThrow(/Configure both Logistics distance slabs/);return;}
     for (const score of [0, 5000, 10000]) {
       const d = { ...demandProvenance(settings), scoreBasisPoints: score };
       const r = calc.calculateEstimate(

@@ -24,6 +24,14 @@ class SupportTicketModel {
   });
 
   factory SupportTicketModel.fromJson(Map<String, dynamic> json) {
+    if (!const [
+      'OPEN',
+      'UNDER_REVIEW',
+      'RESOLVED',
+      'CLOSED',
+    ].contains(json['status'])) {
+      throw const FormatException('Invalid support ticket status');
+    }
     return SupportTicketModel(
       id: json['id'] as String,
       ticketNumber: json['ticketNumber'] as String? ?? '',
@@ -32,7 +40,7 @@ class SupportTicketModel {
       category: json['category'] as String? ?? 'General',
       subject: json['subject'] as String? ?? '',
       message: json['message'] as String? ?? '',
-      status: json['status'] as String? ?? 'OPEN',
+      status: json['status'] as String,
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'] as String)
           : null,

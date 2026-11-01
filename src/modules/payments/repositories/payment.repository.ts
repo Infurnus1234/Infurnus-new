@@ -1,3 +1,4 @@
+import { AppError } from '../../../common/errors/app-error.js';
 import type { Pool } from 'pg';
 import type { CapturePaymentData, InitiatePaymentData, Payment } from '../types/payment.js';
 
@@ -15,7 +16,7 @@ export interface PaymentRepository {
 }
 
 const paymentProjection = `
-  id, user_id AS "userId", ride_id AS "rideId",
+  id, payment_stage AS "paymentStage", customer_claimed_at AS "customerClaimedAt", cash_confirmed_by AS "cashConfirmedBy", cash_confirmed_at AS "cashConfirmedAt", user_id AS "userId", ride_id AS "rideId",
   rental_id AS "rentalId", logistics_order_id AS "logisticsOrderId",
   status, amount::numeric AS "amount", currency, provider,
   provider_order_id AS "providerOrderId", provider_payment_id AS "providerPaymentId",
@@ -68,21 +69,40 @@ export class PostgresPaymentRepository implements PaymentRepository {
   }
 
   async capture(data: CapturePaymentData): Promise<Payment | null> {
+    const current = await this.findById(data.paymentId);
+    if (current?.paymentStage) {
+      if (current.provider === 'cashfree' && (!data.verifiedOnline || !data.providerPaymentId))
+        throw new AppError(
+          'PAYMENT_VERIFICATION_REQUIRED',
+          'Verified provider transaction required',
+          409,
+        );
+      if (current.provider === 'cash' && !data.cashConfirmedBy)
+        throw new AppError(
+          'PAYMENT_RECEIPT_REQUIRED',
+          'Assigned driver cash receipt confirmation required',
+          403,
+        );
+      if (['FAILED', 'REFUNDED'].includes(current.status))
+        throw new AppError('PAYMENT_STATE', 'Payment cannot be captured', 409);
+    }
     const result = await this.pool.query<Payment>(
       `UPDATE payments
        SET status = 'CAPTURED',
-           captured_at = NOW(),
+           cash_confirmed_by=CASE WHEN payment_stage IS NOT NULL AND provider='cash' THEN COALESCE(cash_confirmed_by,$3::uuid) ELSE cash_confirmed_by END,
+           cash_confirmed_at=CASE WHEN payment_stage IS NOT NULL AND provider='cash' THEN COALESCE(cash_confirmed_at,NOW()) ELSE cash_confirmed_at END,
+           captured_at = COALESCE(captured_at,NOW()),
            authorized_at = COALESCE(authorized_at, NOW()),
-           provider_payment_id = COALESCE($2, provider_payment_id, gen_random_uuid()::text),
+           provider_payment_id = CASE WHEN payment_stage IS NOT NULL AND status='CAPTURED' THEN provider_payment_id ELSE COALESCE($2, provider_payment_id, gen_random_uuid()::text) END,
            updated_at = NOW()
-       WHERE id = $1
+       WHERE id = $1 AND (payment_stage IS NULL OR status IN ('INITIATED','AUTHORIZED','CAPTURED'))
        RETURNING ${paymentProjection}`,
-      [data.paymentId, data.providerPaymentId ?? null],
+      [data.paymentId, data.providerPaymentId ?? null, data.cashConfirmedBy ?? null],
     );
 
     const captured = result.rows[0] ?? null;
 
-    if (captured?.rideId) {
+    if (captured?.rideId && !captured.paymentStage) {
       try {
         const amountNum = Number(captured.amount);
         const comm = Math.round(amountNum * 0.1 * 100) / 100;
@@ -95,7 +115,9 @@ export class PostgresPaymentRepository implements PaymentRepository {
            WHERE id = $1`,
           [captured.rideId, amountNum, comm, earn],
         );
-      } catch (_) { /* ignore ride-amount update errors on capture */ }
+      } catch (_) {
+        /* ignore ride-amount update errors on capture */
+      }
     }
 
     return captured;

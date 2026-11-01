@@ -1,0 +1,150 @@
+[
+  {
+    "sector": "logistics",
+    "code": "cargo_207"
+  },
+  {
+    "sector": "logistics",
+    "code": "cargo_207_heavy"
+  },
+  {
+    "sector": "logistics",
+    "code": "cargo_407"
+  },
+  {
+    "sector": "logistics",
+    "code": "electric_tuk_tuk"
+  },
+  {
+    "sector": "logistics",
+    "code": "e_rickshaw"
+  },
+  {
+    "sector": "logistics",
+    "code": "ftl"
+  },
+  {
+    "sector": "logistics",
+    "code": "mini_commercial"
+  },
+  {
+    "sector": "logistics",
+    "code": "mini_truck"
+  },
+  {
+    "sector": "logistics",
+    "code": "piaggio_ape"
+  },
+  {
+    "sector": "logistics",
+    "code": "pickup_8ft"
+  },
+  {
+    "sector": "logistics",
+    "code": "tata_407"
+  },
+  {
+    "sector": "logistics",
+    "code": "tata_magic"
+  },
+  {
+    "sector": "logistics",
+    "code": "three_wheeler"
+  },
+  {
+    "sector": "passenger",
+    "code": "auto"
+  },
+  {
+    "sector": "passenger",
+    "code": "bike"
+  },
+  {
+    "sector": "passenger",
+    "code": "e-rickshaw"
+  },
+  {
+    "sector": "passenger",
+    "code": "hatchback"
+  },
+  {
+    "sector": "passenger",
+    "code": "innova"
+  },
+  {
+    "sector": "passenger",
+    "code": "mini"
+  },
+  {
+    "sector": "passenger",
+    "code": "mini_commercial"
+  },
+  {
+    "sector": "passenger",
+    "code": "sedan"
+  },
+  {
+    "sector": "passenger",
+    "code": "suv"
+  },
+  {
+    "sector": "passenger",
+    "code": "traveller"
+  },
+  {
+    "sector": "passenger",
+    "code": "winger"
+  },
+  {
+    "sector": "premium",
+    "code": "helicopter"
+  },
+  {
+    "sector": "premium",
+    "code": "innova"
+  },
+  {
+    "sector": "premium",
+    "code": "mercedes"
+  },
+  {
+    "sector": "premium",
+    "code": "scorpio"
+  },
+  {
+    "sector": "premium",
+    "code": "thar"
+  },
+  {
+    "sector": "premium",
+    "code": "traveller"
+  },
+  {
+    "sector": "service",
+    "code": "ambulance"
+  },
+  {
+    "sector": "service",
+    "code": "crane"
+  },
+  {
+    "sector": "service",
+    "code": "fire_truck"
+  },
+  {
+    "sector": "service",
+    "code": "jcb"
+  },
+  {
+    "sector": "service",
+    "code": "road_roller"
+  },
+  {
+    "sector": "service",
+    "code": "roadside_assist"
+  },
+  {
+    "sector": "service",
+    "code": "towing"
+  }
+]

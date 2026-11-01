@@ -119,6 +119,7 @@ function createTestApp() {
    * even though these tests only exercise driver document routes.
    */
   const rideController = {
+    serviceAvailability: vi.fn(),
     map: vi.fn(),
     location: vi.fn(),
     create: vi.fn(),

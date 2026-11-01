@@ -24,21 +24,19 @@ export function dispatchPolicy(sector = 'passenger', category = ''): DispatchPol
       cityWide: false,
       rankByDistance: false,
     };
-  if (sector === 'service' && ['towing', 'towing_van'].includes(category))
+  if (sector === 'service')
     return {
-      kind: 'towing',
-      radiiMeters: [10000, 15000, 20000],
-      responseMs: 600000,
+      kind:
+        category === 'ambulance'
+          ? 'ambulance'
+          : ['towing', 'towing_van'].includes(category)
+            ? 'towing'
+            : 'legacy',
+      // The repository resolves the active Admin radius for every query/offer/accept.
+      radiiMeters: [25000],
+      responseMs: category === 'ambulance' ? 30000 : 600000,
       cityWide: false,
-      rankByDistance: false,
-    };
-  if (sector === 'service' && category === 'ambulance')
-    return {
-      kind: 'ambulance',
-      radiiMeters: [],
-      responseMs: 30000,
-      cityWide: false,
-      rankByDistance: true,
+      rankByDistance: category === 'ambulance',
     };
   if (sector === 'passenger')
     return {

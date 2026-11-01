@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from 'express';
 import {
   createRideSchema,
+  fareEstimateSchema,
   cancelRideSchema,
   listRidesSchema,
   rideIdSchema,
@@ -10,6 +11,18 @@ import type { RideService } from '../services/ride.service.js';
 
 export class RideController {
   constructor(private readonly service: RideService) {}
+
+  serviceAvailability = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const input = fareEstimateSchema.parse(req.body);
+      res.json({
+        success: true,
+        data: await this.service.serviceAvailability(req.auth!.userId, input),
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
 
   create = async (req: Request, res: Response, next: NextFunction) => {
     try {

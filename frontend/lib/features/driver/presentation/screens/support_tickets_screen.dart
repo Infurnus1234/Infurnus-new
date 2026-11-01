@@ -1,3 +1,8 @@
+import 'dart:async';
+
+import '../../../../core/services/support_request_id.dart';
+import '../../../../core/errors/support_error_message.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -26,7 +31,77 @@ class SupportTicketsScreen extends ConsumerStatefulWidget {
       _SupportTicketsScreenState();
 }
 
-class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen> {
+class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen>
+    with WidgetsBindingObserver {
+  Timer? _refresh;
+  bool _active = true;
+  String? _requestId, _submissionBody;
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _refresh = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (mounted && _active && (ModalRoute.of(context)?.isCurrent ?? false)) {
+        ref.invalidate(supportTicketsFutureProvider);
+      }
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _active = state == AppLifecycleState.resumed;
+    if (_active) ref.invalidate(supportTicketsFutureProvider);
+  }
+
+  Stream<SupportTicketModel> _details(String id) async* {
+    final source = ref.read(driverRemoteDataSourceProvider);
+    yield await source.getSupportTicket(id);
+    yield* Stream.periodic(const Duration(seconds: 10))
+        .where((_) => _active)
+        .asyncMap((_) => source.getSupportTicket(id));
+  }
+
+  void _showDetails(SupportTicketModel ticket) {
+    final stream = _details(ticket.id);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.sizeOf(context).height * 0.75,
+          child: StreamBuilder<SupportTicketModel>(
+            stream: stream,
+            initialData: ticket,
+            builder: (context, snapshot) {
+              final current = snapshot.data;
+              return ListView(
+                padding: const EdgeInsets.all(20),
+                children: [
+                  if (snapshot.hasError)
+                    Text(supportErrorMessage(snapshot.error)),
+                  if (current != null) ...[
+                    SelectableText(current.ticketNumber),
+                    Text('Status: ${current.status}'),
+                    Text(
+                      current.subject,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    Text('Category: ${current.category}'),
+                    Text(
+                      'Updated: ${current.updatedAt?.toLocal() ?? "Unavailable"}',
+                    ),
+                    const SizedBox(height: 16),
+                    SelectableText(current.message),
+                  ],
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
   final _subjectController = TextEditingController();
   final _messageController = TextEditingController();
   String _selectedCategory = 'Trip Issue';
@@ -43,6 +118,8 @@ class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen> {
 
   @override
   void dispose() {
+    _refresh?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _subjectController.dispose();
     _messageController.dispose();
     super.dispose();
@@ -134,12 +211,14 @@ class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen> {
                   onPressed: _isCreating
                       ? null
                       : () async {
-                          if (_subjectController.text.trim().isEmpty ||
-                              _messageController.text.trim().isEmpty) {
+                          if (_subjectController.text.trim().length < 3 ||
+                              _subjectController.text.trim().length > 200 ||
+                              _messageController.text.trim().length < 5 ||
+                              _messageController.text.trim().length > 5000) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text(
-                                  'Please fill subject and message',
+                                  'Enter a subject (3–200 characters) and message (5–5000 characters)',
                                 ),
                               ),
                             );
@@ -150,13 +229,22 @@ class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen> {
                           setSheetState(() {});
                           try {
                             final ds = ref.read(driverRemoteDataSourceProvider);
-                            await ds.createSupportTicket({
+                            final bodyKey =
+                                '$_selectedCategory\u0000${_subjectController.text.trim()}\u0000${_messageController.text.trim()}';
+                            if (_submissionBody != bodyKey) {
+                              _submissionBody = bodyKey;
+                              _requestId = supportRequestId();
+                            }
+                            final ticket = await ds.createSupportTicket({
+                              'requestId': _requestId,
                               'category': _selectedCategory,
                               'subject': _subjectController.text.trim(),
                               'message': _messageController.text.trim(),
                             });
                             if (!mounted) return;
 
+                            _requestId = null;
+                            _submissionBody = null;
                             _subjectController.clear();
                             _messageController.clear();
                             if (ctx.mounted) Navigator.pop(ctx);
@@ -168,9 +256,9 @@ class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen> {
 
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
+                                SnackBar(
                                   content: Text(
-                                    'Support ticket created successfully',
+                                    '${ticket.ticketNumber} · ${ticket.status}',
                                   ),
                                   backgroundColor: AppColors.primaryGreen,
                                 ),
@@ -179,7 +267,7 @@ class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen> {
                           } catch (e) {
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Failed: $e')),
+                                SnackBar(content: Text(supportErrorMessage(e))),
                               );
                             }
                           } finally {
@@ -223,7 +311,7 @@ class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen> {
       body: ticketsAsync.when(
         loading: () =>
             const InfurnusLoader(message: 'Loading support tickets...'),
-        error: (err, _) => Center(child: Text('Error: $err')),
+        error: (err, _) => Center(child: Text(supportErrorMessage(err))),
         data: (tickets) {
           if (tickets.isEmpty) {
             return Center(
@@ -256,6 +344,7 @@ class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen> {
                   ticket.status == 'RESOLVED' || ticket.status == 'CLOSED';
 
               return InfurnusCard(
+                onTap: () => _showDetails(ticket),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

@@ -158,7 +158,7 @@ export class DriverService {
       const now = this.clock();
       if (
         !Number.isFinite(input.timestamp.getTime()) ||
-        input.timestamp.getTime() > now.getTime()
+        input.timestamp.getTime() > now.getTime() + 2000
       ) {
         throw new AppError(
           'DRIVER_LOCATION_FUTURE',
@@ -168,11 +168,14 @@ export class DriverService {
       }
       if (now.getTime() - input.timestamp.getTime() > env.DRIVER_LOCATION_STALE_SECONDS * 1000)
         throw new AppError('DRIVER_LOCATION_STALE', 'Location timestamp is too old', 400);
+      // Phone and server wall clocks can differ slightly even with automatic time.
+      // Never persist a future fix: bound skew and normalize to receipt time.
+      const recordedAt = new Date(Math.min(input.timestamp.getTime(), now.getTime()));
       if (
         !(await this.repository.updateLocation(profileId, {
           latitude: input.latitude,
           longitude: input.longitude,
-          recordedAt: input.timestamp,
+          recordedAt,
           speed: input.speed,
           heading: input.heading,
           accuracy: input.accuracy,
@@ -184,7 +187,11 @@ export class DriverService {
           409,
         );
       }
-      rideEvents.emit('driver:location_updated', { profileId, userId, location: input });
+      rideEvents.emit('driver:location_updated', {
+        profileId,
+        userId,
+        location: { ...input, timestamp: recordedAt },
+      });
     } finally {
       const remaining = (this.locationUpdates.get(userId) ?? 1) - 1;
       if (remaining) this.locationUpdates.set(userId, remaining);

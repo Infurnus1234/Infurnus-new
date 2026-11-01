@@ -93,7 +93,7 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
           'Authorization',
           'Bearer ' + (await signAccessToken({ sub: other, role: 'driver', type: 'access' })),
         );
-      expect(unauthorized.status).toBe(404);
+      expect(unauthorized.status).toBe(403);
     });
     it.each([
       { subject: ' ', message: 'Valid description' },

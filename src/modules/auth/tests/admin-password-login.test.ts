@@ -93,7 +93,10 @@ describe('temporary administrative password-only policy', () => {
       await expect(f.service.authenticate(input, true)).rejects.toMatchObject({
         code: 'ADMIN_ACCESS_REQUIRED',
       });
-      const result = await f.service.authenticate(input);
+      await expect(f.service.authenticate(input)).rejects.toMatchObject({
+        code: 'PASSWORD_LOGIN_NOT_ALLOWED',
+      });
+      const result = await f.service.authenticate({ email: credentials.email });
       expect(result).toHaveProperty('challengeId');
       expect(result).not.toHaveProperty('userId');
       expect(f.provider.sendEmailOtp).toHaveBeenCalledTimes(1);

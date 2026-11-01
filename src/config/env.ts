@@ -177,6 +177,8 @@ export const envSchema = z
     // Driver Matching
     // ============================================================
 
+    DRIVER_LOCATION_CACHE_TTL_SECONDS: z.coerce.number().int().min(30).max(600).default(120),
+    DRIVER_LOCATION_PERSIST_MS: z.coerce.number().int().min(1000).max(15000).default(10000),
     DRIVER_LOCATION_STALE_SECONDS: z.coerce.number().int().positive().default(30),
 
     DRIVER_SEARCH_RADIUS_METERS: z.coerce.number().positive().default(5000),
@@ -206,6 +208,7 @@ export const envSchema = z
     MAP_POPULAR_CACHE_TTL: z.coerce.number().int().min(0).max(86400).default(3600),
     MAP_REVERSE_PRECISION: z.coerce.number().int().min(3).max(6).default(4),
     MAP_MOVEMENT_THRESHOLD_METERS: z.coerce.number().positive().default(10),
+    MAP_OFF_ROUTE_SUSTAIN_MS: z.coerce.number().int().min(0).default(8000),
     MAP_OFF_ROUTE_ENTER_METERS: z.coerce.number().positive().default(60),
     MAP_OFF_ROUTE_EXIT_METERS: z.coerce.number().positive().default(20),
     MAP_MIN_REROUTE_INTERVAL_MS: z.coerce.number().int().min(10000).default(10000),

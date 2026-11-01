@@ -1,3 +1,4 @@
+import { assignFirstOwnerVehicle } from './default-owner-vehicle.js';
 import { FleetFinancialReportRepository } from './fleet-financial-report.repository.js';
 import type { Pool, PoolClient } from 'pg';
 import { createHash, randomBytes } from 'node:crypto';
@@ -39,6 +40,7 @@ export class RoleEnrolmentRepository {
   ) {
     return this.transaction(async (c) => {
       await this.actor(c, id, role);
+      if (role === 'driver_fleet_owner') await assignFirstOwnerVehicle(c, id);
       await c.query(
         'INSERT INTO provider_onboarding(user_id,role_flow_active) VALUES($1,TRUE) ON CONFLICT(user_id) DO UPDATE SET role_flow_active=TRUE WHERE NOT provider_onboarding.role_flow_active',
         [id],
@@ -210,7 +212,7 @@ export class RoleEnrolmentRepository {
       ).rows;
     });
   }
-  async addDriver(owner: string, role: string, email: string, driverUserId?: string) {
+  async addDriver(owner: string, role: string, contact: string, driverUserId?: string) {
     return this.transaction(async (c) => {
       await this.actor(c, owner, role);
       if (!['fleet_owner', 'driver_fleet_owner'].includes(role))
@@ -229,8 +231,12 @@ export class RoleEnrolmentRepository {
         );
       const matches = (
         await c.query(
-          "SELECT id,role FROM users WHERE LOWER(email)=LOWER($1) AND role IN ('driver','driver_fleet_owner') AND status='active' AND deleted_at IS NULL AND ($2::uuid IS NULL OR id=$2) FOR SHARE",
-          [email, driverUserId ?? null],
+          "SELECT id,role FROM users WHERE (($1::text IS NOT NULL AND LOWER(email)=LOWER($1)) OR ($3::text IS NOT NULL AND ltrim(btrim(phone),'+')=ltrim($3,'+'))) AND role IN ('driver','driver_fleet_owner') AND status='active' AND deleted_at IS NULL AND ($2::uuid IS NULL OR id=$2) FOR SHARE",
+          [
+            contact.includes('@') ? contact : null,
+            driverUserId ?? null,
+            contact.includes('@') ? null : contact,
+          ],
         )
       ).rows;
       if (matches.length > 1)

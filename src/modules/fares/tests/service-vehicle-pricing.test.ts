@@ -16,108 +16,32 @@ describe('Phase 4 Step 5: Service Vehicle Trip-Based Refactoring', () => {
 
   const calculator = new FareCalculatorService(pricing);
 
-  describe('1. JCB Trip-Based Pricing (Flat Mobilization + Distance Charge)', () => {
-    it('calculates JCB fare strictly on trip distance, mobilization base, duration and GST', () => {
-      // 10 km trip, 30 min duration
-      const result = calculator.calculate({
-        distanceMeters: 10000,
-        durationSeconds: 1800,
-        sector: 'service',
-        vehicleCategory: 'jcb',
-      });
-
-      // Flat mobilization: 120,000 paise (₹1,200)
-      // Distance charge: 10 km * 4,000 paise/km = 40,000 paise (₹400)
-      // Time charge: 30 min * 200 paise/min = 6,000 paise (₹60)
-      // Subtotal: 120,000 + 40,000 + 6,000 = 166,000 paise
-      // Tax: 166,000 * 0.05 = 8,300 paise
-      // Gross: 174,300 paise (₹1,743.00)
-      expect(result.baseAmount).toBe(120000);
-      expect(result.distanceAmount).toBe(80000);
-      expect(result.timeAmount).toBe(6000);
-      expect(result.taxAmount).toBe(10300);
-      expect(result.grossAmount).toBe(216300);
-      expect(result.fuelAmount).toBeUndefined();
+  describe('Service fixed-fare contract', () => {
+    const configured = (code: string, fare = 123.45) => ({
+      id: '7d7c2be0-21bd-4a75-907a-8b558079ef17', name: code, code, sector: 'service' as const,
+      baseFare: null, perKmRate: null, serviceFixedFare: fare, serviceRadiusMeters: 25000,
+      currency: 'INR' as const, active: true, version: 3, createdAt: new Date(), updatedAt: new Date(),
     });
-
-    it('proves rentalHours has zero effect on JCB calculation', () => {
-      const standard = calculator.calculate({
-        distanceMeters: 15000,
-        durationSeconds: 2400,
-        sector: 'service',
-        vehicleCategory: 'jcb',
+    for (const category of ['ambulance','towing','roadside_assist','jcb','crane','road_roller','fire_truck']) {
+      it(`${category} charges only its configured fixed fare for short and long service trips`, () => {
+        for (const distanceMeters of [0, 1000, 25000, 100000]) {
+          const result = calculator.calculateEstimate({distanceMeters, durationSeconds: 9000, sector:'service', vehicleCategory:category, waitingMinutes:90, rentalHours:12, fuelRatePerKm:999}, configured(category));
+          expect(result).toMatchObject({ bookable: true, bookingFare: { baseAmount:12345, distanceAmount:0, timeAmount:0, grossAmount:12345, pricingVersion:'vehicle-type:7d7c2be0-21bd-4a75-907a-8b558079ef17:v3', vehicleConfiguration: { pricingModel:'service_fixed', serviceRadiusMeters:25000, perKmRatePaise:0 } } });
+          if (!('bookingFare' in result)) throw Error('Expected fixed fare');
+          expect(result.bookingFare?.taxAmount).toBeUndefined();
+          expect(result.bookingFare?.fuelAmount).toBeUndefined();
+        }
       });
-
-      const withRentalHours = calculator.calculate({
-        distanceMeters: 15000,
-        durationSeconds: 2400,
-        sector: 'service',
-        vehicleCategory: 'jcb',
-        rentalHours: 8,
-      });
-
-      expect(withRentalHours.baseAmount).toBe(120000);
-      expect(withRentalHours.distanceAmount).toBe(standard.distanceAmount);
-      expect(withRentalHours.grossAmount).toBe(standard.grossAmount);
-    });
-  });
-
-  describe('2. Supported Service Vehicle Categories (Trip/Service Based)', () => {
-    const categories = [
-      { name: 'ambulance', base: 50000, distRatePerKm: 2500 },
-      { name: 'towing', base: 60000, distRatePerKm: 3000 },
-      { name: 'towing_van', base: 60000, distRatePerKm: 3000 },
-      { name: 'jcb', base: 120000, distRatePerKm: 4000 },
-      { name: 'recovery', base: 60000, distRatePerKm: 3000 },
-      { name: 'recovery_vehicle', base: 60000, distRatePerKm: 3000 },
-      { name: 'roadside_service', base: 60000, distRatePerKm: 3000 },
-      { name: 'roadside_service_vehicle', base: 60000, distRatePerKm: 3000 },
-    ];
-
-    for (const cat of categories) {
-      it(`calculates trip-based fare for category ${cat.name}`, () => {
-        const distanceMeters = 12000; // 12 km
-        const durationSeconds = 1200; // 20 mins
-        const result = calculator.calculate({
-          distanceMeters,
-          durationSeconds,
-          sector: 'service',
-          vehicleCategory: cat.name,
-        });
-
-        const expectedDist = (24000 * cat.distRatePerKm) / 1000;
-        const expectedTime = (1200 * 200) / 60;
-        const subtotal = cat.base + expectedDist + expectedTime;
-        const expectedTax = Math.round(subtotal * 0.05);
-
-        expect(result.baseAmount).toBe(cat.base);
-        expect(result.distanceAmount).toBe(expectedDist);
-        expect(result.timeAmount).toBe(expectedTime);
-        expect(result.taxAmount).toBe(expectedTax);
-        expect(result.grossAmount).toBe(subtotal + expectedTax);
-      });
-
-      it(`proves category ${cat.name} is immune to rentalHours manipulation`, () => {
-        const standard = calculator.calculate({
-          distanceMeters: 8000,
-          durationSeconds: 600,
-          sector: 'service',
-          vehicleCategory: cat.name,
-        });
-
-        const tampered = calculator.calculate({
-          distanceMeters: 8000,
-          durationSeconds: 600,
-          sector: 'service',
-          vehicleCategory: cat.name,
-          rentalHours: 10,
-        });
-
-        expect(tampered.baseAmount).toBe(standard.baseAmount);
-        expect(tampered.distanceAmount).toBe(standard.distanceAmount);
-        expect(tampered.grossAmount).toBe(standard.grossAmount);
+      it(`${category} cannot use a legacy distance tariff`, () => {
+        expect(() => calculator.calculate({distanceMeters:10000,durationSeconds:600,sector:'service',vehicleCategory:category})).toThrow(/active fixed fare/);
       });
     }
+    it('allows an explicitly configured zero fare and fails closed for disabled, missing or mixed configurations', () => {
+      const input = {distanceMeters:10000,durationSeconds:600,sector:'service' as const,vehicleCategory:'ambulance'};
+      expect(calculator.calculateEstimate(input,configured('ambulance',0))).toMatchObject({bookingFare:{grossAmount:0}});
+      for (const changes of [{active:false},{serviceFixedFare:null},{serviceFixedFare:-1},{baseFare:1},{perKmRate:1},{serviceRadiusMeters:0},{serviceRadiusMeters:200001}])
+        expect(() => calculator.calculateEstimate(input,{...configured('ambulance'),...changes})).toThrow();
+    });
   });
 
   describe('3. Backend Schema & Types Validation', () => {
@@ -129,6 +53,7 @@ describe('Phase 4 Step 5: Service Vehicle Trip-Based Refactoring', () => {
         pickup: validPickup,
         destination: validDestination,
         sector: 'service',
+        clientRequestId: '165938c9-c46c-43dd-b8da-144dbad559f4',
         vehicleCategory: 'jcb',
         serviceDetails: {
           serviceType: 'jcb',
@@ -151,6 +76,7 @@ describe('Phase 4 Step 5: Service Vehicle Trip-Based Refactoring', () => {
         pickup: validPickup,
         destination: validDestination,
         sector: 'service',
+        clientRequestId: '165938c9-c46c-43dd-b8da-144dbad559f4',
         vehicleCategory: 'recovery_vehicle',
         serviceDetails: {
           serviceType: 'recovery_vehicle',

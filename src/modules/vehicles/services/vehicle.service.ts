@@ -62,6 +62,17 @@ export class VehicleService {
     return this.repository.findByDriver(query.driverProfileId, query.activeOnly);
   }
 
+  async catalog(
+    sector: 'passenger' | 'premium' | 'logistics' | 'service',
+    limit: number,
+    offset: number,
+  ) {
+    if (!this.repository.listTypes)
+      throw new AppError('VEHICLE_CATALOG_UNAVAILABLE', 'Vehicle catalog is unavailable', 503);
+    const types = await this.repository.listTypes(limit, offset, sector, true);
+    return types.filter((type) => type.pricingStatus === 'available');
+  }
+
   async listFleet(query: VehicleFleetQuery) {
     return this.repository.listFleet(query.sector, query.category);
   }

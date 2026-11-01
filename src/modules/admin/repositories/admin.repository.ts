@@ -145,6 +145,7 @@ const driverApplicationProjection = `
 
 const partnerProjection = `
   p.id, p.user_id AS "userId", p.business_name AS "businessName",
+  (SELECT COALESCE(NULLIF(btrim(concat_ws(' ',u.first_name,u.last_name)),''),p.owner_name) FROM users u WHERE u.id=p.user_id AND u.deleted_at IS NULL) AS "ownerName",
   p.business_description AS "businessDescription", p.approval_status AS "approvalStatus",
   p.availability_status AS "availabilityStatus", p.created_at AS "createdAt",
   p.updated_at AS "updatedAt",

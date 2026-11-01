@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { emailSchema } from '../../auth/schemas/auth.schemas.js';
+import { managedDriverContactsSchema } from '../schemas/managed-driver-contact.schemas.js';
 import { requireFleetOwner } from '../../auth/middleware/authorization.middleware.js';
 import {
   upsertDriverProfileSchema,
@@ -17,18 +17,18 @@ import {
 import { storageService } from '../../../infrastructure/storage/index.js';
 import { AppError } from '../../../common/errors/app-error.js';
 
-const createSchema = upsertDriverProfileSchema
+export const createManagedDriverSchema = upsertDriverProfileSchema
   .extend({
     firstName: z.string().trim().min(1).max(60),
     lastName: z.string().trim().min(1).max(60),
-    email: emailSchema,
-    phone: z
-      .string()
-      .regex(/^\+[1-9]\d{7,14}$/)
-      .optional(),
+    ...managedDriverContactsSchema.shape,
     driverUserId: z.string().uuid().optional(),
   })
-  .strict();
+  .strict()
+  .refine((value) => Boolean(value.email || value.phone), {
+    path: ['email'],
+    message: 'Phone number or email address is required',
+  });
 const types = z.enum(['profile_photo', 'driver_license', 'vehicle_rc', 'identity', 'pan', 'other']);
 export function createManagedDriverRouter(repo: ManagedDriverRepository) {
   const router = Router();
@@ -47,7 +47,11 @@ export function createManagedDriverRouter(repo: ManagedDriverRepository) {
     try {
       res.status(201).json({
         success: true,
-        data: await repo.create(req.auth!.userId, req.auth!.role, createSchema.parse(req.body)),
+        data: await repo.create(
+          req.auth!.userId,
+          req.auth!.role,
+          createManagedDriverSchema.parse(req.body),
+        ),
       });
     } catch (e) {
       next(e);

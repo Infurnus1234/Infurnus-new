@@ -74,6 +74,7 @@ export function requiredPermissions(
   if (path === '/admin/access/me') return method === 'GET' ? [] : null;
   if (/^\/auth\/(logout|logout-all|refresh|sessions(?:\/[^/]+)?|change-password)$/.test(path))
     return [];
+  if(path==='/admin/logistics/payments') return method==='GET'?['logistics.read','payments.read']:null;
   if (path === '/admin/dashboard') return method === 'GET' ? ['dashboard.read'] : null;
   if (path === '/admin/operations/summary') return method === 'GET' ? ['reports.read'] : null;
   const operation = path.match(/^\/admin\/operations\/([^/]+)(?:\/[^/]+\/(status|active))?$/);

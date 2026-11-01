@@ -77,7 +77,12 @@ export class MatchingService {
       new Date(Date.now() - env.DRIVER_LOCATION_STALE_SECONDS * 1000),
       ride.sector ?? 'passenger',
       ride.vehicleCategory ?? undefined,
-      { rideId: ride.id, radiusMeters, ...(city ? { boundaryGeoJson: city.boundaryGeoJson } : {}) },
+      {
+        rideId: ride.id,
+        customerId: ride.customerId,
+        radiusMeters,
+        ...(city ? { boundaryGeoJson: city.boundaryGeoJson, cityId: city.cityId } : {}),
+      },
     );
     return this.rankCandidates(
       [

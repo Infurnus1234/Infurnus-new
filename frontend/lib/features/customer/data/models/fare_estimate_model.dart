@@ -6,6 +6,21 @@ class FareEstimateModel {
   final FareEstimateModel? maximum;
   final FareEstimateModel? bookingQuote;
   final String? pricingDescription;
+  final String? vehicleTypeId;
+  final String? pricingVersion;
+  final String? vehicleCategory;
+  Map<String, dynamic>? get pricingQuote {
+    if (vehicleTypeId == null ||
+        pricingVersion == null ||
+        bookingAmount == null) {
+      return null;
+    }
+    return {
+      'vehicleTypeId': vehicleTypeId,
+      'pricingVersion': pricingVersion,
+      'amountPaise': (bookingAmount! * 100).round(),
+    };
+  }
 
   bool get isRange => estimateType == 'range';
   bool get isUnavailable =>
@@ -17,7 +32,7 @@ class FareEstimateModel {
   }
 
   String get displayFare {
-    if (isUnavailable) return 'Fare unavailable';
+    if (isUnavailable) return 'Available Soon';
     if (isRange && minimum != null) {
       if (maximum?.grossAmount == minimum!.grossAmount) {
         return '₹${minimum!.grossAmount.toStringAsFixed(2)}';
@@ -52,6 +67,9 @@ class FareEstimateModel {
     this.maximum,
     this.bookingQuote,
     this.pricingDescription,
+    this.vehicleTypeId,
+    this.pricingVersion,
+    this.vehicleCategory,
     required this.grossAmount,
     required this.baseAmount,
     required this.distanceAmount,
@@ -166,8 +184,14 @@ class FareEstimateModel {
         minimum: minimum,
         maximum: maximum,
         bookingQuote: quote,
+        vehicleTypeId: quote?.vehicleTypeId,
+        vehicleCategory: json['vehicleCategory'] as String?,
+        pricingVersion: json['pricingVersion'] as String?,
         pricingDescription:
-            '${base == null ? "Route-based base" : "Base ${moneyRange(base)}"}; ${moneyRange(rate)}/km',
+            (json['bookingFare']?['vehicleConfiguration']?['pricingModel'] ==
+                'service_fixed')
+            ? 'Fixed service fare · no distance or time charges'
+            : '${base == null ? "Route-based base" : "Base ${moneyRange(base)}"}; ${moneyRange(rate)}/km',
         grossAmount: quote?.grossAmount ?? 0,
         baseAmount: 0,
         distanceAmount: 0,
@@ -216,6 +240,10 @@ class FareEstimateModel {
 
     return FareEstimateModel(
       bookable: json['bookable'] != false,
+      vehicleTypeId:
+          (json['vehicleConfiguration'] as Map<String, dynamic>?)?['id']
+              as String?,
+      pricingVersion: json['pricingVersion'] as String?,
       grossAmount: grossPaise / 100.0,
       baseAmount: basePaise / 100.0,
       distanceAmount: distPaise / 100.0,

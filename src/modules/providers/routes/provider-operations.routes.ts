@@ -135,6 +135,16 @@ export function createProviderOperationsRouter(repository: PostgresProviderOpera
   });
   router.post('/approval-requests', async (req, res, next) => {
     try {
+      if (req.body?.requestType === 'fleet_submission') {
+        z.object({ requestType: z.literal('fleet_submission') })
+          .strict()
+          .parse(req.body);
+        res.json({
+          success: true,
+          data: await repository.submitFleetApprovals(req.auth!.userId, req.auth!.role),
+        });
+        return;
+      }
       if (req.body?.requestType === 'onboarding_submission') {
         z.object({ requestType: z.literal('onboarding_submission') })
           .strict()
@@ -412,16 +422,27 @@ export function createProviderApprovalRouter(repository: PostgresProviderOperati
             .enum(['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED', 'EXPIRED', 'ALL'])
             .default('PENDING'),
           group: z.literal('driver').optional(),
+          kind: z.enum(['driver', 'vehicle']).optional(),
+          page: z.coerce.number().int().min(1).max(100000).default(1),
+          pageSize: z.coerce.number().int().min(1).max(100).default(10),
+          search: z.string().max(200).default(''),
         })
         .strict()
         .parse(req.query);
       res.json({
         success: true,
-        data: await repository.pendingApprovals(
-          req.auth!.userId,
-          query.status,
-          query.group === 'driver',
-        ),
+        data: query.kind
+          ? await repository.requestPage(req.auth!.userId, query.status, {
+              kind: query.kind,
+              page: query.page,
+              pageSize: query.pageSize,
+              search: query.search,
+            })
+          : await repository.pendingApprovals(
+              req.auth!.userId,
+              query.status,
+              query.group === 'driver',
+            ),
       });
     } catch (error) {
       next(error);

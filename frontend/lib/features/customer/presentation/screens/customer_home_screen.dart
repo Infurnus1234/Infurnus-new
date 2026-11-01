@@ -13,8 +13,15 @@ import '../../../../shared/widgets/infurnus_empty_state.dart';
 import '../../../../shared/widgets/infurnus_skeleton.dart';
 import '../../data/models/ride_model.dart' as model;
 import '../providers/ride_provider.dart';
+import '../providers/ride_use_case_providers.dart';
+import '../../data/models/fleet_vehicle_model.dart';
 import '../widgets/vehicle_category_visual.dart';
 import '../../../auth/presentation/providers/user_provider.dart';
+
+final serviceCatalogProvider =
+    FutureProvider.autoDispose<List<FleetVehicleModel>>(
+      (ref) => ref.watch(getFleetUseCaseProvider).call(sector: 'service'),
+    );
 
 class CustomerHomeScreen extends ConsumerStatefulWidget {
   const CustomerHomeScreen({super.key});
@@ -943,23 +950,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     }
   }
 
-  String _serviceTierSlug(String title) {
-    switch (title.toLowerCase().trim()) {
-      case 'ambulance':
-        return 'ambulance';
-      case 'towing van':
-        return 'towing';
-      case 'jcb / excavator':
-        return 'jcb';
-      case 'crane':
-        return 'crane';
-      case 'roadside assist':
-        return 'roadside_assist';
-      default:
-        return title.toLowerCase().replaceAll(' ', '_');
-    }
-  }
-
   Widget _buildPassengerSection(BuildContext context) {
     const items = [
       _VehicleCategoryItem(
@@ -1119,86 +1109,68 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
   }
 
   Widget _buildServiceFleetSection(BuildContext context) {
-    const items = [
-      _VehicleCategoryItem(
-        title: 'Ambulance',
-        capacity: 'Patient + Medical Triage',
-        rate: 'Trip-Based',
-        eta: 'Priority',
-        icon: Icons.medical_services_rounded,
-        category: VehicleCategoryType.emergency,
-        assetImagePath: 'assets/images/ambulance_clean.jpg',
-      ),
-      _VehicleCategoryItem(
-        title: 'Towing Van',
-        capacity: 'Breakdown Assist',
-        rate: 'Trip-Based',
-        eta: 'Priority',
-        icon: Icons.car_repair_rounded,
-        category: VehicleCategoryType.emergency,
-        assetImagePath: 'assets/images/flatbed_towing_truck.png',
-      ),
-      _VehicleCategoryItem(
-        title: 'JCB / Excavator',
-        capacity: 'Specialty Excavation',
-        rate: 'Trip-Based',
-        eta: 'Scheduled',
-        icon: Icons.agriculture_rounded,
-        category: VehicleCategoryType.logistics,
-        assetImagePath: 'assets/images/jcb_excavator.jpg',
-      ),
-      _VehicleCategoryItem(
-        title: 'Crane',
-        capacity: 'Heavy Lifting',
-        rate: 'Trip-Based',
-        eta: 'Scheduled',
-        icon: Icons.precision_manufacturing_rounded,
-        category: VehicleCategoryType.logistics,
-        assetImagePath: 'assets/images/crane_truck.png',
-      ),
-      _VehicleCategoryItem(
-        title: 'Roadside Assist',
-        capacity: 'Tire / Battery Support',
-        rate: 'Trip-Based',
-        eta: 'Priority',
-        icon: Icons.build_rounded,
-        category: VehicleCategoryType.emergency,
-        assetImagePath: 'assets/images/flatbed_towing_truck.png',
-      ),
-    ];
-
+    final catalog = ref.watch(serviceCatalogProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildSectionHeader(
-          title: 'Specialty & Emergency',
-          subtitle: 'On-demand specialized fleet support',
-          onSeeAll: () {
-            ref.read(rideProvider.notifier).selectSector('service');
-            context.push('/ride-booking');
-          },
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Service Vehicles',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Refresh Service Vehicles',
+              onPressed: () => ref.invalidate(serviceCatalogProvider),
+              icon: const Icon(Icons.refresh),
+            ),
+          ],
         ),
+        const Text('Fixed fares · availability checked near your pickup'),
         const SizedBox(height: 12),
-        SizedBox(
-          height: 130,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: items.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
-            itemBuilder: (context, index) {
-              final item = items[index];
-              return _buildHorizontalVehicleCard(
-                item: item,
-                onTap: () {
-                  ref.read(rideProvider.notifier).selectSector('service');
-                  ref
-                      .read(rideProvider.notifier)
-                      .selectTier(_serviceTierSlug(item.title));
-                  context.push('/ride-booking');
-                },
-              );
-            },
+        catalog.when(
+          loading: () => const LinearProgressIndicator(),
+          error: (_, _) => const Text(
+            'Service types are temporarily unavailable. Tap refresh to try again.',
           ),
+          data: (items) => items.isEmpty
+              ? const Text(
+                  'No Service types are enabled with a configured fixed fare.',
+                )
+              : SizedBox(
+                  height: 130,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: items.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 12),
+                    itemBuilder: (context, index) {
+                      final service = items[index];
+                      return _buildHorizontalVehicleCard(
+                        item: _VehicleCategoryItem(
+                          title: service.displayName,
+                          capacity: service.range ?? 'Service radius',
+                          rate: '₹${service.pricing!.toStringAsFixed(2)} fixed',
+                          eta: 'Check availability',
+                          icon: service.category == 'ambulance'
+                              ? Icons.medical_services_rounded
+                              : Icons.build_rounded,
+                          category: VehicleCategoryType.emergency,
+                        ),
+                        onTap: () {
+                          ref
+                              .read(rideProvider.notifier)
+                              .selectSector('service');
+                          ref
+                              .read(rideProvider.notifier)
+                              .selectTier(service.category);
+                          context.push('/ride-booking');
+                        },
+                      );
+                    },
+                  ),
+                ),
         ),
       ],
     );

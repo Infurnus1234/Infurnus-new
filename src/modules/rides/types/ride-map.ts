@@ -4,6 +4,9 @@ import type { RouteResult } from '../providers/map.provider.js';
 
 export interface LiveRideLocation extends RideLocation {
   timestamp: string;
+  heading?: number | undefined;
+  speed?: number | undefined;
+  accuracy?: number | undefined;
 }
 export interface RideMapSnapshot {
   ride: Ride;

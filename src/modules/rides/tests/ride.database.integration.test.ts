@@ -1,3 +1,4 @@
+import { configureServiceFixture, restoreServiceFixtures, type ServiceFixtureSnapshots } from './service-catalog.fixture.js';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { pinVerifier, sealRidePin } from '../repositories/ride-pin.js';
@@ -31,6 +32,7 @@ const describeDatabase = databaseEnabled ? describe : describe.skip;
 const repository = new PostgresRideRepository(pool, syntheticDispatchAreas);
 const driverRepository = new PostgresDriverRepository(pool);
 const service = new RideService(repository, driverRepository);
+const serviceCatalog: ServiceFixtureSnapshots = new Map();
 
 interface Fixture {
   rideIds: string[];
@@ -118,6 +120,7 @@ describeDatabase('ride PostgreSQL integration', () => {
 
   afterEach(async () => {
     if (fixture) await cleanFixture(fixture);
+    await restoreServiceFixtures(pool,serviceCatalog);
   });
 
   it('exposes customer contact only after actual acceptance and revokes it on cancellation/reassignment', async () => {
@@ -312,17 +315,17 @@ describeDatabase('ride PostgreSQL integration', () => {
     ['service', 'ambulance', 30000],
     ['premium', 'sedan', 3600000],
   ])('enforces the persisted %s/%s deadline', async (sector, category, milliseconds) => {
+    if (sector === 'service') await configureServiceFixture(pool,category as string,serviceCatalog);
     const id = fixture.rideIds[0]!;
     await pool.query('DELETE FROM ride_dispatch_attempts WHERE ride_id=$1', [id]);
     await pool.query(
       'UPDATE rides SET dispatch_driver_id=NULL,dispatch_expires_at=NULL,sector=$2,vehicle_category=$3 WHERE id=$1',
       [id, sector, category],
     );
-    await pool.query('UPDATE vehicles SET sector=$2,category=$3 WHERE id=$1', [
-      fixture.vehicleId,
-      sector,
-      category,
-    ]);
+    await pool.query(
+      "UPDATE vehicles SET sector=$2,category=$3,operating_city_id='TEST_ONLY_CITY' WHERE id=$1",
+      [fixture.vehicleId, sector, category],
+    );
     // Isolated fixture: vehicle identity changes correctly invalidate approval.
     await pool.query(
       "UPDATE vehicles SET verification_status='approved',is_active=TRUE WHERE id=$1",
@@ -378,17 +381,17 @@ describeDatabase('ride PostgreSQL integration', () => {
     };
   }
   async function prepareMap(sector = 'passenger', amount = 106, distance = 8500) {
+    if (sector === 'service') await configureServiceFixture(pool,'ambulance',serviceCatalog);
     const category =
       sector === 'logistics' ? 'mini_truck' : sector === 'service' ? 'ambulance' : 'sedan';
     await pool.query(
       `UPDATE rides SET sector=$2,fare_estimate=$3,vehicle_category=$5,route_metadata=COALESCE(route_metadata,'{}'::jsonb)||jsonb_build_object('bookingDistanceMeters',$4::numeric) WHERE id=$1`,
       [fixture.rideIds[0], sector, amount, distance, category],
     );
-    await pool.query('UPDATE vehicles SET sector=$2,category=$3 WHERE id=$1', [
-      fixture.vehicleId,
-      sector,
-      category,
-    ]);
+    await pool.query(
+      "UPDATE vehicles SET sector=$2,category=$3,operating_city_id='TEST_ONLY_CITY' WHERE id=$1",
+      [fixture.vehicleId, sector, category],
+    );
     // Changing vehicle identity invalidates approval; model the completed re-review.
     if (sector !== 'passenger') {
       const changed = await pool.query(
@@ -895,9 +898,10 @@ describeDatabase('ride PostgreSQL integration', () => {
       undefined,
       maps,
     );
-    await expect(serviceMap.getDriverMap(fixture.driverUserId, id, true)).rejects.toMatchObject({
-      statusCode: 503,
-    });
+    const unavailable = await serviceMap.getDriverMap(fixture.driverUserId, id, true);
+    expect(unavailable.routeStatus).toBe('unavailable');
+    expect(unavailable.route).toBeNull();
+    expect(unavailable.eta).toBeNull();
     await pool.query('UPDATE driver_profiles SET last_location_at=$2 WHERE id=$1', [
       fixture.driverProfileId,
       new Date(Date.now() - 60000),

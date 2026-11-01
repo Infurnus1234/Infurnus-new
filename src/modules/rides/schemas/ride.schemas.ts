@@ -2,6 +2,13 @@ import { z } from 'zod';
 import { rideStatuses } from '../types/ride.js';
 
 const uuid = z.string().uuid();
+const pricingQuote = z
+  .object({
+    vehicleTypeId: uuid,
+    pricingVersion: z.string().min(1).max(150),
+    amountPaise: z.number().int().nonnegative().max(9_999_999_999),
+  })
+  .strict();
 
 const latitude = z.number().finite().min(-90).max(90);
 
@@ -21,9 +28,12 @@ export const createRideSchema = z
     pickupAddress: z.string().trim().min(1).max(500).optional(),
     destinationAddress: z.string().trim().min(1).max(500).optional(),
     fareEstimate: z.number().positive().optional(),
+    pricingQuote: pricingQuote.optional(),
+    clientRequestId: uuid.optional(),
     waitingMinutes: z.number().finite().nonnegative().optional(),
     sector: z.enum(['passenger', 'logistics', 'service', 'premium', 'rental']),
     vehicleCategory: z.string().trim().min(1).max(50),
+    bookingHours: z.number().finite().positive().optional(),
     goods: z
       .object({
         itemType: z.string().trim().min(1).max(100).optional(),
@@ -38,18 +48,8 @@ export const createRideSchema = z
     serviceDetails: z
       .object({
         serviceType: z
-          .enum([
-            'ambulance',
-            'towing',
-            'towing_van',
-            'jcb',
-            'recovery',
-            'recovery_vehicle',
-            'roadside_service',
-            'roadside_service_vehicle',
-            'roadside_recovery',
-            'roadside',
-          ])
+          .string()
+          .regex(/^[a-z][a-z0-9_-]{0,49}$/)
           .optional(),
         emergencyLevel: z.string().optional(),
         description: z.string().optional(),
@@ -62,11 +62,16 @@ export const createRideSchema = z
         startTime: z.string().optional(),
         hours: z.number().positive().optional(),
         rentalHours: z.number().positive().optional(),
+        tripType: z.enum(['one_way', 'round_trip']).optional(),
         fuelRatePerKm: z.number().nonnegative().optional(),
       })
       .optional(),
   })
-  .strict();
+  .strict()
+  .refine((v) => v.sector !== 'service' || !!v.clientRequestId, {
+    path: ['clientRequestId'],
+    message: 'A request ID is required for a service booking.',
+  });
 
 export const fareEstimateSchema = z
   .object({
@@ -74,6 +79,7 @@ export const fareEstimateSchema = z
     destination: location,
     sector: z.enum(['passenger', 'logistics', 'service', 'premium', 'rental']),
     vehicleCategory: z.string().trim().min(1).max(50),
+    bookingHours: z.number().finite().positive().optional(),
     waitingMinutes: z.number().nonnegative().optional(),
     weightKg: z.number().nonnegative().optional(),
     hasLoadingAssistance: z.boolean().optional(),
@@ -104,6 +110,7 @@ export const fareEstimateSchema = z
         startTime: z.string().optional(),
         hours: z.number().positive().optional(),
         rentalHours: z.number().positive().optional(),
+        tripType: z.enum(['one_way', 'round_trip']).optional(),
         fuelRatePerKm: z.number().nonnegative().optional(),
       })
       .optional(),

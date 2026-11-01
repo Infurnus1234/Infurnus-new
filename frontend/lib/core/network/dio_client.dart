@@ -100,13 +100,27 @@ final dioProvider = Provider<Dio>((ref) {
       },
       onError: (error, handler) async {
         if (_shouldAttemptRefresh(error)) {
-          // Prevent multiple simultaneous refresh calls
-          refreshFuture ??= _performTokenRefresh(dio, ref);
-
-          final isRefreshed = await refreshFuture;
-
-          // Clear future after completion
-          refreshFuture = null;
+          final storage = ref.read(secureStorageProvider);
+          final currentToken = await storage.read(key: 'auth_token');
+          final sentAuthorization =
+              error.requestOptions.headers['Authorization'];
+          if (currentToken == null && sentAuthorization != null) {
+            // A signed-out session must not be resurrected by a delayed response.
+            return handler.next(error);
+          }
+          bool? isRefreshed;
+          if (currentToken != null &&
+              sentAuthorization != 'Bearer $currentToken') {
+            // Retry with the token already rotated by another request.
+            isRefreshed = true;
+          } else {
+            final pending = refreshFuture ??= _performTokenRefresh(dio, ref);
+            try {
+              isRefreshed = await pending;
+            } finally {
+              if (identical(refreshFuture, pending)) refreshFuture = null;
+            }
+          }
 
           if (isRefreshed == true) {
             final requestOptions = error.requestOptions;
@@ -132,14 +146,6 @@ final dioProvider = Provider<Dio>((ref) {
             } on DioException catch (retryError) {
               return handler.next(retryError);
             }
-          } else if (isRefreshed == false) {
-            // Refresh rejected - Clear storage to trigger logout at UI level
-            final storage = ref.read(secureStorageProvider);
-            await storage.delete(key: 'auth_token');
-            await storage.delete(key: 'user_id');
-            await storage.delete(key: 'user_role');
-            await storage.delete(key: 'auth_csrf_token');
-            ref.read(sessionRejectionProvider.notifier).state++;
           }
         }
         handler.next(error);
@@ -209,6 +215,8 @@ bool _shouldAttemptRefresh(DioException error) {
 }
 
 Future<bool?> _performTokenRefresh(Dio dio, Ref ref) async {
+  final sessionStorage = ref.read(secureStorageProvider);
+  final tokenBeforeRefresh = await sessionStorage.read(key: 'auth_token');
   try {
     final options = Options(
       method: 'POST',
@@ -231,6 +239,9 @@ Future<bool?> _performTokenRefresh(Dio dio, Ref ref) async {
     final accessToken = response.data['data']?['accessToken'];
 
     if (accessToken is String && accessToken.isNotEmpty) {
+      if (await sessionStorage.read(key: 'auth_token') != tokenBeforeRefresh) {
+        return null;
+      }
       await ref
           .read(secureStorageProvider)
           .write(key: 'auth_token', value: accessToken);
@@ -238,7 +249,19 @@ Future<bool?> _performTokenRefresh(Dio dio, Ref ref) async {
     }
     return null;
   } on DioException catch (error) {
-    return error.response?.statusCode == 401 ? false : null;
+    if (error.response?.statusCode == 401) {
+      if (await sessionStorage.read(key: 'auth_token') != tokenBeforeRefresh) {
+        return null;
+      }
+      final storage = ref.read(secureStorageProvider);
+      await storage.delete(key: 'auth_token');
+      await storage.delete(key: 'user_id');
+      await storage.delete(key: 'user_role');
+      await storage.delete(key: 'auth_csrf_token');
+      ref.read(sessionRejectionProvider.notifier).state++;
+      return false;
+    }
+    return null;
   } catch (_) {
     return null;
   }

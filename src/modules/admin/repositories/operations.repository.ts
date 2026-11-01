@@ -1,3 +1,4 @@
+import { PostgresSupportRepository } from '../../support/repositories/support.repository.js';
 import { reportingDatePredicates } from './reporting-dates.js';
 import type { Pool } from 'pg';
 import { z } from 'zod';
@@ -34,8 +35,7 @@ export const operationSources = {
   },
   rides: {
     table: 'rides',
-    columns:
-      'id, customer_id, assigned_driver_id, assigned_vehicle_id, sector, vehicle_category, status, pickup_address, destination_address, fare_estimate, final_fare, actual_distance_meters, created_at, updated_at',
+    columns: `id, customer_id, assigned_driver_id, assigned_vehicle_id, sector, vehicle_category, status, pickup_address, destination_address, fare_estimate, final_fare, actual_distance_meters, cancellation_reason, created_at, updated_at, completed_at, cancelled_at, ST_Y(pickup_location::geometry) AS pickup_latitude, ST_X(pickup_location::geometry) AS pickup_longitude, route_metadata->'bookingFareSnapshot'->>'pricingVersion' AS pricing_version`,
     status: 'status',
     search: 'id::text',
     statuses: [
@@ -160,6 +160,7 @@ export const operationQuerySchema = z
     pageSize: z.coerce.number().int().min(1).max(100).default(25),
     search: z.string().trim().min(1).max(150).optional(),
     recordId: z.string().uuid().optional(),
+    sector: z.enum(['passenger', 'logistics', 'premium', 'service']).optional(),
     status: z.string().max(40).optional(),
     from: z.string().date().optional(),
     to: z.string().date().optional(),
@@ -180,25 +181,8 @@ export class AdminOperationsRepository {
       id,
     );
   }
-  async updateSupportStatus(id: string, input: unknown) {
-    const update = z
-      .object({
-        status: z.enum(['OPEN', 'UNDER_REVIEW', 'RESOLVED', 'CLOSED']),
-        expectedVersion: z.number().int().positive(),
-      })
-      .strict()
-      .parse(input);
-    const result = await this.pool.query(
-      'UPDATE support_tickets SET status=$2,version=version+1,updated_at=NOW() WHERE id=$1 AND version=$3 RETURNING id,ticket_number,user_id,role,category,subject,message,status,version,created_at,updated_at',
-      [id, update.status, update.expectedVersion],
-    );
-    if (!result.rows[0])
-      throw new AppError(
-        'TICKET_UPDATE_CONFLICT',
-        'Ticket is unavailable or has changed; refresh before updating',
-        409,
-      );
-    return result.rows[0];
+  async updateSupportStatus(id: string, input: unknown, actorId?: string) {
+    return new PostgresSupportRepository(this.pool).updateStatus(id, input, actorId);
   }
   async list(module: OperationModule, query: OperationQuery) {
     const source = operationSources[module];
@@ -208,11 +192,20 @@ export class AdminOperationsRepository {
       values.push(value);
       return '$' + values.length;
     };
+    if (query.sector) {
+      if (module !== 'rides')
+        throw new AppError(
+          'INVALID_FILTER',
+          'Sector filtering is only available for ride bookings.',
+          400,
+        );
+      predicates.push(`sector = ${add(query.sector)}`);
+    }
     if (query.recordId)
       predicates.push(`${module === 'wallets' ? 'user_id' : 'id'} = ${add(query.recordId)}::uuid`);
     if (query.search)
       predicates.push(
-        `${source.search} ILIKE ${add('%' + query.search.replace(/[\\%_]/g, '\\$&') + '%')}`,
+        `${module === 'support' ? "concat_ws(' ',ticket_number,subject,message)" : source.search} ILIKE ${add('%' + query.search.replace(/[\\%_]/g, '\\$&') + '%')}`,
       );
     if (query.status) {
       if (!source.status || !(source.statuses as readonly string[]).includes(query.status))

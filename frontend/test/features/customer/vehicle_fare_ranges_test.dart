@@ -112,6 +112,18 @@ class RecordingRepository implements RideRepository {
   }
 }
 
+class RepricingRepository extends RecordingRepository {
+  @override
+  Future<ride.RideModel> createRide(Map<String, dynamic> data) async {
+    creates++;
+    estimate = FareEstimateModel.fromJson({
+      ...range(quote: true),
+      'bookingFare': fixed(2600),
+    });
+    throw FareFailure('FARE_QUOTE_CHANGED', 'Pricing changed.');
+  }
+}
+
 class FailingDataSource implements RideRemoteDataSource {
   final String code;
   FailingDataSource(this.code);
@@ -147,6 +159,41 @@ class MalformedDataSource extends FailingDataSource {
 }
 
 void main() {
+  test(
+    'a stale quote refreshes the fare but never auto-submits a changed price',
+    () async {
+      final repository = RepricingRepository()
+        ..estimate = FareEstimateModel.fromJson(range(quote: true));
+      final socket = ConnectedSocket();
+      final container = ProviderContainer(
+        overrides: [
+          rideRepositoryProvider.overrideWithValue(repository),
+          socketServiceProvider.overrideWithValue(socket),
+        ],
+      );
+      addTearDown(() {
+        container.dispose();
+        socket.dispose();
+      });
+      final notifier = container.read(rideProvider.notifier);
+      notifier.setRoute(
+        'A',
+        'B',
+        pickupCoords: const LatLng(12, 77),
+        destCoords: const LatLng(13, 78),
+        vehicleCategory: 'sedan',
+      );
+      await notifier.estimateRouteFare();
+      await notifier.requestRide();
+      expect(repository.creates, 1);
+      expect(container.read(rideProvider).fareEstimate!.bookingAmount, 26);
+      expect(
+        container.read(rideProvider).errorMessage,
+        contains('confirming again'),
+      );
+      expect(container.read(rideProvider).currentRide, isNull);
+    },
+  );
   test('malformed backend fare is a professional retry error, never availability or zero', () async {
     final repository = RideRepositoryImpl(MalformedDataSource());
     await expectLater(
@@ -234,7 +281,6 @@ void main() {
           locationServiceProvider.overrideWithValue(NoLocation()),
         ],
       );
-      addTearDown(container.dispose);
       final notifier = container.read(rideProvider.notifier);
       notifier.setRoute(
         'Warehouse',
@@ -263,6 +309,8 @@ void main() {
       expect(button.onPressed, isNotNull);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
+      container.dispose();
+      await tester.pump();
     },
   );
   test(

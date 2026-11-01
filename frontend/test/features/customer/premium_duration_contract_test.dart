@@ -1,0 +1,34 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:infurnus/core/services/location_service.dart';
+import 'package:infurnus/core/services/socket_service.dart';
+import 'package:infurnus/features/customer/data/models/fare_estimate_model.dart';
+import 'package:infurnus/features/customer/presentation/providers/ride_provider.dart';
+import 'package:infurnus/features/customer/presentation/providers/ride_repository_provider.dart';
+import 'package:infurnus/features/customer/presentation/screens/ride_booking_screen.dart';
+import 'passenger_vehicle_exclusion_test.dart' show NoLocation;
+import 'vehicle_fare_ranges_test.dart' show RecordingRepository, ConnectedSocket, range;
+
+void main() {
+  testWidgets('Premium duration menu exposes every hour through twelve and extended exact hours', (tester) async {
+    tester.view.physicalSize=const Size(1000,2400);
+    tester.view.devicePixelRatio=1;
+    addTearDown(() {tester.view.resetPhysicalSize();tester.view.resetDevicePixelRatio();});
+    final socket=ConnectedSocket();
+    final repo=RecordingRepository()..estimate=FareEstimateModel.fromJson(range(quote:true));
+    final container=ProviderContainer(overrides:[
+      rideRepositoryProvider.overrideWithValue(repo),
+      socketServiceProvider.overrideWithValue(socket),
+      locationServiceProvider.overrideWithValue(NoLocation()),
+    ]);
+    container.read(rideProvider.notifier).selectSector('premium');
+    container.read(rideProvider.notifier).selectTier('thar');
+    await tester.pumpWidget(UncontrolledProviderScope(container:container,child:const MaterialApp(home:RideBookingScreen())));
+    await tester.pump();
+    final field=tester.widget<DropdownButton<int>>(find.byType(DropdownButton<int>));
+    expect(field.items!.map((item)=>item.value).toList(),[1,2,3,4,5,6,7,8,9,10,11,12,13,24]);
+    await tester.pumpWidget(const SizedBox());
+    container.dispose();socket.dispose();
+  });
+}

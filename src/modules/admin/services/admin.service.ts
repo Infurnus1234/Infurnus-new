@@ -51,7 +51,7 @@ export class AdminService {
     const input = createVehicleTypeSchema.parse(body);
     // Canonical pricing aliases cannot acquire a conflicting second tariff.
     if (
-      (input.code === 'ftl' &&
+      (input.code === 'ftl' && !input.logisticsSlabs &&
         (input.pricingReference?.routeBased !== true ||
           input.baseFare !== null ||
           input.perKmRate !== null)) ||
@@ -59,7 +59,7 @@ export class AdminService {
     )
       throw new AppError(
         'VEHICLE_TYPE_INVALID',
-        'Use a canonical vehicle code; FTL remains route based.',
+        'Use a canonical vehicle code and explicitly configure its supported pricing model.',
         422,
       );
     const definedSectors = Object.keys(VEHICLE_FARE_PRICING).filter((sector) =>
@@ -80,8 +80,8 @@ export class AdminService {
   updateVehicleType(actorId: string, id: string, body: unknown) {
     return this.catalog().updateType(actorId, id, updateVehicleTypeSchema.parse(body));
   }
-  listVehicleTypes(limit: number, offset: number) {
-    return this.catalog().listTypes(limit, offset);
+  listVehicleTypes(limit: number, offset: number, sector?: string, excludeSector?: string) {
+    return this.catalog().listTypes(limit, offset, sector, false, excludeSector);
   }
   async getVehicleType(id: string) {
     const type = await this.catalog().getType(id);

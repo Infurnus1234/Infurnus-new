@@ -420,7 +420,6 @@ describe('Auth integration', () => {
   }> {
     const loginResponse = await request(app).post('/auth/login').send({
       email,
-      password: 'StrongPassword123!',
     });
 
     expect(loginResponse.status).toBe(200);
@@ -1325,7 +1324,6 @@ describe('Auth integration', () => {
 
     const login = await request(app).post('/auth/login').send({
       email: user.email,
-      password: 'StrongPassword123!',
     });
 
     expect(login.status).toBe(200);
@@ -1361,7 +1359,6 @@ describe('Auth integration', () => {
 
     const login = await request(app).post('/auth/login').send({
       phone: user.phone,
-      password: 'StrongPassword123!',
     });
 
     expect(login.status).toBe(200);
@@ -1393,7 +1390,6 @@ describe('Auth integration', () => {
 
     const login = await request(app).post('/auth/login').send({
       email: user.email,
-      password: 'StrongPassword123!',
     });
 
     expect(login.status).toBe(200);
@@ -1421,7 +1417,6 @@ describe('Auth integration', () => {
       .post('/auth/login')
       .send({
         email: uniqueEmail('invalid-credentials'),
-        password: 'WrongPassword123!',
       });
 
     expect(response.status).toBe(200);

@@ -1,3 +1,4 @@
+import { configureServiceFixture, restoreServiceFixtures, type ServiceFixtureSnapshots } from './service-catalog.fixture.js';
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { createServer as createTcpServer, connect as connectTcp } from 'node:net';
@@ -38,6 +39,7 @@ const users: string[] = [],
   profiles: string[] = [],
   vehicles: string[] = [],
   rides: string[] = [];
+const serviceTypes: ServiceFixtureSnapshots = new Map();
 const controllers: RideDispatchService[] = [];
 const queueCleanups: Array<() => Promise<void>> = [];
 function record(id: string, data: Record<string, unknown>) {
@@ -84,6 +86,10 @@ async function driver(sector = 'passenger', category = 'sedan', distance = 100) 
     [vehicleId, profileId, userId, `QA${vehicleId.slice(0, 12)}`, sector, category],
   );
   vehicles.push(vehicleId);
+  await pool.query('UPDATE vehicles SET operating_city_id=$2 WHERE id=$1', [
+    vehicleId,
+    syntheticDispatchCity.cityId,
+  ]);
   await pool.query(
     "UPDATE driver_profiles SET active_vehicle_id=$2,availability_status='available',last_location=ST_Project(ST_SetSRID(ST_MakePoint(77.5,13),4326)::geography,$3::float8,pi()/2),last_location_at=clock_timestamp() WHERE id=$1",
     [profileId, vehicleId, distance],
@@ -91,6 +97,7 @@ async function driver(sector = 'passenger', category = 'sedan', distance = 100) 
   return { userId, profileId, vehicleId };
 }
 async function ride(customerId: string, sector = 'passenger', category = 'sedan') {
+  if (sector === 'service') await configureServiceFixture(pool,category,serviceTypes);
   const id = randomUUID();
   await pool.query(
     "INSERT INTO rides(id,customer_id,status,sector,vehicle_category,pin,pickup_location,destination_location) VALUES($1,$2,'searching',$3,$4,'1234',ST_SetSRID(ST_MakePoint(77.5,13),4326)::geography,ST_SetSRID(ST_MakePoint(77.51,13),4326)::geography)",
@@ -111,6 +118,7 @@ async function expire(id: string) {
 }
 afterEach(async () => {
   for (const controller of controllers.splice(0)) controller.dispose();
+  await restoreServiceFixtures(pool,serviceTypes);
   for (const cleanup of queueCleanups.splice(0)) await cleanup();
   if (rides.length)
     await pool.query('DELETE FROM rides WHERE id=ANY($1::uuid[])', [rides.splice(0)]);
@@ -555,7 +563,7 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
   it.each([
     ['passenger', 'sedan', [2000, 5000, 10000]],
     ['logistics', 'mini_truck', [7000, 15000, 20000]],
-    ['service', 'towing', [10000, 15000, 20000]],
+    ['service', 'towing', [25000]],
   ] as const)(
     'HD-GEO-%s-%s: inside, exact and outside all wave edges',
     async (sector, category, radii) => {
@@ -589,7 +597,7 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
   it.each([
     ['passenger', 'sedan', [2000, 5000, 10000]],
     ['logistics', 'mini_truck', [7000, 15000, 20000]],
-    ['service', 'towing', [10000, 15000, 20000]],
+    ['service', 'towing', [25000]],
   ] as const)(
     'HD-WAVES-%s-%s: actual spatial matching and immediate rejection through all waves',
     async (sector, category, radii) => {
@@ -612,9 +620,9 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
       controllers.push(controller);
       await controller.dispatch(r);
       expect(offers).toEqual(ds.map((d) => d.profileId));
-      expect(new Set(offers).size).toBe(3);
+      expect(new Set(offers).size).toBe(radii.length);
       expect((await repo.findById(r.id))?.status).toBe('cancelled');
-      expect(times[2]!).toBeLessThan(5000);
+      expect(times.at(-1)!).toBeLessThan(5000);
       record(`HD-WAVES-${sector}-${category}`, {
         radii,
         offerDrivers: offers,
@@ -1018,6 +1026,78 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
       recoveryObservedMs: performance.now() - start,
     });
   });
+  it.each([
+    ['patna', 85.1, 25.6, 'muzaffarpur', 85.4, 26.12],
+    ['muzaffarpur', 85.4, 26.12, 'patna', 85.1, 25.6],
+  ] as const)(
+    'INTERCITY: %s pickup selects its own vehicle, never destination city',
+    async (pickupCity, pickupLon, pickupLat, destinationCity, destinationLon, destinationLat) => {
+      const areas = new PremiumCityAreas('config/service-area/premium-city-radius.json');
+      const cityRepo = new PostgresRideRepository(pool, areas);
+      const local = await driver('premium'),
+        visiting = await driver('premium'),
+        unknown = await driver('premium');
+      const r = await ride(await customer(), 'premium');
+      await pool.query('UPDATE vehicles SET operating_city_id=$2 WHERE id=$1', [
+        local.vehicleId,
+        pickupCity,
+      ]);
+      await pool.query('UPDATE vehicles SET operating_city_id=$2 WHERE id=$1', [
+        visiting.vehicleId,
+        destinationCity,
+      ]);
+      await pool.query('UPDATE vehicles SET operating_city_id=NULL WHERE id=$1', [
+        unknown.vehicleId,
+      ]);
+      await pool.query(
+        'UPDATE driver_profiles SET last_location=ST_SetSRID(ST_MakePoint($2,$3),4326)::geography,last_location_at=clock_timestamp() WHERE id=ANY($1::uuid[])',
+        [[local.profileId, visiting.profileId, unknown.profileId], pickupLon, pickupLat],
+      );
+      await pool.query(
+        'UPDATE rides SET pickup_location=ST_SetSRID(ST_MakePoint($2,$3),4326)::geography,destination_location=ST_SetSRID(ST_MakePoint($4,$5),4326)::geography WHERE id=$1',
+        [r.id, pickupLon, pickupLat, destinationLon, destinationLat],
+      );
+      const actual = (await cityRepo.findById(r.id))!;
+      const city = await areas.resolve(actual.pickup);
+      const matching = new MatchingService(drivers, undefined, undefined, areas);
+      const ids = (await matching.findDispatchDrivers(actual, null)).map((d) => d.driverProfileId);
+      expect(ids).toContain(local.profileId);
+      expect(ids).not.toContain(visiting.profileId);
+      expect(ids).not.toContain(unknown.profileId);
+      expect(await cityRepo.offerDispatch(r.id, visiting.profileId, 1, city)).toBe(false);
+      expect(await cityRepo.offerDispatch(r.id, unknown.profileId, 1, city)).toBe(false);
+      expect(await cityRepo.offerDispatch(r.id, local.profileId, 1, city)).toBe(true);
+      // Recheck persisted city at acceptance, even after a valid offer was issued.
+      await pool.query('UPDATE vehicles SET operating_city_id=$2 WHERE id=$1', [
+        local.vehicleId,
+        destinationCity,
+      ]);
+      await expect(
+        new RideService(cityRepo, drivers).acceptRide(local.profileId, r.id),
+      ).rejects.toMatchObject({ statusCode: 409 });
+      expect(await cityRepo.pendingDispatch(r.id)).toBeNull();
+      await pool.query('UPDATE vehicles SET operating_city_id=$2 WHERE id=$1', [
+        local.vehicleId,
+        pickupCity,
+      ]);
+      // Previously rejected drivers are never re-offered the same ride.
+      expect(await cityRepo.offerDispatch(r.id, local.profileId, 2, city)).toBe(false);
+      await pool.query('UPDATE vehicles SET operating_city_id=$2 WHERE id=$1', [
+        unknown.vehicleId,
+        pickupCity,
+      ]);
+      expect(await cityRepo.offerDispatch(r.id, unknown.profileId, 2, city)).toBe(true);
+      await new RideService(cityRepo, drivers).acceptRide(unknown.profileId, r.id);
+      expect((await cityRepo.findById(r.id))?.assignedDriverId).toBe(unknown.profileId);
+      record('INTERCITY', {
+        pickupCity,
+        destinationCity,
+        localAssigned: true,
+        visitingRejected: true,
+        unknownRejected: true,
+      });
+    },
+  );
   it('CITY-RADIUS-LIFECYCLE: matching, offer and acceptance enforce the same exact city radius', async () => {
     const areas = new PremiumCityAreas('config/service-area/premium-city-radius.json');
     const radiusRepo = new PostgresRideRepository(pool, areas),
@@ -1027,6 +1107,7 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
       'UPDATE rides SET pickup_location=ST_SetSRID(ST_MakePoint(85.1,25.6),4326)::geography WHERE id=$1',
       [r.id],
     );
+    await pool.query("UPDATE vehicles SET operating_city_id='patna' WHERE id=$1", [d.vehicleId]);
     const actual = (await radiusRepo.findById(r.id))!,
       city = await areas.resolve(actual.pickup);
     for (const delta of [-0.01, 0, 0.01]) {
@@ -1045,6 +1126,12 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
       );
     }
     expect(await radiusRepo.offerDispatch(r.id, d.profileId, 1, city)).toBe(false);
+    // Start a new GPS fixture at the pickup; a 25 km teleport in one second
+    // must still be rejected by the production movement validation.
+    await pool.query(
+      'UPDATE driver_profiles SET last_location=NULL,last_location_at=NULL WHERE id=$1',
+      [d.profileId],
+    );
     await vi.waitFor(async () =>
       expect(
         await drivers.updateLocation(d.profileId, {
@@ -1062,6 +1149,10 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
     await expect(
       new RideService(radiusRepo, drivers).acceptRide(d.profileId, r.id),
     ).rejects.toMatchObject({ statusCode: 409 });
+    await pool.query(
+      'UPDATE driver_profiles SET last_location=NULL,last_location_at=NULL WHERE id=$1',
+      [d.profileId],
+    );
     await vi.waitFor(async () =>
       expect(
         await drivers.updateLocation(d.profileId, {
@@ -1095,6 +1186,9 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
       'UPDATE driver_profiles SET last_location=ST_SetSRID(ST_MakePoint(85.1,25.6),4326)::geography WHERE id=ANY($1::uuid[])',
       [[d.profileId, next.profileId]],
     );
+    await pool.query("UPDATE vehicles SET operating_city_id='patna' WHERE id=ANY($1::uuid[])", [
+      [d.vehicleId, next.vehicleId],
+    ]);
     const city = await areas.resolve({ latitude: 25.6, longitude: 85.1 });
     expect(await radiusRepo.offerDispatch(r.id, d.profileId, 1, city)).toBe(true);
     await pool.query(

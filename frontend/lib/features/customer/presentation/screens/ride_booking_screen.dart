@@ -113,44 +113,17 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
           _fleetVehicles = fleet;
           _isLoadingFleet = false;
         });
-        final rideState = ref.read(rideProvider);
-        if (rideState.selectedTier.isEmpty) {
-          final nextTier = fleet.isNotEmpty
-              ? fleet.first.category
-              : (_getVehiclesForSector(sector).isNotEmpty
-                    ? _getVehiclesForSector(sector).first['category'] as String
-                    : 'hatchback');
-          ref.read(rideProvider.notifier).selectTier(nextTier);
-        }
       }
     } on DioException catch (e) {
       if (e.type == DioExceptionType.cancel) return;
       if (mounted) {
         setState(() => _isLoadingFleet = false);
         debugPrint('Fleet fetch fallback to catalog: $e');
-        final rideState = ref.read(rideProvider);
-        if (rideState.selectedTier.isEmpty) {
-          final catalog = _getVehiclesForSector(sector);
-          if (catalog.isNotEmpty) {
-            ref
-                .read(rideProvider.notifier)
-                .selectTier(catalog.first['category'] as String);
-          }
-        }
       }
     } catch (error) {
       if (mounted) {
         setState(() => _isLoadingFleet = false);
         debugPrint('Fleet fetch fallback to catalog: $error');
-        final rideState = ref.read(rideProvider);
-        if (rideState.selectedTier.isEmpty) {
-          final catalog = _getVehiclesForSector(sector);
-          if (catalog.isNotEmpty) {
-            ref
-                .read(rideProvider.notifier)
-                .selectTier(catalog.first['category'] as String);
-          }
-        }
       }
     }
   }
@@ -517,6 +490,11 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
   }
 
   String _getFuelNoticeText(RideState state) {
+    if (state.fareEstimate?.vehicleTypeId != null) {
+      return state.rentalDetails?['tripType'] == 'one_way'
+          ? 'One-way distance is included in this fare.'
+          : 'Round-trip distance is included in this fare.';
+    }
     final rentalFuelRate = state.rentalDetails?['fuelRatePerKm'] as num?;
     if (rentalFuelRate != null && rentalFuelRate > 0) {
       return 'Actual distance fuel billed separately @ ₹${rentalFuelRate.toStringAsFixed(0)}/km';
@@ -556,7 +534,9 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                     isService
                         ? 'Trip-Based Service Breakdown'
                         : (isPremium
-                              ? 'Premium Standby Estimate'
+                              ? (estimate?.vehicleTypeId != null
+                                    ? 'Itemized Fare Breakdown'
+                                    : 'Premium Standby Estimate')
                               : 'Itemized Fare Breakdown'),
                     style: const TextStyle(
                       fontSize: 18,
@@ -1060,6 +1040,60 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
         const SizedBox(height: 14),
 
         // Sector-specific options
+        if (state.selectedSector == 'premium') ...[
+          DropdownButtonFormField<String>(
+            initialValue:
+                state.rentalDetails?['tripType'] as String? ?? 'round_trip',
+            decoration: const InputDecoration(labelText: 'Journey type'),
+            items: const [
+              DropdownMenuItem(value: 'one_way', child: Text('One-way')),
+              DropdownMenuItem(value: 'round_trip', child: Text('Round trip')),
+            ],
+            onChanged: (tripType) {
+              if (tripType != null) {
+                ref.read(rideProvider.notifier).setRentalDetails({
+                  ...?state.rentalDetails,
+                  'tripType': tripType,
+                });
+              }
+            },
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<int>(
+            initialValue:
+                (state.rentalDetails?['hours'] as num?)?.toInt() ??
+                (state.selectedTier == 'thar' ? 6 : 1),
+            decoration: const InputDecoration(labelText: 'Booking duration'),
+            items: [
+              for (final hours in [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                24,
+              ])
+                DropdownMenuItem(value: hours, child: Text('$hours hours')),
+            ],
+            onChanged: (hours) {
+              if (hours != null) {
+                ref.read(rideProvider.notifier).setRentalDetails({
+                  ...?state.rentalDetails,
+                  'hours': hours,
+                });
+              }
+            },
+          ),
+          const SizedBox(height: 12),
+        ],
         if (state.selectedSector == 'service') ...[
           Container(
             padding: const EdgeInsets.all(12),
@@ -1128,9 +1162,13 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Chauffeur Standby Package',
-                        style: TextStyle(
+                      Text(
+                        state.fareEstimate?.vehicleTypeId != null
+                            ? (state.rentalDetails?['tripType'] == 'one_way'
+                                  ? 'One-way booking'
+                                  : 'Round-trip booking')
+                            : 'Chauffeur Standby Package',
+                        style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
                           color: goldAccent,
@@ -1442,7 +1480,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
   }
 
   bool _isTierMatching(String selectedTier, String category, int index) {
-    if (selectedTier.isEmpty) return index == 0;
+    if (selectedTier.isEmpty) return false;
     final s = selectedTier.toLowerCase().trim();
     final c = category.toLowerCase().trim();
     if (s == c) return true;
@@ -1451,20 +1489,16 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
         (c == 'traveller' || c == 'force_traveller')) {
       return true;
     }
-    if ((s == '207 cargo' || s == '207 heavy' || s == 'cargo_207_heavy') &&
-        (c == 'cargo_207' || c == 'cargo_207_heavy')) {
+    if (s == '207 cargo' && c == 'cargo_207') {
       return true;
     }
-    if ((s == '407 cargo' || s == 'tata_407') &&
-        (c == 'cargo_407' || c == 'tata_407')) {
+    if (s == '407 cargo' && c == 'cargo_407') {
       return true;
     }
-    if ((s == 'piaggio ape' || s == 'three_wheeler') &&
-        (c == 'piaggio_ape' || c == 'three_wheeler')) {
+    if (s == 'piaggio ape' && c == 'piaggio_ape') {
       return true;
     }
-    if ((s == 'tata magic' || s == 'mini_truck') &&
-        (c == 'tata_magic' || c == 'mini_truck')) {
+    if (s == 'tata magic' && c == 'tata_magic') {
       return true;
     }
     return false;
@@ -1504,36 +1538,16 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
           },
         ];
       case 'service':
-        return [
-          {
-            'name': 'Ambulance',
-            'category': 'ambulance',
-            'capacity': 'Emergency',
-            'icon': Icons.medical_services_rounded,
-            'image': 'assets/images/ambulance_van.png',
-          },
-          {
-            'name': 'Towing Van',
-            'category': 'towing',
-            'capacity': 'Breakdown',
-            'icon': Icons.car_repair_rounded,
-            'image': 'assets/images/towing_van.jpg',
-          },
-          {
-            'name': 'JCB Excavator',
-            'category': 'jcb',
-            'capacity': 'Construction',
-            'icon': Icons.construction_rounded,
-            'image': 'assets/images/jcb_excavator.jpg',
-          },
-          {
-            'name': 'Crane',
-            'category': 'crane',
-            'capacity': 'Heavy Lift',
-            'icon': Icons.precision_manufacturing_rounded,
-            'image': 'assets/images/crane_truck.png',
-          },
-        ];
+        return _fleetVehicles
+            .map(
+              (v) => <String, dynamic>{
+                'name': v.displayName,
+                'category': v.category,
+                'capacity': v.range ?? 'Configured service radius',
+                'icon': Icons.medical_services_rounded,
+              },
+            )
+            .toList();
       case 'premium':
       case 'rental':
       case 'rentals':
@@ -1842,7 +1856,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
     final vehicles = _getVehiclesForSector(state.selectedSector);
     final selected = vehicles.firstWhere(
       (v) => _isTierMatching(state.selectedTier, v['category'] as String, 0),
-      orElse: () => vehicles.isNotEmpty ? vehicles.first : <String, dynamic>{},
+      orElse: () => <String, dynamic>{},
     );
 
     if (selected.isEmpty) return const SizedBox.shrink();
@@ -1852,7 +1866,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
           'passenger': 'Rides',
           'logistics': 'Logistics',
           'service': 'Emergency',
-          'premium': 'Rentals',
+          'premium': 'Premium',
         }[state.selectedSector] ??
         'Ride';
 
@@ -2003,7 +2017,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
     final vehicles = _getVehiclesForSector(state.selectedSector);
     final selectedVehicle = vehicles.firstWhere(
       (v) => v['category'] == state.selectedTier,
-      orElse: () => vehicles.isNotEmpty ? vehicles.first : {'name': 'Ride'},
+      orElse: () => {'name': 'Ride'},
     );
     final vehicleName = selectedVehicle['name'] as String;
 
@@ -2113,7 +2127,10 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
             borderRadius: BorderRadius.circular(26),
           ),
         ),
-        onPressed: _isSubmittingBooking ? null : _handleBooking,
+        onPressed:
+            _isSubmittingBooking || state.fareEstimate?.bookingAmount == null
+            ? null
+            : _handleBooking,
         child: _isSubmittingBooking
             ? const Row(
                 mainAxisAlignment: MainAxisAlignment.center,

@@ -6,7 +6,6 @@ import '../../features/splash/presentation/screens/splash_screen.dart';
 import '../../features/onboarding/presentation/screens/onboarding_screen.dart';
 import '../../features/auth/presentation/screens/welcome_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
-import '../../features/auth/presentation/screens/password_recovery_screen.dart';
 import '../../features/auth/presentation/screens/signup_screen.dart';
 
 import '../../features/auth/presentation/screens/otp_screen.dart';
@@ -126,12 +125,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const DriverOnboardingScreen(),
       ),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
-      GoRoute(
-        path: '/forgot-password',
-        builder: (context, state) => PasswordRecoveryScreen(
-          initialEmail: state.extra is String ? state.extra as String : '',
-        ),
-      ),
+      GoRoute(path: '/forgot-password', redirect: (context, state) => '/login'),
       GoRoute(
         path: '/signup',
         builder: (context, state) => const SignupScreen(),

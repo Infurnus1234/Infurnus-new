@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { pool } from '../../../infrastructure/database/postgres.js';
 import { PostgresRentalRepository } from '../repositories/rental.repository.js';
 import { RentalService } from '../services/rental.service.js';
@@ -90,12 +90,60 @@ describeDatabase('rental PostgreSQL integration', () => {
     fixture = await createFixture();
   });
 
+  afterEach(async () => {
+    await cleanFixture(fixture);
+  });
+
   afterAll(async () => {
-    if (fixture) {
-      await cleanFixture(fixture);
-    }
     await pool.end();
   });
+
+  it.each(
+    [
+      'charter_flight',
+      'fortuner',
+      'helicopter',
+      'innova',
+      'scorpio_n',
+      'thar',
+      'traveller',
+      'yacht',
+    ].flatMap((category) =>
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 24].map((hours) => ({ category, hours })),
+    ),
+  )(
+    '$category asset reservation for $hours hours persists exact asset/time slot and completes',
+    async ({ category, hours }) => {
+      await pool.query("UPDATE vehicles SET sector='rental',category=$2 WHERE id=$1", [
+        fixture.vehicleId,
+        category,
+      ]);
+      const startAt = '2030-01-01T00:00:00Z';
+      const endAt = new Date(Date.parse(startAt) + hours * 3_600_000).toISOString();
+      const input = { ...rentalInput, vehicleId: fixture.vehicleId, startAt, endAt };
+      const key = randomUUID();
+      const created = await service.createRental(fixture.userId, input, key);
+      expect(created).toMatchObject({
+        vehicleId: fixture.vehicleId,
+        status: 'PENDING',
+        totalAmount: 2500,
+      });
+      expect(created.endAt.getTime() - created.startAt.getTime()).toBe(hours * 3_600_000);
+      expect((await service.createRental(fixture.userId, input, key)).id).toBe(created.id);
+      await expect(service.createRental(fixture.userId, input, randomUUID())).rejects.toMatchObject(
+        { code: 'RENTAL_AVAILABILITY_CONFLICT' },
+      );
+      await service.transitionRental(created.id, 'PENDING', 'CONFIRMED');
+      await service.transitionRental(created.id, 'CONFIRMED', 'ACTIVE');
+      expect((await service.transitionRental(created.id, 'ACTIVE', 'COMPLETED')).status).toBe(
+        'COMPLETED',
+      );
+      expect(
+        (await pool.query('SELECT category,sector FROM vehicles WHERE id=$1', [created.vehicleId]))
+          .rows[0],
+      ).toEqual({ category, sector: 'rental' });
+    },
+  );
 
   it('creates a rental and prevents an overlapping booking', async () => {
     const first = await service.createRental(

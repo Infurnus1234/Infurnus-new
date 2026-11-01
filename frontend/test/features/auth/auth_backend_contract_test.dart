@@ -65,8 +65,7 @@ void main() {
         token = auth.accessToken;
         expect(authRoleFromToken(token), 'customer');
         await source.getUserProfile(auth.userId);
-        // Customer login is OTP-based in the existing backend. A password
-        // string can request a challenge, but cannot grant an access token.
+        // Password login is rejected; only the OTP challenge may establish a session.
         final anonymousDio = Dio(BaseOptions(baseUrl: url));
         Map? challengeData;
         anonymousDio.interceptors.add(
@@ -80,9 +79,20 @@ void main() {
           ),
         );
         final anonymous = AuthRemoteDataSourceImpl(anonymousDio);
-        final challenge = await anonymous.login(
-          LoginRequest(email: email, password: 'wrong-password'),
+        await expectLater(
+          anonymousDio.post(
+            '/auth/login',
+            data: {'email': email, 'role': 'customer', 'password': original},
+          ),
+          throwsA(
+            isA<DioException>().having(
+              (e) => e.response?.statusCode,
+              'password login rejected',
+              400,
+            ),
+          ),
         );
+        final challenge = await anonymous.login(LoginRequest(email: email));
         expect(challenge.challengeId, isNotEmpty);
         expect(challengeData, isNot(contains('accessToken')));
         await expectLater(
@@ -109,9 +119,7 @@ void main() {
         );
         expect(anonymousVerified.userId, auth.userId);
         expect(authRoleFromToken(anonymousVerified.accessToken), 'customer');
-        final login = await source.loginEmail(
-          LoginRequest(email: email, password: original),
-        );
+        final login = await source.loginEmail(LoginRequest(email: email));
         await expectLater(
           source.verifyLoginEmail(
             VerifyLoginRequest(challengeId: login.challengeId, otp: '000000'),
@@ -157,6 +165,8 @@ void main() {
         await source.logout();
         await expectLater(source.refreshToken(), throwsA(isA<DioException>()));
       } finally {
+        // The logout assertion revoked this bearer; fixture cleanup is anonymous.
+        token = null;
         await dio.post('/__auth_test_shutdown');
         dio.close();
       }

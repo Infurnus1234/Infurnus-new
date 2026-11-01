@@ -1,3 +1,4 @@
+import { hashPassword } from '../utils/password.js';
 import { randomUUID } from 'node:crypto';
 
 import request from 'supertest';
@@ -279,6 +280,15 @@ describe('Password reset integration', () => {
     expect(verifyResponse.status).toBe(200);
     expect(verifyResponse.body.success).toBe(true);
 
+    // Public signup cannot create administrators. Seed the controlled Admin
+    // fixture after OTP registration to test retained administrative recovery.
+    await pool.query("UPDATE users SET role='admin' WHERE id=$1", [
+      verifyResponse.body.data.userId,
+    ]);
+    await pool.query('UPDATE user_credentials SET password_hash=$2 WHERE user_id=$1', [
+      verifyResponse.body.data.userId,
+      await hashPassword(ORIGINAL_PASSWORD),
+    ]);
     return {
       userId: verifyResponse.body.data.userId,
       email,
@@ -443,35 +453,35 @@ describe('Password reset integration', () => {
       const user = await createVerifiedUser('role-reset');
       try {
         await pool.query('UPDATE users SET role=$2 WHERE id=$1', [user.userId, role]);
+        const administrative = ['admin', 'super_admin'].includes(role);
         const login = await request(app)
           .post('/auth/login')
-          .send({ email: user.email, password: ORIGINAL_PASSWORD })
+          .send({ email: user.email, ...(administrative ? { password: ORIGINAL_PASSWORD } : {}) })
           .expect(200);
-        if (role === 'admin' || role === 'super_admin') {
+        if (administrative) {
           expect(login.body.data.accessToken).toEqual(expect.any(String));
           expect(login.body.data.challengeId).toBeUndefined();
         } else {
-          if (role === 'admin' || role === 'super_admin') {
-            expect(login.body.data.accessToken).toEqual(expect.any(String));
-            expect(login.body.data.challengeId).toBeUndefined();
-          } else {
-            await request(app)
-              .post('/auth/login/verify')
-              .send({ challengeId: login.body.data.challengeId, otp: '123456' })
-              .expect(200);
-          }
-        }
-        if (role === 'customer' || role === 'driver') {
+          await request(app)
+            .post('/auth/login/verify')
+            .send({ challengeId: login.body.data.challengeId, otp: '123456' })
+            .expect(200);
+          await request(app)
+            .post('/auth/login')
+            .send({ email: user.email, password: ORIGINAL_PASSWORD })
+            .expect(400);
           const disabled = await requestPasswordReset(user.email);
           await request(app)
             .post('/auth/forgot-password/verify')
             .send({ resetSessionToken: disabled.resetSessionToken, otp: '123456' })
             .expect(400);
-          const count = await pool.query(
-            'SELECT id FROM password_reset_challenges WHERE user_id=$1',
-            [user.userId],
-          );
-          expect(count.rows).toHaveLength(0);
+          expect(
+            (
+              await pool.query('SELECT id FROM password_reset_challenges WHERE user_id=$1', [
+                user.userId,
+              ])
+            ).rows,
+          ).toHaveLength(0);
           return;
         }
         const session = await requestPasswordReset(user.email);
@@ -883,30 +893,12 @@ describe('Password reset integration', () => {
 
       expect(loginOne.status).toBe(200);
 
-      const otpOne = otpProvider.getEmailOtp(user.email);
-
-      const verifyOne = await request(app).post('/auth/login/verify').send({
-        challengeId: loginOne.body.data.challengeId,
-        otp: otpOne,
-      });
-
-      expect(verifyOne.status).toBe(200);
-
       const loginTwo = await request(app).post('/auth/login').send({
         email: user.email,
         password: ORIGINAL_PASSWORD,
       });
 
       expect(loginTwo.status).toBe(200);
-
-      const otpTwo = otpProvider.getEmailOtp(user.email);
-
-      const verifyTwo = await request(app).post('/auth/login/verify').send({
-        challengeId: loginTwo.body.data.challengeId,
-        otp: otpTwo,
-      });
-
-      expect(verifyTwo.status).toBe(200);
 
       const reset = await requestPasswordReset(user.email);
 

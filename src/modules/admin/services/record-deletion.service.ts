@@ -226,6 +226,12 @@ export class RecordDeletionService {
           throw conflict(['coupon_redemptions']);
         if (module === 'vehicles') await this.clearUnreviewedRequest(client, 'vehicle', id);
         if (module === 'vehicle-types') {
+          const catalog = await client.query(
+            'SELECT 1 FROM fleet_registration_vehicle_types WHERE sector=$1 AND code=$2',
+            [row.sector, row.code],
+          );
+          if (catalog.rowCount)
+            throw conflict(['vehicle_catalog: deactivate this category instead']);
           // Category codes are also persisted in records without foreign keys.
           const columns = await client.query<{ table: string; column: string }>(
             `SELECT table_name AS table,column_name AS column FROM information_schema.columns WHERE table_schema='public' AND table_name IN ('vehicles','driver_profiles','rides','rentals','logistics_orders') AND column_name IN ('category','vehicle_type','vehicle_category','vehicle_type_code')`,

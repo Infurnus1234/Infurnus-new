@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -114,6 +115,44 @@ void main() {
       'rotated-fixture',
     );
   });
+
+  test(
+    'a delayed support 401 retries the rotated token without a second refresh',
+    () async {
+      var refreshes = 0;
+      var oldRequests = 0;
+      final rotatedRequest = Completer<void>();
+      server.listen((request) async {
+        request.response.headers.contentType = ContentType.json;
+        if (request.uri.path == '/auth/refresh') {
+          refreshes++;
+          request.response.statusCode = refreshes == 1 ? 200 : 401;
+          request.response.write(
+            jsonEncode({
+              'data': {'accessToken': 'rotated-fixture'},
+            }),
+          );
+        } else if (request.headers.value('Authorization') ==
+            'Bearer rotated-fixture') {
+          if (!rotatedRequest.isCompleted) rotatedRequest.complete();
+          request.response.write('{"success":true,"data":[]}');
+        } else {
+          oldRequests++;
+          if (oldRequests == 2) await rotatedRequest.future;
+          request.response.statusCode = 401;
+          request.response.write('{}');
+        }
+        await request.response.close();
+      });
+      final responses = await Future.wait([
+        dio.get('/support/tickets'),
+        dio.get('/support/tickets'),
+      ]);
+      expect(responses.every((response) => response.statusCode == 200), isTrue);
+      expect(refreshes, 1);
+      expect(container.read(sessionRejectionProvider), 0);
+    },
+  );
 
   for (final status in [401, 503]) {
     test(

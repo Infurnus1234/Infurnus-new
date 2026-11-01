@@ -14,7 +14,7 @@ vi.mock('../../auth/utils/jwt.js', () => ({
 const ack = (client: Socket, event: string, payload: unknown) =>
   new Promise<{ success: boolean }>((resolve) => client.emit(event, payload, resolve));
 describe('live GPS backend Socket.IO integration', () => {
-  it('broadcasts HTTP/shared ingestion and five-second updates without requesting a route on every update', async () => {
+  it('broadcasts HTTP/shared ingestion and one-second updates without requesting a route on every update', async () => {
     const now = Date.now(),
       rideId = '11111111-1111-4111-8111-111111111111';
     const driverRepository = {
@@ -138,7 +138,7 @@ describe('live GPS backend Socket.IO integration', () => {
             rideId,
             latitude: 0,
             longitude: 0.00001 * (i + 1),
-            timestamp: new Date(now - 15000 + i * 5000).toISOString(),
+            timestamp: new Date(now - 3000 + i * 1000).toISOString(),
           }),
         ).toMatchObject({ success: true });
       // Same ingestion service is called by the existing authenticated HTTP controller.

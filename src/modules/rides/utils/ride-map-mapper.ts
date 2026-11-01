@@ -18,7 +18,7 @@ export function freshRideLocation(location: LiveRideLocation | null, now = Date.
   }
   const age = now - Date.parse(location.timestamp);
   return Number.isFinite(age) && age >= 0 && age <= env.DRIVER_LOCATION_STALE_SECONDS * 1000
-    ? { latitude: location.latitude, longitude: location.longitude, timestamp: location.timestamp }
+    ? { ...location }
     : null;
 }
 export function driverDestinationAllowed(ride: Ride): boolean {

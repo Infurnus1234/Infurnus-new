@@ -1,3 +1,7 @@
+import { randomUUID } from 'node:crypto';
+import type { MatchingService } from './matching.service.js';
+import { dispatchPolicy } from './dispatch-policy.js';
+import { requestedBookingHours } from '../../vehicles/services/hourly-pricing.js';
 import type { CommonMapService } from '../../maps/map.service.js';
 import type { RideMapData, UserRideMapData, DriverRideMapData } from '../types/ride-map.js';
 import {
@@ -17,9 +21,14 @@ import { env } from '../../../config/env.js';
 import { serviceArea, type ServiceAreaGate } from '../../maps/service-area.js';
 import { withTransaction } from '../../../infrastructure/database/postgres.js';
 import { AppError } from '../../../common/errors/app-error.js';
-import type { CancelRideInput, CreateRideInput, ListRidesInput } from '../schemas/ride.schemas.js';
+import type {
+  CancelRideInput,
+  CreateRideInput,
+  FareEstimateInput,
+  ListRidesInput,
+} from '../schemas/ride.schemas.js';
 import type { RideRepository } from '../repositories/ride.repository.js';
-import type { RideStatus } from '../types/ride.js';
+import type { Ride, RideStatus } from '../types/ride.js';
 import type { DriverRepository } from '../repositories/driver.repository.js';
 import type { DriverDocumentStorageService } from '../services/driver-document-storage.service.js';
 import { rideEvents } from '../events/ride.events.js';
@@ -38,9 +47,56 @@ export class RideService {
     private readonly transactionRunner: RideTransactionRunner = withTransaction,
     private readonly area: ServiceAreaGate = serviceArea,
     private readonly maps?: CommonMapService,
+    private readonly matching?: Pick<MatchingService, 'findDispatchDrivers'>,
   ) {}
 
+  async serviceAvailability(customerId: string, input: FareEstimateInput) {
+    if (input.sector !== 'service')
+      throw new AppError('INVALID_SERVICE_TYPE', 'Choose a Service Vehicle type.', 400);
+    await this.area.assertSupported([input.pickup, input.destination]);
+    if (!this.matching || !this.fareEstimateService)
+      throw new AppError(
+        'SERVICE_UNAVAILABLE',
+        'Service availability is temporarily unavailable.',
+        503,
+      );
+    const fare = await this.fareEstimateService.estimate(input.pickup, input.destination, {
+      sector: 'service',
+      vehicleCategory: input.vehicleCategory,
+      pricingMode: 'vehicle_range',
+    });
+    const candidates = await this.matching.findDispatchDrivers(
+      {
+        id: randomUUID(),
+        customerId,
+        pickup: input.pickup,
+        destination: input.destination,
+        sector: 'service',
+        vehicleCategory: input.vehicleCategory,
+      } as Ride,
+      25000,
+    );
+    return {
+      ...fare,
+      bookable: candidates.length > 0,
+      available: candidates.length > 0,
+      message: candidates.length
+        ? 'Fixed fare. An eligible service vehicle is currently available near your pickup.'
+        : 'No eligible service vehicle is available within this service’s configured radius of your pickup. Try again later.',
+    };
+  }
+
   async createRide(customerId: string, input: CreateRideInput) {
+    if (input.sector === 'service' && !input.clientRequestId)
+      throw new AppError(
+        'BOOKING_REQUEST_ID_REQUIRED',
+        'Start a new service booking before confirming.',
+        400,
+      );
+    if (input.clientRequestId && this.repository.findByClientRequest) {
+      const previous = await this.repository.findByClientRequest(customerId, input);
+      if (previous) return this.hydrateDriverPhoto(previous);
+    }
     await this.area.assertSupported([input.pickup, input.destination]);
     if (!this.fareEstimateService) {
       throw new AppError(
@@ -66,6 +122,8 @@ export class RideService {
         input.sector === 'premium'
           ? (input.rentalDetails?.hours ?? input.rentalDetails?.rentalHours)
           : undefined,
+      bookingHours: requestedBookingHours(input),
+      tripType: input.sector === 'premium' ? input.rentalDetails?.tripType : undefined,
       fuelRatePerKm: input.sector === 'premium' ? input.rentalDetails?.fuelRatePerKm : undefined,
     });
     const bookingFare =
@@ -81,6 +139,30 @@ export class RideService {
     ) {
       throw new AppError('FARE_FIXED_QUOTE_REQUIRED', FIXED_QUOTE_REQUIRED_MESSAGE, 422);
     }
+    const quoted = input.pricingQuote;
+    if (
+      quoted &&
+      (quoted.vehicleTypeId !== bookingFare.vehicleConfiguration?.id ||
+        quoted.pricingVersion !== bookingFare.pricingVersion ||
+        quoted.amountPaise !== bookingFare.grossAmount)
+    ) {
+      throw new AppError(
+        'FARE_QUOTE_CHANGED',
+        'Vehicle pricing changed or the quote does not match this vehicle. Refresh the fare before booking.',
+        409,
+      );
+    }
+    // Legacy clients may send a display amount, but it never sets the fare.
+    if (
+      input.fareEstimate !== undefined &&
+      Math.round(input.fareEstimate * 100) !== bookingFare.grossAmount
+    ) {
+      throw new AppError(
+        'FARE_QUOTE_MISMATCH',
+        'The submitted fare does not match the server quote.',
+        409,
+      );
+    }
     // rides.fare_estimate is NUMERIC(10, 2): reject overflow before persistence.
     if (bookingFare.grossAmount > 9_999_999_999) {
       throw new AppError(
@@ -88,6 +170,43 @@ export class RideService {
         'The booking quote exceeds the supported amount.',
         422,
       );
+    }
+    // A saved price is not evidence of live vehicle supply. Check the same
+    // sector/category/city/eligibility policy as dispatch before creating a ride.
+    // Dispatch still revalidates and leases atomically if availability changes.
+    if (this.matching) {
+      const policy = dispatchPolicy(input.sector, input.vehicleCategory);
+      const now = new Date();
+      const probe: Ride = {
+        id: randomUUID(),
+        customerId,
+        assignedDriverId: null,
+        assignedVehicleId: null,
+        pickup: input.pickup,
+        destination: input.destination,
+        pickupAddress: input.pickupAddress ?? null,
+        destinationAddress: input.destinationAddress ?? null,
+        status: 'searching',
+        sector: input.sector,
+        vehicleCategory: input.vehicleCategory,
+        cancellationReason: null,
+        cancelledAt: null,
+        completedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      const candidates = await this.matching.findDispatchDrivers(
+        probe,
+        policy.radiiMeters.at(-1) ?? null,
+      );
+      if (!candidates.length)
+        throw new AppError(
+          'NO_ELIGIBLE_DRIVERS',
+          input.sector === 'service'
+            ? 'No eligible service vehicle is available within this service’s configured radius of your pickup. Please try again later.'
+            : 'No eligible drivers are available for this vehicle near your pickup. Please try again later.',
+          409,
+        );
     }
     const ride = await this.repository.create(customerId, {
       ...input,
@@ -168,7 +287,10 @@ export class RideService {
         ? 'destination'
         : 'pickup'
       : null;
-    const metadata = snapshot.metadata;
+    const metadata =
+      this.maps?.navigationStorageAllowed === false
+        ? this.maps.navigation.transientMetadata(id)
+        : snapshot.metadata;
     let route: RideMapData['route'] = null,
       progress: RideMapData['progress'] = null,
       eta: RideMapData['eta'] = null;
@@ -181,7 +303,7 @@ export class RideService {
     const target = segment === 'destination' ? ride.destination : ride.pickup;
     if (
       active &&
-      this.maps?.navigationStorageAllowed &&
+      this.maps &&
       metadata?.segment === segment &&
       metadata.destination?.latitude === target.latitude &&
       metadata.destination?.longitude === target.longitude &&
@@ -200,14 +322,22 @@ export class RideService {
         source: progress ? 'route_progress_estimate' : 'provider_route',
       };
     } else if (active && includeRoute && this.maps && driverLocation) {
-      route = await this.maps
-        .calculateRoute(driverLocation!, target, {
-          source: 'RIDE',
-        })
-        .catch((error: unknown) => {
-          if (error instanceof AppError && error.code === 'MAP_PROVIDER_INVALID') throw error;
-          return null;
-        });
+      const work = async () => {
+        const next = await this.maps!.navigation.process(
+          id,
+          metadata,
+          driverLocation!,
+          target,
+          segment!,
+          (value) => this.repository.updateRouteMetadata(id, value, metadata?.routeVersion ?? 0),
+        );
+        return next ?? this.maps!.navigation.transientMetadata(id) ?? metadata;
+      };
+      const next = this.repository.withRouteLock
+        ? await this.repository.withRouteLock(id, work)
+        : await work();
+      route = next?.route ?? null;
+      routeVersion = next?.routeVersion ?? 0;
       if (route && !validRouteResult(route))
         throw new AppError('MAP_PROVIDER_INVALID', 'Invalid ride route', 503);
       if (route) {
@@ -229,7 +359,11 @@ export class RideService {
     ride = current.ride;
     driverLocation = active ? freshRideLocation(current.driverLocation) : null;
     userLocation = active ? freshRideLocation(current.userLocation) : null;
-    if ((current.metadata?.routeVersion ?? 0) > (metadata?.routeVersion ?? 0)) {
+    const currentNavigation =
+      this.maps?.navigationStorageAllowed === false
+        ? this.maps.navigation.transientMetadata(id)
+        : current.metadata;
+    if ((currentNavigation?.routeVersion ?? 0) > routeVersion) {
       route = null;
       progress = null;
       eta = null;

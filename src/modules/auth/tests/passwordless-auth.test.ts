@@ -51,9 +51,9 @@ describe('passwordless authentication', () => {
       expect(await f.service.authenticate({ phone: f.identity.phone })).toHaveProperty(
         'challengeId',
       );
-      expect(
-        await f.service.authenticate({ email: ' USER@example.com ', password: 'ignored' }),
-      ).toHaveProperty('challengeId');
+      expect(await f.service.authenticate({ email: ' USER@example.com ' })).toHaveProperty(
+        'challengeId',
+      );
       expect(f.provider.sendSmsOtp).toHaveBeenCalledWith(f.identity.phone);
       expect(f.provider.sendEmailOtp).toHaveBeenCalledWith(f.identity.email);
       expect(verifyPassword).not.toHaveBeenCalled();

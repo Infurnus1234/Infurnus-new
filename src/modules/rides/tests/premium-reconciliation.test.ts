@@ -176,7 +176,14 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
         releaseBusy: vi.fn().mockResolvedValue(true),
       };
 
-      const service = new RideService(mockRideRepo as never, mockDriverRepo as never);
+      const service = new RideService(
+        mockRideRepo as never,
+        mockDriverRepo as never,
+        undefined,
+        undefined,
+        async (work) =>
+          work({ query: vi.fn().mockResolvedValue({ rows: [], rowCount: 1 }) } as never),
+      );
 
       const completed = await service.completeRide('premium-ride-1', 'driver-1');
 
@@ -235,7 +242,14 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
         releaseBusy: vi.fn().mockResolvedValue(true),
       };
 
-      const service = new RideService(mockRideRepo as never, mockDriverRepo as never);
+      const service = new RideService(
+        mockRideRepo as never,
+        mockDriverRepo as never,
+        undefined,
+        undefined,
+        async (work) =>
+          work({ query: vi.fn().mockResolvedValue({ rows: [], rowCount: 1 }) } as never),
+      );
 
       const completed = await service.completeRide('passenger-ride-1', 'driver-1');
 
@@ -298,7 +312,14 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
         releaseBusy: vi.fn().mockResolvedValue(true),
       };
 
-      const service = new RideService(mockRideRepo as never, mockDriverRepo as never);
+      const service = new RideService(
+        mockRideRepo as never,
+        mockDriverRepo as never,
+        undefined,
+        undefined,
+        async (work) =>
+          work({ query: vi.fn().mockResolvedValue({ rows: [], rowCount: 1 }) } as never),
+      );
 
       const completed = await service.completeRide('premium-ride-sec', 'driver-1');
 
@@ -501,7 +522,7 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
 
       driverProfileId = profileRes.rows[0]!.id;
 
-      // Configured vehicle fuel rate: ₹18.00/km (Fortuner)
+      // Configured vehicle fuel rate: Ã¢â€šÂ¹18.00/km (Fortuner)
       const vehicleRes = await pool.query<{ id: string }>(
         `INSERT INTO vehicles
              (
@@ -532,7 +553,10 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
       );
 
       vehicleId = vehicleRes.rows[0]!.id;
-      await pool.query('UPDATE vehicles SET owner_id=$2 WHERE id=$1', [vehicleId, driverUserId]);
+      await pool.query(
+        "UPDATE vehicles SET owner_id=$2,operating_city_id='TEST_ONLY_CITY' WHERE id=$1",
+        [vehicleId, driverUserId],
+      );
       await pool.query('UPDATE driver_profiles SET active_vehicle_id=$2 WHERE id=$1', [
         driverProfileId,
         vehicleId,
@@ -576,10 +600,10 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
         [secondProfileId, `NEXT-${secondSuffix.replaceAll('-', '').slice(0, 10)}`],
       );
       const secondVehicleId = secondVehicleResult.rows[0]!.id;
-      await pool.query('UPDATE vehicles SET owner_id=$2 WHERE id=$1', [
-        secondVehicleId,
-        secondUserId,
-      ]);
+      await pool.query(
+        "UPDATE vehicles SET owner_id=$2,operating_city_id='TEST_ONLY_CITY' WHERE id=$1",
+        [secondVehicleId, secondUserId],
+      );
       await pool.query(
         `UPDATE driver_profiles
          SET active_vehicle_id = $2,
@@ -854,11 +878,11 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
 
       expect(completedRide.actualDistanceMeters).toBe(50000);
 
-      // Hourly base = 4 * 1000 = ₹4,000
-      // Fuel = 50 * ₹18 = ₹900
-      // Subtotal = ₹4,900
-      // Tax = ₹245
-      // Final = ₹5,145
+      // Hourly base = 4 * 1000 = Ã¢â€šÂ¹4,000
+      // Fuel = 50 * Ã¢â€šÂ¹18 = Ã¢â€šÂ¹900
+      // Subtotal = Ã¢â€šÂ¹4,900
+      // Tax = Ã¢â€šÂ¹245
+      // Final = Ã¢â€šÂ¹5,145
       expect(completedRide.actualFuelCost).toBe(900);
 
       expect(completedRide.finalFare).toBe(5145);
@@ -906,7 +930,7 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
       await pool.query('DELETE FROM rides WHERE id = $1', [ride.id]);
     });
 
-    it('safely falls back to ₹15.00/km if vehicle fuel_rate_per_km is 0 or null', async () => {
+    it('safely falls back to Ã¢â€šÂ¹15.00/km if vehicle fuel_rate_per_km is 0 or null', async () => {
       const suffix = randomUUID();
 
       const driverRes2 = await pool.query<{ id: string }>(
@@ -971,10 +995,10 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
       );
 
       const fallbackVehId = vehRes.rows[0]!.id;
-      await pool.query('UPDATE vehicles SET owner_id=$2 WHERE id=$1', [
-        fallbackVehId,
-        driverRes2.rows[0]!.id,
-      ]);
+      await pool.query(
+        "UPDATE vehicles SET owner_id=$2,operating_city_id='TEST_ONLY_CITY' WHERE id=$1",
+        [fallbackVehId, driverRes2.rows[0]!.id],
+      );
       await pool.query('UPDATE driver_profiles SET active_vehicle_id=$2 WHERE id=$1', [
         driverProfileId2,
         fallbackVehId,

@@ -1,3 +1,6 @@
+import { serviceConfiguration } from '../../vehicles/services/service-pricing.js';
+import { logisticsSlab } from '../../vehicles/services/logistics-pricing.js';
+import { hourlyBaseFare } from '../../vehicles/services/hourly-pricing.js';
 import { demandProvenance, selectDemandRates } from './demand-pricing.js';
 import type { DemandPricingProvenance } from '../types/fare.js';
 import type { VehicleType } from '../../vehicles/types/vehicle.js';
@@ -78,8 +81,104 @@ export class FareCalculatorService {
   ): FareEstimateResult {
     if (configured) {
       this.validateInput(input);
-      if (!configured.active || configured.sector !== input.sector)
+      if (
+        !configured.active ||
+        configured.sector !== input.sector ||
+        configured.code !== canonicalVehicleCode(input.sector ?? '', input.vehicleCategory ?? '')
+      )
         throw new AppError('FARE_CONFIGURATION_MISSING', VEHICLE_UNAVAILABLE_MESSAGE, 422);
+      if (configured.sector === 'service') {
+        const { farePaise, radiusMeters } = serviceConfiguration(configured);
+        const bookingFare = this.calculateResolved(
+          input,
+          { baseFare: farePaise, distanceRatePerKm: 0 },
+          true,
+          1,
+        );
+        bookingFare.billableDistanceMeters = 0;
+        const pricingVersion = `vehicle-type:${configured.id}:v${configured.version}`;
+        bookingFare.pricingVersion = pricingVersion;
+        bookingFare.vehicleConfiguration = {
+          id: configured.id,
+          code: configured.code,
+          sector: 'service',
+          version: configured.version,
+          baseFarePaise: farePaise,
+          perKmRatePaise: 0,
+          pricingModel: 'service_fixed',
+          serviceRadiusMeters: radiusMeters,
+        };
+        return {
+          estimateType: 'range',
+          vehicleCategory: configured.code,
+          currency: 'INR',
+          pricingVersion,
+          pricing: {
+            displayName: configured.name,
+            baseFare: { minimum: farePaise, maximum: farePaise },
+            perKmRate: { minimum: 0, maximum: 0 },
+          },
+          distanceMeters: input.distanceMeters,
+          durationSeconds: input.durationSeconds,
+          oneWayDistanceMeters: input.distanceMeters,
+          billableDistanceMeters: 0,
+          distanceMultiplier: 1,
+          estimatedFare: { minimum: bookingFare, maximum: bookingFare },
+          bookingFare,
+          bookable: true,
+          message: 'Fixed service fare. Distance, duration and demand do not change this amount.',
+        };
+      }
+      if (configured.sector === 'logistics' && !configured.logisticsSlabs)
+        throw new AppError(
+          'FARE_CONFIGURATION_MISSING',
+          'Configure both Logistics distance slabs before accepting bookings',
+          422,
+        );
+      if (configured.logisticsSlabs) {
+        if (input.sector !== 'logistics')
+          throw new AppError('FARE_CONFIGURATION_MISSING', VEHICLE_UNAVAILABLE_MESSAGE, 422);
+        const slab = logisticsSlab(configured.logisticsSlabs, input.distanceMeters);
+        const bookingFare = this.calculateResolved(input, slab, true, 1);
+        const pricingVersion = 'vehicle-type:' + configured.id + ':v' + configured.version;
+        bookingFare.pricingVersion = pricingVersion;
+        bookingFare.vehicleConfiguration = {
+          id: configured.id,
+          code: configured.code,
+          sector: configured.sector,
+          version: configured.version,
+          baseFarePaise: slab.baseFare,
+          perKmRatePaise: slab.distanceRatePerKm,
+          logisticsSlab: slab.key,
+        };
+        const upfront = Math.round(bookingFare.grossAmount * 0.4);
+        bookingFare.logisticsPayment = {
+          totalPaise: bookingFare.grossAmount,
+          upfrontPaise: upfront,
+          finalPaise: bookingFare.grossAmount - upfront,
+          currency: 'INR',
+        };
+        return {
+          estimateType: 'range',
+          vehicleCategory: configured.code,
+          pricing: {
+            displayName: configured.name,
+            baseFare: { minimum: slab.baseFare, maximum: slab.baseFare },
+            perKmRate: { minimum: slab.distanceRatePerKm, maximum: slab.distanceRatePerKm },
+          },
+          currency: 'INR',
+          pricingVersion,
+          oneWayDistanceMeters: input.distanceMeters,
+          billableDistanceMeters: input.distanceMeters,
+          distanceMultiplier: 1,
+          distanceMeters: input.distanceMeters,
+          durationSeconds: input.durationSeconds,
+          estimatedFare: { minimum: bookingFare, maximum: bookingFare },
+          bookingFare,
+          bookable: true,
+          message: 'Fare uses this Logistics vehicle’s saved distance slab.',
+        };
+      }
       if (configured.baseFare === null || configured.perKmRate === null) {
         if (!configured.pricingReference)
           throw new AppError('FARE_CONFIGURATION_MISSING', VEHICLE_UNAVAILABLE_MESSAGE, 422);
@@ -90,8 +189,12 @@ export class FareCalculatorService {
           const pricingVersion = 'vehicle-type:' + configured.id + ':v' + configured.version;
           const common = {
             oneWayDistanceMeters: input.distanceMeters,
-            billableDistanceMeters: input.distanceMeters * 2,
-            distanceMultiplier: 2 as const,
+            billableDistanceMeters:
+              input.distanceMeters *
+              (input.sector === 'premium' && input.tripType === 'one_way' ? 1 : 2),
+            distanceMultiplier: (input.sector === 'premium' && input.tripType === 'one_way'
+              ? 1
+              : 2) as 1 | 2,
             vehicleCategory: configured.code,
             pricing: tariff,
             currency: 'INR' as const,
@@ -145,7 +248,11 @@ export class FareCalculatorService {
         result.pricingVersion = 'vehicle-type:' + configured.id + ':v' + configured.version;
         return result;
       }
-      const baseFare = Math.round(configured.baseFare * 100),
+      const hourly = hourlyBaseFare(
+        configured,
+        input.bookingHours ?? (input.sector === 'premium' ? input.rentalHours : undefined),
+      );
+      const baseFare = hourly?.amountPaise ?? Math.round(configured.baseFare * 100),
         distanceRatePerKm = Math.round(configured.perKmRate * 100);
       if (
         !Number.isSafeInteger(baseFare) ||
@@ -166,6 +273,12 @@ export class FareCalculatorService {
         version: configured.version,
         baseFarePaise: baseFare,
         perKmRatePaise: distanceRatePerKm,
+        ...(hourly?.durationBucket
+          ? { durationBucket: hourly.durationBucket, bookedHours: hourly.bookedHours! }
+          : {}),
+        ...(hourly?.durationBucket === '12_plus'
+          ? { extendedDurationPolicy: 'booked_duration' as const }
+          : {}),
       };
       const pricing = {
         displayName: configured.name,
@@ -181,8 +294,10 @@ export class FareCalculatorService {
         currency: 'INR',
         pricingVersion,
         oneWayDistanceMeters: input.distanceMeters,
-        billableDistanceMeters: input.distanceMeters * 2,
-        distanceMultiplier: 2,
+        billableDistanceMeters:
+          input.distanceMeters *
+          (input.sector === 'premium' && input.tripType === 'one_way' ? 1 : 2),
+        distanceMultiplier: input.sector === 'premium' && input.tripType === 'one_way' ? 1 : 2,
         distanceMeters: input.distanceMeters,
         durationSeconds: input.durationSeconds,
         ...(estimatedFare ? { estimatedFare } : {}),
@@ -192,14 +307,22 @@ export class FareCalculatorService {
       };
     }
     this.validateInput(input);
+    if (input.sector === 'service')
+      throw new AppError(
+        'SERVICE_CONFIGURATION_UNAVAILABLE',
+        'Select a service with an active fixed fare.',
+        422,
+      );
     this.validatePricing();
     const tariff = explicitReference ?? this.validateEstimateCategory(input);
     if (explicitReference) this.validateVehiclePricing(explicitReference);
     if (!tariff) return this.calculate(input);
     const common = {
       oneWayDistanceMeters: input.distanceMeters,
-      billableDistanceMeters: input.distanceMeters * 2,
-      distanceMultiplier: 2 as const,
+      billableDistanceMeters:
+        input.distanceMeters * (input.sector === 'premium' && input.tripType === 'one_way' ? 1 : 2),
+      distanceMultiplier: (input.sector === 'premium' && input.tripType === 'one_way' ? 1 : 2) as
+        1 | 2,
       vehicleCategory: input.vehicleCategory!,
       pricing: tariff,
       currency: this.pricing.currency,
@@ -293,6 +416,12 @@ export class FareCalculatorService {
   }
 
   calculate(input: FareCalculationInput): FareCalculationResult {
+    if (input.sector === 'service')
+      throw new AppError(
+        'SERVICE_CONFIGURATION_UNAVAILABLE',
+        'Select a service with an active fixed fare.',
+        422,
+      );
     return this.calculateResolved(input);
   }
 
@@ -300,13 +429,17 @@ export class FareCalculatorService {
     input: FareCalculationInput,
     vehicleRates?: { baseFare: number; distanceRatePerKm: number },
     exactConfiguration = false,
+    configuredDistanceMultiplier?: 1 | 2,
   ): FareCalculationResult {
     this.validateInput(input);
     this.validatePricing();
     if (!vehicleRates) this.validateVehicleFareConfiguration(input);
 
     // Inputs and stored route distances stay one-way. Only billable components use this value.
-    const billableDistanceMeters = input.distanceMeters * 2;
+    const billableDistanceMeters =
+      input.distanceMeters *
+      (configuredDistanceMultiplier ??
+        (input.sector === 'premium' && input.tripType === 'one_way' ? 1 : 2));
     if (!Number.isFinite(billableDistanceMeters))
       throw new AppError('FARE_INPUT_INVALID', 'Round-trip distance exceeds supported range', 400);
     let baseAmount = vehicleRates?.baseFare ?? this.pricing.baseFare;
@@ -339,34 +472,6 @@ export class FareCalculatorService {
 
       if (input.hasLoadingAssistance) {
         loadingAmount = 15000;
-      }
-    } else if (!exactConfiguration && input.sector === 'service') {
-      if (input.vehicleCategory === 'ambulance') {
-        baseAmount = 50000;
-        distanceAmount = this.roundMoney((billableDistanceMeters * 2500) / 1000, 'distanceAmount');
-      } else if (
-        input.vehicleCategory === 'towing' ||
-        input.vehicleCategory === 'towing_van' ||
-        input.vehicleCategory === 'recovery' ||
-        input.vehicleCategory === 'recovery_vehicle'
-      ) {
-        baseAmount = 60000;
-        distanceAmount = this.roundMoney((billableDistanceMeters * 3000) / 1000, 'distanceAmount');
-      } else if (
-        input.vehicleCategory === 'roadside_service' ||
-        input.vehicleCategory === 'roadside_service_vehicle' ||
-        input.vehicleCategory === 'roadside_recovery' ||
-        input.vehicleCategory === 'roadside'
-      ) {
-        baseAmount = 60000;
-        distanceAmount = this.roundMoney((billableDistanceMeters * 3000) / 1000, 'distanceAmount');
-      } else if (input.vehicleCategory === 'jcb') {
-        // JCB trip-based pricing: Flat mobilization/base charge (120,000 paise / â‚¹1,200) + distance charge (4,000 paise/km / â‚¹40/km)
-        baseAmount = 120000;
-        distanceAmount = this.roundMoney((billableDistanceMeters * 4000) / 1000, 'distanceAmount');
-      } else {
-        baseAmount = 60000;
-        distanceAmount = this.roundMoney((billableDistanceMeters * 3000) / 1000, 'distanceAmount');
       }
     } else if (!exactConfiguration && input.sector === 'premium') {
       const hours = Math.max(1, input.rentalHours || 1);
@@ -417,7 +522,9 @@ export class FareCalculatorService {
     const result: FareCalculationResult = {
       oneWayDistanceMeters: input.distanceMeters,
       billableDistanceMeters,
-      distanceMultiplier: 2,
+      distanceMultiplier:
+        configuredDistanceMultiplier ??
+        (input.sector === 'premium' && input.tripType === 'one_way' ? 1 : 2),
       distanceMeters: input.distanceMeters,
       durationSeconds: input.durationSeconds,
       baseAmount,

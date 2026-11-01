@@ -136,7 +136,6 @@ void main() {
             locationServiceProvider.overrideWithValue(NoLocation()),
           ],
         );
-        addTearDown(container.dispose);
 
         container
             .read(rideProvider.notifier)
@@ -181,6 +180,9 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(container.read(rideProvider).selectedTier, 'hatchback');
+        await tester.pumpWidget(const SizedBox());
+        container.dispose();
+        await tester.pump();
       },
     );
 

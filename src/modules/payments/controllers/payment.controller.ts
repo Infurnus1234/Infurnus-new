@@ -1,3 +1,5 @@
+import type { LogisticsPaymentService } from '../services/logistics-payment.service.js';
+import { z } from 'zod';
 import type { NextFunction, Request, Response } from 'express';
 import type { PaymentRepository } from '../repositories/payment.repository.js';
 import type { RideRepository } from '../../rides/repositories/ride.repository.js';
@@ -16,8 +18,39 @@ export class PaymentController {
     private readonly rideRepository?: RideRepository,
     private readonly rentalRepository?: RentalRepository,
     private readonly paymentProvider?: PaymentProvider,
+    private readonly logistics?: LogisticsPaymentService,
   ) {}
 
+  logisticsSummary = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!this.logistics) throw new Error('Logistics payments unavailable');
+      res.json({
+        success: true,
+        data: await this.logistics.summary(
+          z.string().uuid().parse(req.params.rideId),
+          req.auth!.userId,
+          req.auth!.role,
+        ),
+      });
+    } catch (e) {
+      next(e);
+    }
+  };
+  claim = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      z.object({}).strict().parse(req.body);
+      if (!this.logistics) throw new Error('Logistics payments unavailable');
+      res.json({
+        success: true,
+        data: await this.logistics.claim(
+          z.string().uuid().parse(req.params.paymentId),
+          req.auth!.userId,
+        ),
+      });
+    } catch (e) {
+      next(e);
+    }
+  };
   initiate = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const input = initiatePaymentSchema.parse(req.body);
@@ -43,6 +76,11 @@ export class PaymentController {
           return;
         }
 
+        if (this.logistics && (await this.logistics.hasPlan(input.rideId))) {
+          const data = await this.logistics.initiate(input.rideId, userId, role ?? '', input);
+          res.status(201).json({ success: true, data });
+          return;
+        }
         // 1. Ownership authorization: Customer of the ride or admin
         const isCustomer = ride.customerId === userId;
         const isAdmin = role === 'admin';
@@ -78,10 +116,44 @@ export class PaymentController {
           (p) => p.status === 'INITIATED' || p.status === 'AUTHORIZED',
         );
         if (activePayment) {
-          if (input.idempotencyKey && activePayment.idempotencyKey === input.idempotencyKey) {
+          if (
+            ((input.idempotencyKey && activePayment.idempotencyKey === input.idempotencyKey) ||
+              (!input.idempotencyKey && input.provider === 'cashfree')) &&
+            activePayment.provider === input.provider
+          ) {
+            let session: { paymentSessionId: string | null; providerOrderId: string } | undefined;
+            if (activePayment.provider === 'cashfree') {
+              if (!this.paymentProvider) {
+                res.status(503).json({ success: false, message: 'Payment provider unavailable' });
+                return;
+              }
+              try {
+                const order = await this.paymentProvider.createOrder({
+                  orderId: `order_${activePayment.id}`,
+                  amount: Number(activePayment.amount),
+                  currency: activePayment.currency,
+                  customerId: userId,
+                  orderNote: `INFURNUS Ride ${input.rideId}`,
+                });
+                await this.paymentRepository.updateProviderOrder?.(
+                  activePayment.id,
+                  order.providerOrderId,
+                );
+                session = {
+                  paymentSessionId: order.paymentSessionId ?? null,
+                  providerOrderId: order.providerOrderId,
+                };
+              } catch {
+                res.status(502).json({
+                  success: false,
+                  message: 'Unable to resume Cashfree checkout. Retry with the same request.',
+                });
+                return;
+              }
+            }
             res.status(200).json({
               success: true,
-              data: activePayment,
+              data: { ...activePayment, ...session },
               message: 'Payment already initiated',
             });
             return;
@@ -94,7 +166,7 @@ export class PaymentController {
         }
 
         // 4. Server-side authoritative fare derivation (NEVER trust client amount)
-        if (ride.sector === 'premium') {
+        if (ride.sector === 'premium' && !ride.bookingPricingVersion?.startsWith('vehicle-type:')) {
           // For Premium rides, reconcile final fare including actual GPS distance-based fuel cost
           const bookedHours = Math.max(
             1,
@@ -170,7 +242,7 @@ export class PaymentController {
         try {
           const orderResult = await this.paymentProvider.createOrder({
             orderId: `order_${payment.id}`,
-            amount: payment.amount,
+            amount: Number(payment.amount),
             currency: payment.currency,
             customerId: userId,
             orderNote: input.rideId
@@ -241,6 +313,15 @@ export class PaymentController {
         return;
       }
 
+      if (payment.paymentStage && payment.provider === 'cash') {
+        if (!this.logistics) throw new Error('Logistics payment service unavailable');
+        const data =
+          payment.userId === userId
+            ? await this.logistics.claim(paymentId, userId)
+            : await this.logistics.confirmCash(paymentId, userId, role ?? '');
+        res.json({ success: true, data });
+        return;
+      }
       // Authorization check: User owns this payment, is admin, or is assigned driver for the ride (restricted to cash)
       const isOwner = payment.userId === userId;
       const isAdmin = role === 'admin';
@@ -293,11 +374,29 @@ export class PaymentController {
         return;
       }
 
-      let effectiveProviderPaymentId = input.providerPaymentId;
+      let effectiveProviderPaymentId = payment.paymentStage ? undefined : input.providerPaymentId;
+
+      if (payment.provider === 'cashfree' && (!this.paymentProvider || !payment.providerOrderId)) {
+        res
+          .status(503)
+          .json({ success: false, message: 'Cashfree order verification is unavailable' });
+        return;
+      }
 
       if (payment.provider === 'cashfree' && this.paymentProvider && payment.providerOrderId) {
         try {
           const statusResult = await this.paymentProvider.getPaymentStatus(payment.providerOrderId);
+
+          if (
+            statusResult.providerOrderId !== payment.providerOrderId ||
+            statusResult.orderCurrency !== payment.currency ||
+            !Number.isFinite(Number(statusResult.orderAmount))
+          ) {
+            res
+              .status(400)
+              .json({ success: false, message: 'Payment order verification mismatch' });
+            return;
+          }
 
           // Reconcile amount where available
           if (
@@ -347,6 +446,14 @@ export class PaymentController {
             });
             return;
           }
+          if (
+            payment.paymentStage &&
+            Math.round(Number(statusResult.orderAmount) * 100) !==
+              Math.round(Number(payment.amount) * 100)
+          ) {
+            res.status(400).json({ success: false, message: 'Payment amount mismatch' });
+            return;
+          }
           if (!effectiveProviderPaymentId && statusResult.providerPaymentId) {
             effectiveProviderPaymentId = statusResult.providerPaymentId;
           }
@@ -364,6 +471,7 @@ export class PaymentController {
       const captured = await this.paymentRepository.capture({
         paymentId,
         providerPaymentId: effectiveProviderPaymentId,
+        ...(payment.paymentStage ? { verifiedOnline: true } : {}),
       });
 
       if (!captured) {
@@ -399,6 +507,15 @@ export class PaymentController {
         return;
       }
 
+      if (payment.paymentStage && payment.provider === 'cash') {
+        if (!this.logistics) throw new Error('Logistics payment service unavailable');
+        const data =
+          payment.userId === userId
+            ? await this.logistics.claim(paymentId, userId)
+            : await this.logistics.confirmCash(paymentId, userId, role ?? '');
+        res.json({ success: true, data });
+        return;
+      }
       // Authorization check: User owns this payment or is admin
       const isOwner = payment.userId === userId;
       const isAdmin = role === 'admin';
@@ -453,6 +570,11 @@ export class PaymentController {
       }
 
       const rawBody = (req as Request & { rawBody?: string }).rawBody ?? JSON.stringify(req.body);
+
+      if (!this.paymentProvider.verifyWebhookSignature) {
+        res.status(503).json({ success: false, message: 'Webhook verification unavailable' });
+        return;
+      }
 
       if (this.paymentProvider.verifyWebhookSignature) {
         const isValid = this.paymentProvider.verifyWebhookSignature(rawBody, signature, timestamp);
@@ -514,6 +636,23 @@ export class PaymentController {
         : undefined;
       const webhookAmount = Number(event.data?.payment?.payment_amount);
 
+      if (
+        payment.paymentStage &&
+        (payment.provider !== 'cashfree' ||
+          payment.providerOrderId !== orderId ||
+          !cfPaymentId ||
+          event.data?.payment?.payment_currency !== payment.currency ||
+          event.data?.order?.order_currency !== payment.currency ||
+          Math.round(webhookAmount * 100) !== Math.round(Number(payment.amount) * 100))
+      ) {
+        res
+          .status(400)
+          .json({
+            success: false,
+            message: 'Logistics webhook payment identity, currency or amount mismatch',
+          });
+        return;
+      }
       // Handle SUCCESS / PAID
       if (eventType === 'PAYMENT_SUCCESS_WEBHOOK' || paymentStatus === 'SUCCESS') {
         // 1. Idempotency check: Already CAPTURED
@@ -536,7 +675,14 @@ export class PaymentController {
         }
 
         // 3. Amount reconciliation check
-        if (!isNaN(webhookAmount) && Math.abs(webhookAmount - payment.amount) > 0.01) {
+        if (
+          !Number.isFinite(webhookAmount) ||
+          Math.abs(webhookAmount - payment.amount) > 0.01 ||
+          (event.data?.payment?.payment_currency !== undefined &&
+            event.data.payment.payment_currency !== payment.currency) ||
+          (event.data?.order?.order_currency !== undefined &&
+            event.data.order.order_currency !== payment.currency)
+        ) {
           res.status(400).json({
             success: false,
             message: `Amount mismatch in webhook: expected ${payment.amount}, received ${webhookAmount}`,
@@ -548,6 +694,7 @@ export class PaymentController {
         const captured = await this.paymentRepository.capture({
           paymentId: payment.id,
           providerPaymentId: cfPaymentId,
+          ...(payment.paymentStage ? { verifiedOnline: true } : {}),
         });
 
         res.status(200).json({
@@ -614,6 +761,16 @@ export class PaymentController {
         return;
       }
 
+      if (payment.paymentStage) {
+        res
+          .status(409)
+          .json({
+            success: false,
+            message:
+              'Installment refunds require the audited refund workflow; this legacy endpoint does not support staged refunds',
+          });
+        return;
+      }
       // Must be CAPTURED
       if (payment.status === 'REFUNDED') {
         res.status(409).json({

@@ -1,3 +1,6 @@
+import { MatchingService } from './modules/rides/services/matching.service.js';
+import { createLogisticsAdminRouter } from './modules/admin/routes/logistics.routes.js';
+import { LogisticsPaymentService } from './modules/payments/services/logistics-payment.service.js';
 import { requireAuth } from './modules/auth/middleware/auth.middleware.js';
 import { RecordDeletionService } from './modules/admin/services/record-deletion.service.js';
 import { createRecordDeletionRouter } from './modules/admin/routes/record-deletion.routes.js';
@@ -95,7 +98,10 @@ import { ProviderController } from './modules/providers/controllers/provider.con
 import { createProviderRouter } from './modules/providers/routes/provider.routes.js';
 import { ProviderService } from './modules/providers/services/provider.service.js';
 
-import type { SupportRepository } from './modules/support/repositories/support.repository.js';
+import {
+  PostgresSupportRepository,
+  type SupportRepository,
+} from './modules/support/repositories/support.repository.js';
 import { SupportController } from './modules/support/controllers/support.controller.js';
 import { createSupportRouter } from './modules/support/routes/support.routes.js';
 import { SupportService } from './modules/support/services/support.service.js';
@@ -433,6 +439,7 @@ export function createApp(
   // ==========================================================
 
   if (adminRepository) {
+    app.use('/admin/logistics', createLogisticsAdminRouter(pool));
     app.use('/admin/operations', createAdminOperationsRouter(new AdminOperationsRepository(pool)));
     app.use(
       '/admin',
@@ -473,6 +480,7 @@ export function createApp(
       undefined,
       undefined,
       maps,
+      driverRepository ? new MatchingService(driverRepository, maps) : undefined,
     );
 
     const driverController = driverRepository
@@ -536,6 +544,7 @@ export function createApp(
       rideRepository,
       rentalRepository,
       paymentProvider,
+      pool ? new LogisticsPaymentService(pool, paymentRepository, paymentProvider) : undefined,
     );
 
     app.use('/payments', createPaymentRouter(paymentController));
@@ -567,8 +576,10 @@ export function createApp(
   // Support Tickets
   // ==========================================================
 
-  if (supportRepository) {
-    const supportController = new SupportController(new SupportService(supportRepository));
+  {
+    const supportController = new SupportController(
+      new SupportService(supportRepository ?? new PostgresSupportRepository(pool)),
+    );
 
     app.use('/support', createSupportRouter(supportController));
   }

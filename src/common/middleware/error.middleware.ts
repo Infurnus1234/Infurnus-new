@@ -3,6 +3,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { ZodError } from 'zod';
 
 import { AppError } from '../errors/app-error.js';
+import { RequestValidationError } from '../errors/request-validation-error.js';
 import { StorageValidationError } from '../../infrastructure/storage/validation.js';
 import { MulterError } from 'multer';
 
@@ -54,6 +55,7 @@ export function errorMiddleware(err: unknown, _req: Request, res: Response, _nex
       error: {
         code: err.code,
         message: err.message,
+        ...(err instanceof RequestValidationError ? { details: err.details } : {}),
       },
     });
 
@@ -63,6 +65,17 @@ export function errorMiddleware(err: unknown, _req: Request, res: Response, _nex
   // ==========================================================
   // HTTP / Body Parser errors (e.g. 413 Payload Too Large)
   // ==========================================================
+
+  if (err instanceof SyntaxError && 'type' in err && err.type === 'entity.parse.failed') {
+    res.status(400).json({
+      success: false,
+      error: {
+        code: 'INVALID_JSON',
+        message: 'The request body must contain valid JSON.',
+      },
+    });
+    return;
+  }
 
   if (
     typeof err === 'object' &&

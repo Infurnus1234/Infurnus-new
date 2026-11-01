@@ -9,6 +9,8 @@ export function createPaymentRouter(controller: PaymentController): Router {
   router.post('/webhooks/cashfree', controller.handleCashfreeWebhook);
 
   // Authenticated customer/admin routes
+  router.get('/rides/:rideId/summary', requireAuth, controller.logisticsSummary);
+  router.post('/:paymentId/claim', requireAuth, controller.claim);
   router.post('/initiate', requireAuth, controller.initiate);
   router.post('/:paymentId/capture', requireAuth, controller.capture);
   router.post('/:paymentId/refund', requireAuth, controller.refund);

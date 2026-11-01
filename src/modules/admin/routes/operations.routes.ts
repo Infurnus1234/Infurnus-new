@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { supportValidationError } from '../../support/schemas/support-validation.js';
 import { z } from 'zod';
 import { requireAuth } from '../../auth/middleware/auth.middleware.js';
 import { requireRoles } from '../../auth/middleware/authorization.middleware.js';
@@ -22,9 +23,12 @@ export function createAdminOperationsRouter(repository: AdminOperationsRepositor
   router.patch('/support/:id/status', async (req, res, next) => {
     try {
       const id = z.string().uuid().parse(req.params.id);
-      res.json({ success: true, data: await repository.updateSupportStatus(id, req.body) });
+      res.json({
+        success: true,
+        data: await repository.updateSupportStatus(id, req.body, req.auth!.userId),
+      });
     } catch (error) {
-      next(error);
+      next(supportValidationError(error));
     }
   });
   router.post('/coupons', async (req, res, next) => {

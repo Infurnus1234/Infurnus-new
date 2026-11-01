@@ -18,12 +18,21 @@ export function createRideRouter(controller: RideController, driverController?: 
   const router = Router();
 
   router.use(requireAuth);
+  router.post('/service-availability', requireRoles('customer'), controller.serviceAvailability);
   const mapLimit = rateLimit({
     windowMs: 60000,
     limit: env.MAP_RATE_LIMIT_MAX,
     standardHeaders: 'draft-8',
     legacyHeaders: false,
     keyGenerator: (req) => req.auth!.userId,
+    handler: (_req, res) =>
+      res.status(429).json({
+        success: false,
+        error: {
+          code: 'MAP_RATE_LIMITED',
+          message: 'Map refresh limit reached. Please wait before trying again.',
+        },
+      }),
   });
 
   const assignmentLimit = rateLimit({
@@ -115,12 +124,7 @@ export function createRideRouter(controller: RideController, driverController?: 
 
     router.post('/driver/available/:id/decline', requireRoles('driver'), driverController.decline);
 
-    router.get(
-      '/driver/rides/:id/map',
-      requireRoles('driver'),
-      assignmentLimit,
-      driverController.map,
-    );
+    router.get('/driver/rides/:id/map', requireRoles('driver'), mapLimit, driverController.map);
 
     router.get('/driver/current-trip', requireRoles('driver'), driverController.getCurrentTrip);
 
@@ -156,7 +160,11 @@ export function createRideRouter(controller: RideController, driverController?: 
 
     router.post(
       '/driver/active-vehicle',
-      requireRoles('driver'),
+      // Combined accounts also select their own vehicle from Fleet mode.
+      // The repository still requires their own eligible Driver profile and
+      // an owned or already assigned vehicle.
+      (req, res, next) =>
+        req.auth?.role === 'driver_fleet_owner' ? next() : requireRoles('driver')(req, res, next),
       driverController.setActiveVehicle,
     );
 

@@ -79,7 +79,13 @@ describe('policy-aware dispatch matching', () => {
       expect.any(Date),
       'premium',
       'sedan',
-      { rideId: 'test-ride', radiusMeters: null, boundaryGeoJson: 'test-geometry' },
+      {
+        rideId: 'test-ride',
+        customerId: ride.customerId,
+        radiusMeters: null,
+        boundaryGeoJson: 'test-geometry',
+        cityId: 'TEST_CITY',
+      },
     );
   });
   it('does not query drivers when premium city coverage is missing', async () => {

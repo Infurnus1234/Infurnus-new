@@ -49,6 +49,7 @@ export interface RideBillingItemization {
 }
 
 export interface Ride {
+  logisticsPayment?: Record<string,unknown>|null;
   id: string;
   customerId: string;
   assignedDriverId: string | null;
@@ -61,6 +62,7 @@ export interface Ride {
   dispatchExpiresAt?: Date | null;
   bookingDistanceMeters?: number | null;
   bookingPricingVersion?: string | null;
+  bookingVehicleTypeId?: string | null;
   fareEstimate?: number | null;
   finalFare?: number | null;
   commissionAmount?: number | null;

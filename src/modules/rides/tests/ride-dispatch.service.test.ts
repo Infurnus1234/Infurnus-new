@@ -79,7 +79,7 @@ describe('RideDispatchService', () => {
   it.each([
     ['passenger', 'sedan', [2000, 5000, 10000]],
     ['logistics', 'mini_truck', [7000, 15000, 20000]],
-    ['service', 'towing', [10000, 15000, 20000]],
+    ['service', 'towing', [25000]],
   ])(
     'exhausts each %s wave without re-offering a rejected driver',
     async (sector, vehicleCategory, radii) => {

@@ -330,32 +330,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
                           const SizedBox(height: 10),
 
-                          // Forgot password link
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: GestureDetector(
-                              onTap: () => context.push(
-                                '/forgot-password',
-                                extra: _isEmailLogin
-                                    ? _emailController.text.trim()
-                                    : '',
-                              ),
-                              child: const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 4),
-                                child: Text(
-                                  'Forgot Password?',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: _green,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-
-                          const SizedBox(height: 18),
-
                           // Continue Button
                           _buildContinueButton(authState),
 

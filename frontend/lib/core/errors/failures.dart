@@ -10,6 +10,11 @@ class ServerFailure extends Failure {
   ServerFailure([super.message = 'A server error occurred']);
 }
 
+class FareFailure extends ServerFailure {
+  final String code;
+  FareFailure(this.code, super.message);
+}
+
 class NetworkFailure extends Failure {
   NetworkFailure([super.message = 'No internet connection']);
 }

@@ -1,3 +1,4 @@
+import { requestedBookingHours } from '../../vehicles/services/hourly-pricing.js';
 import type { NextFunction, Request, Response } from 'express';
 import { fareEstimateSchema } from '../../rides/schemas/ride.schemas.js';
 import type { FareEstimateService } from '../services/fare-estimate.service.js';
@@ -49,6 +50,8 @@ export class FareController {
             weightKg,
             hasLoadingAssistance,
             rentalHours,
+            bookingHours: requestedBookingHours(input),
+            tripType: input.sector === 'premium' ? input.rentalDetails?.tripType : undefined,
             fuelRatePerKm,
             pricingMode: 'vehicle_range',
           })

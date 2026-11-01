@@ -60,7 +60,12 @@ class RideRemoteDataSourceImpl implements RideRemoteDataSource {
 
   @override
   Future<FareEstimateModel> estimateFare(Map<String, dynamic> data) async {
-    final response = await _dio.post('/fares/estimate', data: data);
+    final response = await _dio.post(
+      data['sector'] == 'service'
+          ? '/rides/service-availability'
+          : '/fares/estimate',
+      data: data,
+    );
     return FareEstimateModel.fromJson(response.data['data']);
   }
 
@@ -110,15 +115,23 @@ class RideRemoteDataSourceImpl implements RideRemoteDataSource {
     String? category,
   }) async {
     final response = await _dio.get(
-      '/vehicles/fleet',
+      sector == 'service' ? '/vehicles/catalog' : '/vehicles/fleet',
       queryParameters: {
         if (sector != null) 'sector': sector,
-        if (category != null) 'category': category,
+        if (sector != 'service' && category != null) 'category': category,
+        if (sector == 'service') 'limit': 100,
       },
     );
     final List list = response.data['data'] as List;
-    return list
-        .map((e) => FleetVehicleModel.fromJson(e as Map<String, dynamic>))
-        .toList();
+    return list.map((e) {
+      final value = Map<String, dynamic>.from(e as Map);
+      if (sector == 'service') {
+        value['category'] = value['code'];
+        value['pricing'] = value['serviceFixedFare'];
+        value['range'] =
+            '${((value['serviceRadiusMeters'] as num?) ?? 25000) / 1000} km service radius';
+      }
+      return FleetVehicleModel.fromJson(value);
+    }).toList();
   }
 }

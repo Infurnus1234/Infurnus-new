@@ -115,7 +115,6 @@ async function login(role?: string, contacts: object = { email }) {
     .send({
       ...contacts,
       ...(role ? { role } : {}),
-      ...(['fleet_owner', 'driver_fleet_owner'].includes(role ?? '') ? { password: pass } : {}),
     });
   if (start.status !== 200 || !start.body.data.challengeId) return start;
   return request(app)
@@ -170,6 +169,32 @@ describe('Role-scoped verified account identities', () => {
         expect((await login(role, { phone: phone.slice(1) })).body.data.userId).toBe(id);
     },
   );
+  it('Driver App login excludes Customer accounts and preserves explicit provider-role selection', async () => {
+    await signup('customer', { phone });
+    const count = sent.length;
+    const missing = await request(app).post('/auth/login').send({ phone, driverFlow: true });
+    expect(missing.status).toBe(200);
+    expect(sent.length).toBe(count);
+    expect(
+      (
+        await pool.query('SELECT 1 FROM login_challenges WHERE id=$1', [
+          missing.body.data.challengeId,
+        ])
+      ).rowCount,
+    ).toBe(0);
+    const driver = await signup('driver', { phone });
+    const scoped = await request(app).post('/auth/login').send({ phone, driverFlow: true });
+    expect(scoped.status).toBe(200);
+    const authenticated = await request(app)
+      .post('/auth/login/verify')
+      .send({ challengeId: scoped.body.data.challengeId, otp: '123456' });
+    expect(authenticated.status).toBe(200);
+    expect(authenticated.body.data.userId).toBe(driver.body.data.userId);
+    expect(
+      (await request(app).post('/auth/login').send({ phone, driverFlow: true, role: 'customer' }))
+        .status,
+    ).toBe(400);
+  });
   it('missing role is rejected for shared contacts before delivery, single-account legacy login works', async () => {
     const a = await signup('customer');
     expect((await login()).body.data.userId).toBe(a.body.data.userId);
@@ -305,7 +330,7 @@ describe('Role-scoped verified account identities', () => {
     expect(results.every((r) => r.status === 200)).toBe(true);
     expect(new Set(results.map((r) => r.body.data.userId)).size).toBe(1);
   });
-  it('recovery resolves explicit role and resets only its account/session', async () => {
+  it('recovery resolves explicit role but never resets public-role credentials or sessions', async () => {
     await signup('customer');
     const fleet = await signup('fleet_owner'),
       combined = await signup('driver_fleet_owner');
@@ -322,7 +347,7 @@ describe('Role-scoped verified account identities', () => {
           .post('/auth/forgot-password/verify')
           .send({ resetSessionToken: t, otp: '123456' })
       ).status,
-    ).toBe(200);
+    ).toBe(400);
     expect(
       (
         await request(app).post('/auth/reset-password').send({
@@ -331,13 +356,13 @@ describe('Role-scoped verified account identities', () => {
           confirmPassword: 'Changed-password-2026!',
         })
       ).status,
-    ).toBe(200);
+    ).toBe(400);
     const rows = await pool.query(
       'SELECT user_id,revoked_at FROM refresh_tokens WHERE user_id=ANY($1::uuid[])',
       [[fleet.body.data.userId, combined.body.data.userId]],
     );
     expect(
-      rows.rows.filter((r) => r.user_id === fleet.body.data.userId).every((r) => r.revoked_at),
+      rows.rows.filter((r) => r.user_id === fleet.body.data.userId).every((r) => !r.revoked_at),
     ).toBe(true);
     expect(
       rows.rows.filter((r) => r.user_id === combined.body.data.userId).every((r) => !r.revoked_at),

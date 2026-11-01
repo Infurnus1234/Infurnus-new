@@ -1,3 +1,4 @@
+import { requireAdminOrSuperAdmin } from '../middleware/authorization.middleware.js';
 import { Router } from 'express';
 
 import type { AuthControllerDependencies } from '../controllers/auth.controller.js';
@@ -176,7 +177,7 @@ export function createAuthRouter(
   // POST /auth/change-password
   // ==========================================================
 
-  router.post('/change-password', requireAuth, changePassword);
+  router.post('/change-password', requireAuth, requireAdminOrSuperAdmin(), changePassword);
 
   // ==========================================================
   // DELETE /auth/account

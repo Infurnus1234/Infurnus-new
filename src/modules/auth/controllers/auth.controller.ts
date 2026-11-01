@@ -312,6 +312,7 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
       const input = loginSchema.parse(req.body);
 
       const credentials = {
+        ...(input.driverFlow !== undefined ? { driverFlow: input.driverFlow } : {}),
         ...(input.role !== undefined ? { role: input.role } : {}),
         ...(input.email !== undefined ? { email: input.email } : {}),
 

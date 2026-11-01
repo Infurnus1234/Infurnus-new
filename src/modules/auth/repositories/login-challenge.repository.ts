@@ -107,9 +107,10 @@ export class PostgresLoginChallengeRepository implements LoginChallengeRepositor
               encrypted_provider_session_token,
               provider_expires_at,
               expires_at,
-              last_otp_sent_at
+              last_otp_sent_at,
+              provisioned_contact_value
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING id
           `,
           [
@@ -121,6 +122,7 @@ export class PostgresLoginChallengeRepository implements LoginChallengeRepositor
             data.providerExpiresAt,
             data.expiresAt,
             data.lastOtpSentAt,
+            data.provisionedContactValue ?? null,
           ],
         );
 
@@ -268,10 +270,14 @@ export class PostgresLoginChallengeRepository implements LoginChallengeRepositor
         verifiedAt: Date | null;
         consumedAt: Date | null;
         expired: boolean;
+        provisionedContactValue: string | null;
+        otpChannel: string;
       }>(
         `
           SELECT
             user_id AS "userId",
+            provisioned_contact_value AS "provisionedContactValue",
+            otp_channel AS "otpChannel",
             verified_at AS "verifiedAt",
             consumed_at AS "consumedAt",
             (expires_at <= clock_timestamp() OR provider_expires_at <= clock_timestamp()) AS expired
@@ -392,6 +398,34 @@ export class PostgresLoginChallengeRepository implements LoginChallengeRepositor
         return {
           status: 'already_consumed',
         };
+      }
+
+      if (challenge.provisionedContactValue) {
+        // Verification and challenge consumption commit together. Recheck the
+        // exact provisioned contact and fleet authority after provider verification.
+        const verified = await client.query(
+          `UPDATE users u SET
+             email_verified=CASE WHEN $2='email' THEN TRUE ELSE u.email_verified END,
+             phone_verified=CASE WHEN $2='sms' THEN TRUE ELSE u.phone_verified END,
+             updated_at=NOW()
+           WHERE u.id=$1 AND u.role='driver' AND u.status='active' AND u.deleted_at IS NULL
+             AND EXISTS(SELECT 1 FROM fleet_managed_driver_accounts m
+               JOIN partners p ON p.id=m.partner_id JOIN users owner ON owner.id=p.user_id
+               WHERE m.driver_user_id=u.id AND m.status='ACTIVE'
+                 AND owner.status='active' AND owner.deleted_at IS NULL
+                 AND owner.role IN ('fleet_owner','driver_fleet_owner') AND (
+                   ($2='email' AND m.provisioned_email=$3 AND lower(btrim(u.email))=$3) OR
+                   ($2='sms' AND m.provisioned_phone=$3 AND u.phone=$3)))
+           RETURNING u.id`,
+          [challenge.userId, challenge.otpChannel, challenge.provisionedContactValue],
+        );
+        if (!verified.rowCount)
+          throw new AppError('INVALID_LOGIN_CHALLENGE', 'Login contact is no longer eligible', 400);
+        await client.query(
+          `INSERT INTO user_history(user_id,event_type,entity_type,entity_id,metadata)
+           VALUES($1,'managed_driver_contact_verified','user',$1,jsonb_build_object('channel',$2::text))`,
+          [challenge.userId, challenge.otpChannel],
+        );
       }
 
       // ------------------------------------------------------

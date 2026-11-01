@@ -27,7 +27,10 @@ export const customVehicleTypeSchema = z
 const projection = `u.id,u.first_name AS "firstName",u.last_name AS "lastName",
  COALESCE(c.email,u.email) AS email,COALESCE(c.phone,u.phone) AS phone,
  (c.email IS NULL AND u.email_verified) AS "emailVerified",
- (c.phone IS NULL AND u.phone_verified) AS "phoneVerified"`;
+ (c.phone IS NULL AND u.phone_verified) AS "phoneVerified",
+ CASE WHEN EXISTS(SELECT 1 FROM fleet_managed_driver_accounts m WHERE m.driver_user_id=u.id
+ AND (m.provisioned_email IS NOT NULL OR m.provisioned_phone IS NOT NULL))
+ THEN 'fleet_provisioned' ELSE 'self_registered' END AS "accountOrigin"`;
 
 // Mounted behind the existing provider authentication, role and rate-limit middleware.
 export function createProviderAccountRouter(pool: Pool) {

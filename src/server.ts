@@ -1,3 +1,4 @@
+import { LiveLocationCache } from './modules/rides/repositories/live-location.cache.js';
 import { attachProviderTracking } from './modules/providers/services/provider-tracking.socket.js';
 import { loadDeletedSubjects } from './modules/auth/services/deleted-subjects.js';
 import { PostgresProviderOperationsRepository } from './modules/providers/repositories/provider-operations.repository.js';
@@ -11,7 +12,6 @@ import {
   waitForBackendInstance,
 } from './infrastructure/database/backend-standby.js';
 import { GoogleMapsProvider } from './modules/rides/providers/google.maps.provider.js';
-import { RouteRecalculationService } from './modules/rides/services/route-recalculation.service.js';
 import { createApp } from './app.js';
 import { localStorageProvider } from './infrastructure/storage/index.js';
 import { env } from './config/env.js';
@@ -152,6 +152,13 @@ async function startServer() {
     void connectRedis().catch(() => console.warn('Map Redis unavailable; cache fallback active'));
 
     mapCache = new RedisMapCache(redis);
+    const trackingCache = new LiveLocationCache(
+      redis,
+      env.DRIVER_LOCATION_CACHE_TTL_SECONDS,
+      env.DRIVER_LOCATION_PERSIST_MS,
+    );
+    driverRepository.trackingCache = trackingCache;
+    rideRepository.trackingCache = trackingCache;
   }
 
   const googleMapsProvider = new CommonMapService(
@@ -260,7 +267,7 @@ async function startServer() {
 
   const driverService = new DriverService(driverRepository, undefined, rideRepository);
 
-  const routeRecalculationService = new RouteRecalculationService(googleMapsProvider);
+  const routeRecalculationService = googleMapsProvider.navigation;
 
   const matchingService = new MatchingService(driverRepository, googleMapsProvider);
 

@@ -45,13 +45,7 @@ void main() {
       addTearDown(container.dispose);
       final notifier = container.read(authProvider.notifier);
       await Future<void>.delayed(Duration.zero);
-      await notifier.login(
-        LoginRequest(
-          email: 'fixture@example.com',
-          password: 'invalid-password',
-        ),
-        'email',
-      );
+      await notifier.login(LoginRequest(email: 'fixture@example.com'), 'email');
       final state = container.read(authProvider);
       expect(state.status, AuthStatus.unauthenticated);
       expect(state.errorMessage, isNotEmpty);

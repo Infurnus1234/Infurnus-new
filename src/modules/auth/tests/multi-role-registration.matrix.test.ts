@@ -167,7 +167,7 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
     async function login(role: string, kind: string, value: string) {
       const r = await request(app)
         .post('/auth/login')
-        .send({ role, [kind]: value, ...(role === 'fleet_owner' ? { password } : {}) });
+        .send({ role, [kind]: value });
       expect(r.status).toBe(200);
       noCredential(r);
       const v = await request(app)

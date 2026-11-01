@@ -17,6 +17,7 @@ export interface Vehicle {
   model: string;
   color: string | null;
   plateNumber: string;
+  operatingCityId?: string | null | undefined;
 
   /**
    * Service sector and vehicle category.
@@ -71,6 +72,7 @@ export interface CreateVehicleData {
   model: string;
   color?: string | null | undefined;
   plateNumber: string;
+  operatingCityId?: string | null | undefined;
 
   sector?: string | undefined;
   category?: string | undefined;
@@ -94,6 +96,7 @@ export interface UpdateVehicleData {
   model?: string | undefined;
   color?: string | null | undefined;
   plateNumber?: string | undefined;
+  operatingCityId?: string | undefined;
 
   sector?: string | undefined;
   category?: string | undefined;
@@ -114,6 +117,10 @@ export interface UpdateVehicleData {
 
 /** Admin catalog rates use integer paise internally; category is the code on rides/inventory. */
 export interface VehicleType {
+  serviceFixedFare?: number | null;
+  serviceRadiusMeters?: number;
+  logisticsSlabs?: import('../services/logistics-pricing.js').LogisticsSlabs | null;
+  pricingStatus?: 'needs_pricing' | 'inactive' | 'quote_required' | 'available';
   id: string;
   name: string;
   code: string;
@@ -121,6 +128,11 @@ export interface VehicleType {
   baseFare: number | null;
   perKmRate: number | null;
   pricingReference?: import('../../fares/types/fare.js').VehiclePricing | null;
+  hourlyBaseFares?: Partial<
+    Record<import('../services/hourly-pricing.js').HourlyFareBucket, number>
+  > | null;
+  missingDurationPolicy?: 'legacy_base' | 'require_duration';
+  extendedDurationPolicy?: 'booked_duration' | null;
   currency: 'INR';
   active: boolean;
   version: number;
@@ -134,5 +146,11 @@ export interface VehicleFareSnapshot {
   version: number;
   baseFarePaise: number;
   perKmRatePaise: number;
+  serviceRadiusMeters?: number;
+  pricingModel?: 'service_fixed';
+  logisticsSlab?: 'below_15' | 'from_15';
+  durationBucket?: import('../services/hourly-pricing.js').HourlyFareBucket;
+  bookedHours?: number;
+  extendedDurationPolicy?: 'booked_duration';
   demandPricing?: import('../../fares/types/fare.js').DemandPricingProvenance;
 }

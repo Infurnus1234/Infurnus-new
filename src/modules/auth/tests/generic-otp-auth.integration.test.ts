@@ -115,7 +115,7 @@ describe('same auth API across generic configuration A and B', () => {
         users.push(verified.body.data.userId);
         const login = await request(app)
           .post('/auth/login')
-          .send({ [channel]: contact, password });
+          .send({ [channel]: contact });
         expect(login.status).toBe(200);
         const expired = await pool.query<{ unconsumed: boolean; unverified: boolean }>(
           "UPDATE login_challenges SET expires_at=NOW()-INTERVAL '1 second' WHERE id=$1 RETURNING consumed_at IS NULL AS unconsumed, verified_at IS NULL AS unverified",
@@ -131,7 +131,7 @@ describe('same auth API across generic configuration A and B', () => {
         ).toBe('OTP_EXPIRED');
         const fresh = await request(app)
           .post('/auth/login')
-          .send({ [channel]: contact, password });
+          .send({ [channel]: contact });
         const authenticated = await request(app)
           .post('/auth/login/verify')
           .send({ challengeId: fresh.body.data.challengeId, otp: '123456' });

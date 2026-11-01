@@ -1,3 +1,4 @@
+import { RouteRecalculationService } from '../rides/services/route-recalculation.service.js';
 import { env } from '../../config/env.js';
 import { createHash } from 'node:crypto';
 import { serviceArea, type ServiceAreaGate } from './service-area.js';
@@ -56,6 +57,7 @@ const emptyMetric = (): Metric => ({
 });
 export class CommonMapService implements MapProvider {
   readonly providerName: string;
+  readonly navigation: RouteRecalculationService;
   private readonly pending = new Map<string, Promise<unknown>>();
   private readonly metrics = new Map<string, Metric>();
   private readonly popularity = new Map<string, number>();
@@ -71,6 +73,7 @@ export class CommonMapService implements MapProvider {
     private readonly area: ServiceAreaGate = serviceArea,
   ) {
     this.providerName = provider.providerName ?? 'configured';
+    this.navigation = new RouteRecalculationService(this, now, config);
   }
   get navigationStorageAllowed() {
     // Redis cache permission does not authorize indefinite ride JSONB retention.

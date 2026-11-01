@@ -30,7 +30,7 @@ RUN npm run build && npm prune --omit=dev
 FROM asia-south2-docker.pkg.dev/infurnus-5c47c/cloud-run-source-deploy/infurnus-api:github-db9cfb0-boundary-20261019 AS runner
 USER root
 WORKDIR /app
-RUN rm -rf /app/node_modules
+RUN rm -rf /app/node_modules /app/dist
 COPY --from=builder /app/dist ./dist
 # Deploy the lockfile-verified runtime dependencies, not an older base snapshot.
 COPY --from=builder /app/node_modules ./node_modules

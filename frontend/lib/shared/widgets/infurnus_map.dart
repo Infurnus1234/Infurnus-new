@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../core/services/map_service.dart';
+import 'vehicle_motion.dart';
 import '../../core/services/location_service.dart';
 import '../../features/customer/data/models/route_model.dart';
 import '../../features/customer/presentation/providers/ride_provider.dart';
@@ -32,7 +33,35 @@ class InfurnusMap extends ConsumerStatefulWidget {
 }
 
 class _InfurnusMapState extends ConsumerState<InfurnusMap>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+  late final VehicleMotion _motion;
+  BitmapDescriptor? _arrow;
+  Timer? _freshnessTimer;
+  bool _driverStale = false;
+
+  void _receiveDriver() {
+    final fix = widget.driverLocation;
+    if (fix == null) {
+      if (_motion.timestamp != null) _motion.reset();
+      _driverStale = false;
+      return;
+    }
+    _driverStale =
+        DateTime.now().difference(fix.timestamp) > const Duration(seconds: 10);
+    if (_motion.sample(
+          LatLng(fix.latitude, fix.longitude),
+          fix.timestamp,
+          heading: fix.heading,
+          speed: fix.speed,
+          accuracy: fix.accuracy,
+        ) &&
+        !_manualCamera) {
+      _mapService
+          .animateToLocation(LatLng(fix.latitude, fix.longitude))
+          .catchError((_) {});
+    }
+  }
+
   late MapService _mapService;
   LatLng? _currentLocation;
   StreamSubscription? _locationSubscription;
@@ -46,6 +75,21 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _mapService = ref.read(mapServiceProvider(this));
+    _motion = VehicleMotion(this);
+    navigationArrow().then((icon) {
+      if (mounted) setState(() => _arrow = icon);
+    });
+    _receiveDriver();
+    _freshnessTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      final fix = widget.driverLocation;
+      final stale =
+          fix != null &&
+          DateTime.now().difference(fix.timestamp) >
+              const Duration(seconds: 10);
+      if (mounted && stale != _driverStale) {
+        setState(() => _driverStale = stale);
+      }
+    });
     _fetchInitialLocation();
   }
 
@@ -118,6 +162,8 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _locationSubscription?.cancel();
+    _freshnessTimer?.cancel();
+    _motion.dispose();
     super.dispose();
   }
 
@@ -160,22 +206,6 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap>
       );
     }
 
-    if (widget.driverLocation != null) {
-      markers.add(
-        _mapService.createMarker(
-          markerId: 'driver',
-          position: LatLng(
-            widget.driverLocation!.latitude,
-            widget.driverLocation!.longitude,
-          ),
-          title: 'Driver',
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-            BitmapDescriptor.hueAzure,
-          ),
-        ),
-      );
-    }
-
     if (widget.route?.encodedPolyline != null) {
       final polyline = _mapService.createPolyline(
         polylineId: 'route',
@@ -204,23 +234,69 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap>
       children: [
         Listener(
           onPointerDown: (_) => _manualCamera = true,
-          child: GoogleMap(
-            padding: EdgeInsets.only(bottom: widget.bottomOverlayHeight),
-            initialCameraPosition:
-                widget.initialCameraPosition ??
-                CameraPosition(target: fallbackCenter, zoom: defaultZoom),
-            markers: markers,
-            polylines: polylines,
-            onMapCreated: (controller) {
-              _mapService.onMapCreated(controller);
-              _fitBounds();
-            },
-            myLocationEnabled: _currentLocation != null,
-            myLocationButtonEnabled: false,
-            zoomControlsEnabled: false,
-            mapToolbarEnabled: false,
+          child: AnimatedBuilder(
+            animation: _motion,
+            builder: (context, _) => GoogleMap(
+              padding: EdgeInsets.only(bottom: widget.bottomOverlayHeight),
+              initialCameraPosition:
+                  widget.initialCameraPosition ??
+                  CameraPosition(target: fallbackCenter, zoom: defaultZoom),
+              markers: {
+                ...markers,
+                if (widget.driverLocation != null && _motion.position != null)
+                  Marker(
+                    markerId: const MarkerId('driver'),
+                    position: _motion.position!,
+                    flat: true,
+                    anchor: const Offset(0.5, 0.5),
+                    rotation: _motion.heading,
+                    icon:
+                        _arrow ??
+                        BitmapDescriptor.defaultMarkerWithHue(
+                          BitmapDescriptor.hueAzure,
+                        ),
+                    infoWindow: InfoWindow(
+                      title: _driverStale
+                          ? 'Last known driver location'
+                          : 'Driver',
+                    ),
+                  ),
+              },
+              polylines: polylines,
+              onMapCreated: (controller) {
+                _mapService.onMapCreated(controller);
+                if (widget.driverLocation != null) {
+                  _mapService.animateToLocation(
+                    LatLng(
+                      widget.driverLocation!.latitude,
+                      widget.driverLocation!.longitude,
+                    ),
+                  );
+                } else {
+                  _fitBounds();
+                }
+              },
+              myLocationEnabled: _currentLocation != null,
+              myLocationButtonEnabled: false,
+              zoomControlsEnabled: false,
+              mapToolbarEnabled: false,
+            ),
           ),
         ),
+        if (_driverStale)
+          const Positioned(
+            top: 45,
+            left: 8,
+            right: 8,
+            child: Card(
+              child: Padding(
+                padding: EdgeInsets.all(8),
+                child: Text(
+                  'Driver location is stale. Reconnecting to live updates…',
+                ),
+              ),
+            ),
+          ),
         if (_locationError != null)
           Positioned(
             top: 8,
@@ -265,11 +341,20 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap>
           top: 70,
           right: 8,
           child: IconButton.filled(
-            tooltip: 'Fit ride route',
+            tooltip: 'Follow driver / fit route',
             icon: const Icon(Icons.center_focus_strong),
             onPressed: () {
               _manualCamera = false;
-              _fitBounds();
+              if (widget.driverLocation != null) {
+                _mapService.animateToLocation(
+                  LatLng(
+                    widget.driverLocation!.latitude,
+                    widget.driverLocation!.longitude,
+                  ),
+                );
+              } else {
+                _fitBounds();
+              }
             },
           ),
         ),
@@ -280,6 +365,7 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap>
   @override
   void didUpdateWidget(InfurnusMap oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _receiveDriver();
     if (widget.pickup != oldWidget.pickup ||
         widget.destination != oldWidget.destination ||
         widget.route != oldWidget.route ||
@@ -310,6 +396,12 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap>
       );
     }
 
+    // GPS may resolve before GoogleMap creates its native controller. Replay
+    // that fix here instead of leaving the camera at the initial fallback.
+    if (points.isEmpty && _currentLocation != null) {
+      points.add(_currentLocation!);
+    }
+
     if (points.length >= 2) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && !_manualCamera) {
@@ -317,11 +409,9 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap>
         }
       });
     } else if (points.length == 1) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && !_manualCamera) {
-          _mapService.animateToLocation(points.first).catchError((_) {});
-        }
-      });
+      // Unlike fitting bounds, centering one point does not depend on another
+      // layout pass. A late native-map callback may have no further frame queued.
+      _mapService.animateToLocation(points.first).catchError((_) {});
     }
   }
 }

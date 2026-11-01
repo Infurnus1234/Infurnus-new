@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../providers/ride_provider.dart';
-import '../../domain/utils/passenger_vehicle_filter.dart';
 
 class PassengerRidesScreen extends ConsumerStatefulWidget {
   const PassengerRidesScreen({super.key});
@@ -74,11 +73,7 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
   @override
   Widget build(BuildContext context) {
     final rideState = ref.watch(rideProvider);
-    final selectedTier =
-        (rideState.selectedTier.isEmpty ||
-            isExcludedPassengerVehicle(rideState.selectedTier))
-        ? 'hatchback'
-        : rideState.selectedTier;
+    final selectedTier = rideState.selectedTier;
 
     final filteredVehicles = _selectedFilter == 'All'
         ? _allVehicles
@@ -86,7 +81,7 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
 
     final selectedVehicle = _allVehicles.firstWhere(
       (v) => v['category'] == selectedTier,
-      orElse: () => _allVehicles.first,
+      orElse: () => <String, dynamic>{},
     );
 
     return Scaffold(
@@ -368,18 +363,26 @@ class _PassengerRidesScreenState extends ConsumerState<PassengerRidesScreen> {
                     ),
                     elevation: 0,
                   ),
-                  onPressed: () {
-                    ref.read(rideProvider.notifier).selectSector('passenger');
-                    ref
-                        .read(rideProvider.notifier)
-                        .selectTier(selectedVehicle['category']);
-                    context.push('/ride-booking');
-                  },
+                  onPressed:
+                      selectedVehicle.isEmpty ||
+                          rideState.fareEstimate?.isUnavailable == true
+                      ? null
+                      : () {
+                          ref
+                              .read(rideProvider.notifier)
+                              .selectSector('passenger');
+                          ref
+                              .read(rideProvider.notifier)
+                              .selectTier(selectedVehicle['category']);
+                          context.push('/ride-booking');
+                        },
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        rideState.fareEstimate != null
+                        selectedVehicle.isEmpty
+                            ? 'Select a Vehicle'
+                            : rideState.fareEstimate != null
                             ? 'Book ${selectedVehicle['title']} • ${rideState.fareEstimate!.displayFare}'
                             : 'Select ${selectedVehicle['title']} & Set Route',
                         style: const TextStyle(

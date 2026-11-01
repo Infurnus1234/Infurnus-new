@@ -1,10 +1,11 @@
+import { assignFirstOwnerVehicle } from '../../providers/repositories/default-owner-vehicle.js';
+import { premiumCityAreas } from '../../maps/premium-city-areas.js';
 import { paidRideRevenueSql } from './fleet-revenue.repository.js';
 import { env } from '../../../config/env.js';
 import { FleetRevenueRepository, type RevenueFilter } from './fleet-revenue.repository.js';
 import { AppError } from '../../../common/errors/app-error.js';
 import type { FleetListQuery } from '../schemas/fleet.schemas.js';
 import type { Pool } from 'pg';
-import { randomInt } from 'node:crypto';
 import type { CreateFleetVehicleInput, UpdateFleetVehicleInput } from '../schemas/fleet.schemas.js';
 import type {
   FleetDashboardMetrics,
@@ -35,7 +36,7 @@ export interface FleetRepository {
     ownerId: string,
     vehicleId: string,
     driverProfileId?: string,
-  ): Promise<{ code: string; expiresAt: Date }>;
+  ): Promise<{ code: string; expiresAt: Date; permanent?: boolean }>;
 
   unassignDriver(ownerId: string, vehicleId: string): Promise<boolean>;
 
@@ -62,7 +63,11 @@ export class PostgresFleetRepository implements FleetRepository {
       );
       types.push(...custom.rows);
     }
-    return { sectors: ['passenger', 'logistics', 'service', 'premium', 'rental'], types };
+    return {
+      sectors: ['passenger', 'logistics', 'service', 'premium', 'rental'],
+      types,
+      operatingCities: premiumCityAreas.cities.map(({ id, name }) => ({ id, name })),
+    };
   }
   async revenue(ownerId: string, filter: RevenueFilter = {}) {
     return new FleetRevenueRepository(this.pool).report(ownerId, filter);
@@ -198,6 +203,7 @@ export class PostgresFleetRepository implements FleetRepository {
       permitDetails: string | null;
       ownershipType: string;
       ownerNotes: string | null;
+      operatingCityId: string | null;
       verificationStatus: string;
       isActive: boolean;
       driverUserId: string | null;
@@ -238,7 +244,7 @@ export class PostgresFleetRepository implements FleetRepository {
            TRUE
          ) AS "isCommercial",
          v.permit_details AS "permitDetails",
-         v.ownership_type AS "ownershipType",v.owner_notes AS "ownerNotes",
+         v.ownership_type AS "ownershipType",v.owner_notes AS "ownerNotes", operating_city_id AS "operatingCityId",
          COALESCE(
            v.verification_status,
            'pending'
@@ -254,8 +260,11 @@ export class PostgresFleetRepository implements FleetRepository {
          END AS "driverName",
          u.phone AS "driverPhone",
          dp.availability_status AS "driverAvailability",
-         ac.code AS "activeCode",
-         ac.status AS "assignmentCodeStatus",
+         v.joining_code AS "activeCode",
+         v.joining_code AS "vehicleCode",
+         CASE WHEN v.driver_profile_id IS NOT NULL THEN 'CLAIMED'
+              WHEN v.is_active AND v.verification_status='approved' THEN 'ACTIVE'
+              ELSE 'PENDING_APPROVAL' END AS "assignmentCodeStatus",
          ac.intended_driver_profile_id AS "assignmentDriverProfileId",
          v.created_at AS "createdAt",
          v.updated_at AS "updatedAt"
@@ -268,7 +277,7 @@ export class PostgresFleetRepository implements FleetRepository {
          SELECT code,status,intended_driver_profile_id
          FROM driver_assignment_codes
          WHERE vehicle_id = v.id
-           AND ((status = 'ACTIVE' AND expires_at > NOW()) OR (status='CLAIMED' AND driver_id=dp.user_id AND v.driver_profile_id=dp.id))
+           AND code = v.joining_code
          ORDER BY created_at DESC
          LIMIT 1
        ) ac ON TRUE
@@ -309,6 +318,7 @@ export class PostgresFleetRepository implements FleetRepository {
       permitDetails: row.permitDetails,
       ownershipType: row.ownershipType,
       ownerNotes: row.ownerNotes,
+      operatingCityId: row.operatingCityId,
       verificationStatus: row.verificationStatus,
       isActive: row.isActive,
       assignedDriver:
@@ -322,6 +332,7 @@ export class PostgresFleetRepository implements FleetRepository {
             }
           : null,
       activeAssignmentCode: row.activeCode,
+      vehicleCode: row.activeCode,
       assignmentCodeStatus: row.assignmentCodeStatus,
       assignmentDriverProfileId: row.assignmentDriverProfileId,
       createdAt: row.createdAt,
@@ -333,6 +344,42 @@ export class PostgresFleetRepository implements FleetRepository {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
+      // Serialize first-vehicle election across requests, before reading persisted vehicles.
+      await client.query(
+        "SELECT pg_advisory_xact_lock(hashtextextended('owner_first_vehicle:'||$1::text,0))",
+        [ownerId],
+      );
+      const owner = (
+        await client.query<{
+          role: string;
+          profile_id: string | null;
+          approval_status: string | null;
+        }>(
+          `SELECT u.role,dp.id AS profile_id,p.approval_status FROM users u
+         LEFT JOIN driver_profiles dp ON dp.user_id=u.id LEFT JOIN partners p ON p.user_id=u.id WHERE u.id=$1`,
+          [ownerId],
+        )
+      ).rows[0];
+      if (
+        owner?.role === 'driver_fleet_owner' &&
+        owner.approval_status === 'approved' &&
+        !owner.profile_id
+      )
+        throw new AppError(
+          'DRIVER_PROFILE_MISSING',
+          'The Driver profile linked to this Driver + Fleet Owner account is missing',
+          409,
+        );
+      await client.query("SELECT set_config('infurnus.actor_id',$1,TRUE)", [ownerId]);
+      if (
+        input.operatingCityId !== undefined &&
+        !premiumCityAreas.cities.some((city) => city.id === input.operatingCityId)
+      )
+        throw new AppError(
+          'INVALID_OPERATING_CITY',
+          'Choose a configured premium operating city',
+          400,
+        );
       const configuredType = await client.query(
         `SELECT id FROM vehicle_types WHERE code=$1 AND (sector=$2 OR ($2='rental' AND sector IN ('passenger','premium'))) UNION ALL SELECT NULL::uuid AS id FROM fleet_registration_vehicle_types WHERE code=$1 AND (sector=$2 OR ($2='rental' AND sector IN ('passenger','premium'))) UNION ALL SELECT id FROM fleet_custom_vehicle_types WHERE code=$1 AND sector=$2 AND owner_id=$3`,
         [input.category, input.sector, ownerId],
@@ -362,7 +409,7 @@ export class PostgresFleetRepository implements FleetRepository {
          registration_expiry,
          is_commercial,
          permit_details,
-         ownership_type, owner_notes,
+         ownership_type, owner_notes, operating_city_id,
          verification_status,
          is_active
        )
@@ -383,7 +430,7 @@ export class PostgresFleetRepository implements FleetRepository {
          $14,
          $15,
          $16,
-         $17, $18,
+         $17, $18, $19,
          'pending',
          FALSE
        )
@@ -412,7 +459,7 @@ export class PostgresFleetRepository implements FleetRepository {
          registration_expiry::text AS "registrationExpiry",
          is_commercial AS "isCommercial",
          permit_details AS "permitDetails",
-         ownership_type AS "ownershipType", owner_notes AS "ownerNotes",
+         ownership_type AS "ownershipType", owner_notes AS "ownerNotes", operating_city_id AS "operatingCityId",
          verification_status AS "verificationStatus",
          is_active AS "isActive",
          created_at AS "createdAt",
@@ -436,6 +483,7 @@ export class PostgresFleetRepository implements FleetRepository {
           input.permitDetails ?? null,
           input.ownershipType ?? 'OWNED',
           input.ownerNotes ?? null,
+          input.operatingCityId ?? null,
         ],
       );
 
@@ -445,9 +493,23 @@ export class PostgresFleetRepository implements FleetRepository {
         throw new Error('Failed to create fleet vehicle');
       }
 
+      // Elect from all persisted vehicles, including pending/inactive vehicles.
+      // The durable intent survives retirement/deletion and never promotes a later vehicle.
+      await client.query(
+        `INSERT INTO owner_first_vehicle_assignments(owner_id,vehicle_id)
+         SELECT $1,id FROM vehicles WHERE owner_id=$1 ORDER BY created_at,id LIMIT 1
+         ON CONFLICT(owner_id) DO NOTHING`,
+        [ownerId],
+      );
+      await assignFirstOwnerVehicle(client, ownerId);
       const joining = await this.issueVehicleCode(client, ownerId, vehicle.id);
       await client.query('COMMIT');
-      return { ...vehicle, activeAssignmentCode: joining.code, assignmentCodeStatus: 'ACTIVE' };
+      return {
+        ...vehicle,
+        vehicleCode: joining.code,
+        activeAssignmentCode: joining.code,
+        assignmentCodeStatus: 'PENDING_APPROVAL',
+      };
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
@@ -464,6 +526,15 @@ export class PostgresFleetRepository implements FleetRepository {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
+      if (
+        input.operatingCityId !== undefined &&
+        !premiumCityAreas.cities.some((city) => city.id === input.operatingCityId)
+      )
+        throw new AppError(
+          'INVALID_OPERATING_CITY',
+          'Choose a configured premium operating city',
+          400,
+        );
       await client.query(
         "SELECT pg_advisory_xact_lock(hashtextextended('provider_vehicle:'||$1::text,0))",
         [vehicleId],
@@ -487,6 +558,7 @@ export class PostgresFleetRepository implements FleetRepository {
         permitDetails: 'permit_details',
         ownershipType: 'ownership_type',
         ownerNotes: 'owner_notes',
+        operatingCityId: 'operating_city_id',
       };
 
       if (input.sector != null || input.category != null) {
@@ -542,7 +614,7 @@ export class PostgresFleetRepository implements FleetRepository {
          color,
          plate_number AS "plateNumber",
          sector,
-         category,
+         category, operating_city_id AS "operatingCityId",
          is_active AS "isActive",
          created_at AS "createdAt",
          updated_at AS "updatedAt"`,
@@ -652,19 +724,19 @@ export class PostgresFleetRepository implements FleetRepository {
     vehicleId: string,
     driverProfileId?: string,
   ) {
-    const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
-    let code: string | null = null;
-    for (let attempt = 0; attempt < 20 && !code; attempt++) {
-      const candidate = randomInt(0, 1000000).toString().padStart(6, '0');
-      const inserted = await client.query<{ code: string }>(
-        'INSERT INTO driver_assignment_codes(code,vehicle_id,fleet_owner_id,expires_at,intended_driver_profile_id) VALUES($1,$2,$3,$4,$5) ON CONFLICT(code) DO NOTHING RETURNING code',
-        [candidate, vehicleId, ownerId, expiresAt, driverProfileId],
-      );
-      code = inserted.rows[0]?.code ?? null;
-    }
-    if (!code) throw new Error('ASSIGNMENT_CODE_CAPACITY_EXCEEDED');
-
-    return { code, expiresAt };
+    const vehicle = (
+      await client.query<{ joining_code: string }>(
+        'SELECT joining_code FROM vehicles WHERE id=$1 AND owner_id=$2',
+        [vehicleId, ownerId],
+      )
+    ).rows[0];
+    if (!vehicle) throw new Error('VEHICLE_NOT_AVAILABLE_FOR_ASSIGNMENT');
+    const expiresAt = new Date('9999-12-31T23:59:59.000Z');
+    await client.query(
+      'INSERT INTO driver_assignment_codes(code,vehicle_id,fleet_owner_id,expires_at,intended_driver_profile_id) VALUES($1,$2,$3,$4,$5) ON CONFLICT(code) DO NOTHING',
+      [vehicle.joining_code, vehicleId, ownerId, expiresAt, driverProfileId ?? null],
+    );
+    return { code: vehicle.joining_code, expiresAt, permanent: true };
   }
 
   async generateAssignmentCode(
@@ -674,6 +746,7 @@ export class PostgresFleetRepository implements FleetRepository {
   ): Promise<{
     code: string;
     expiresAt: Date;
+    permanent?: boolean;
   }> {
     const client = await this.pool.connect();
 
@@ -691,12 +764,12 @@ export class PostgresFleetRepository implements FleetRepository {
        */
       const vehicleResult = await client.query<{
         id: string;
+        driver_profile_id: string | null;
       }>(
-        `SELECT v.id
+        `SELECT v.id,v.driver_profile_id
          FROM vehicles v
          WHERE v.id = $1
            AND v.owner_id = $2
-           AND v.driver_profile_id IS NULL
          FOR UPDATE`,
         [vehicleId, ownerId],
       );
@@ -707,26 +780,20 @@ export class PostgresFleetRepository implements FleetRepository {
 
       if (
         driverProfileId &&
+        vehicleResult.rows[0].driver_profile_id &&
+        vehicleResult.rows[0].driver_profile_id !== driverProfileId
+      )
+        throw new Error('VEHICLE_NOT_AVAILABLE_FOR_ASSIGNMENT');
+      if (
+        driverProfileId &&
         !(
           await client.query(
-            `SELECT dp.id FROM driver_profiles dp JOIN partner_drivers pd ON pd.driver_profile_id=dp.id JOIN partners p ON p.id=pd.partner_id JOIN users u ON u.id=dp.user_id WHERE dp.id=$1 AND p.user_id=$2 AND pd.status='ACTIVE' AND dp.verification_status='approved' AND dp.license_expiry>=CURRENT_DATE AND dp.active_vehicle_id IS NULL AND u.status='active' AND u.deleted_at IS NULL AND EXISTS(SELECT 1 FROM vehicles class_vehicle WHERE class_vehicle.id=$3 AND driver_licence_category_satisfied(dp.id,class_vehicle.category)) FOR SHARE OF dp,pd,u`,
+            `SELECT dp.id FROM driver_profiles dp JOIN partner_drivers pd ON pd.driver_profile_id=dp.id JOIN partners p ON p.id=pd.partner_id JOIN users u ON u.id=dp.user_id WHERE dp.id=$1 AND p.user_id=$2 AND pd.status='ACTIVE' AND dp.verification_status='approved' AND dp.license_expiry>=CURRENT_DATE AND (dp.active_vehicle_id IS NULL OR dp.active_vehicle_id=$3) AND u.status='active' AND u.deleted_at IS NULL AND EXISTS(SELECT 1 FROM vehicles class_vehicle WHERE class_vehicle.id=$3 AND driver_licence_category_satisfied(dp.id,class_vehicle.category)) FOR SHARE OF dp,pd,u`,
             [driverProfileId, ownerId, vehicleId],
           )
         ).rowCount
       )
         throw new Error('DRIVER_NOT_ELIGIBLE_FOR_ASSIGNMENT');
-      /*
-       * Only one active assignment code should exist for a vehicle.
-       */
-      await client.query(
-        `UPDATE driver_assignment_codes
-         SET status = 'REVOKED',
-             updated_at = NOW()
-         WHERE vehicle_id = $1
-           AND status IN ('ACTIVE','CLAIMED')`,
-        [vehicleId],
-      );
-
       const { code, expiresAt } = await this.issueVehicleCode(
         client,
         ownerId,
@@ -734,11 +801,18 @@ export class PostgresFleetRepository implements FleetRepository {
         driverProfileId,
       );
 
+      if (driverProfileId && !vehicleResult.rows[0].driver_profile_id) {
+        await client.query(
+          'UPDATE driver_assignment_codes SET intended_driver_profile_id=$2,updated_at=NOW() WHERE code=$1',
+          [code, driverProfileId],
+        );
+      }
       await client.query('COMMIT');
 
       return {
         code,
         expiresAt,
+        permanent: true,
       };
     } catch (error) {
       try {
@@ -803,11 +877,15 @@ export class PostgresFleetRepository implements FleetRepository {
       );
 
       await client.query(
-        `UPDATE driver_assignment_codes
-         SET status = 'REVOKED',
-             updated_at = NOW()
-         WHERE vehicle_id = $1
-           AND status IN ('ACTIVE','CLAIMED')`,
+        `UPDATE driver_assignment_codes SET status='REVOKED',updated_at=NOW()
+         WHERE vehicle_id=$1 AND code<>(SELECT joining_code FROM vehicles WHERE id=$1)
+         AND status IN ('ACTIVE','CLAIMED')`,
+        [vehicleId],
+      );
+      await client.query(
+        `UPDATE driver_assignment_codes SET status='ACTIVE',driver_id=NULL,
+         intended_driver_profile_id=NULL,updated_at=NOW()
+         WHERE vehicle_id=$1 AND code=(SELECT joining_code FROM vehicles WHERE id=$1)`,
         [vehicleId],
       );
 
@@ -881,6 +959,7 @@ export class PostgresFleetRepository implements FleetRepository {
 
        LEFT JOIN vehicles v
          ON v.driver_profile_id = dp.id
+        AND dp.active_vehicle_id = v.id
         AND v.owner_id = p.user_id
         AND v.is_active = TRUE
         AND v.verification_status = 'approved'

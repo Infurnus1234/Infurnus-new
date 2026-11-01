@@ -12,6 +12,7 @@ import { signAccessToken } from '../../auth/utils/jwt.js';
 import { createRequiredSingleFileUpload } from '../../../infrastructure/storage/multipart.js';
 import { storageService } from '../../../infrastructure/storage/index.js';
 import { AppError } from '../../../common/errors/app-error.js';
+import { normalizePhone } from '../../auth/utils/contact.js';
 export function createRoleEnrolmentRouter(repo: RoleEnrolmentRepository) {
   const router = Router();
   const invitations = new FleetInvitationRepository(pool);
@@ -135,13 +136,39 @@ export function createRoleEnrolmentRouter(repo: RoleEnrolmentRepository) {
   });
   router.post('/fleet-drivers', requireFleetOwner(), async (req, res, next) => {
     try {
-      const { email, driverUserId } = z
-        .object({ email: z.string().email().max(320), driverUserId: z.string().uuid().optional() })
-        .strict()
+      const input = z
+        .union([
+          z
+            .object({
+              email: z.string().trim().email().max(320),
+              driverUserId: z.string().uuid().optional(),
+            })
+            .strict(),
+          z
+            .object({
+              phone: z
+                .string()
+                .trim()
+                .regex(/^[+\d\s()-]+$/)
+                .transform(normalizePhone)
+                .pipe(
+                  z
+                    .string()
+                    .regex(/^\+[1-9]\d{7,14}$/, 'Enter the registered phone with country code'),
+                ),
+              driverUserId: z.string().uuid().optional(),
+            })
+            .strict(),
+        ])
         .parse(req.body);
       res.status(201).json({
         success: true,
-        data: await repo.addDriver(req.auth!.userId, req.auth!.role, email, driverUserId),
+        data: await repo.addDriver(
+          req.auth!.userId,
+          req.auth!.role,
+          'email' in input ? input.email : input.phone,
+          input.driverUserId,
+        ),
       });
     } catch (e) {
       next(e);

@@ -31,6 +31,7 @@ export interface FleetVehicle {
   permitDetails?: string | null;
   ownershipType?: string;
   ownerNotes?: string | null;
+  operatingCityId?: string | null;
   verificationStatus: string;
   isActive: boolean;
   assignedDriver?: {
@@ -40,6 +41,7 @@ export interface FleetVehicle {
     phone: string;
     availabilityStatus?: string | null;
   } | null;
+  vehicleCode?: string | null;
   activeAssignmentCode?: string | null;
   assignmentCodeStatus?: string | null;
   assignmentDriverProfileId?: string | null;

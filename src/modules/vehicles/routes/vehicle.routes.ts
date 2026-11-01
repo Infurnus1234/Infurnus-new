@@ -17,6 +17,7 @@ export function createVehicleRouter(controller: VehicleController) {
   // Fleet listing must stay before /:id
   // so "fleet" is not interpreted as a vehicle UUID.
   router.get('/fleet', controller.getFleet);
+  router.get('/catalog', controller.catalog);
 
   // Driver-specific vehicle listing
   router.get('/', controller.list);

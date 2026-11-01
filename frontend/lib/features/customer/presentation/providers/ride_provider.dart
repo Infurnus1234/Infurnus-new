@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import '../../../../core/services/support_request_id.dart';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
@@ -8,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../../core/services/cashfree_checkout_service.dart';
+import '../../../../core/errors/failures.dart';
 import '../../../../core/services/upi_payment_service.dart';
 import '../../../../core/services/geocoding_service.dart';
 import '../../../../core/services/location_service.dart';
@@ -36,11 +39,15 @@ class DriverLocation {
   final double latitude;
   final double longitude;
   final DateTime timestamp;
+  final double? heading, speed, accuracy;
 
   DriverLocation({
     required this.latitude,
     required this.longitude,
     required this.timestamp,
+    this.heading,
+    this.speed,
+    this.accuracy,
   });
 }
 
@@ -210,13 +217,28 @@ class RideNotifier extends StateNotifier<RideState> {
   int _mapGeneration = 0;
   int _locationGeneration = 0;
   int _rideReadGeneration = 0;
+  String? _dismissedRideId;
   StreamSubscription<SocketConnectionState>? _socketStateSubscription;
   Future<bool>? _pendingFare;
   String? _pendingFareKey;
   int? _pendingFareGeneration;
+  Timer? _rideReconciliation;
+  bool _reconcilingRide = false;
 
   RideNotifier(this.ref) : super(RideState()) {
     _subscribeToSocketEvents();
+    // Socket events may be missed during expiry, reconnects, or backgrounding.
+    // Reconcile active rides with the authoritative API until they are terminal.
+    _rideReconciliation = Timer.periodic(const Duration(seconds: 5), (_) async {
+      final id = state.currentRide?.id;
+      if (!mounted || !_activeRide || id == null || _reconcilingRide) return;
+      _reconcilingRide = true;
+      try {
+        await getRideDetails(id);
+      } finally {
+        _reconcilingRide = false;
+      }
+    });
     final notifications = ref.read(notificationServiceProvider);
     _pushSubscription = notifications.rideUpdates.listen(_refreshFromPush);
     final pending = notifications.takePendingRide();
@@ -230,7 +252,7 @@ class RideNotifier extends StateNotifier<RideState> {
               id != null &&
               _activeRide) {
             ref.read(socketServiceProvider).joinRide(id);
-            refreshRideMap();
+            unawaited(getRideDetails(id));
           } else if (connection == SocketConnectionState.error ||
               connection == SocketConnectionState.disconnected) {
             if (mounted && _activeRide) {
@@ -319,14 +341,29 @@ class RideNotifier extends StateNotifier<RideState> {
       return null;
     }
     if (state.lastDriverLocation != null &&
-        timestamp.isBefore(state.lastDriverLocation!.timestamp)) {
+        !timestamp.isAfter(state.lastDriverLocation!.timestamp)) {
       return null;
     }
-    return DriverLocation(latitude: lat, longitude: lng, timestamp: timestamp);
+    double? metric(String key) {
+      final value = data[key];
+      return value is num && value.isFinite && value >= 0
+          ? value.toDouble()
+          : null;
+    }
+
+    return DriverLocation(
+      latitude: lat,
+      longitude: lng,
+      timestamp: timestamp,
+      heading: metric('heading'),
+      speed: metric('speed'),
+      accuracy: metric('accuracy'),
+    );
   }
 
   void _refreshFromPush(String id) {
     if (!mounted ||
+        id == _dismissedRideId ||
         (state.currentRide != null && state.currentRide!.id != id)) {
       return;
     }
@@ -439,8 +476,25 @@ class RideNotifier extends StateNotifier<RideState> {
             clearMapData: true,
           );
           ref.read(socketServiceProvider).leaveRide(state.currentRide!.id);
+          unawaited(_refreshCancellationDetails(state.currentRide!.id));
         }
         break;
+    }
+  }
+
+  Future<void> _refreshCancellationDetails(String id) async {
+    final generation = _rideReadGeneration;
+    try {
+      final ride = await ref.read(getRideUseCaseProvider).execute(id);
+      if (!mounted ||
+          generation != _rideReadGeneration ||
+          state.currentRide?.id != id ||
+          state.status != RideStatus.cancelled ||
+          ride.status != model.RideStatus.cancelled)
+        return;
+      state = state.copyWith(currentRide: ride);
+    } catch (_) {
+      // Keep the terminal state if the authoritative explanation cannot load.
     }
   }
 
@@ -712,7 +766,12 @@ class RideNotifier extends StateNotifier<RideState> {
   }
 
   void selectTier(String tier) {
-    state = state.copyWith(selectedTier: tier);
+    state = state.copyWith(
+      selectedTier: tier,
+      rentalDetails: state.selectedSector == 'premium' && tier == 'thar'
+          ? (state.rentalDetails ?? {'hours': 6})
+          : state.rentalDetails,
+    );
     estimateRouteFare();
   }
 
@@ -765,11 +824,7 @@ class RideNotifier extends StateNotifier<RideState> {
 
   Future<bool> _performFareEstimate() async {
     final generation = ++_fareEstimateGeneration;
-    String tier = state.selectedTier.trim();
-    if (tier.isEmpty) {
-      tier = defaultVehicleCategoryForSector(state.selectedSector);
-      state = state.copyWith(selectedTier: tier);
-    }
+    final tier = state.selectedTier.trim();
     if (state.pickupCoords == null ||
         state.destinationCoords == null ||
         tier.isEmpty) {
@@ -833,6 +888,12 @@ class RideNotifier extends StateNotifier<RideState> {
       final estimate = await ref
           .read(estimateFareUseCaseProvider)
           .execute(payload);
+      if (estimate.vehicleCategory != null &&
+          estimate.vehicleCategory != vehicleCategory) {
+        throw const FormatException(
+          'The fare response does not match the selected vehicle.',
+        );
+      }
 
       if (!mounted || generation != _fareEstimateGeneration) return false;
       state = state.copyWith(
@@ -899,6 +960,8 @@ class RideNotifier extends StateNotifier<RideState> {
         'pickupAddress': state.pickup ?? 'Current Location',
         'destinationAddress': state.destination ?? 'Destination',
         'sector': state.selectedSector,
+        if (state.fareEstimate?.pricingQuote != null)
+          'pricingQuote': state.fareEstimate!.pricingQuote,
         'vehicleCategory': normalizeVehicleCategoryForBackend(
           state.selectedSector,
           state.selectedTier,
@@ -919,6 +982,37 @@ class RideNotifier extends StateNotifier<RideState> {
         data['waitingMinutes'] = state.waitingMinutes;
       }
 
+      if (state.selectedSector == 'service') {
+        final storage = ref.read(secureStorageProvider);
+        final userId = await storage.read(key: 'user_id');
+        if (userId == null) throw StateError('Please sign in before booking.');
+        final intent = jsonEncode([
+          data['sector'],
+          data['vehicleCategory'],
+          data['pickup'],
+          data['destination'],
+          data['serviceDetails'],
+        ]);
+        final key = 'pending_service_request_$userId';
+        final saved = await storage.read(key: key);
+        Map<String, dynamic>? pending;
+        try {
+          pending = saved == null
+              ? null
+              : jsonDecode(saved) as Map<String, dynamic>;
+        } catch (_) {
+          pending = null;
+        }
+        if (pending?['intent'] != intent) {
+          final hex = supportRequestId();
+          final id =
+              '${hex.substring(0, 8)}-${hex.substring(8, 12)}-4${hex.substring(13, 16)}-8${hex.substring(17, 20)}-${hex.substring(20)}';
+          pending = {'intent': intent, 'id': id};
+          // Persist before sending: a lost response or app restart reuses this intent.
+          await storage.write(key: key, value: jsonEncode(pending));
+        }
+        data['clientRequestId'] = pending!['id'];
+      }
       final ride = await ref.read(createRideUseCaseProvider).execute(data);
 
       state = state.copyWith(
@@ -930,6 +1024,17 @@ class RideNotifier extends StateNotifier<RideState> {
       await _ensureSocketConnected();
       ref.read(socketServiceProvider).joinRide(ride.id);
     } catch (e) {
+      if (e is FareFailure && mounted) {
+        state = state.copyWith(status: RideStatus.error, clearFareData: true);
+        await estimateRouteFare();
+        if (!mounted) return;
+        state = state.copyWith(
+          status: RideStatus.error,
+          errorMessage:
+              '${e.message} Review the current fare before confirming again.',
+        );
+        return;
+      }
       state = state.copyWith(
         status: RideStatus.error,
         errorMessage: e.toString(),
@@ -1215,7 +1320,20 @@ class RideNotifier extends StateNotifier<RideState> {
     } catch (_) {}
   }
 
+  Future<void> _clearServiceBookingIntent() async {
+    final storage = ref.read(secureStorageProvider);
+    final userId = await storage.read(key: 'user_id');
+    if (userId != null) {
+      await storage.delete(key: 'pending_service_request_$userId');
+    }
+  }
+
   void resetRide() {
+    if (state.selectedSector == 'service') {
+      unawaited(_clearServiceBookingIntent());
+    }
+    _dismissedRideId = state.currentRide?.id;
+    _rideReadGeneration++;
     _mapGeneration++;
     state = state.copyWith(
       status: RideStatus.initial,
@@ -1257,6 +1375,7 @@ class RideNotifier extends StateNotifier<RideState> {
 
   @override
   void dispose() {
+    _rideReconciliation?.cancel();
     _socketStateSubscription?.cancel();
     _eventSubscription?.cancel();
     _pushSubscription?.cancel();

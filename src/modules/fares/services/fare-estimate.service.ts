@@ -1,3 +1,4 @@
+import { serviceArea } from '../../maps/service-area.js';
 import { demandProvenance } from './demand-pricing.js';
 import { VEHICLE_PRICING_ALIASES } from '../config/fare.config.js';
 import type { VehicleRepository } from '../../vehicles/repositories/vehicle.repository.js';
@@ -40,6 +41,8 @@ export class FareEstimateService {
       weightKg?: number | undefined;
       hasLoadingAssistance?: boolean | undefined;
       rentalHours?: number | undefined;
+      bookingHours?: number | undefined;
+      tripType?: 'one_way' | 'round_trip' | undefined;
       fuelRatePerKm?: number | undefined;
       fallbackConfig?: FallbackRouteConfig | undefined;
       pricingMode?: 'vehicle_range';
@@ -59,6 +62,21 @@ export class FareEstimateService {
           400,
         );
       }
+    }
+    if (options?.sector === 'service') {
+      await serviceArea.assertSupported([origin, destination]);
+      const configured = await this.resolveConfiguration(options);
+      if (!configured)
+        throw new AppError(
+          'SERVICE_CONFIGURATION_UNAVAILABLE',
+          'Select a service with an active fixed fare.',
+          422,
+        );
+      // Navigation uses the existing trip-map infrastructure, separately from this fixed price.
+      return this.fareCalculator.calculateEstimate(
+        { distanceMeters: 0, durationSeconds: 0, currency: 'INR', ...options },
+        configured,
+      );
     }
     if (options?.pricingMode === 'vehicle_range') await this.resolveConfiguration(options);
     let route;

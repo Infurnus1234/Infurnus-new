@@ -88,6 +88,8 @@ class RideModel {
   final String? destinationAddress;
   final double? fareEstimate;
   final double? finalFare;
+  final String? bookingVehicleTypeId;
+  final String? bookingPricingVersion;
   final int? actualDistanceMeters;
   final double? actualFuelCost;
   final String? sector;
@@ -120,6 +122,8 @@ class RideModel {
     this.destinationAddress,
     this.fareEstimate,
     this.finalFare,
+    this.bookingVehicleTypeId,
+    this.bookingPricingVersion,
     this.paymentStatus,
     this.actualDistanceMeters,
     this.actualFuelCost,
@@ -226,6 +230,8 @@ class RideModel {
           : null,
       sector: json['sector'] as String?,
       vehicleCategory: json['vehicleCategory'] as String?,
+      bookingVehicleTypeId: json['bookingVehicleTypeId'] as String?,
+      bookingPricingVersion: json['bookingPricingVersion'] as String?,
       goods: json['goods'] != null
           ? Map<String, dynamic>.from(json['goods'] as Map)
           : null,

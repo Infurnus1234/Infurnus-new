@@ -35,7 +35,7 @@ function fixture(role: SignupInput['role']) {
     phone: '+919876543210',
     ...(role !== 'customer' && role !== 'fleet_owner' ? { onboardingLicencePending: true } : {}),
     ...(role === 'fleet_owner' || role === 'driver_fleet_owner'
-      ? { businessName: 'Fleet', password: 'Fixture123!' }
+      ? { businessName: 'Fleet' }
       : {}),
   };
   return { old, repository, service, input, send, users };
@@ -58,8 +58,9 @@ describe('provider signup retries', () => {
     async (role) => {
       const f = fixture(role);
       f.old.otpProviderExpiresAt = new Date(Date.now() + 300000);
-      await expect(f.service.signup(f.input)).rejects.toMatchObject({
-        code: 'SIGNUP_ALREADY_PENDING',
+      await expect(f.service.signup(f.input)).resolves.toMatchObject({
+        signupId: 'old',
+        expiresAt: f.old.otpProviderExpiresAt,
       });
       expect(f.repository.deleteExpiredById).not.toHaveBeenCalled();
       expect(f.send).not.toHaveBeenCalled();
