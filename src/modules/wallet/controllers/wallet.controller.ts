@@ -1,10 +1,12 @@
 import type { NextFunction, Request, Response } from 'express';
 import { z } from 'zod';
 import type { PostgresWalletRepository } from '../repositories/wallet.repository.js';
-import { AppError } from '../../../common/errors/app-error.js';
 
 const topUpInitiateSchema = z.object({
-  amount: z.number().min(10, 'Minimum top-up is ₹10').max(100000, 'Maximum top-up is ₹1,00,000'),
+  amount: z
+    .number()
+    .min(10, 'Minimum top-up is â‚¹10')
+    .max(100000, 'Maximum top-up is â‚¹1,00,000'),
   paymentMethod: z.string().default('upi'),
   idempotencyKey: z.string().min(1, 'Idempotency key required'),
 });

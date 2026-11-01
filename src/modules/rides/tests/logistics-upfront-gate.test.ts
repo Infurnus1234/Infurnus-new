@@ -3,7 +3,7 @@ import { RideService } from '../services/ride.service.js';
 import type { RideRepository } from '../repositories/ride.repository.js';
 
 function build(ride: Record<string, unknown>) {
-  const verifyPinAttempt = vi.fn().mockResolvedValue('ok');
+  const verifyPinAttempt = vi.fn().mockResolvedValue('verified');
   const findById = vi.fn().mockResolvedValue(ride);
   const service = new RideService({
     findById,

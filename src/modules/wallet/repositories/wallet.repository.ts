@@ -70,10 +70,9 @@ export class PostgresWalletRepository {
       balance_paise: string;
       currency: string;
       is_active: boolean;
-    }>(
-      `SELECT balance_paise::text, currency, is_active FROM user_wallets WHERE user_id = $1`,
-      [userId],
-    );
+    }>(`SELECT balance_paise::text, currency, is_active FROM user_wallets WHERE user_id = $1`, [
+      userId,
+    ]);
 
     const countResult = await this.pool.query<{ count: string }>(
       `SELECT COUNT(*)::text as count FROM user_wallet_entries WHERE user_id = $1`,
@@ -97,7 +96,12 @@ export class PostgresWalletRepository {
   async getHistory(
     userId: string,
     filter?: { type?: 'all' | 'credit' | 'debit'; limit?: number; offset?: number },
-  ): Promise<{ transactions: WalletTransactionEntry[]; totalCount: number; limit: number; offset: number }> {
+  ): Promise<{
+    transactions: WalletTransactionEntry[];
+    totalCount: number;
+    limit: number;
+    offset: number;
+  }> {
     const limit = Math.max(1, Math.min(filter?.limit ?? 20, 100));
     const offset = Math.max(0, filter?.offset ?? 0);
     const filterType = filter?.type ?? 'all';
@@ -290,7 +294,13 @@ export class PostgresWalletRepository {
     target: { type: string; id: string; name?: string | undefined; orderId?: string | undefined },
     idempotencyKey: string,
     note?: string | undefined,
-  ): Promise<{ transactionId: string; status: string; balanceAfter: number; balanceAfterPaise: number; reference: string }> {
+  ): Promise<{
+    transactionId: string;
+    status: string;
+    balanceAfter: number;
+    balanceAfterPaise: number;
+    reference: string;
+  }> {
     if (amountPaise <= 0) {
       throw new AppError('INVALID_AMOUNT', 'Payment amount must be greater than zero', 400);
     }
@@ -340,9 +350,10 @@ export class PostgresWalletRepository {
       );
 
       const ref = `WLT_PAY_${Date.now()}_${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
-      const desc = note && note.trim().length > 0
-        ? `Payment to ${target.name || target.id}: ${note.trim()}`
-        : `Payment to ${target.name || target.id}`;
+      const desc =
+        note && note.trim().length > 0
+          ? `Payment to ${target.name || target.id}: ${note.trim()}`
+          : `Payment to ${target.name || target.id}`;
 
       const entryResult = await client.query<{ id: string; created_at: Date }>(
         `INSERT INTO user_wallet_entries(
@@ -362,7 +373,9 @@ export class PostgresWalletRepository {
       );
 
       // If target is a driver/merchant user account, credit them atomically
-      const isTargetUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(target.id);
+      const isTargetUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        target.id,
+      );
       if (isTargetUuid) {
         try {
           const recipientBalance = await this.lockUserWallet(client, target.id);
@@ -421,7 +434,9 @@ export class PostgresWalletRepository {
 
     // 2. Driver resolution
     if (targetType === 'driver') {
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId);
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        cleanId,
+      );
       if (isUuid) {
         const driverRes = await this.pool.query<{ name: string }>(
           `SELECT u.name 
@@ -450,9 +465,16 @@ export class PostgresWalletRepository {
 
     // 3. Logistics Order resolution
     if (targetType === 'order') {
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId);
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        cleanId,
+      );
       if (isUuid) {
-        const orderRes = await this.pool.query<{ id: string; status: string; final_fare: string | null; fare_estimate: string | null }>(
+        const orderRes = await this.pool.query<{
+          id: string;
+          status: string;
+          final_fare: string | null;
+          fare_estimate: string | null;
+        }>(
           `SELECT id, status, final_fare::text, fare_estimate::text FROM rides WHERE id = $1 LIMIT 1`,
           [cleanId],
         );
