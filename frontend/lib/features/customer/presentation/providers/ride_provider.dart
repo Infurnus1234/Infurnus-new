@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
@@ -1206,7 +1206,6 @@ class RideNotifier extends StateNotifier<RideState> {
     }
   }
 
-
   /// Initiates 40% upfront payment for a logistics booking.
   /// Amount always comes from backend [logisticsPayment.upfrontAmount].
   Future<bool> initiateLogisticsUpfrontPayment({
@@ -1234,7 +1233,10 @@ class RideNotifier extends StateNotifier<RideState> {
         throw Exception('Payment initiation did not return a valid payment ID');
       }
 
-      state = state.copyWith(paymentId: paymentId, paymentMethod: paymentMethod);
+      state = state.copyWith(
+        paymentId: paymentId,
+        paymentMethod: paymentMethod,
+      );
 
       final method = paymentMethod.toLowerCase();
       bool captured = false;
@@ -1251,19 +1253,26 @@ class RideNotifier extends StateNotifier<RideState> {
           paymentSessionId: paymentSessionId,
         );
         if (checkoutResult.status == CashfreeCheckoutStatus.cancelled) {
-          state = state.copyWith(paymentStatus: 'unpaid', errorMessage: 'Payment cancelled');
+          state = state.copyWith(
+            paymentStatus: 'unpaid',
+            errorMessage: 'Payment cancelled',
+          );
           return false;
         }
         if (checkoutResult.status == CashfreeCheckoutStatus.failed) {
           state = state.copyWith(
             paymentStatus: 'unpaid',
-            errorMessage: checkoutResult.errorMessage ?? 'Payment failed at gateway',
+            errorMessage:
+                checkoutResult.errorMessage ?? 'Payment failed at gateway',
           );
           return false;
         }
         final captureResult = await ref
             .read(capturePaymentUseCaseProvider)
-            .execute(paymentId: paymentId, providerPaymentId: checkoutResult.referenceId);
+            .execute(
+              paymentId: paymentId,
+              providerPaymentId: checkoutResult.referenceId,
+            );
         captured = captureResult['status'] == 'CAPTURED';
       } else if (method == 'wallet') {
         final captureResult = await ref
@@ -1295,7 +1304,10 @@ class RideNotifier extends StateNotifier<RideState> {
         }
         final captureResult = await ref
             .read(capturePaymentUseCaseProvider)
-            .execute(paymentId: paymentId, providerPaymentId: upiResult.transactionId);
+            .execute(
+              paymentId: paymentId,
+              providerPaymentId: upiResult.transactionId,
+            );
         captured = captureResult['status'] == 'CAPTURED';
       }
 
@@ -1311,10 +1323,14 @@ class RideNotifier extends StateNotifier<RideState> {
         return false;
       }
     } catch (e) {
-      state = state.copyWith(paymentStatus: 'unpaid', errorMessage: e.toString());
+      state = state.copyWith(
+        paymentStatus: 'unpaid',
+        errorMessage: e.toString(),
+      );
       return false;
     }
   }
+
   Future<void> fetchPaymentHistory() async {
     try {
       final payments = await ref

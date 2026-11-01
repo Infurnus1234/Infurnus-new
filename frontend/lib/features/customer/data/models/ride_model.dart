@@ -102,8 +102,10 @@ class RideModel {
   final RideStatus status;
   final String? paymentStatus;
   // Logistics upfront payment fields
-  final String? upfrontPaymentStatus; // NOT_REQUIRED | PENDING | PAID_VERIFIED | FAILED
-  final Map<String, dynamic>? logisticsPayment; // {upfrontAmount, remainingAmount, status, ...}
+  final String?
+  upfrontPaymentStatus; // NOT_REQUIRED | PENDING | PAID_VERIFIED | FAILED
+  final Map<String, dynamic>?
+  logisticsPayment; // {upfrontAmount, remainingAmount, status, ...}
   final String? cancellationReason;
   final DateTime? cancelledAt;
   final DateTime? completedAt;
@@ -115,7 +117,8 @@ class RideModel {
   bool get isLogistics => sector == 'logistics';
   bool get upfrontPaid => upfrontPaymentStatus == 'PAID_VERIFIED';
   double get upfrontAmount {
-    final fromBackend = (logisticsPayment?['upfrontAmount'] as num?)?.toDouble();
+    final fromBackend = (logisticsPayment?['upfrontAmount'] as num?)
+        ?.toDouble();
     if (fromBackend != null) return fromBackend;
     final fare = fareEstimate ?? 0.0;
     return (fare * 0.4 * 100).roundToDouble() / 100;

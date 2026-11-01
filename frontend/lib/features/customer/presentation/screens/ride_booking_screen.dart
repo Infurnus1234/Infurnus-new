@@ -14,11 +14,20 @@ import '../../../../shared/widgets/infurnus_button.dart';
 import '../../../../shared/widgets/infurnus_map.dart';
 import '../../../../shared/widgets/infurnus_outlined_button.dart';
 import '../../data/models/fleet_vehicle_model.dart';
+import '../../data/models/ride_model.dart' as model;
 import '../providers/ride_provider.dart';
 import '../widgets/fare_range_details.dart';
 import '../widgets/waiting_timer_widget.dart';
 import '../providers/ride_use_case_providers.dart';
 import '../../domain/utils/passenger_vehicle_filter.dart';
+
+// Top-level color constants (shared between _RideBookingScreenState and sub-widgets)
+const Color _kCardElevated = Color(0xFFFFFFFF);
+const Color _kTextWhite = Color(0xFF111827);
+const Color _kTextGray = Color(0xFF4B5563);
+const Color _kBrandGreen = Color(0xFF16A34A);
+const Color _kServiceRed = Color(0xFFDC2626);
+const Color _kGoldAccent = Color(0xFFCA8A04);
 
 class RideBookingScreen extends ConsumerStatefulWidget {
   const RideBookingScreen({super.key});
@@ -2556,7 +2565,11 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                 SizedBox(width: 8),
                 Text(
                   '40% Upfront Payment Confirmed',
-                  style: TextStyle(color: brandGreen, fontWeight: FontWeight.w600, fontSize: 13),
+                  style: TextStyle(
+                    color: brandGreen,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
                 ),
               ],
             ),
@@ -3362,6 +3375,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Logistics 40% Upfront Payment Card
+// Uses top-level _k* color constants so it compiles outside _RideBookingScreenState
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _LogisticsUpfrontCard extends ConsumerStatefulWidget {
@@ -3379,18 +3393,18 @@ class _LogisticsUpfrontCardState extends ConsumerState<_LogisticsUpfrontCard> {
   Color _statusColor(String? s) {
     switch (s) {
       case 'PAID_VERIFIED':
-        return brandGreen;
+        return _kBrandGreen;
       case 'FAILED':
-        return serviceRed;
+        return _kServiceRed;
       default:
-        return goldAccent;
+        return _kGoldAccent;
     }
   }
 
   String _statusLabel(String? s) {
     switch (s) {
       case 'PAID_VERIFIED':
-        return 'Paid ✓';
+        return 'Paid \u2713';
       case 'FAILED':
         return 'Failed';
       case 'PENDING':
@@ -3410,10 +3424,7 @@ class _LogisticsUpfrontCardState extends ConsumerState<_LogisticsUpfrontCard> {
       if (!ok && mounted) {
         final err = ref.read(rideProvider).errorMessage ?? 'Payment failed';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(err),
-            backgroundColor: serviceRed,
-          ),
+          SnackBar(content: Text(err), backgroundColor: _kServiceRed),
         );
       }
     } finally {
@@ -3432,21 +3443,21 @@ class _LogisticsUpfrontCardState extends ConsumerState<_LogisticsUpfrontCard> {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: cardElevated,
+        color: _kCardElevated,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: brandGreen.withValues(alpha: 0.3)),
+        border: Border.all(color: _kBrandGreen.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Row(
             children: [
-              Icon(Icons.local_shipping_rounded, color: brandGreen, size: 16),
+              Icon(Icons.local_shipping_rounded, color: _kBrandGreen, size: 16),
               SizedBox(width: 6),
               Text(
-                'Logistics – 40% Upfront Payment Required',
+                'Logistics \u2013 40% Upfront Payment Required',
                 style: TextStyle(
-                  color: textWhite,
+                  color: _kTextWhite,
                   fontWeight: FontWeight.bold,
                   fontSize: 13,
                 ),
@@ -3457,10 +3468,13 @@ class _LogisticsUpfrontCardState extends ConsumerState<_LogisticsUpfrontCard> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Total Fare', style: TextStyle(color: textGray, fontSize: 12)),
+              const Text(
+                'Total Fare',
+                style: TextStyle(color: _kTextGray, fontSize: 12),
+              ),
               Text(
-                '₹${totalFare.toStringAsFixed(2)}',
-                style: const TextStyle(color: textWhite, fontSize: 12),
+                '\u20B9${totalFare.toStringAsFixed(2)}',
+                style: const TextStyle(color: _kTextWhite, fontSize: 12),
               ),
             ],
           ),
@@ -3468,11 +3482,14 @@ class _LogisticsUpfrontCardState extends ConsumerState<_LogisticsUpfrontCard> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Pay Now (40%)', style: TextStyle(color: textGray, fontSize: 12)),
+              const Text(
+                'Pay Now (40%)',
+                style: TextStyle(color: _kTextGray, fontSize: 12),
+              ),
               Text(
-                '₹${upfrontAmt.toStringAsFixed(2)}',
+                '\u20B9${upfrontAmt.toStringAsFixed(2)}',
                 style: const TextStyle(
-                  color: brandGreen,
+                  color: _kBrandGreen,
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
                 ),
@@ -3483,7 +3500,10 @@ class _LogisticsUpfrontCardState extends ConsumerState<_LogisticsUpfrontCard> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Status', style: TextStyle(color: textGray, fontSize: 12)),
+              const Text(
+                'Status',
+                style: TextStyle(color: _kTextGray, fontSize: 12),
+              ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
@@ -3511,14 +3531,14 @@ class _LogisticsUpfrontCardState extends ConsumerState<_LogisticsUpfrontCard> {
                       width: 22,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: brandGreen,
+                        color: _kBrandGreen,
                       ),
                     ),
                   )
                 : InfurnusButton(
                     text: status == 'FAILED'
-                        ? 'Retry Payment (₹${upfrontAmt.toStringAsFixed(2)})'
-                        : 'Pay ₹${upfrontAmt.toStringAsFixed(2)} Now',
+                        ? 'Retry Payment (\u20B9${upfrontAmt.toStringAsFixed(2)})'
+                        : 'Pay \u20B9${upfrontAmt.toStringAsFixed(2)} Now',
                     onPressed: _pay,
                   ),
           ),
@@ -3526,7 +3546,7 @@ class _LogisticsUpfrontCardState extends ConsumerState<_LogisticsUpfrontCard> {
             const SizedBox(height: 6),
             const Text(
               'Previous payment failed. Please retry.',
-              style: TextStyle(color: serviceRed, fontSize: 11),
+              style: TextStyle(color: _kServiceRed, fontSize: 11),
               textAlign: TextAlign.center,
             ),
           ],
@@ -3534,7 +3554,7 @@ class _LogisticsUpfrontCardState extends ConsumerState<_LogisticsUpfrontCard> {
             const SizedBox(height: 6),
             const Text(
               'Driver can start only after this payment is verified.',
-              style: TextStyle(color: textGray, fontSize: 11),
+              style: TextStyle(color: _kTextGray, fontSize: 11),
             ),
           ],
         ],

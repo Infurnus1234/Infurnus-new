@@ -17,14 +17,23 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // If a data-only push arrives without a notification payload, present it locally with custom sound
   if (message.notification == null && message.data.isNotEmpty) {
     try {
-      final title = message.data['title']?.toString() ?? 'Infurnus Notification';
-      final body = message.data['body']?.toString() ?? message.data['message']?.toString() ?? '';
-      final channelId = message.data['channelId']?.toString() ?? 'infurnus_ride_updates_v2';
-      final isRideReq = message.data['rideId'] != null || message.data['type'] == 'ride.incoming';
+      final title =
+          message.data['title']?.toString() ?? 'Infurnus Notification';
+      final body =
+          message.data['body']?.toString() ??
+          message.data['message']?.toString() ??
+          '';
+      final channelId =
+          message.data['channelId']?.toString() ?? 'infurnus_ride_updates_v2';
+      final isRideReq =
+          message.data['rideId'] != null ||
+          message.data['type'] == 'ride.incoming';
       final activeChannel = isRideReq ? 'infurnus_ride_requests_v2' : channelId;
 
       final localPlugin = FlutterLocalNotificationsPlugin();
-      const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const androidSettings = AndroidInitializationSettings(
+        '@mipmap/ic_launcher',
+      );
       const initSettings = InitializationSettings(
         android: androidSettings,
         iOS: DarwinInitializationSettings(),
@@ -32,13 +41,17 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       await localPlugin.initialize(initSettings);
 
       await localPlugin.show(
-        (message.data['notificationId'] ?? message.hashCode.toString()).hashCode & 0x7fffffff,
+        (message.data['notificationId'] ?? message.hashCode.toString())
+                .hashCode &
+            0x7fffffff,
         title,
         body,
         NotificationDetails(
           android: AndroidNotificationDetails(
             activeChannel,
-            activeChannel == 'infurnus_ride_requests_v2' ? 'Infurnus Ride Requests' : 'Infurnus Ride Updates',
+            activeChannel == 'infurnus_ride_requests_v2'
+                ? 'Infurnus Ride Requests'
+                : 'Infurnus Ride Updates',
             importance: Importance.max,
             priority: Priority.max,
             playSound: true,
@@ -174,7 +187,9 @@ class NotificationService {
       // Delete old channels so Android recreates v2 channels with the custom sound.
       await androidPlugin?.deleteNotificationChannel('infurnus_channel');
       await androidPlugin?.deleteNotificationChannel('infurnus_ride_requests');
-      await androidPlugin?.deleteNotificationChannel('infurnus_ride_request_channel');
+      await androidPlugin?.deleteNotificationChannel(
+        'infurnus_ride_request_channel',
+      );
       await androidPlugin?.deleteNotificationChannel('infurnus_driver_channel');
 
       const AndroidNotificationChannel rideUpdatesChannel =
@@ -356,7 +371,9 @@ class NotificationService {
         );
 
     final NotificationDetails platformDetails = NotificationDetails(
-      android: isRideRequest ? rideRequestAndroidDetails : rideUpdatesAndroidDetails,
+      android: isRideRequest
+          ? rideRequestAndroidDetails
+          : rideUpdatesAndroidDetails,
       iOS: const DarwinNotificationDetails(
         sound: 'infurnus_alert.wav',
         presentSound: true,
@@ -394,7 +411,7 @@ class NotificationService {
 
     const NotificationDetails platformDetails = NotificationDetails(
       android: androidDetails,
-      iOS: const DarwinNotificationDetails(
+      iOS: DarwinNotificationDetails(
         sound: 'infurnus_alert.wav',
         presentSound: true,
         presentAlert: true,
