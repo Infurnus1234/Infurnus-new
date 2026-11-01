@@ -16,11 +16,7 @@
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
-<<<<<<< HEAD
-		AA000002INFURNUS00000002 /* infurnus_alert.wav in Resources */ = {isa = PBXBuildFile; fileRef = AA000001INFURNUS00000001 /* infurnus_alert.wav */; };
-=======
 	AA000002INFURNUS00000002 /* infurnus_alert.wav in Resources */ = {isa = PBXBuildFile; fileRef = AA000001INFURNUS00000001 /* infurnus_alert.wav */; };
->>>>>>> origin/main
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -64,11 +60,7 @@
 		97C146FD1CF9000F007C117D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-<<<<<<< HEAD
-		AA000001INFURNUS00000001 /* infurnus_alert.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = infurnus_alert.wav; sourceTree = "<group>"; };
-=======
 	AA000001INFURNUS00000001 /* infurnus_alert.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = infurnus_alert.wav; sourceTree = "<group>"; };
->>>>>>> origin/main
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */

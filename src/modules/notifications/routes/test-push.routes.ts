@@ -20,19 +20,18 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../../auth/middleware/auth.middleware.js';
 import { requireRoles } from '../../auth/middleware/authorization.middleware.js';
-import { AppError } from '../../../common/errors/app-error.js';
 import { NotificationService } from '../services/notification.service.js';
 
 const testPushSchema = z
   .object({
     userId: z.string().uuid('userId must be a valid UUID'),
     audience: z.enum(['driver', 'customer']).default('customer'),
-    title: z.string().min(1).max(120).default('🔔 Infurnus test notification'),
+    title: z.string().min(1).max(120).default('ðŸ”” Infurnus test notification'),
     body: z
       .string()
       .min(1)
       .max(300)
-      .default('If you hear the custom sound, setup is correct! ✅'),
+      .default('If you hear the custom sound, setup is correct! âœ…'),
   })
   .strict();
 
@@ -77,7 +76,7 @@ export function createTestPushRouter(): Router {
           androidChannelId,
           iOSSound: 'infurnus_alert.wav',
           message:
-            'Notification enqueued. Check the target device — you should hear infurnus_alert sound.',
+            'Notification enqueued. Check the target device â€” you should hear infurnus_alert sound.',
         },
       });
     } catch (error) {
