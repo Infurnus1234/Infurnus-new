@@ -144,7 +144,7 @@ export class PostgresWalletRepository {
     const totalCount = Number(countResult.rows[0]?.count ?? '0');
 
     const query = `
-      SELECT 
+      SELECT
         id,
         amount_paise::text as amount_paise,
         balance_after_paise::text as balance_after_paise,
@@ -225,7 +225,7 @@ export class PostgresWalletRepository {
         created_at: Date;
       }>(
         `SELECT id, amount_paise::text, balance_after_paise::text, status, reference, description, payment_method, created_at
-         FROM user_wallet_entries 
+         FROM user_wallet_entries
          WHERE user_id = $1 AND idempotency_key = $2`,
         [userId, idempotencyKey],
       );
@@ -262,8 +262,8 @@ export class PostgresWalletRepository {
       const nextBalance = currentBalance + BigInt(amountPaise);
 
       await client.query(
-        `UPDATE user_wallets 
-         SET balance_paise = $2, updated_at = NOW() 
+        `UPDATE user_wallets
+         SET balance_paise = $2, updated_at = NOW()
          WHERE user_id = $1`,
         [userId, nextBalance.toString()],
       );
@@ -273,7 +273,7 @@ export class PostgresWalletRepository {
         created_at: Date;
       }>(
         `INSERT INTO user_wallet_entries(
-           user_id, amount_paise, balance_after_paise, entry_type, 
+           user_id, amount_paise, balance_after_paise, entry_type,
            reference, description, payment_method, status, idempotency_key
          ) VALUES ($1, $2, $3, 'TOPUP', $4, $5, $6, 'COMPLETED', $7)
          RETURNING id, created_at`,
@@ -459,10 +459,10 @@ export class PostgresWalletRepository {
       );
       if (isUuid) {
         const driverRes = await this.pool.query<{ name: string }>(
-          `SELECT concat_ws(' ',u.first_name,u.last_name) AS name 
-           FROM users u 
-           JOIN driver_profiles dp ON dp.user_id = u.id 
-           WHERE dp.id = $1 OR u.id = $1 
+          `SELECT concat_ws(' ',u.first_name,u.last_name) AS name
+           FROM users u
+           JOIN driver_profiles dp ON dp.user_id = u.id
+           WHERE dp.id = $1 OR u.id = $1
            LIMIT 1`,
           [cleanId],
         );
