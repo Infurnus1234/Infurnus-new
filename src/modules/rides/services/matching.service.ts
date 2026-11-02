@@ -68,7 +68,8 @@ export class MatchingService {
   async findDispatchDrivers(ride: Ride, radiusMeters: number | null): Promise<DriverCandidate[]> {
     await this.area.assertSupported([ride.pickup]);
     const policy = dispatchPolicy(ride.sector ?? 'passenger', ride.vehicleCategory ?? '');
-    const city = policy.cityWide ? await this.premiumAreas.resolve(ride.pickup) : undefined;
+    const city = policy.cityWide ? await this.premiumAreas.resolve(ride.pickup, true) : undefined;
+    if (policy.cityWide && !city) return [];
     const candidates = await this.drivers.findNearbyEligible(
       ride.pickup.latitude,
       ride.pickup.longitude,
