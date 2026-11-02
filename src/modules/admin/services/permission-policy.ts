@@ -71,7 +71,12 @@ export function requiredPermissions(
     /^\/admin\/records\/(users|drivers|partners|vehicles|vehicle-types|coupons|support|notifications|approvals|fleet-applications)\/[\da-f-]{36}$/i,
   );
   if (deletion && method === 'DELETE') {
-    const resource = deletion[1] === 'vehicle-types' ? 'pricing' : deletion[1] === 'fleet-applications' ? 'approvals' : deletion[1]!;
+    const resource =
+      deletion[1] === 'vehicle-types'
+        ? 'pricing'
+        : deletion[1] === 'fleet-applications'
+          ? 'approvals'
+          : deletion[1]!;
     return [resource + '.read', resource + '.delete'];
   }
   if (path === '/admin/access/me') return method === 'GET' ? [] : null;
@@ -119,6 +124,12 @@ export function requiredPermissions(
     if (method === 'PATCH') return ['pricing.read', 'pricing.update'];
     return null;
   }
+  if (path === '/vehicles/operating-cities')
+    return method === 'GET'
+      ? ['vehicles.read']
+      : method === 'POST'
+        ? ['vehicles.read', 'vehicles.create']
+        : null;
   if (/^\/vehicles(?:\/[^/]+(?:\/deactivate)?)?$/.test(path)) {
     if (method === 'GET')
       return ['vehicles.read', ...(path === '/vehicles' ? [] : ['vehicles.detail'])];

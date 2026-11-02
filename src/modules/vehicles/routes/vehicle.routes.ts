@@ -1,3 +1,4 @@
+import { loadPremiumCities, registerPremiumCity } from '../../maps/premium-city-registry.js';
 import { Router } from 'express';
 
 import { requireAuth } from '../../auth/middleware/auth.middleware.js';
@@ -10,6 +11,23 @@ export function createVehicleRouter(controller: VehicleController) {
 
   // Every vehicle endpoint requires an authenticated user.
   router.use(requireAuth);
+
+  router.get('/operating-cities', async (_req, res, next) => {
+    try {
+      res.json({ success: true, data: await loadPremiumCities() });
+    } catch (error) {
+      next(error);
+    }
+  });
+  router.post('/operating-cities', requireAdminOrSuperAdmin(), async (req, res, next) => {
+    try {
+      res
+        .status(201)
+        .json({ success: true, data: await registerPremiumCity(req.body, req.auth!.userId) });
+    } catch (error) {
+      next(error);
+    }
+  });
 
   // Vehicle creation
   router.post('/', requireAdminOrSuperAdmin(), controller.create);

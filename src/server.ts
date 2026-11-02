@@ -1,3 +1,4 @@
+import { loadPremiumCities } from './modules/maps/premium-city-registry.js';
 import { LiveLocationCache } from './modules/rides/repositories/live-location.cache.js';
 import { attachProviderTracking } from './modules/providers/services/provider-tracking.socket.js';
 import { loadDeletedSubjects } from './modules/auth/services/deleted-subjects.js';
@@ -63,6 +64,7 @@ async function startServer() {
   // ==========================================================
 
   await checkDatabaseConnection();
+  await loadPremiumCities();
 
   // Push delivery is optional for the API. Loading the worker eagerly requires
   // Redis and Firebase even when neither service is configured locally.
@@ -477,11 +479,13 @@ async function startServer() {
 // ============================================================
 
 startServer().catch(async (error: unknown) => {
-  console.error(JSON.stringify({
-    event: 'backend_startup_failed',
-    code: error instanceof AppError ? error.code : 'BACKEND_STARTUP_UNAVAILABLE',
-    reason: error instanceof Error ? error.name : 'unknown',
-  }));
+  console.error(
+    JSON.stringify({
+      event: 'backend_startup_failed',
+      code: error instanceof AppError ? error.code : 'BACKEND_STARTUP_UNAVAILABLE',
+      reason: error instanceof Error ? error.name : 'unknown',
+    }),
+  );
 
   await releaseInstance?.();
 

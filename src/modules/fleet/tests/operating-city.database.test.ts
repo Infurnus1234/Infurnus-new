@@ -11,6 +11,7 @@ vi.mock('../../maps/premium-city-areas.js', () => ({
     cities: [
       { id: 'patna', name: 'Patna' },
       { id: 'muzaffarpur', name: 'Muzaffarpur' },
+      { id: 'configured-city', name: 'Configured Bihar City' },
     ],
   },
 }));
@@ -36,6 +37,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')('Explicit vehicle operating
       expect((await fleet.catalog(owner)).operatingCities).toEqual([
         { id: 'patna', name: 'Patna' },
         { id: 'muzaffarpur', name: 'Muzaffarpur' },
+        { id: 'configured-city', name: 'Configured Bihar City' },
       ]);
       const v = await fleet.createVehicle(owner, input);
       expect(v.operatingCityId).toBe('patna');
@@ -49,9 +51,9 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')('Explicit vehicle operating
       await expect(admin.update(v.id, { operatingCityId: 'unknown' })).rejects.toMatchObject({
         code: 'INVALID_OPERATING_CITY',
       });
-      const saved = await admin.update(v.id, { operatingCityId: 'patna' });
+      const saved = await admin.update(v.id, { operatingCityId: 'configured-city' });
       expect(saved).toMatchObject({
-        operatingCityId: 'patna',
+        operatingCityId: 'configured-city',
         verificationStatus: 'pending',
         isActive: false,
       });
