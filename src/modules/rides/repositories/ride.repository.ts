@@ -355,8 +355,8 @@ function mapRide(row: Record<string, unknown>, forCustomer = false): Ride {
             const upfrontAmount = Math.round(totalFare * 0.4 * 100) / 100;
             const remainingAmount = Math.round((totalFare - upfrontAmount) * 100) / 100;
             const status =
-              (row.upfrontPaymentStatus as import('../types/ride.js').LogisticsPaymentStatus | null) ??
-              'PENDING';
+              (row.upfrontPaymentStatus as
+                import('../types/ride.js').LogisticsPaymentStatus | null) ?? 'PENDING';
             return {
               totalFare,
               upfrontAmount,
@@ -1166,6 +1166,16 @@ export class PostgresRideRepository implements RideRepository {
                  r.final_fare,
                  r.fare_estimate
                )
+           END,
+           commission_amount = CASE
+             WHEN cr.route_metadata->'bookingFareSnapshot'->>'commissionAmount' IS NOT NULL THEN
+               ROUND(((cr.route_metadata->'bookingFareSnapshot'->>'commissionAmount')::numeric / 100.0), 2)
+             ELSE r.commission_amount
+           END,
+           driver_earning_amount = CASE
+             WHEN cr.route_metadata->'bookingFareSnapshot'->>'driverEarnings' IS NOT NULL THEN
+               ROUND(((cr.route_metadata->'bookingFareSnapshot'->>'driverEarnings')::numeric / 100.0), 2)
+             ELSE r.driver_earning_amount
            END,
            updated_at = NOW()
          FROM current_ride cr

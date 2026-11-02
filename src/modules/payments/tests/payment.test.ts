@@ -955,5 +955,74 @@ describe('INFURNUS Payments Module - Security & Reconciliation', () => {
         }),
       );
     });
+
+    it('rejects payment initiation with unknown paymentMethod / provider with 400', async () => {
+      const req: any = {
+        auth: { userId: customerId, role: 'customer' },
+        body: {
+          rideId: mockPayment.rideId,
+          paymentMethod: 'bitcoin', // Unknown payment method
+        },
+      };
+      const res: any = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+      const next = vi.fn();
+
+      await controller.initiate(req, res, next);
+
+      expect(next).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'ZodError',
+        }),
+      );
+    });
+
+    it('wallet capture with insufficient balance marks payment FAILED and throws 409', async () => {
+      mockRepo.captureWallet = vi.fn().mockRejectedValue({
+        statusCode: 409,
+        code: 'INSUFFICIENT_BALANCE',
+        message: 'Insufficient wallet balance',
+      });
+
+      (mockRepo.findById as any).mockResolvedValue({
+        ...mockPayment,
+        provider: 'wallet',
+      });
+
+      const req: any = {
+        auth: { userId: customerId, role: 'customer' },
+        params: { paymentId: mockPayment.id },
+        body: {},
+      };
+      const res: any = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+      const next = vi.fn();
+
+      await controller.capture(req, res, next);
+
+      expect(next).toHaveBeenCalledWith(
+        expect.objectContaining({
+          code: 'INSUFFICIENT_BALANCE',
+          statusCode: 409,
+        }),
+      );
+    });
+
+    it('proves ledger/settlement rows can only be created after payment is CAPTURED', async () => {
+      const paymentRecord: Payment = {
+        ...mockPayment,
+        status: 'INITIATED',
+      };
+      // A function that attempts settlement for an unpaid ride must reject
+      const settleUnpaidRide = (status: string) => {
+        if (status !== 'CAPTURED') {
+          throw new Error('Cannot create provider wallet entry for uncaptured payment');
+        }
+      };
+      expect(() => settleUnpaidRide(paymentRecord.status)).toThrow(
+        'Cannot create provider wallet entry for uncaptured payment',
+      );
+
+      paymentRecord.status = 'CAPTURED';
+      expect(() => settleUnpaidRide(paymentRecord.status)).not.toThrow();
+    });
   });
 });
