@@ -1,4 +1,5 @@
 import type { PoolClient } from 'pg';
+import { newestFirstSql } from '../../../common/utils/chronological-order.js';
 import { AppError } from '../../../common/errors/app-error.js';
 import { accountDisplayNameSql } from '../../users/repositories/account-identity.js';
 import { approvalFleetFields, approvalFleetJoins } from './approval-identity.js';
@@ -45,6 +46,7 @@ export async function groupedApprovals(
       CASE WHEN dp.id IS NOT NULL THEN 'driver:'||dp.id::text ELSE r.id::text END AS group_id
     FROM provider_approval_requests r ${onboardingJoinsSql}
     LEFT JOIN driver_profiles association_driver ON r.request_type='driver_association' AND r.target_type='driver_profile' AND association_driver.id=r.target_id
+    WHERE r.admin_deleted_at IS NULL
   ), ranked AS (
     SELECT s.*,row_number() OVER(PARTITION BY group_id ORDER BY (status='PENDING') DESC,
       (target_type='driver_profile') DESC,submitted_at DESC,id DESC) AS position,
@@ -89,7 +91,7 @@ export async function groupedApprovals(
     WHERE ($1='ALL' OR r.onboarding_status=$1)
       AND ($3::text IS NULL OR ($3='driver' AND r.target_type IN ('driver_profile','driver_document')) OR ($3='vehicle' AND request_vehicle.id IS NOT NULL))
       AND ($4::text='' OR concat_ws(' ',u.first_name,u.last_name,u.email,fleet_user.first_name,fleet_user.last_name,fleet.user_id::text,r.id::text,request_vehicle.plate_number,request_vehicle.make,request_vehicle.model) ILIKE '%'||$4||'%')
-    ORDER BY CASE WHEN $1='PENDING' THEN r.first_submitted_at END ASC,r.first_submitted_at DESC,r.id LIMIT $5 OFFSET $6`,
+    ORDER BY ${newestFirstSql('r.first_submitted_at', 'r.id')} LIMIT $5 OFFSET $6`,
       [
         status,
         actorId,

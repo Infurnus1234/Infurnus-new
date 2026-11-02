@@ -2,7 +2,8 @@ import express from 'express';
 import request from 'supertest';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, afterAll, describe, expect, it } from 'vitest';
+import { preserveCatalogFixture } from '../../vehicles/tests/catalog-fixture.js';
 import { pool } from '../../../infrastructure/database/postgres.js';
 import { PostgresVehicleRepository } from '../../vehicles/repositories/vehicle.repository.js';
 import { PostgresRideRepository } from '../../rides/repositories/ride.repository.js';
@@ -65,7 +66,9 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       vehicleCategory: 'hatchback',
     };
     const auth = (value: string) => 'Bearer ' + value;
+    let restoreCatalog: (() => Promise<void>) | undefined;
     beforeAll(async () => {
+      restoreCatalog = await preserveCatalogFixture(pool);
       const accounts = await pool.query(
         "INSERT INTO users(first_name,last_name,role) VALUES('Strict','TEST Admin','admin'),('Strict','TEST Customer','customer') RETURNING id,role",
       );
@@ -80,6 +83,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
         type: 'access',
       });
     });
+    afterAll(async () => { await restoreCatalog?.(); });
     const estimate = (code: string) =>
       request(app)
         .post('/fares/estimate')
@@ -123,16 +127,25 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       };
     }
     it('lists every registration category, including unpriced rows, and rejects missing/inactive pricing', async () => {
-      // Other suites may remove catalog fixtures. Repair missing rows first,
-      // then prove another migration run preserves every existing record.
-      await pool.query(
-        readFileSync('migrations/088_complete_unpriced_vehicle_catalog.sql', 'utf8'),
+      // Recheck migration 088's idempotent seed, without reinstalling its old
+      // pre-Service/pre-Logistics constraint over the fully migrated schema.
+      const historical = readFileSync(
+        'migrations/088_complete_unpriced_vehicle_catalog.sql',
+        'utf8',
       );
+      const seed = historical.slice(historical.indexOf('INSERT INTO vehicle_types'));
+      const constraints = async () =>
+        (
+          await pool.query(
+            "SELECT conname,pg_get_constraintdef(oid) AS definition FROM pg_constraint WHERE conrelid='vehicle_types'::regclass ORDER BY conname",
+          )
+        ).rows;
+      const beforeConstraints = await constraints();
+      await pool.query(seed);
       const before = (await pool.query('SELECT * FROM vehicle_types ORDER BY id')).rows;
-      await pool.query(
-        readFileSync('migrations/088_complete_unpriced_vehicle_catalog.sql', 'utf8'),
-      );
+      await pool.query(seed);
       expect((await pool.query('SELECT * FROM vehicle_types ORDER BY id')).rows).toEqual(before);
+      expect(await constraints()).toEqual(beforeConstraints);
       const missing = await pool.query(
         'SELECT c.* FROM fleet_registration_vehicle_types c LEFT JOIN vehicle_types t USING(sector,code) WHERE t.id IS NULL',
       );

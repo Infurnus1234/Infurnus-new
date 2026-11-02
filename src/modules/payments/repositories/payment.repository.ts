@@ -1,4 +1,3 @@
-import { AppError } from '../../../common/errors/app-error.js';
 import type { Pool } from 'pg';
 import { AppError } from '../../../common/errors/app-error.js';
 import type { CapturePaymentData, InitiatePaymentData, Payment } from '../types/payment.js';
@@ -74,14 +73,32 @@ export class PostgresPaymentRepository implements PaymentRepository {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      await client.query(
-        'INSERT INTO provider_wallets(user_id) VALUES ($1) ON CONFLICT DO NOTHING',
-        [userId],
+      const locked = await client.query<Payment>(
+        `SELECT ${paymentProjection} FROM payments WHERE id=$1 FOR UPDATE`,
+        [paymentId],
       );
+      const current = locked.rows[0];
+      if (!current || current.userId !== userId || current.provider !== 'wallet')
+        throw new AppError('PAYMENT_NOT_FOUND', 'Wallet payment not found', 404);
+      if (current.status === 'CAPTURED') {
+        await client.query('COMMIT');
+        return current;
+      }
+      if (
+        !['INITIATED', 'AUTHORIZED'].includes(current.status) ||
+        !Number.isFinite(Number(current.amount)) ||
+        Number(current.amount) <= 0 ||
+        Number(current.amount) !== Number(amount)
+      )
+        throw new AppError('PAYMENT_STATE', 'Wallet payment cannot be captured', 409);
+      await client.query('INSERT INTO user_wallets(user_id) VALUES ($1) ON CONFLICT DO NOTHING', [
+        userId,
+      ]);
       const walletRes = await client.query<{ balance_paise: string }>(
-        'SELECT balance_paise FROM provider_wallets WHERE user_id = $1 FOR UPDATE',
+        'SELECT balance_paise FROM user_wallets WHERE user_id = $1 AND is_active = TRUE FOR UPDATE',
         [userId],
       );
+      if (!walletRes.rows[0]) throw new AppError('WALLET_INACTIVE', 'Wallet is unavailable', 409);
       const balancePaise = BigInt(walletRes.rows[0]?.balance_paise ?? '0');
       const amountPaise = BigInt(Math.round(amount * 100));
       if (balancePaise < amountPaise) {
@@ -99,12 +116,12 @@ export class PostgresPaymentRepository implements PaymentRepository {
       }
       const nextBalance = balancePaise - amountPaise;
       await client.query(
-        'UPDATE provider_wallets SET balance_paise = $2, updated_at = NOW() WHERE user_id = $1',
+        'UPDATE user_wallets SET balance_paise = $2, updated_at = NOW() WHERE user_id = $1',
         [userId, nextBalance.toString()],
       );
       await client.query(
-        `INSERT INTO provider_wallet_entries(user_id, actor_id, amount_paise, balance_after_paise, entry_type, reference, idempotency_key)
-         VALUES ($1, $1, $2, $3, 'ADJUSTMENT', $4, $5)`,
+        `INSERT INTO user_wallet_entries(user_id, amount_paise, balance_after_paise, entry_type, reference, idempotency_key)
+         VALUES ($1, $2, $3, 'DEBIT_PAYMENT', $4, $5)`,
         [
           userId,
           (-amountPaise).toString(),

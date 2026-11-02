@@ -28,6 +28,67 @@ describe('policy-aware dispatch matching', () => {
     expect(repo.findNearbyEligible).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['logistics', 'tata_407'],
+    ['logistics', 'cargo_407'],
+    ['passenger', 'sedan'],
+    ['premium', 'thar'],
+    ['rental', 'sedan'],
+    ['service', 'ambulance'],
+    ['service', 'towing'],
+  ])(
+    '%s/%s dispatch resolves pickup independently of remote customer GPS and intercity destination',
+    async (sector, vehicleCategory) => {
+      const repo = driverRepository();
+      const pickup = { latitude: 25.617, longitude: 85.145 };
+      const area = {
+        configured: true,
+        required: true,
+        assertSupported: vi.fn().mockResolvedValue(undefined),
+      };
+      const resolve = vi.fn().mockResolvedValue({ cityId: 'PATNA', boundaryGeoJson: 'boundary' });
+      const matching = new MatchingService(repo, undefined, area, { resolve });
+      for (const customerLocation of [
+        { latitude: 28.6139, longitude: 77.209 },
+        { latitude: 19.076, longitude: 72.8777 },
+      ]) {
+        await matching.findDispatchDrivers(
+          {
+            id: 'remote-booking',
+            customerId: 'customer',
+            pickup,
+            destination: { latitude: 26.12, longitude: 85.39 },
+            customerLocation,
+            sector,
+            vehicleCategory,
+            assignedDriverId: null,
+            assignedVehicleId: null,
+            pickupAddress: null,
+            destinationAddress: null,
+            status: 'requested',
+            cancellationReason: null,
+            cancelledAt: null,
+            completedAt: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          } as Ride,
+          sector === 'premium' ? null : 20000,
+        );
+        expect(area.assertSupported).toHaveBeenLastCalledWith([pickup]);
+        expect(repo.findNearbyEligible).toHaveBeenLastCalledWith(
+          pickup.latitude,
+          pickup.longitude,
+          20000,
+          expect.any(Number),
+          expect.any(Date),
+          sector,
+          vehicleCategory,
+          expect.objectContaining({ rideId: 'remote-booking', customerId: 'customer' }),
+        );
+      }
+      if (sector === 'premium') expect(resolve).toHaveBeenLastCalledWith(pickup, true);
+    },
+  );
   const ride = {
     id: 'test-ride',
     pickup: { latitude: 12, longitude: 77 },

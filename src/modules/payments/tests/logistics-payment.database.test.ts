@@ -1,4 +1,4 @@
-import {PostgresDriverRepository} from '../../rides/repositories/driver.repository.js';
+import { PostgresDriverRepository } from '../../rides/repositories/driver.repository.js';
 import { randomUUID, createHmac } from 'node:crypto';
 import express from 'express';
 import request from 'supertest';
@@ -44,7 +44,12 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       { allowFallback: false },
       vehicles,
     );
-    const rideService = new RideService(rides, new PostgresDriverRepository(pool), undefined, estimator);
+    const rideService = new RideService(
+      rides,
+      new PostgresDriverRepository(pool),
+      undefined,
+      estimator,
+    );
     const orders = new Map<string, { amount: number; currency: string }>();
     let status: PaymentStatusResult['orderStatus'] = 'ACTIVE',
       wrongAmount = false;
@@ -131,12 +136,21 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       return response.body.data;
     }
     async function booking(type?: Awaited<ReturnType<typeof createType>>) {
-      const previous=await pool.query("SELECT id,status FROM rides WHERE assigned_driver_id=$1 AND status NOT IN ('completed','cancelled')",[profile]);
-      for(const row of previous.rows) {
-        if(row.status==='in_progress') await rideService.completeRide(row.id,profile);
-        else await pool.query("UPDATE rides SET status='cancelled',cancelled_at=NOW(),cancellation_reason='test fixture finished' WHERE id=$1",[row.id]);
+      const previous = await pool.query(
+        "SELECT id,status FROM rides WHERE assigned_driver_id=$1 AND status NOT IN ('completed','cancelled')",
+        [profile],
+      );
+      for (const row of previous.rows) {
+        if (row.status === 'in_progress') await rideService.completeRide(row.id, profile);
+        else
+          await pool.query(
+            "UPDATE rides SET status='cancelled',cancelled_at=NOW(),cancellation_reason='test fixture finished' WHERE id=$1",
+            [row.id],
+          );
       }
-      await pool.query("UPDATE driver_profiles SET availability_status='available' WHERE id=$1",[profile]);
+      await pool.query("UPDATE driver_profiles SET availability_status='available' WHERE id=$1", [
+        profile,
+      ]);
       const t = type ?? (await createType());
       distance = 10000;
       const ride = await rideService.createRide(customer, {
@@ -150,7 +164,9 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
         "UPDATE rides SET assigned_driver_id=$2,assigned_vehicle_id=$3,status='driver_assigned' WHERE id=$1",
         [ride.id, profile, vehicle],
       );
-      await pool.query("UPDATE driver_profiles SET availability_status='busy' WHERE id=$1",[profile]);
+      await pool.query("UPDATE driver_profiles SET availability_status='busy' WHERE id=$1", [
+        profile,
+      ]);
       return ride;
     }
     const initiate = (id: string, method = 'cash', stage?: string, token = customerToken) =>
@@ -327,8 +343,8 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       expect(claim.status, claim.text).toBe(200);
       expect(claim.body.data.status).toBe('INITIATED');
       expect(claim.body.data.customerClaimedAt).toBeTruthy();
-      await rides.transition(ride.id,'driver_arriving',profile);
-    await rides.transition(ride.id,'driver_arrived',profile);
+      await rides.transition(ride.id, 'driver_arriving', profile);
+      await rides.transition(ride.id, 'driver_arrived', profile);
       await expect(rides.verifyPinAttempt(ride.id, profile, '0000')).rejects.toMatchObject({
         code: 'LOGISTICS_UPFRONT_REQUIRED',
       });
@@ -353,8 +369,8 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       await capture(p.body.data.id, customerToken);
       await capture(p.body.data.id);
       expect((await initiate(ride.id, 'cash', 'final')).status).toBe(409);
-      await rides.transition(ride.id,'driver_arriving',profile);
-    await rides.transition(ride.id,'driver_arrived',profile);
+      await rides.transition(ride.id, 'driver_arriving', profile);
+      await rides.transition(ride.id, 'driver_arrived', profile);
       const pin = (await rides.findByIdForCustomer(ride.id, customer))!.pin!;
       await rides.verifyPinAttempt(ride.id, profile, pin);
       await rideService.completeRide(ride.id, profile);

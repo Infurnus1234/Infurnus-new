@@ -34,9 +34,7 @@ function fixture(role: SignupInput['role']) {
     role,
     phone: '+919876543210',
     ...(role !== 'customer' && role !== 'fleet_owner' ? { onboardingLicencePending: true } : {}),
-    ...(role === 'fleet_owner' || role === 'driver_fleet_owner'
-      ? { businessName: 'Fleet' }
-      : {}),
+    ...(role === 'fleet_owner' || role === 'driver_fleet_owner' ? { businessName: 'Fleet' } : {}),
   };
   return { old, repository, service, input, send, users };
 }

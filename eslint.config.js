@@ -8,6 +8,7 @@ export default tseslint.config(
   {
     ignores: [
       'dist/**',
+      'tmp/**',
       'scripts/**',
       'coverage/**',
       'frontend/build/**',

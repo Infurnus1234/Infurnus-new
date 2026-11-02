@@ -425,7 +425,7 @@ describe('Logistics 40% Upfront Payment Confirmation Flow', () => {
 
       vi.mocked(mockPaymentRepo.findById).mockResolvedValue(payment);
       vi.mocked(mockProvider.getPaymentStatus).mockResolvedValue({
-        providerOrderId: 'order_pay-1',
+        providerOrderId: payment.providerOrderId!,
         orderCurrency: 'INR',
         orderStatus: 'ACTIVE',
         orderAmount: 340.0,

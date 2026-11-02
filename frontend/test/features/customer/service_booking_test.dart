@@ -132,7 +132,9 @@ void main() {
           vehicleCategory: 'ambulance',
         );
         await notifier.estimateRouteFare();
-        for (var i = 0; i < repeats; i++) await notifier.requestRide();
+        for (var i = 0; i < repeats; i++) {
+          await notifier.requestRide();
+        }
       } finally {
         container.dispose();
         socket.dispose();

@@ -66,18 +66,18 @@ export class FleetOwnerOverviewRepository {
       FROM partner_documents d WHERE d.partner_id=$1
       AND concat_ws(' ',d.document_type,d.metadata->>'documentCode') ILIKE $4
       AND ($5='ALL' OR ($5='ACTION_REQUIRED' AND (d.status IN ('PENDING','REJECTED','EXPIRED') OR d.expires_at<CURRENT_DATE)) OR (CASE WHEN d.expires_at<CURRENT_DATE THEN 'EXPIRED' ELSE d.status::text END)=$5)
-      ORDER BY d.updated_at DESC,d.id DESC LIMIT $2 OFFSET $3`;
+      ORDER BY d.created_at DESC,d.id DESC LIMIT $2 OFFSET $3`;
     else if (section === 'vehicles')
       sql = `SELECT v.id,v.plate_number AS "plateNumber",v.make,v.model,v.category,v.sector,v.is_active AS "isActive",v.verification_status AS status,
       (SELECT r.id FROM provider_approval_requests r WHERE r.target_type='vehicle' AND r.target_id=v.id ORDER BY r.submitted_at DESC,r.id DESC LIMIT 1) AS "approvalId"
-      FROM vehicles v JOIN partners p ON p.user_id=v.owner_id WHERE p.id=$1 AND concat_ws(' ',v.plate_number,v.make,v.model) ILIKE $4 AND ($5='ALL' OR upper(v.verification_status::text)=$5 OR ($5='ACTION_REQUIRED' AND (v.verification_status::text<>'approved' OR NOT v.is_active)))
-      ORDER BY v.updated_at DESC,v.id DESC LIMIT $2 OFFSET $3`;
+      FROM vehicles v JOIN partners p ON p.user_id=v.owner_id WHERE p.id=$1 AND NOT EXISTS (SELECT 1 FROM user_history deleted WHERE deleted.event_type='ADMIN_RECORD_DELETED' AND deleted.entity_id=v.id AND deleted.metadata->>'module'='vehicles') AND concat_ws(' ',v.plate_number,v.make,v.model) ILIKE $4 AND ($5='ALL' OR upper(v.verification_status::text)=$5 OR ($5='ACTION_REQUIRED' AND (v.verification_status::text<>'approved' OR NOT v.is_active)))
+      ORDER BY v.created_at DESC,v.id DESC LIMIT $2 OFFSET $3`;
     else if (section === 'drivers')
       sql = `SELECT dp.id,dp.user_id AS "userId",u.first_name AS "firstName",u.last_name AS "lastName",u.phone,u.email,dp.verification_status AS status,dp.license_expiry AS "licenseExpiry",dp.active_vehicle_id AS "vehicleId",
       EXISTS(SELECT 1 FROM fleet_managed_driver_accounts m WHERE m.partner_id=$1 AND m.driver_user_id=u.id AND m.status='ACTIVE') AS "managementAuthorized"
       FROM driver_profiles dp JOIN users u ON u.id=dp.user_id WHERE u.deleted_at IS NULL AND (EXISTS(SELECT 1 FROM partner_drivers pd WHERE pd.partner_id=$1 AND pd.driver_profile_id=dp.id) OR EXISTS(SELECT 1 FROM fleet_managed_driver_accounts m WHERE m.partner_id=$1 AND m.driver_user_id=u.id))
       AND concat_ws(' ',u.first_name,u.last_name,u.phone) ILIKE $4 AND ($5='ALL' OR upper(dp.verification_status::text)=$5 OR ($5='ACTION_REQUIRED' AND (dp.verification_status::text<>'approved' OR dp.license_expiry<CURRENT_DATE)))
-      ORDER BY dp.updated_at DESC,dp.id DESC LIMIT $2 OFFSET $3`;
+      ORDER BY dp.created_at DESC,dp.id DESC LIMIT $2 OFFSET $3`;
     else
       sql = `SELECT r.id,r.target_type AS "targetType",r.target_id AS "targetId",r.request_type AS "requestType",r.status,r.submitted_at AS "submittedAt",r.reviewer_id AS "reviewerId",r.reviewed_at AS "reviewedAt",r.rejection_reason AS "rejectionReason"
       FROM provider_approval_requests r JOIN partners p ON p.user_id=r.requester_id WHERE p.id=$1 AND r.request_type ILIKE $4 AND ($5='ALL' OR r.status=$5 OR ($5='ACTION_REQUIRED' AND r.status IN ('PENDING','REJECTED','EXPIRED'))) ORDER BY r.submitted_at DESC,r.id DESC LIMIT $2 OFFSET $3`;

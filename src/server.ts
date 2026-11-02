@@ -477,23 +477,11 @@ async function startServer() {
 // ============================================================
 
 startServer().catch(async (error: unknown) => {
-  // Temporary detailed startup diagnostics.
-  // This is intentionally verbose so the actual TypeError,
-  // message, and stack trace are visible during local debugging.
-
-  console.error('========== BACKEND STARTUP ERROR ==========');
-  console.error(error);
-  console.error('===========================================');
-
-  console.error(
-    JSON.stringify({
-      event: 'backend_startup_failed',
-      code: error instanceof AppError ? error.code : 'BACKEND_STARTUP_UNAVAILABLE',
-      reason: error instanceof Error ? error.name : 'unknown',
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    }),
-  );
+  console.error(JSON.stringify({
+    event: 'backend_startup_failed',
+    code: error instanceof AppError ? error.code : 'BACKEND_STARTUP_UNAVAILABLE',
+    reason: error instanceof Error ? error.name : 'unknown',
+  }));
 
   await releaseInstance?.();
 

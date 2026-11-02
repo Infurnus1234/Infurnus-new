@@ -1,3 +1,5 @@
+import type { PaymentProvider } from '../../payments/providers/payment.provider.js';
+import { AppError } from '../../../common/errors/app-error.js';
 import type { NextFunction, Request, Response } from 'express';
 import { z } from 'zod';
 import type { PostgresWalletRepository } from '../repositories/wallet.repository.js';
@@ -8,7 +10,7 @@ const topUpInitiateSchema = z.object({
     .min(10, 'Minimum top-up is â‚¹10')
     .max(100000, 'Maximum top-up is â‚¹1,00,000'),
   paymentMethod: z.string().default('upi'),
-  idempotencyKey: z.string().min(1, 'Idempotency key required'),
+  idempotencyKey: z.string().min(1, 'Idempotency key required').max(100),
 });
 
 const topUpVerifySchema = z.object({
@@ -24,7 +26,7 @@ const paySchema = z.object({
   targetId: z.string().min(1),
   amount: z.number().positive('Payment amount must be greater than zero'),
   note: z.string().max(200).optional(),
-  idempotencyKey: z.string().min(1, 'Idempotency key required'),
+  idempotencyKey: z.string().min(1, 'Idempotency key required').max(100),
   authConfirmation: z.string().optional(),
 });
 
@@ -34,7 +36,10 @@ const resolveRecipientSchema = z.object({
 });
 
 export class WalletController {
-  constructor(private readonly repository: PostgresWalletRepository) {}
+  constructor(
+    private readonly repository: PostgresWalletRepository,
+    private readonly provider?: PaymentProvider,
+  ) {}
 
   getWallet = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -92,7 +97,27 @@ export class WalletController {
 
       const input = topUpInitiateSchema.parse(req.body);
       const amountPaise = Math.round(input.amount * 100);
-      const orderId = `order_topup_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      if (!this.provider)
+        throw new AppError('PAYMENT_PROVIDER_UNAVAILABLE', 'Wallet checkout is unavailable', 503);
+      const stored = await this.repository.createTopUpOrder(
+        userId,
+        amountPaise,
+        input.idempotencyKey,
+      );
+      const orderId = stored.orderId;
+      const order = await this.provider.createOrder({
+        orderId,
+        amount: amountPaise / 100,
+        currency: 'INR',
+        customerId: userId,
+        orderNote: 'INFURNUS Wallet Top-Up',
+      });
+      if (order.providerOrderId !== orderId || !order.paymentSessionId)
+        throw new AppError(
+          'PAYMENT_PROVIDER_UNAVAILABLE',
+          'Wallet checkout session unavailable',
+          502,
+        );
 
       res.json({
         success: true,
@@ -104,7 +129,7 @@ export class WalletController {
           paymentMethod: input.paymentMethod,
           idempotencyKey: input.idempotencyKey,
           // Provider session details for checkout
-          paymentSessionId: `session_${orderId}`,
+          paymentSessionId: order.paymentSessionId,
         },
       });
     } catch (error) {
@@ -121,16 +146,31 @@ export class WalletController {
       }
 
       const input = topUpVerifySchema.parse(req.body);
-      const amountPaise = Math.round(input.amount * 100);
-
-      // Server verification step: credits wallet ONLY here
+      if (!this.provider)
+        throw new AppError('PAYMENT_PROVIDER_UNAVAILABLE', 'Wallet verification unavailable', 503);
+      const order = await this.repository.findTopUpOrder(userId, input.orderId);
+      if (!order) throw new AppError('TOPUP_NOT_FOUND', 'Wallet top-up order not found', 404);
+      const status = await this.provider.getPaymentStatus(order.orderId);
+      const amountPaise = Number(order.amountPaise);
+      if (
+        status.orderStatus !== 'PAID' ||
+        status.providerOrderId !== order.orderId ||
+        status.orderCurrency !== 'INR' ||
+        Math.round(Number(status.orderAmount) * 100) !== amountPaise ||
+        !status.providerPaymentId
+      )
+        throw new AppError(
+          'PAYMENT_VERIFICATION_REQUIRED',
+          'A matching paid gateway transaction is required',
+          409,
+        );
       const result = await this.repository.topUp(
         userId,
         amountPaise,
-        input.paymentMethod,
-        input.referenceId || input.orderId,
-        input.idempotencyKey,
-        `Top-Up via ${input.paymentMethod}`,
+        'CASHFREE',
+        status.providerPaymentId,
+        order.orderId,
+        'Verified wallet top-up',
       );
 
       res.json({

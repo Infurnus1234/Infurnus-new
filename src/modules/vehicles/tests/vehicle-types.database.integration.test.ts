@@ -1,10 +1,11 @@
-import {LogisticsPaymentService} from '../../payments/services/logistics-payment.service.js';
-import {PostgresPaymentRepository} from '../../payments/repositories/payment.repository.js';
+import { LogisticsPaymentService } from '../../payments/services/logistics-payment.service.js';
+import { PostgresPaymentRepository } from '../../payments/repositories/payment.repository.js';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import express from 'express';
 import request from 'supertest';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, beforeAll, afterAll, describe, expect, it } from 'vitest';
+import { preserveCatalogFixture } from './catalog-fixture.js';
 import { pool } from '../../../infrastructure/database/postgres.js';
 import { errorMiddleware } from '../../../common/middleware/error.middleware.js';
 import { signAccessToken } from '../../auth/utils/jwt.js';
@@ -98,6 +99,9 @@ live(
     let adminId: string, customerId: string, driverId: string, profileId: string, vehicleId: string;
     let app: ReturnType<typeof express>;
     const ids: string[] = [];
+    let restoreCatalog: (() => Promise<void>) | undefined;
+    beforeAll(async () => { restoreCatalog = await preserveCatalogFixture(pool); });
+    afterAll(async () => { await restoreCatalog?.(); });
     async function token(role = 'admin', id = adminId) {
       return signAccessToken({ sub: id, role, type: 'access' });
     }
@@ -138,7 +142,7 @@ live(
       app.use(errorMiddleware);
     });
     afterEach(async () => {
-      await pool.query('DELETE FROM payments WHERE user_id=$1',[customerId]);
+      await pool.query('DELETE FROM payments WHERE user_id=$1', [customerId]);
       await pool.query('DELETE FROM rides WHERE customer_id=$1', [customerId]);
       await pool.query('DELETE FROM vehicles WHERE id=$1', [vehicleId]);
       await pool.query('DELETE FROM driver_profiles WHERE id=$1', [profileId]);
@@ -175,7 +179,20 @@ live(
           },
         });
         expect(type!.version).toBeGreaterThan(1);
-        if(type!.sector==='logistics'){expect(()=>new FareCalculatorService().calculateEstimate({distanceMeters:10000,durationSeconds:600,sector:'logistics',vehicleCategory:row.code},type!)).toThrow(/Configure both Logistics distance slabs/);continue;}
+        if (type!.sector === 'logistics') {
+          expect(() =>
+            new FareCalculatorService().calculateEstimate(
+              {
+                distanceMeters: 10000,
+                durationSeconds: 600,
+                sector: 'logistics',
+                vehicleCategory: row.code,
+              },
+              type!,
+            ),
+          ).toThrow(/Configure both Logistics distance slabs/);
+          continue;
+        }
         const quote = new FareCalculatorService().calculateEstimate(
           {
             distanceMeters: 10000,
@@ -449,7 +466,24 @@ live(
     it.each(['passenger', 'logistics', 'service', 'premium'] as const)(
       'dynamic %s uses same exact model and matching',
       async (sector) => {
-        const type = await create({ ...payload, sector, active: true, ...(sector==='service'?{baseFare:null,perKmRate:null,serviceFixedFare:400}:{}), ...(sector==='logistics'?{baseFare:null,perKmRate:null,logisticsSlabs:{below_15:{baseFare:100,perKmRate:30},from_15:{baseFare:200,perKmRate:40}}}:{}) });
+        const type = await create({
+          ...payload,
+          sector,
+          active: true,
+          ...(sector === 'service'
+            ? { baseFare: null, perKmRate: null, serviceFixedFare: 400 }
+            : {}),
+          ...(sector === 'logistics'
+            ? {
+                baseFare: null,
+                perKmRate: null,
+                logisticsSlabs: {
+                  below_15: { baseFare: 100, perKmRate: 30 },
+                  from_15: { baseFare: 200, perKmRate: 40 },
+                },
+              }
+            : {}),
+        });
         await pool.query(
           "UPDATE vehicles SET sector=$2,operating_city_id='TEST_ONLY_CITY' WHERE id=$1",
           [vehicleId, sector],
@@ -472,7 +506,7 @@ live(
         const ride = await service.createRide(customerId, {
           ...booking,
           sector,
-          ...(sector==='service'?{clientRequestId:randomUUID()}:{}),
+          ...(sector === 'service' ? { clientRequestId: randomUUID() } : {}),
           goods: { weightKg: 100, hasLoadingAssistance: true },
           rentalDetails: { hours: 4, fuelRatePerKm: 999 },
         });
@@ -489,10 +523,29 @@ live(
         expect((await service.getDriverMap(driverId, ride.id)).fare.bookedAmount).toBe(400);
         await rides.transition(ride.id, 'driver_arriving', profileId);
         await rides.transition(ride.id, 'driver_arrived', profileId);
-        if(sector==='logistics'){const money=new LogisticsPaymentService(pool,new PostgresPaymentRepository(pool));const due=await money.initiate(ride.id,customerId,'customer',{provider:'cash'});await money.claim(due.id,customerId);await money.confirmCash(due.id,driverId,'driver');}
+        if (sector === 'logistics') {
+          const money = new LogisticsPaymentService(pool, new PostgresPaymentRepository(pool));
+          const due = await money.initiate(ride.id, customerId, 'customer', { provider: 'cash' });
+          await money.claim(due.id, customerId);
+          await money.confirmCash(due.id, driverId, 'driver');
+        }
         const pin = (await rides.findByIdForCustomer(ride.id, customerId))!.pin!;
         expect(await rides.verifyPinAttempt(ride.id, profileId, pin)).toBe('verified');
-        await admin.updateVehicleType(adminId, type.id, sector==='logistics'?{logisticsSlabs:{below_15:{baseFare:120,perKmRate:30},from_15:{baseFare:200,perKmRate:40}},expectedVersion:1}:sector==='service'?{serviceFixedFare:500,expectedVersion:1}:{ baseFare: 120, expectedVersion: 1 });
+        await admin.updateVehicleType(
+          adminId,
+          type.id,
+          sector === 'logistics'
+            ? {
+                logisticsSlabs: {
+                  below_15: { baseFare: 120, perKmRate: 30 },
+                  from_15: { baseFare: 200, perKmRate: 40 },
+                },
+                expectedVersion: 1,
+              }
+            : sector === 'service'
+              ? { serviceFixedFare: 500, expectedVersion: 1 }
+              : { baseFare: 120, expectedVersion: 1 },
+        );
         const complete = await service.completeRide(ride.id, profileId);
         expect(complete.finalFare).toBe(400);
         expect(complete.billing).toEqual({ currency: 'INR', finalFare: 400 });
@@ -710,7 +763,13 @@ live(
     });
     it('unknown/missing/wrong-sector and FTL never acquire fallback fares; ranges preserved', async () => {
       for (const sector of ['passenger', 'logistics', 'service', 'premium'] as const) {
-        await expect(service.createRide(customerId, { ...booking, sector, ...(sector==='service'?{clientRequestId:randomUUID()}: {}) })).rejects.toMatchObject({
+        await expect(
+          service.createRide(customerId, {
+            ...booking,
+            sector,
+            ...(sector === 'service' ? { clientRequestId: randomUUID() } : {}),
+          }),
+        ).rejects.toMatchObject({
           code: 'FARE_CONFIGURATION_MISSING',
         });
       }

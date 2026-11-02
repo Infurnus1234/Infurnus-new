@@ -11,6 +11,10 @@ export function createRecordDeletionRouter(service: RecordDeletionService) {
   router.use(requireAuth, requireRoles('admin', 'super_admin'));
   router.delete('/:module/:id', async (req, res, next) => {
     try {
+      const input = z
+        .object({ reason: z.string().trim().min(5).max(500) })
+        .strict()
+        .parse(req.body);
       res.json({
         success: true,
         data: await service.remove(
@@ -18,6 +22,7 @@ export function createRecordDeletionRouter(service: RecordDeletionService) {
           req.auth!.role,
           deletionModuleSchema.parse(req.params.module),
           z.string().uuid().parse(req.params.id),
+          input.reason,
         ),
       });
     } catch (error) {

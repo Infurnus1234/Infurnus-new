@@ -18,29 +18,96 @@ describe('Phase 4 Step 5: Service Vehicle Trip-Based Refactoring', () => {
 
   describe('Service fixed-fare contract', () => {
     const configured = (code: string, fare = 123.45) => ({
-      id: '7d7c2be0-21bd-4a75-907a-8b558079ef17', name: code, code, sector: 'service' as const,
-      baseFare: null, perKmRate: null, serviceFixedFare: fare, serviceRadiusMeters: 25000,
-      currency: 'INR' as const, active: true, version: 3, createdAt: new Date(), updatedAt: new Date(),
+      id: '7d7c2be0-21bd-4a75-907a-8b558079ef17',
+      name: code,
+      code,
+      sector: 'service' as const,
+      baseFare: null,
+      perKmRate: null,
+      serviceFixedFare: fare,
+      serviceRadiusMeters: 25000,
+      currency: 'INR' as const,
+      active: true,
+      version: 3,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     });
-    for (const category of ['ambulance','towing','roadside_assist','jcb','crane','road_roller','fire_truck']) {
+    for (const category of [
+      'ambulance',
+      'towing',
+      'roadside_assist',
+      'jcb',
+      'crane',
+      'road_roller',
+      'fire_truck',
+    ]) {
       it(`${category} charges only its configured fixed fare for short and long service trips`, () => {
         for (const distanceMeters of [0, 1000, 25000, 100000]) {
-          const result = calculator.calculateEstimate({distanceMeters, durationSeconds: 9000, sector:'service', vehicleCategory:category, waitingMinutes:90, rentalHours:12, fuelRatePerKm:999}, configured(category));
-          expect(result).toMatchObject({ bookable: true, bookingFare: { baseAmount:12345, distanceAmount:0, timeAmount:0, grossAmount:12345, pricingVersion:'vehicle-type:7d7c2be0-21bd-4a75-907a-8b558079ef17:v3', vehicleConfiguration: { pricingModel:'service_fixed', serviceRadiusMeters:25000, perKmRatePaise:0 } } });
+          const result = calculator.calculateEstimate(
+            {
+              distanceMeters,
+              durationSeconds: 9000,
+              sector: 'service',
+              vehicleCategory: category,
+              waitingMinutes: 90,
+              rentalHours: 12,
+              fuelRatePerKm: 999,
+            },
+            configured(category),
+          );
+          expect(result).toMatchObject({
+            bookable: true,
+            bookingFare: {
+              baseAmount: 12345,
+              distanceAmount: 0,
+              timeAmount: 0,
+              grossAmount: 12345,
+              pricingVersion: 'vehicle-type:7d7c2be0-21bd-4a75-907a-8b558079ef17:v3',
+              vehicleConfiguration: {
+                pricingModel: 'service_fixed',
+                serviceRadiusMeters: 25000,
+                perKmRatePaise: 0,
+              },
+            },
+          });
           if (!('bookingFare' in result)) throw Error('Expected fixed fare');
           expect(result.bookingFare?.taxAmount).toBeUndefined();
           expect(result.bookingFare?.fuelAmount).toBeUndefined();
         }
       });
       it(`${category} cannot use a legacy distance tariff`, () => {
-        expect(() => calculator.calculate({distanceMeters:10000,durationSeconds:600,sector:'service',vehicleCategory:category})).toThrow(/active fixed fare/);
+        expect(() =>
+          calculator.calculate({
+            distanceMeters: 10000,
+            durationSeconds: 600,
+            sector: 'service',
+            vehicleCategory: category,
+          }),
+        ).toThrow(/active fixed fare/);
       });
     }
     it('allows an explicitly configured zero fare and fails closed for disabled, missing or mixed configurations', () => {
-      const input = {distanceMeters:10000,durationSeconds:600,sector:'service' as const,vehicleCategory:'ambulance'};
-      expect(calculator.calculateEstimate(input,configured('ambulance',0))).toMatchObject({bookingFare:{grossAmount:0}});
-      for (const changes of [{active:false},{serviceFixedFare:null},{serviceFixedFare:-1},{baseFare:1},{perKmRate:1},{serviceRadiusMeters:0},{serviceRadiusMeters:200001}])
-        expect(() => calculator.calculateEstimate(input,{...configured('ambulance'),...changes})).toThrow();
+      const input = {
+        distanceMeters: 10000,
+        durationSeconds: 600,
+        sector: 'service' as const,
+        vehicleCategory: 'ambulance',
+      };
+      expect(calculator.calculateEstimate(input, configured('ambulance', 0))).toMatchObject({
+        bookingFare: { grossAmount: 0 },
+      });
+      for (const changes of [
+        { active: false },
+        { serviceFixedFare: null },
+        { serviceFixedFare: -1 },
+        { baseFare: 1 },
+        { perKmRate: 1 },
+        { serviceRadiusMeters: 0 },
+        { serviceRadiusMeters: 200001 },
+      ])
+        expect(() =>
+          calculator.calculateEstimate(input, { ...configured('ambulance'), ...changes }),
+        ).toThrow();
     });
   });
 

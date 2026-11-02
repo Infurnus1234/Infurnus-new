@@ -8,7 +8,7 @@ export function requireDisposableAdministrativeDatabase(): void {
   if (
     process.env.NODE_ENV !== 'test' ||
     !['localhost', '127.0.0.1'].includes(url.hostname) ||
-    !['5434','5436'].includes(url.port) ||
+    !['5434', '5436'].includes(url.port) ||
     !(ownedLocal || ownedCi)
   ) {
     throw Error('Owned disposable administrative test database required');

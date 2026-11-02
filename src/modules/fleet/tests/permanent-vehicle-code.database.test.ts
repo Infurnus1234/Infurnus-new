@@ -71,13 +71,21 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
       ).toBe(1);
     });
     it('unassignment revokes legacy active tokens before restoring the permanent identity', async () => {
-      const f=await fixture();
-      await drivers.claimAssignmentCode(f.code,f.driver,f.profile);
-      const legacy='legacy_'+f.vehicle.id.replaceAll('-','').slice(0,12);
-      await pool.query("INSERT INTO driver_assignment_codes(code,vehicle_id,fleet_owner_id,expires_at) VALUES($1,$2,$3,NOW()+INTERVAL '1 day')",[legacy,f.vehicle.id,f.owner]);
-      await fleet.unassignDriver(f.owner,f.vehicle.id);
-      expect((await pool.query('SELECT status FROM driver_assignment_codes WHERE code=$1',[legacy])).rows[0].status).toBe('REVOKED');
-      expect((await drivers.claimAssignmentCode(f.code,f.driver,f.profile)).vehicleId).toBe(f.vehicle.id);
+      const f = await fixture();
+      await drivers.claimAssignmentCode(f.code, f.driver, f.profile);
+      const legacy = 'legacy_' + f.vehicle.id.replaceAll('-', '').slice(0, 12);
+      await pool.query(
+        "INSERT INTO driver_assignment_codes(code,vehicle_id,fleet_owner_id,expires_at) VALUES($1,$2,$3,NOW()+INTERVAL '1 day')",
+        [legacy, f.vehicle.id, f.owner],
+      );
+      await fleet.unassignDriver(f.owner, f.vehicle.id);
+      expect(
+        (await pool.query('SELECT status FROM driver_assignment_codes WHERE code=$1', [legacy]))
+          .rows[0].status,
+      ).toBe('REVOKED');
+      expect((await drivers.claimAssignmentCode(f.code, f.driver, f.profile)).vehicleId).toBe(
+        f.vehicle.id,
+      );
     });
     it('still rejects cross-Fleet, invalid, busy and duplicate vehicle assignments', async () => {
       const a = await fixture(),

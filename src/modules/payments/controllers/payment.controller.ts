@@ -176,89 +176,91 @@ export class PaymentController {
             amountToCharge = remainingAmount;
           }
         } else {
-        // 3. Duplicate/conflicting payment protection
-        const capturedPayment = existingPayments.find((p) => p.status === 'CAPTURED');
-        if (capturedPayment) {
-          res.status(409).json({
-            success: false,
-            message: 'Payment has already been captured for this ride',
-          });
-          return;
-        }
-
-        const activePayment = existingPayments.find(
-          (p) => p.status === 'INITIATED' || p.status === 'AUTHORIZED',
-        );
-        if (activePayment) {
-          if (
-            ((input.idempotencyKey && activePayment.idempotencyKey === input.idempotencyKey) ||
-              (!input.idempotencyKey && input.provider === 'cashfree')) &&
-            activePayment.provider === input.provider
-          ) {
-            let session: { paymentSessionId: string | null; providerOrderId: string } | undefined;
-            if (activePayment.provider === 'cashfree') {
-              if (!this.paymentProvider) {
-                res.status(503).json({ success: false, message: 'Payment provider unavailable' });
-                return;
-              }
-              try {
-                const order = await this.paymentProvider.createOrder({
-                  orderId: `order_${activePayment.id}`,
-                  amount: Number(activePayment.amount),
-                  currency: activePayment.currency,
-                  customerId: userId,
-                  orderNote: `INFURNUS Ride ${input.rideId}`,
-                });
-                await this.paymentRepository.updateProviderOrder?.(
-                  activePayment.id,
-                  order.providerOrderId,
-                );
-                session = {
-                  paymentSessionId: order.paymentSessionId ?? null,
-                  providerOrderId: order.providerOrderId,
-                };
-              } catch {
-                res.status(502).json({
-                  success: false,
-                  message: 'Unable to resume Cashfree checkout. Retry with the same request.',
-                });
-                return;
-              }
-            }
-            res.status(200).json({
-              success: true,
-              data: { ...activePayment, ...session },
-              message: 'Payment already initiated',
+          // 3. Duplicate/conflicting payment protection
+          const capturedPayment = existingPayments.find((p) => p.status === 'CAPTURED');
+          if (capturedPayment) {
+            res.status(409).json({
+              success: false,
+              message: 'Payment has already been captured for this ride',
             });
             return;
           }
-          res.status(409).json({
-            success: false,
-            message: 'An active payment already exists for this ride',
-          });
-          return;
-        }
 
-        // 4. Server-side authoritative fare derivation (NEVER trust client amount)
-        if (ride.sector === 'premium' && !ride.bookingPricingVersion?.startsWith('vehicle-type:')) {
-          // For Premium rides, reconcile final fare including actual GPS distance-based fuel cost
-          const bookedHours = Math.max(
-            1,
-            Number(ride.rentalDetails?.rentalHours ?? ride.rentalDetails?.hours ?? 1),
+          const activePayment = existingPayments.find(
+            (p) => p.status === 'INITIATED' || p.status === 'AUTHORIZED',
           );
-          const hourlyRate = 1000;
-          const hourlyBase = bookedHours * hourlyRate;
-          const actualFuelCost = Number(ride.actualFuelCost ?? 0);
-          const subtotal = hourlyBase + actualFuelCost;
-          const taxAmount = Math.round(subtotal * 0.05 * 100) / 100;
-          const reconciledFare = Math.round((subtotal + taxAmount) * 100) / 100;
+          if (activePayment) {
+            if (
+              ((input.idempotencyKey && activePayment.idempotencyKey === input.idempotencyKey) ||
+                (!input.idempotencyKey && input.provider === 'cashfree')) &&
+              activePayment.provider === input.provider
+            ) {
+              let session: { paymentSessionId: string | null; providerOrderId: string } | undefined;
+              if (activePayment.provider === 'cashfree') {
+                if (!this.paymentProvider) {
+                  res.status(503).json({ success: false, message: 'Payment provider unavailable' });
+                  return;
+                }
+                try {
+                  const order = await this.paymentProvider.createOrder({
+                    orderId: `order_${activePayment.id}`,
+                    amount: Number(activePayment.amount),
+                    currency: activePayment.currency,
+                    customerId: userId,
+                    orderNote: `INFURNUS Ride ${input.rideId}`,
+                  });
+                  await this.paymentRepository.updateProviderOrder?.(
+                    activePayment.id,
+                    order.providerOrderId,
+                  );
+                  session = {
+                    paymentSessionId: order.paymentSessionId ?? null,
+                    providerOrderId: order.providerOrderId,
+                  };
+                } catch {
+                  res.status(502).json({
+                    success: false,
+                    message: 'Unable to resume Cashfree checkout. Retry with the same request.',
+                  });
+                  return;
+                }
+              }
+              res.status(200).json({
+                success: true,
+                data: { ...activePayment, ...session },
+                message: 'Payment already initiated',
+              });
+              return;
+            }
+            res.status(409).json({
+              success: false,
+              message: 'An active payment already exists for this ride',
+            });
+            return;
+          }
 
-          amountToCharge = Number(ride.finalFare ?? reconciledFare);
-        } else {
-          // For Passenger, Logistics, Service
-          amountToCharge = Number(ride.finalFare ?? ride.fareEstimate);
-        }
+          // 4. Server-side authoritative fare derivation (NEVER trust client amount)
+          if (
+            ride.sector === 'premium' &&
+            !ride.bookingPricingVersion?.startsWith('vehicle-type:')
+          ) {
+            // For Premium rides, reconcile final fare including actual GPS distance-based fuel cost
+            const bookedHours = Math.max(
+              1,
+              Number(ride.rentalDetails?.rentalHours ?? ride.rentalDetails?.hours ?? 1),
+            );
+            const hourlyRate = 1000;
+            const hourlyBase = bookedHours * hourlyRate;
+            const actualFuelCost = Number(ride.actualFuelCost ?? 0);
+            const subtotal = hourlyBase + actualFuelCost;
+            const taxAmount = Math.round(subtotal * 0.05 * 100) / 100;
+            const reconciledFare = Math.round((subtotal + taxAmount) * 100) / 100;
 
+            amountToCharge = Number(ride.finalFare ?? reconciledFare);
+          } else {
+            // For Passenger, Logistics, Service
+            amountToCharge = Number(ride.finalFare ?? ride.fareEstimate);
+          }
         }
 
         if (isNaN(amountToCharge) || amountToCharge <= 0) {
@@ -737,12 +739,10 @@ export class PaymentController {
           event.data?.order?.order_currency !== payment.currency ||
           Math.round(webhookAmount * 100) !== Math.round(Number(payment.amount) * 100))
       ) {
-        res
-          .status(400)
-          .json({
-            success: false,
-            message: 'Logistics webhook payment identity, currency or amount mismatch',
-          });
+        res.status(400).json({
+          success: false,
+          message: 'Logistics webhook payment identity, currency or amount mismatch',
+        });
         return;
       }
       // Handle SUCCESS / PAID
@@ -793,7 +793,9 @@ export class PaymentController {
           try {
             const updatedRide = await this.rideRepository.findById(payment.rideId);
             if (updatedRide) rideEvents.emit('ride:lifecycle_updated', updatedRide);
-          } catch { /* Payment capture must succeed even if lifecycle refresh fails. */ }
+          } catch {
+            /* Payment capture must succeed even if lifecycle refresh fails. */
+          }
         }
 
         res.status(200).json({
@@ -861,13 +863,11 @@ export class PaymentController {
       }
 
       if (payment.paymentStage) {
-        res
-          .status(409)
-          .json({
-            success: false,
-            message:
-              'Installment refunds require the audited refund workflow; this legacy endpoint does not support staged refunds',
-          });
+        res.status(409).json({
+          success: false,
+          message:
+            'Installment refunds require the audited refund workflow; this legacy endpoint does not support staged refunds',
+        });
         return;
       }
       // Must be CAPTURED

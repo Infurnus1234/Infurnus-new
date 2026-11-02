@@ -294,7 +294,8 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       expect(forged.status).toBe(409);
       const deleted = await request(app)
         .delete('/admin/records/vehicle-types/' + type.id)
-        .auth(adminToken, { type: 'bearer' });
+        .auth(adminToken, { type: 'bearer' })
+        .send({ reason: 'TEST_ONLY dependency protection verification' });
       expect(deleted.status).toBe(409);
       expect((await vehicles.getType(type.id))?.active).toBe(false);
     });
@@ -314,6 +315,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           await request(app)
             .delete('/admin/records/vehicle-types/' + type.id)
             .auth(adminToken, { type: 'bearer' })
+            .send({ reason: 'TEST_ONLY unused category deletion verification' })
         ).status,
       ).toBe(200);
       expect(await vehicles.getType(type.id)).toBeNull();

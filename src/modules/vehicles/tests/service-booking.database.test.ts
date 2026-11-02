@@ -119,8 +119,11 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       await pool.query('DELETE FROM vehicles WHERE id=$1', [vehicleId]);
       await pool.query('DELETE FROM driver_profiles WHERE id=$1', [profileId]);
       await pool.query('DELETE FROM vehicle_types WHERE id=$1', [type.id]);
-      await pool.query('DELETE FROM provider_approval_requests WHERE requester_id=ANY($1::uuid[])',[[adminId,customerId,driverId]]);
-    await pool.query('DELETE FROM users WHERE id=ANY($1::uuid[])', [
+      await pool.query(
+        'DELETE FROM provider_approval_requests WHERE requester_id=ANY($1::uuid[])',
+        [[adminId, customerId, driverId]],
+      );
+      await pool.query('DELETE FROM users WHERE id=ANY($1::uuid[])', [
         [adminId, customerId, driverId],
       ]);
     });
@@ -142,41 +145,118 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
         25000,
       );
     it('retains the approved Bihar boundary for pickups and for nearby driver locations', async () => {
-      const boundary=JSON.parse(readFileSync(new URL('../../../../config/service-area/bihar.geojson', import.meta.url),'utf8'));
-      const policy=new ServiceAreaPolicy(boundary,true);
+      const boundary = JSON.parse(
+        readFileSync(
+          new URL('../../../../config/service-area/bihar.geojson', import.meta.url),
+          'utf8',
+        ),
+      );
+      const policy = new ServiceAreaPolicy(boundary, true);
       await expect(policy.assertSupported([pickup])).resolves.toBeUndefined();
-      await expect(policy.assertSupported([{latitude:26.91,longitude:75.79}])).rejects.toMatchObject({code:'SERVICE_AREA_UNAVAILABLE'});
-      const boundaryRead=vi.spyOn(serviceArea,'boundaryGeoJson','get').mockReturnValue(JSON.stringify(boundary));
+      await expect(
+        policy.assertSupported([{ latitude: 26.91, longitude: 75.79 }]),
+      ).rejects.toMatchObject({ code: 'SERVICE_AREA_UNAVAILABLE' });
+      const boundaryRead = vi
+        .spyOn(serviceArea, 'boundaryGeoJson', 'get')
+        .mockReturnValue(JSON.stringify(boundary));
       try {
-        expect((await candidates()).map(d=>d.driverProfileId)).toContain(profileId);
-        await pool.query('UPDATE driver_profiles SET last_location=ST_SetSRID(ST_MakePoint(75.79,26.91),4326)::geography,last_location_at=NOW() WHERE id=$1',[profileId]);
-        expect(await drivers.findNearbyEligible(26.91,75.79,25000,10,new Date(Date.now()-30000),'service',type.code)).toEqual([]);
-      } finally {boundaryRead.mockRestore();}
+        expect((await candidates()).map((d) => d.driverProfileId)).toContain(profileId);
+        await pool.query(
+          'UPDATE driver_profiles SET last_location=ST_SetSRID(ST_MakePoint(75.79,26.91),4326)::geography,last_location_at=NOW() WHERE id=$1',
+          [profileId],
+        );
+        expect(
+          await drivers.findNearbyEligible(
+            26.91,
+            75.79,
+            25000,
+            10,
+            new Date(Date.now() - 30000),
+            'service',
+            type.code,
+          ),
+        ).toEqual([]);
+      } finally {
+        boundaryRead.mockRestore();
+      }
     });
     it('serves live fixed-fare availability/catalog with auth, and persists only authorized Admin changes', async () => {
-      const app=express();app.use(express.json());
-      app.use('/vehicles',createVehicleRouter(new VehicleController(new VehicleService(vehicles))));
-      app.use('/rides',createRideRouter(new RideController(service)));
-      app.use('/admin',createAdminRouter(new AdminController(new AdminService(new PostgresAdminRepository(pool),vehicles))));
+      const app = express();
+      app.use(express.json());
+      app.use(
+        '/vehicles',
+        createVehicleRouter(new VehicleController(new VehicleService(vehicles))),
+      );
+      app.use('/rides', createRideRouter(new RideController(service)));
+      app.use(
+        '/admin',
+        createAdminRouter(
+          new AdminController(new AdminService(new PostgresAdminRepository(pool), vehicles)),
+        ),
+      );
       app.use(errorMiddleware);
-      const token=await signAccessToken({sub:customerId,role:'customer',type:'access'});
+      const token = await signAccessToken({ sub: customerId, role: 'customer', type: 'access' });
       expect((await request(app).get('/vehicles/catalog?sector=service')).status).toBe(401);
-      const catalog=await request(app).get('/vehicles/catalog?sector=service&limit=100').auth(token,{type:'bearer'});
-      expect(catalog.status,catalog.text).toBe(200);expect(catalog.body.data).toContainEqual(expect.objectContaining({code:type.code,serviceFixedFare:123.45,serviceRadiusMeters:25000}));
-      const quote={pickup,destination:pickup,sector:'service',vehicleCategory:type.code};
-      const available=await request(app).post('/rides/service-availability').auth(token,{type:'bearer'}).send(quote);
-      expect(available.status,available.text).toBe(200);expect(available.body.data).toMatchObject({available:true,bookable:true,bookingFare:{grossAmount:12345}});
+      const catalog = await request(app)
+        .get('/vehicles/catalog?sector=service&limit=100')
+        .auth(token, { type: 'bearer' });
+      expect(catalog.status, catalog.text).toBe(200);
+      expect(catalog.body.data).toContainEqual(
+        expect.objectContaining({
+          code: type.code,
+          serviceFixedFare: 123.45,
+          serviceRadiusMeters: 25000,
+        }),
+      );
+      const quote = { pickup, destination: pickup, sector: 'service', vehicleCategory: type.code };
+      const available = await request(app)
+        .post('/rides/service-availability')
+        .auth(token, { type: 'bearer' })
+        .send(quote);
+      expect(available.status, available.text).toBe(200);
+      expect(available.body.data).toMatchObject({
+        available: true,
+        bookable: true,
+        bookingFare: { grossAmount: 12345 },
+      });
       expect(JSON.stringify(available.body)).not.toContain(profileId);
       await place(25000.01);
-      expect((await request(app).post('/rides/service-availability').auth(token,{type:'bearer'}).send(quote)).body.data).toMatchObject({available:false,bookable:false,bookingFare:{grossAmount:12345}});
-      const changed=await request(app).patch('/admin/vehicle-types/'+type.id).auth(token,{type:'bearer'}).send({expectedVersion:type.version,serviceFixedFare:1});
-      expect(changed.status).toBe(403);expect((await vehicles.getType(type.id))?.serviceFixedFare).toBe(123.45);
-      expect((await request(app).post('/rides').auth(token,{type:'bearer'}).send({...quote,clientRequestId:randomUUID()})).status).toBe(409);
-      expect((await request(app).post('/rides').auth(token,{type:'bearer'}).send(quote)).status).toBe(400);
+      expect(
+        (
+          await request(app)
+            .post('/rides/service-availability')
+            .auth(token, { type: 'bearer' })
+            .send(quote)
+        ).body.data,
+      ).toMatchObject({ available: false, bookable: false, bookingFare: { grossAmount: 12345 } });
+      const changed = await request(app)
+        .patch('/admin/vehicle-types/' + type.id)
+        .auth(token, { type: 'bearer' })
+        .send({ expectedVersion: type.version, serviceFixedFare: 1 });
+      expect(changed.status).toBe(403);
+      expect((await vehicles.getType(type.id))?.serviceFixedFare).toBe(123.45);
+      expect(
+        (
+          await request(app)
+            .post('/rides')
+            .auth(token, { type: 'bearer' })
+            .send({ ...quote, clientRequestId: randomUUID() })
+        ).status,
+      ).toBe(409);
+      expect(
+        (await request(app).post('/rides').auth(token, { type: 'bearer' }).send(quote)).status,
+      ).toBe(400);
       await place(100);
-      const ride=await service.createRide(customerId,input());
-      const records=await new AdminOperationsRepository(pool).list('rides',{page:1,pageSize:25,sector:'service',recordId:ride.id});
-      expect(records.items).toContainEqual(expect.objectContaining({id:ride.id,sector:'service',fare_estimate:123.45}));
+      const ride = await service.createRide(customerId, input());
+      const records = await new AdminOperationsRepository(pool).list('rides', {
+        page: 1,
+        pageSize: 25,
+        sector: 'service',
+        recordId: ride.id,
+      });
+      expect(records.items).toContainEqual(
+        expect.objectContaining({ id: ride.id, sector: 'service', fare_estimate: 123.45 }),
+      );
     });
     it.each([0, 24999.99, 25000])(
       'includes geography distance %s m at the default radius',

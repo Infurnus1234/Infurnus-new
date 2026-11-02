@@ -111,11 +111,6 @@ describe('INFURNUS 4-Sector Fare Calculations', () => {
         vehicleCategory: 'ambulance',
       });
 
-
-
-
-
-
       expect(result.baseAmount).toBe(50000);
       expect(result.distanceAmount).toBe(0);
       expect(result.grossAmount).toBe(result.baseAmount);
@@ -129,11 +124,6 @@ describe('INFURNUS 4-Sector Fare Calculations', () => {
         vehicleCategory: 'towing',
       });
 
-
-
-
-
-
       expect(result.baseAmount).toBe(60000);
       expect(result.distanceAmount).toBe(0);
       expect(result.grossAmount).toBe(result.baseAmount);
@@ -146,11 +136,6 @@ describe('INFURNUS 4-Sector Fare Calculations', () => {
         sector: 'service',
         vehicleCategory: 'jcb',
       });
-
-
-
-
-
 
       expect(result.baseAmount).toBe(120000);
       expect(result.distanceAmount).toBe(0);
@@ -189,11 +174,6 @@ describe('INFURNUS 4-Sector Fare Calculations', () => {
         vehicleCategory: 'recovery',
       });
 
-
-
-
-
-
       expect(result.baseAmount).toBe(60000);
       expect(result.distanceAmount).toBe(0);
       expect(result.timeAmount).toBe(0);
@@ -216,11 +196,6 @@ describe('INFURNUS 4-Sector Fare Calculations', () => {
         sector: 'service',
         vehicleCategory: 'roadside_service',
       });
-
-
-
-
-
 
       expect(result.baseAmount).toBe(60000);
       expect(result.distanceAmount).toBe(0);

@@ -248,9 +248,15 @@ export class ManagedDriverRepository {
         [target.role],
       )
     ).rows;
-    const currentVehicle = await new PostgresDriverRepository(this.pool).getAssignedVehicle(target.id);
+    const currentVehicle = await new PostgresDriverRepository(this.pool).getAssignedVehicle(
+      target.id,
+    );
     const assignedVehicle = currentVehicle?.owner?.id === owner ? currentVehicle : null;
-    return { profile: { ...profile, vehicleId: assignedVehicle?.id ?? null, assignedVehicle }, documents, requirements };
+    return {
+      profile: { ...profile, vehicleId: assignedVehicle?.id ?? null, assignedVehicle },
+      documents,
+      requirements,
+    };
   }
 
   async assign(owner: string, role: string, userId: string, code: string) {

@@ -348,7 +348,8 @@ function mapRide(row: Record<string, unknown>, forCustomer = false): Ride {
       (row.upfrontPaymentStatus as import('../types/ride.js').LogisticsPaymentStatus | null) ??
       (row.sector === 'logistics' ? 'PENDING' : 'NOT_REQUIRED'),
     logisticsPayment:
-      (row.logisticsPayment as Record<string, unknown> | null) ?? (row.sector === 'logistics'
+      (row.logisticsPayment as Record<string, unknown> | null) ??
+      (row.sector === 'logistics'
         ? (() => {
             const totalFare =
               Math.round(Number(row.finalFare ?? row.fareEstimate ?? 0) * 100) / 100;
@@ -1630,6 +1631,16 @@ export class PostgresRideRepository implements RideRepository {
           'Confirm the 40% upfront payment before verifying the pickup PIN',
           409,
         );
+      else if (
+        ride.sector === 'logistics' &&
+        !(
+          await client.query(
+            `SELECT 1 FROM payments WHERE ride_id=$1 AND status='CAPTURED' LIMIT 1`,
+            [id],
+          )
+        ).rowCount
+      )
+        result = 'upfront_payment_required';
       else if (!ride.pin && !ride.pin_verifier) result = 'not_found';
       else {
         const correct = ride.pin_verifier

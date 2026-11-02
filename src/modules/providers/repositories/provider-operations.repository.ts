@@ -1,3 +1,4 @@
+import { newestFirstSql } from '../../../common/utils/chronological-order.js';
 import { assignFirstOwnerVehicle } from './default-owner-vehicle.js';
 import { paidRideRevenueSql } from '../../fleet/repositories/fleet-revenue.repository.js';
 import { ManagedDriverRepository } from './managed-driver.repository.js';
@@ -65,9 +66,8 @@ export class PostgresProviderOperationsRepository {
           `SELECT r.id,r.requester_id,r.requester_role,r.fleet_id,r.request_type,r.target_type,r.target_id,r.status,r.submitted_at,
            ${approvalIdentityFields},${approvalReviewPermission('$2')}
            FROM provider_approval_requests r ${approvalIdentityJoins}
-           WHERE ($1::text='ALL' OR r.status=$1)
-           ORDER BY CASE WHEN $1='PENDING' THEN r.submitted_at END ASC,
-             CASE WHEN $1='PENDING' THEN r.id END ASC,r.submitted_at DESC,r.id DESC LIMIT 100`,
+           WHERE ($1::text='ALL' OR r.status=$1) AND r.admin_deleted_at IS NULL
+           ORDER BY ${newestFirstSql('r.submitted_at', 'r.id')} LIMIT 100`,
           [status, actorId],
         )
       ).rows;

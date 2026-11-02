@@ -141,7 +141,7 @@ export class PostgresDriverApplicationRepository implements DriverApplicationRep
             'UNDER_REVIEW',
             'CHANGES_REQUESTED'
           )
-        ORDER BY created_at DESC
+        ORDER BY created_at DESC, id DESC
         LIMIT 1
       `,
       [partnerId, driverProfileId],
@@ -171,7 +171,7 @@ export class PostgresDriverApplicationRepository implements DriverApplicationRep
           updated_at AS "updatedAt"
         FROM driver_applications
         WHERE driver_profile_id = $1
-        ORDER BY created_at DESC
+        ORDER BY created_at DESC, id DESC
         LIMIT 1
       `,
       [driverProfileId],
@@ -262,7 +262,7 @@ export class PostgresDriverApplicationRepository implements DriverApplicationRep
           updated_at AS "updatedAt"
         FROM driver_applications
         ${whereClause}
-        ORDER BY created_at DESC
+        ORDER BY created_at DESC, id DESC
         LIMIT $${dataValues.length - 1}
         OFFSET $${dataValues.length}
       `,

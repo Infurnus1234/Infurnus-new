@@ -37,12 +37,13 @@ const scenarios = categories.flatMap(({ sector, code }) => [
     ? durationHours.flatMap((hours) =>
         (sector === 'premium' ? ['one_way', 'round_trip'] : ['round_trip']).flatMap((tripType) =>
           (sector === 'premium' ? [false, true] : [true]).map((hourly) => ({
-          sector,
-          code,
-          hours,
-          tripType,
-          hourly,
-        }))),
+            sector,
+            code,
+            hours,
+            tripType,
+            hourly,
+          })),
+        ),
       )
     : []),
 ]);
@@ -81,6 +82,7 @@ app.use(errorMiddleware);
 const payments = new PostgresPaymentRepository(pool);
 const logistics = new LogisticsPaymentService(pool, payments);
 let restore: Record<string, unknown> | undefined;
+let addedTypeIdentity: { sector: string; code: string } | undefined;
 let dispatch: RideDispatchService | undefined;
 let fixtureIds: { customer: string; user: string; profile: string; vehicle: string } | undefined;
 
@@ -129,7 +131,13 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           ],
         );
         restore = undefined;
+      } else if (addedTypeIdentity) {
+        await pool.query('DELETE FROM vehicle_types WHERE sector=$1 AND code=$2', [
+          addedTypeIdentity.sector,
+          addedTypeIdentity.code,
+        ]);
       }
+      addedTypeIdentity = undefined;
     });
     it.each(scenarios)(
       '$sector/$code hours=$hours trip=$tripType hourly=$hourly: rejects unavailable supply, persists exact identity, dispatches once, accepts, completes and pays',
@@ -140,6 +148,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
             code,
           ])
         ).rows[0];
+        if (!restore) addedTypeIdentity = { sector, code };
         const slabs =
           sector === 'logistics'
             ? {
@@ -336,7 +345,10 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           "UPDATE driver_profiles SET availability_status='available',last_location_at=NOW() WHERE id=$1",
           [profile],
         );
-        const expiring = await service.createRide(customer, {...input, ...(sector === 'service' ? {clientRequestId:randomUUID()} : {})});
+        const expiring = await service.createRide(customer, {
+          ...input,
+          ...(sector === 'service' ? { clientRequestId: randomUUID() } : {}),
+        });
         const policy = dispatchPolicy(sector, code);
         expect(
           await rides.offerDispatch(

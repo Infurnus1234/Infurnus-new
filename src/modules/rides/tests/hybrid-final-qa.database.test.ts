@@ -1,4 +1,8 @@
-import { configureServiceFixture, restoreServiceFixtures, type ServiceFixtureSnapshots } from './service-catalog.fixture.js';
+import {
+  configureServiceFixture,
+  restoreServiceFixtures,
+  type ServiceFixtureSnapshots,
+} from './service-catalog.fixture.js';
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { createServer as createTcpServer, connect as connectTcp } from 'node:net';
@@ -97,7 +101,7 @@ async function driver(sector = 'passenger', category = 'sedan', distance = 100) 
   return { userId, profileId, vehicleId };
 }
 async function ride(customerId: string, sector = 'passenger', category = 'sedan') {
-  if (sector === 'service') await configureServiceFixture(pool,category,serviceTypes);
+  if (sector === 'service') await configureServiceFixture(pool, category, serviceTypes);
   const id = randomUUID();
   await pool.query(
     "INSERT INTO rides(id,customer_id,status,sector,vehicle_category,pin,pickup_location,destination_location) VALUES($1,$2,'searching',$3,$4,'1234',ST_SetSRID(ST_MakePoint(77.5,13),4326)::geography,ST_SetSRID(ST_MakePoint(77.51,13),4326)::geography)",
@@ -118,7 +122,7 @@ async function expire(id: string) {
 }
 afterEach(async () => {
   for (const controller of controllers.splice(0)) controller.dispose();
-  await restoreServiceFixtures(pool,serviceTypes);
+  await restoreServiceFixtures(pool, serviceTypes);
   for (const cleanup of queueCleanups.splice(0)) await cleanup();
   if (rides.length)
     await pool.query('DELETE FROM rides WHERE id=ANY($1::uuid[])', [rides.splice(0)]);

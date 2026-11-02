@@ -636,7 +636,12 @@ export class PostgresDriverRepository implements DriverRepository {
         'Driver candidate limit exceeds the configured maximum',
         400,
       );
-    if (sector === 'service' && !vehicleCategory) throw new AppError('MAP_INPUT_INVALID', 'Choose a service type before checking nearby vehicles.', 400);
+    if (sector === 'service' && !vehicleCategory)
+      throw new AppError(
+        'MAP_INPUT_INVALID',
+        'Choose a service type before checking nearby vehicles.',
+        400,
+      );
     const values: unknown[] = [longitude, latitude, radiusMeters, staleBefore, limit];
 
     const conditions: string[] = [];
@@ -687,9 +692,10 @@ export class PostgresDriverRepository implements DriverRepository {
       conditions.push(`v.category = $${values.length}`);
     }
 
-    const radiusExpression = sector === 'service'
-      ? `(SELECT service_radius_meters::float8 FROM vehicle_types WHERE sector='service' AND code=$${values.length} AND active AND service_fixed_fare_paise IS NOT NULL)`
-      : '$3';
+    const radiusExpression =
+      sector === 'service'
+        ? `(SELECT service_radius_meters::float8 FROM vehicle_types WHERE sector='service' AND code=$${values.length} AND active AND service_fixed_fare_paise IS NOT NULL)`
+        : '$3';
 
     const fallbackVehicleConditions = [
       'v2.driver_profile_id = dp.id',

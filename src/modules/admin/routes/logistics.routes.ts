@@ -49,7 +49,7 @@ export function createLogisticsAdminRouter(pool: Pool) {
  FROM rides r JOIN logistics_ride_payment_plans lp ON lp.ride_id=r.id JOIN users cu ON cu.id=r.customer_id LEFT JOIN driver_profiles dp ON dp.id=r.assigned_driver_id LEFT JOIN users du ON du.id=dp.user_id
  WHERE r.sector='logistics' AND ($1::text IS NULL OR r.vehicle_category=$1) AND ($2::text IS NULL OR EXISTS(SELECT 1 FROM payments p WHERE p.ride_id=r.id AND p.provider=$2)) AND ($3::text IS NULL OR EXISTS(SELECT 1 FROM payments p WHERE p.ride_id=r.id AND p.status::text=$3)) AND ($4::text IS NULL OR r.status::text=$4) AND ($5::date IS NULL OR r.created_at>=($5::date::timestamp AT TIME ZONE 'Asia/Kolkata')) AND ($6::date IS NULL OR r.created_at<(($6::date+1)::timestamp AT TIME ZONE 'Asia/Kolkata'))
  ), filtered AS (SELECT *,GREATEST(0,"totalPaise"-"confirmedPaise") AS "outstandingPaise",CASE WHEN "confirmedPaise">="totalPaise" THEN 'settled' ELSE 'outstanding' END AS "settlementStatus" FROM ledger)
- SELECT *,count(*) OVER() AS "totalCount" FROM filtered WHERE ($7::text IS NULL OR "settlementStatus"=$7) ORDER BY "createdAt" DESC,id LIMIT $8 OFFSET $9`,
+ SELECT *,count(*) OVER() AS "totalCount" FROM filtered WHERE ($7::text IS NULL OR "settlementStatus"=$7) ORDER BY "createdAt" DESC,id DESC LIMIT $8 OFFSET $9`,
         [
           q.vehicle ?? null,
           q.method ?? null,

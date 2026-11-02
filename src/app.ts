@@ -559,7 +559,7 @@ export function createApp(
   // ==========================================================
 
   const walletRepository = new PostgresWalletRepository(pool);
-  const walletController = new WalletController(walletRepository);
+  const walletController = new WalletController(walletRepository, paymentProvider);
   app.use('/wallet', createWalletRouter(walletController));
 
   // ==========================================================

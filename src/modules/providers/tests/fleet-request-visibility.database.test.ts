@@ -215,14 +215,36 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
         }),
       );
     });
-    it('repairs only recorded pending Fleet submissions and is safe to repeat', async()=>{
-      await pool.query('UPDATE provider_approval_requests SET requester_id=$2,requester_role=\'driver\',fleet_id=NULL WHERE id=$1',[driverRequest,driverId]);
-      const existing=(await pool.query('SELECT count(*)::int count FROM provider_approval_requests')).rows[0].count;
-      const sql=readFileSync('migrations/087_fleet_request_submitter.sql','utf8');
-      await pool.query(sql);await pool.query(sql);
-      expect((await pool.query('SELECT requester_id,fleet_id,status FROM provider_approval_requests WHERE id=$1',[driverRequest])).rows[0]).toMatchObject({requester_id:f.owner,fleet_id:f.partner,status:'PENDING'});
-      expect((await pool.query('SELECT count(*)::int count FROM provider_approval_requests')).rows[0].count).toBe(existing);
-      expect((await pool.query('SELECT status FROM provider_approval_requests WHERE id=$1',[vehicleRequest])).rows[0].status).toBe('REJECTED');
+    it('repairs only recorded pending Fleet submissions and is safe to repeat', async () => {
+      await pool.query(
+        "UPDATE provider_approval_requests SET requester_id=$2,requester_role='driver',fleet_id=NULL WHERE id=$1",
+        [driverRequest, driverId],
+      );
+      const existing = (
+        await pool.query('SELECT count(*)::int count FROM provider_approval_requests')
+      ).rows[0].count;
+      const sql = readFileSync('migrations/087_fleet_request_submitter.sql', 'utf8');
+      await pool.query(sql);
+      await pool.query(sql);
+      expect(
+        (
+          await pool.query(
+            'SELECT requester_id,fleet_id,status FROM provider_approval_requests WHERE id=$1',
+            [driverRequest],
+          )
+        ).rows[0],
+      ).toMatchObject({ requester_id: f.owner, fleet_id: f.partner, status: 'PENDING' });
+      expect(
+        (await pool.query('SELECT count(*)::int count FROM provider_approval_requests')).rows[0]
+          .count,
+      ).toBe(existing);
+      expect(
+        (
+          await pool.query('SELECT status FROM provider_approval_requests WHERE id=$1', [
+            vehicleRequest,
+          ])
+        ).rows[0].status,
+      ).toBe('REJECTED');
     });
   },
 );

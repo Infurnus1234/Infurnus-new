@@ -11,7 +11,7 @@ const vehicle = (sector: VehicleType['sector'], rate: number): VehicleType => ({
   name: 'Local test',
   sector,
   baseFare: sector === 'service' ? null : 25,
-  ...(sector === 'service' ? { serviceFixedFare:25 } : {}),
+  ...(sector === 'service' ? { serviceFixedFare: 25 } : {}),
   perKmRate: sector === 'service' ? null : rate,
   currency: 'INR',
   active: true,
@@ -92,7 +92,17 @@ describe('Backend one-way route / round-trip billing contract', () => {
         },
       };
       if (sector === 'service') {
-        expect(() => calculator.calculateEstimate({ distanceMeters:10000,durationSeconds:0,sector,vehicleCategory:'configured_test' },configured)).toThrow(/disabled or its fixed fare/);
+        expect(() =>
+          calculator.calculateEstimate(
+            {
+              distanceMeters: 10000,
+              durationSeconds: 0,
+              sector,
+              vehicleCategory: 'configured_test',
+            },
+            configured,
+          ),
+        ).toThrow(/disabled or its fixed fare/);
         return;
       }
       const result = calculator.calculateEstimate(
@@ -121,7 +131,7 @@ describe('Backend one-way route / round-trip billing contract', () => {
         routeBased: true,
       },
     };
-    expect(()=>
+    expect(() =>
       calculator.calculateEstimate(
         {
           distanceMeters: 10000,

@@ -14,6 +14,9 @@ import { loadDeletedSubjects } from '../../auth/services/deleted-subjects.js';
 import { hashPassword } from '../../auth/utils/password.js';
 import { LoginService } from '../../auth/services/login.service.js';
 import { PostgresLoginRepository } from '../../auth/repositories/login.repository.js';
+import { AdminOperationsRepository } from '../repositories/operations.repository.js';
+import { PostgresAdminRepository } from '../repositories/admin.repository.js';
+import { PostgresProviderOperationsRepository } from '../../providers/repositories/provider-operations.repository.js';
 import type { LoginChallengeRepository } from '../../auth/repositories/login-challenge.repository.js';
 import type { OtpProvider } from '../../auth/providers/otp.provider.js';
 
@@ -27,8 +30,10 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
     app.use('/admin/records', createRecordDeletionRouter(service));
     app.use(errorMiddleware);
     let owner: string, admin: string, ownerToken: string, adminToken: string;
+    const fixtureUsers: string[] = [];
     async function user(role = 'customer') {
       const id = randomUUID();
+      fixtureUsers.push(id);
       await pool.query(
         `INSERT INTO users(id,first_name,last_name,email,role) VALUES($1,'TEST_ONLY','Deletion',$2,$3)`,
         [id, id + '@example.invalid', role],
@@ -41,7 +46,8 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
     async function remove(module: string, id: string, t = ownerToken) {
       return request(app)
         .delete(`/admin/records/${module}/${id}`)
-        .set('Authorization', `Bearer ${t}`);
+        .set('Authorization', `Bearer ${t}`)
+        .send({ reason: 'TEST_ONLY deletion verification' });
     }
     beforeAll(async () => {
       requireDisposableAdministrativeDatabase();
@@ -58,6 +64,13 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
       adminToken = await token(admin, 'admin');
     });
     afterAll(async () => {
+      // This suite deliberately retains business history. Remove its synthetic queue
+      // entries so later bounded-list tests do not inherit pending request fixtures.
+      if (fixtureUsers.length)
+        await pool.query(
+          'DELETE FROM provider_approval_requests WHERE requester_id=ANY($1::uuid[])',
+          [fixtureUsers],
+        );
       await pool.end();
     });
     it('requires authentication and rejects customer and ungranted Admin access', async () => {
@@ -142,7 +155,7 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
       expect((await pool.query('SELECT id FROM users WHERE id=$1', [other])).rowCount).toBe(1);
       await expect(verifyAccessToken(old)).rejects.toBeDefined();
     });
-    it('retains a zero-balance wallet with settled ledger history and explains the restriction', async () => {
+    it('deletes the account identity and preserves settled zero-balance wallet history', async () => {
       const id = await user();
       await pool.query(`INSERT INTO provider_wallets(user_id) VALUES($1)`, [id]);
       for (const [amount, balance] of [
@@ -155,8 +168,7 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
           [id, amount, balance, randomUUID(), owner],
         );
       const response = await remove('users', id);
-      expect(response.status).toBe(409);
-      expect(response.body.error.message).toMatch(/financial records.*deactivation/);
+      expect(response.status).toBe(200);
       expect(
         (await pool.query('SELECT 1 FROM provider_wallet_entries WHERE user_id=$1', [id])).rowCount,
       ).toBe(2);
@@ -165,7 +177,7 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
     it('retains a nonzero wallet even without ledger entries', async () => {
       const id = await user();
       await pool.query(`INSERT INTO provider_wallets(user_id,balance_paise) VALUES($1,100)`, [id]);
-      expect((await remove('users', id)).status).toBe(409);
+      expect((await remove('users', id)).status).toBe(200);
       expect(
         (await pool.query('SELECT balance_paise FROM provider_wallets WHERE user_id=$1', [id]))
           .rows[0].balance_paise,
@@ -213,7 +225,7 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
       expect((await remove('users', 'invalid')).status).toBe(400);
       expect((await remove('payments', randomUUID())).status).toBe(400);
     });
-    it('rolls back credential cleanup and preserves dependent operational history', async () => {
+    it('erases credentials and preserves dependent operational history', async () => {
       const id = await user();
       await pool.query(
         `INSERT INTO user_credentials(user_id,password_hash) VALUES($1,'local-test-hash')`,
@@ -224,14 +236,11 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
         [id],
       );
       const response = await remove('users', id);
-      expect(response.status).toBe(409);
-      expect(response.body.error.message).toMatch(/rides:.*operational.*deactivation/);
+      expect(response.status).toBe(200);
       expect(
         (await pool.query('SELECT id FROM user_credentials WHERE user_id=$1', [id])).rowCount,
-      ).toBe(1);
-      await expect(verifyAccessToken(await token(id, 'customer'))).resolves.toMatchObject({
-        sub: id,
-      });
+      ).toBe(0);
+      await expect(verifyAccessToken(await token(id, 'customer'))).rejects.toBeDefined();
     });
     it('deletes an unused driver and its account, and does not leave unreviewed target requests', async () => {
       const id = await user('driver');
@@ -270,7 +279,8 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
       );
       expect((await remove('vehicles', v.rows[0].id)).status).toBe(200);
       expect(
-        (await pool.query('SELECT id FROM vehicles WHERE id=$1', [v.rows[0].id])).rowCount,
+        (await pool.query('SELECT id FROM vehicles WHERE id=$1 AND is_active', [v.rows[0].id]))
+          .rowCount,
       ).toBe(0);
     });
     it('deletes an unused pricing category and rejects a category code used by inventory', async () => {
@@ -322,10 +332,7 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
           [profile],
         );
         const response = await remove('drivers', profile);
-        expect(response.status).toBe(409);
-        expect(response.body.error.message).toMatch(
-          document ? /protected documents/ : /provider location history/,
-        );
+        expect(response.status).toBe(200);
         expect(
           (
             await pool.query('SELECT id FROM provider_approval_requests WHERE target_id=$1', [
@@ -338,7 +345,7 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
         ).toBe(1);
       }
     });
-    it('does not silently clear active vehicle associations', async () => {
+    it('removes associated vehicles from active administration while retaining references', async () => {
       const v = await pool.query(
         `INSERT INTO vehicles(make,model,plate_number) VALUES('TEST_ONLY','Associated',$1) RETURNING id`,
         ['LINK' + randomUUID().slice(0, 8)],
@@ -348,11 +355,43 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
         `INSERT INTO driver_profiles(user_id,license_number,license_expiry,active_vehicle_id) VALUES($1,$2,'2099-01-01',$3)`,
         [u, 'TEST_ONLY_' + u, v.rows[0].id],
       );
-      expect((await remove('vehicles', v.rows[0].id)).status).toBe(409);
+      expect((await remove('vehicles', v.rows[0].id)).status).toBe(200);
       expect(
         (await pool.query('SELECT active_vehicle_id FROM driver_profiles WHERE user_id=$1', [u]))
           .rows[0].active_vehicle_id,
       ).toBe(v.rows[0].id);
+    });
+    it('cancels active rentals when deleting a vehicle and preserves payment history', async () => {
+      const customer = await user();
+      const vehicle = (
+        await pool.query(
+          "INSERT INTO vehicles(make,model,plate_number) VALUES('TEST_ONLY','Cancellation',$1) RETURNING id",
+          ['CANCEL' + randomUUID().slice(0, 8)],
+        )
+      ).rows[0].id;
+      const rental = (
+        await pool.query(
+          "INSERT INTO rentals(user_id,vehicle_id,start_at,end_at,total_amount,status) VALUES($1,$2,NOW(),NOW()+INTERVAL '1 day',100,'ACTIVE') RETURNING id",
+          [customer, vehicle],
+        )
+      ).rows[0].id;
+      const payment = (
+        await pool.query(
+          'INSERT INTO payments(user_id,rental_id,amount) VALUES($1,$2,100) RETURNING id',
+          [customer, rental],
+        )
+      ).rows[0].id;
+      expect((await remove('vehicles', vehicle)).status).toBe(200);
+      expect(
+        (await pool.query('SELECT status FROM rentals WHERE id=$1', [rental])).rows[0].status,
+      ).toBe('CANCELLED');
+      expect((await pool.query('SELECT 1 FROM payments WHERE id=$1', [payment])).rowCount).toBe(1);
+      expect(
+        (
+          await new PostgresAdminRepository(pool).listVehicles({ page: 1, pageSize: 100 })
+        ).items.some((row) => row.id === vehicle),
+      ).toBe(false);
+      expect((await remove('vehicles', vehicle)).status).toBe(404);
     });
     it('serializes concurrent deletion of the same account', async () => {
       const id = await user();
@@ -437,5 +476,272 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
       for (const row of rows.rows)
         expect((await remove('coupons', row.id)).status).toBe(row.usage_count ? 409 : 200);
     });
+    it('validates deletion reasons and rejects unknown payload fields without mutation', async () => {
+      const id = await user();
+      for (const body of [
+        {},
+        { reason: '   ' },
+        { reason: 'x'.repeat(501) },
+        { reason: 'Valid reason', retainHistory: true },
+      ]) {
+        const response = await request(app)
+          .delete(`/admin/records/users/${id}`)
+          .set('Authorization', `Bearer ${ownerToken}`)
+          .send(body);
+        expect(response.status).toBe(400);
+      }
+      expect((await pool.query('SELECT id FROM users WHERE id=$1', [id])).rowCount).toBe(1);
+    });
+    it.each([
+      ['passenger', 'sedan'],
+      ['premium', 'luxury_sedan'],
+      ['logistics', 'mini_truck'],
+      ['service', 'ambulance'],
+      ['service', 'towing'],
+      ['passenger', 'suv'],
+    ])(
+      'deletes unused %s/%s inventory without touching business history',
+      async (sector, category) => {
+        const vehicle = await pool.query(
+          `INSERT INTO vehicles(make,model,plate_number,sector,category) VALUES('TEST_ONLY','Delete',$1,$2,$3) RETURNING id`,
+          ['DEL' + randomUUID().slice(0, 8), sector, category],
+        );
+        const id = vehicle.rows[0].id;
+        expect((await remove('vehicles', id)).status).toBe(200);
+        expect(
+          (await pool.query('SELECT id FROM vehicles WHERE id=$1 AND is_active', [id])).rowCount,
+        ).toBe(0);
+        expect((await remove('vehicles', id)).status).toBe(404);
+      },
+    );
+    it('retains closed support history, hides it from listings and audits the reason', async () => {
+      const subject = await user();
+      const record = await pool.query(
+        `INSERT INTO support_tickets(ticket_number,user_id,role,category,subject,message,status) VALUES($1,$2,'customer','OTHER','TEST_ONLY','History retained','OPEN') RETURNING id`,
+        ['DEL' + randomUUID().slice(0, 8), subject],
+      );
+      const id = record.rows[0].id;
+      expect((await remove('support', id, adminToken)).status).toBe(403);
+      expect((await remove('support', id)).status).toBe(409);
+      await pool.query("UPDATE support_tickets SET status='CLOSED' WHERE id=$1", [id]);
+      const response = await remove('support', id);
+      expect(response.status).toBe(200);
+      expect(response.body.data.mode).toBe('retained');
+      expect(
+        (await pool.query('SELECT message,admin_deleted_at FROM support_tickets WHERE id=$1', [id]))
+          .rows[0],
+      ).toMatchObject({ message: 'History retained', admin_deleted_at: expect.any(Date) });
+      const listing = await new AdminOperationsRepository(pool).list('support', {
+        page: 1,
+        pageSize: 25,
+        recordId: id,
+      });
+      expect(listing.total).toBe(0);
+      expect(listing.items).toEqual([]);
+      expect((await remove('support', id)).status).toBe(404);
+      const audit = await pool.query(
+        "SELECT user_id,metadata FROM user_history WHERE event_type='ADMIN_RECORD_DELETED' AND entity_id=$1",
+        [id],
+      );
+      expect(audit.rows[0]).toMatchObject({
+        user_id: owner,
+        metadata: {
+          module: 'support',
+          reason: 'TEST_ONLY deletion verification',
+          mode: 'retained',
+        },
+      });
+    });
+    it('retains delivered notifications and blocks queued and retryable notifications', async () => {
+      const subject = await user();
+      const record = await pool.query(
+        `INSERT INTO notifications(user_id,notification_type,channel) VALUES($1,'TEST_ONLY','push') RETURNING id`,
+        [subject],
+      );
+      const id = record.rows[0].id;
+      expect((await remove('notifications', id)).status).toBe(409);
+      await pool.query(
+        "UPDATE notifications SET processing_status='PROCESSED',processed_at=NOW(),delivery_status='SENT' WHERE id=$1",
+        [id],
+      );
+      expect((await remove('notifications', id)).status).toBe(409);
+      await pool.query(
+        "UPDATE notifications SET delivery_status='DELIVERED',delivered_at=NOW() WHERE id=$1",
+        [id],
+      );
+      expect((await remove('notifications', id)).status).toBe(200);
+      expect(
+        (await pool.query('SELECT admin_deleted_at FROM notifications WHERE id=$1', [id])).rows[0]
+          .admin_deleted_at,
+      ).toBeTruthy();
+      expect(
+        (
+          await new AdminOperationsRepository(pool).list('notifications', {
+            page: 1,
+            pageSize: 25,
+            recordId: id,
+          })
+        ).total,
+      ).toBe(0);
+    });
+    it('archives completed onboarding requests together while retaining documents and decisions', async () => {
+      const id = await user('driver');
+      const profile = (
+        await pool.query(
+          `INSERT INTO driver_profiles(user_id,license_number,license_expiry) VALUES($1,$2,'2099-01-01') RETURNING id`,
+          [id, 'TEST_ONLY_' + id],
+        )
+      ).rows[0].id;
+      const requests = await pool.query(
+        "SELECT id FROM provider_approval_requests WHERE target_type='driver_profile' AND target_id=$1",
+        [profile],
+      );
+      expect(requests.rowCount).toBeGreaterThan(0);
+      const requestId = requests.rows[0].id;
+      expect((await remove('approvals', requestId)).status).toBe(409);
+      await pool.query(
+        "UPDATE provider_approval_requests SET status='CANCELLED' WHERE target_type='driver_profile' AND target_id=$1",
+        [profile],
+      );
+      expect((await remove('approvals', requestId)).status).toBe(200);
+      expect(
+        (
+          await pool.query('SELECT admin_deleted_at FROM provider_approval_requests WHERE id=$1', [
+            requestId,
+          ])
+        ).rows[0].admin_deleted_at,
+      ).toBeTruthy();
+      expect(
+        (await pool.query('SELECT id FROM driver_profiles WHERE id=$1', [profile])).rowCount,
+      ).toBe(1);
+      expect((await remove('approvals', requestId)).status).toBe(404);
+      const queue = await new PostgresProviderOperationsRepository(pool).pendingApprovals(
+        owner,
+        'ALL',
+        true,
+      );
+      expect(queue.some((row) => row.id === requestId)).toBe(false);
+      const audit = await pool.query(
+        "SELECT metadata FROM user_history WHERE event_type='ADMIN_RECORD_DELETED' AND entity_id=$1",
+        [requestId],
+      );
+      expect(audit.rows[0].metadata.affectedIds).toContain(requestId);
+    });
+    it('removes completed fleet applications from active administration without removing membership history', async () => {
+      const driver = await user('driver'),
+        ownerId = await user('fleet_owner');
+      const profile = (
+        await pool.query(
+          "INSERT INTO driver_profiles(user_id,license_number,license_expiry) VALUES($1,$2,'2099-01-01') RETURNING id",
+          [driver, 'TEST_ONLY_' + driver],
+        )
+      ).rows[0].id;
+      const partner = (
+        await pool.query(
+          "INSERT INTO partners(user_id,business_name) VALUES($1,'TEST_ONLY_FLEET') RETURNING id",
+          [ownerId],
+        )
+      ).rows[0].id;
+      const application = (
+        await pool.query(
+          "INSERT INTO driver_applications(partner_id,driver_profile_id,requested_sector,requested_vehicle_category,vehicle_ownership_type) VALUES($1,$2,'passenger','sedan','DRIVER_ONLY') RETURNING id",
+          [partner, profile],
+        )
+      ).rows[0].id;
+      expect((await remove('fleet-applications', application)).status).toBe(409);
+      await pool.query(
+        "UPDATE driver_applications SET status='CANCELLED',submitted_at=NOW() WHERE id=$1",
+        [application],
+      );
+      expect((await remove('fleet-applications', application)).status).toBe(200);
+      expect(
+        (
+          await pool.query('SELECT admin_deleted_at FROM driver_applications WHERE id=$1', [
+            application,
+          ])
+        ).rows[0].admin_deleted_at,
+      ).toBeTruthy();
+      const active = await new PostgresAdminRepository(pool).listDriverApplications({
+        page: 1,
+        pageSize: 100,
+      });
+      expect(active.items.some((row) => row.id === application)).toBe(false);
+      expect(
+        (await pool.query('SELECT id FROM driver_profiles WHERE id=$1', [profile])).rowCount,
+      ).toBe(1);
+      expect((await pool.query('SELECT id FROM partners WHERE id=$1', [partner])).rowCount).toBe(1);
+    });
+    it.each(['support', 'notifications', 'approvals', 'fleet-applications'] as const)(
+      'requires the explicit delete grant for %s',
+      async (module) => {
+        const current = await access.identity(admin);
+        const resource = module === 'fleet-applications' ? 'approvals' : module;
+        await access.update(owner, admin, {
+          permissions: [resource + '.read'],
+          expectedUpdatedAt: current.updatedAt,
+        });
+        expect((await remove(module, randomUUID(), adminToken)).status).toBe(403);
+        const updated = await access.identity(admin);
+        await access.update(owner, admin, {
+          permissions: [resource + '.read', resource + '.delete'],
+          expectedUpdatedAt: updated.updatedAt,
+        });
+        expect((await remove(module, randomUUID(), adminToken)).status).toBe(404);
+      },
+    );
+    it.each(['customer', 'driver', 'fleet_owner', 'driver_fleet_owner'])(
+      'permanently erases %s identity across approval states while retaining wallet history',
+      async (role) => {
+        for (const approvalState of ['pending', 'approved', 'rejected', 'unapproved']) {
+          const state = approvalState === 'unapproved' ? 'pending' : approvalState;
+          const id = await user(role);
+          if (role === 'driver' || role === 'driver_fleet_owner')
+            await pool.query(
+              "INSERT INTO driver_profiles(user_id,license_number,license_expiry,verification_status) VALUES($1,$2,'2099-01-01',$3)",
+              [id, 'TEST_' + id, state],
+            );
+          if (role === 'fleet_owner' || role === 'driver_fleet_owner')
+            await pool.query(
+              "INSERT INTO partners(user_id,business_name,approval_status,approved_at,approved_by,rejection_reason,reviewed_at,reviewed_by) VALUES($1,'TEST_ONLY_PII',$2::text::partner_approval_status,CASE WHEN $2::text='approved' THEN NOW() END,CASE WHEN $2::text='approved' THEN $3::uuid END,CASE WHEN $2::text='rejected' THEN 'TEST_ONLY' END,CASE WHEN $2::text IN ('approved','rejected') THEN NOW() END,CASE WHEN $2::text IN ('approved','rejected') THEN $3::uuid END)",
+              [id, state, owner],
+            );
+          if (approvalState === 'unapproved')
+            await pool.query("UPDATE users SET status='suspended' WHERE id=$1", [id]);
+          if (state === 'approved')
+            await pool.query(
+              "UPDATE provider_approval_requests SET status='APPROVED',reviewer_id=$2,reviewer_role='super_admin',reviewed_at=NOW() WHERE requester_id=$1",
+              [id, owner],
+            );
+          if (state === 'rejected')
+            await pool.query(
+              "UPDATE provider_approval_requests SET status='REJECTED',reviewer_id=$2,reviewer_role='super_admin',reviewed_at=NOW(),rejection_reason='TEST_ONLY' WHERE requester_id=$1",
+              [id, owner],
+            );
+          await pool.query('INSERT INTO provider_wallets(user_id,balance_paise) VALUES($1,100)', [
+            id,
+          ]);
+          await pool.query(
+            "INSERT INTO user_credentials(user_id,password_hash) VALUES($1,'TEST_ONLY')",
+            [id],
+          );
+          const old = await token(id, role);
+          const response = await remove('users', id);
+          expect(response.status, JSON.stringify(response.body)).toBe(200);
+          expect(
+            (await pool.query('SELECT first_name,email,deleted_at FROM users WHERE id=$1', [id]))
+              .rows[0],
+          ).toMatchObject({ first_name: 'Deleted', email: null, deleted_at: expect.any(Date) });
+          expect(
+            (await pool.query('SELECT 1 FROM user_credentials WHERE user_id=$1', [id])).rowCount,
+          ).toBe(0);
+          expect(
+            (await pool.query('SELECT balance_paise FROM provider_wallets WHERE user_id=$1', [id]))
+              .rows[0].balance_paise,
+          ).toBe('100');
+          await expect(verifyAccessToken(old)).rejects.toBeDefined();
+          expect((await remove('users', id)).status).toBe(404);
+        }
+      },
+    );
   },
 );

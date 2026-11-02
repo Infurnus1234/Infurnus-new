@@ -1,4 +1,8 @@
-import { configureServiceFixture, restoreServiceFixtures, type ServiceFixtureSnapshots } from './service-catalog.fixture.js';
+import {
+  configureServiceFixture,
+  restoreServiceFixtures,
+  type ServiceFixtureSnapshots,
+} from './service-catalog.fixture.js';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { pinVerifier, sealRidePin } from '../repositories/ride-pin.js';
@@ -120,7 +124,7 @@ describeDatabase('ride PostgreSQL integration', () => {
 
   afterEach(async () => {
     if (fixture) await cleanFixture(fixture);
-    await restoreServiceFixtures(pool,serviceCatalog);
+    await restoreServiceFixtures(pool, serviceCatalog);
   });
 
   it('exposes customer contact only after actual acceptance and revokes it on cancellation/reassignment', async () => {
@@ -315,7 +319,8 @@ describeDatabase('ride PostgreSQL integration', () => {
     ['service', 'ambulance', 30000],
     ['premium', 'sedan', 3600000],
   ])('enforces the persisted %s/%s deadline', async (sector, category, milliseconds) => {
-    if (sector === 'service') await configureServiceFixture(pool,category as string,serviceCatalog);
+    if (sector === 'service')
+      await configureServiceFixture(pool, category as string, serviceCatalog);
     const id = fixture.rideIds[0]!;
     await pool.query('DELETE FROM ride_dispatch_attempts WHERE ride_id=$1', [id]);
     await pool.query(
@@ -381,7 +386,7 @@ describeDatabase('ride PostgreSQL integration', () => {
     };
   }
   async function prepareMap(sector = 'passenger', amount = 106, distance = 8500) {
-    if (sector === 'service') await configureServiceFixture(pool,'ambulance',serviceCatalog);
+    if (sector === 'service') await configureServiceFixture(pool, 'ambulance', serviceCatalog);
     const category =
       sector === 'logistics' ? 'mini_truck' : sector === 'service' ? 'ambulance' : 'sedan';
     await pool.query(

@@ -490,8 +490,9 @@ class RideNotifier extends StateNotifier<RideState> {
           generation != _rideReadGeneration ||
           state.currentRide?.id != id ||
           state.status != RideStatus.cancelled ||
-          ride.status != model.RideStatus.cancelled)
+          ride.status != model.RideStatus.cancelled) {
         return;
+      }
       state = state.copyWith(currentRide: ride);
     } catch (_) {
       // Keep the terminal state if the authoritative explanation cannot load.

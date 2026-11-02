@@ -1,3 +1,4 @@
+import { newestFirstSql } from '../../../common/utils/chronological-order.js';
 import { PostgresSupportRepository } from '../../support/repositories/support.repository.js';
 import { reportingDatePredicates } from './reporting-dates.js';
 import type { Pool } from 'pg';
@@ -188,6 +189,8 @@ export class AdminOperationsRepository {
     const source = operationSources[module];
     const values: unknown[] = [];
     const predicates: string[] = [];
+    if (module === 'support' || module === 'notifications')
+      predicates.push('admin_deleted_at IS NULL');
     const add = (value: unknown) => {
       values.push(value);
       return '$' + values.length;
@@ -225,9 +228,9 @@ export class AdminOperationsRepository {
     // A single statement gives count and rows the same MVCC snapshot, including empty pages.
     const result = await this.pool.query<{ items: Record<string, unknown>[]; total: number }>(
       `WITH filtered AS (SELECT ${source.columns} FROM ${source.table}${where}),
-       page AS (SELECT * FROM filtered ORDER BY created_at DESC, id DESC LIMIT $${values.length + 1} OFFSET $${values.length + 2}),
+       page AS (SELECT * FROM filtered ORDER BY ${newestFirstSql()} LIMIT $${values.length + 1} OFFSET $${values.length + 2}),
        visible AS (${visible})
-       SELECT COALESCE((SELECT jsonb_agg(visible ORDER BY created_at DESC,id DESC) FROM visible),'[]'::jsonb) AS items,
+       SELECT COALESCE((SELECT jsonb_agg(visible ORDER BY ${newestFirstSql()}) FROM visible),'[]'::jsonb) AS items,
        (SELECT COUNT(*)::int FROM filtered) AS total`,
       [...values, query.pageSize, (query.page - 1) * query.pageSize],
     );
