@@ -74,7 +74,15 @@ export class PremiumCityAreas {
       });
     }
   }
-  async resolve(pickup: Coordinates): Promise<{ cityId: string; boundaryGeoJson: string }> {
+  async resolve(pickup: Coordinates): Promise<{ cityId: string; boundaryGeoJson: string }>;
+  async resolve(
+    pickup: Coordinates,
+    allowUncovered: true,
+  ): Promise<{ cityId: string; boundaryGeoJson: string } | undefined>;
+  async resolve(
+    pickup: Coordinates,
+    allowUncovered = false,
+  ): Promise<{ cityId: string; boundaryGeoJson: string } | undefined> {
     const matches = [];
     for (const city of this.cities) {
       try {
@@ -84,6 +92,7 @@ export class PremiumCityAreas {
         if (!(error instanceof AppError) || error.statusCode !== 422) throw error;
       }
     }
+    if (!matches.length && allowUncovered && this.cities.length) return undefined;
     if (matches.length !== 1)
       throw new AppError(
         'PREMIUM_CITY_NOT_CONFIGURED',

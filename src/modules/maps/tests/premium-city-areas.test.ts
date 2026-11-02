@@ -141,6 +141,16 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('premium city PostGIS vali
       code: 'PREMIUM_CITY_NOT_CONFIGURED',
     });
   });
+  it('treats a valid but uncovered pickup as unavailable only when requested by dispatch', async () => {
+    const areas = new PremiumCityAreas(registry().file);
+    await expect(areas.resolve({ latitude: 0.5, longitude: 1.5 }, true)).resolves.toBeUndefined();
+    await expect(
+      new PremiumCityAreas().resolve({ latitude: 0.5, longitude: 1.5 }, true),
+    ).rejects.toMatchObject({ code: 'PREMIUM_CITY_NOT_CONFIGURED' });
+    await expect(
+      new PremiumCityAreas(registry(true).file).resolve({ latitude: 0.5, longitude: 0.5 }, true),
+    ).rejects.toMatchObject({ code: 'PREMIUM_CITY_NOT_CONFIGURED' });
+  });
   it('includes city boundary edges', async () => {
     expect(
       (await new PremiumCityAreas(registry().file).resolve({ latitude: 0, longitude: 0 })).cityId,

@@ -5,6 +5,29 @@ import type { MapProvider } from '../providers/map.provider.js';
 import type { Ride } from '../types/ride.js';
 
 describe('policy-aware dispatch matching', () => {
+  it('does not query or assign drivers outside approved Premium city coverage', async () => {
+    const repo = driverRepository();
+    const area = {
+      configured: true,
+      required: true,
+      assertSupported: vi.fn().mockResolvedValue(undefined),
+    };
+    const resolve = vi.fn().mockResolvedValue(undefined);
+    const matcher = new MatchingService(repo, undefined, area, { resolve });
+    const result = await matcher.findDispatchDrivers(
+      {
+        id: 'synthetic',
+        customerId: 'synthetic-customer',
+        pickup: { latitude: 26.647, longitude: 84.917 },
+        sector: 'premium',
+        vehicleCategory: 'thar',
+      } as Ride,
+      null,
+    );
+    expect(result).toEqual([]);
+    expect(repo.findNearbyEligible).not.toHaveBeenCalled();
+  });
+
   const ride = {
     id: 'test-ride',
     pickup: { latitude: 12, longitude: 77 },
@@ -66,7 +89,7 @@ describe('policy-aware dispatch matching', () => {
     const result = await new MatchingService(repo, undefined, undefined, {
       resolve,
     }).findDispatchDrivers({ ...ride, sector: 'premium', vehicleCategory: 'sedan' }, null);
-    expect(resolve).toHaveBeenCalledWith(ride.pickup);
+    expect(resolve).toHaveBeenCalledWith(ride.pickup, true);
     expect(result[0]).toMatchObject({
       dispatchCityId: 'TEST_CITY',
       dispatchBoundaryGeoJson: 'test-geometry',
