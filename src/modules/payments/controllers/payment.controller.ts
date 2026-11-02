@@ -1,3 +1,4 @@
+import { rideEvents } from '../../rides/events/ride.events.js';
 import type { LogisticsPaymentService } from '../services/logistics-payment.service.js';
 import { z } from 'zod';
 import type { NextFunction, Request, Response } from 'express';
@@ -101,8 +102,81 @@ export class PaymentController {
           return;
         }
 
-        // 3. Duplicate/conflicting payment protection
         const existingPayments = await this.paymentRepository.findByRideId(input.rideId);
+        if (ride.sector === 'logistics') {
+          // Logistics upfront (40%) and post-delivery (60%) payment flow
+          const totalFare =
+            Math.round(Number(ride.finalFare ?? ride.fareEstimate ?? 0) * 100) / 100;
+          const upfrontAmount = Math.round(totalFare * 0.4 * 100) / 100;
+          const remainingAmount = Math.round((totalFare - upfrontAmount) * 100) / 100;
+
+          if (ride.status !== 'completed') {
+            // Upfront payment phase (40%)
+            const capturedUpfront = existingPayments.find((p) => p.status === 'CAPTURED');
+            if (capturedUpfront) {
+              // Idempotency: return existing captured payment on re-attempt
+              res.status(200).json({
+                success: true,
+                data: capturedUpfront,
+                message: 'Upfront payment already verified',
+              });
+              return;
+            }
+
+            const activePayment = existingPayments.find(
+              (p) => p.status === 'INITIATED' || p.status === 'AUTHORIZED',
+            );
+            if (activePayment) {
+              if (input.idempotencyKey && activePayment.idempotencyKey === input.idempotencyKey) {
+                res.status(200).json({
+                  success: true,
+                  data: activePayment,
+                  message: 'Payment already initiated',
+                });
+                return;
+              }
+              res.status(409).json({
+                success: false,
+                message: 'An active payment already exists for this ride',
+              });
+              return;
+            }
+
+            amountToCharge = upfrontAmount;
+          } else {
+            // Post-delivery remaining phase (60%)
+            const capturedPayments = existingPayments.filter((p) => p.status === 'CAPTURED');
+            if (capturedPayments.length >= 2) {
+              res.status(409).json({
+                success: false,
+                message: 'All payments have already been captured for this logistics booking',
+              });
+              return;
+            }
+
+            const activePayment = existingPayments.find(
+              (p) => p.status === 'INITIATED' || p.status === 'AUTHORIZED',
+            );
+            if (activePayment) {
+              if (input.idempotencyKey && activePayment.idempotencyKey === input.idempotencyKey) {
+                res.status(200).json({
+                  success: true,
+                  data: activePayment,
+                  message: 'Payment already initiated',
+                });
+                return;
+              }
+              res.status(409).json({
+                success: false,
+                message: 'An active payment already exists for this ride',
+              });
+              return;
+            }
+
+            amountToCharge = remainingAmount;
+          }
+        } else {
+        // 3. Duplicate/conflicting payment protection
         const capturedPayment = existingPayments.find((p) => p.status === 'CAPTURED');
         if (capturedPayment) {
           res.status(409).json({
@@ -183,6 +257,8 @@ export class PaymentController {
         } else {
           // For Passenger, Logistics, Service
           amountToCharge = Number(ride.finalFare ?? ride.fareEstimate);
+        }
+
         }
 
         if (isNaN(amountToCharge) || amountToCharge <= 0) {
@@ -696,6 +772,13 @@ export class PaymentController {
           providerPaymentId: cfPaymentId,
           ...(payment.paymentStage ? { verifiedOnline: true } : {}),
         });
+
+        if (payment.rideId && this.rideRepository) {
+          try {
+            const updatedRide = await this.rideRepository.findById(payment.rideId);
+            if (updatedRide) rideEvents.emit('ride:lifecycle_updated', updatedRide);
+          } catch { /* Payment capture must succeed even if lifecycle refresh fails. */ }
+        }
 
         res.status(200).json({
           success: true,

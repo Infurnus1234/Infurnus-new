@@ -1311,6 +1311,131 @@ class RideNotifier extends StateNotifier<RideState> {
     }
   }
 
+  /// Initiates 40% upfront payment for a logistics booking.
+  /// Amount always comes from backend [logisticsPayment.upfrontAmount].
+  Future<bool> initiateLogisticsUpfrontPayment({
+    required String paymentMethod,
+  }) async {
+    final ride = state.currentRide;
+    if (ride == null || !ride.isLogistics) return false;
+
+    final amount = ride.upfrontAmount;
+    if (amount <= 0) return false;
+
+    state = state.copyWith(paymentStatus: 'processing', errorMessage: null);
+
+    try {
+      final initiateResult = await ref
+          .read(initiatePaymentUseCaseProvider)
+          .execute(
+            rideId: ride.id,
+            amount: amount,
+            paymentMethod: paymentMethod,
+          );
+
+      final paymentId = initiateResult['id']?.toString();
+      if (paymentId == null) {
+        throw Exception('Payment initiation did not return a valid payment ID');
+      }
+
+      state = state.copyWith(
+        paymentId: paymentId,
+        paymentMethod: paymentMethod,
+      );
+
+      final method = paymentMethod.toLowerCase();
+      bool captured = false;
+
+      if (method == 'cashfree') {
+        final paymentSessionId = initiateResult['paymentSessionId']?.toString();
+        final providerOrderId = initiateResult['providerOrderId']?.toString();
+        if (paymentSessionId == null || paymentSessionId.isEmpty) {
+          throw Exception('Payment session ID not returned by gateway');
+        }
+        final checkoutService = ref.read(cashfreeCheckoutServiceProvider);
+        final checkoutResult = await checkoutService.startCheckout(
+          orderId: providerOrderId ?? 'order_$paymentId',
+          paymentSessionId: paymentSessionId,
+        );
+        if (checkoutResult.status == CashfreeCheckoutStatus.cancelled) {
+          state = state.copyWith(
+            paymentStatus: 'unpaid',
+            errorMessage: 'Payment cancelled',
+          );
+          return false;
+        }
+        if (checkoutResult.status == CashfreeCheckoutStatus.failed) {
+          state = state.copyWith(
+            paymentStatus: 'unpaid',
+            errorMessage:
+                checkoutResult.errorMessage ?? 'Payment failed at gateway',
+          );
+          return false;
+        }
+        final captureResult = await ref
+            .read(capturePaymentUseCaseProvider)
+            .execute(
+              paymentId: paymentId,
+              providerPaymentId: checkoutResult.referenceId,
+            );
+        captured = captureResult['status'] == 'CAPTURED';
+      } else if (method == 'wallet') {
+        final captureResult = await ref
+            .read(capturePaymentUseCaseProvider)
+            .execute(paymentId: paymentId);
+        captured = captureResult['status'] == 'CAPTURED';
+      } else {
+        final upiApp = method == 'phonepe'
+            ? UpiPaymentApp.phonePe
+            : method == 'gpay'
+            ? UpiPaymentApp.googlePay
+            : method == 'paytm'
+            ? UpiPaymentApp.paytm
+            : UpiPaymentApp.any;
+        final upiService = ref.read(upiPaymentServiceProvider);
+        final upiResult = await upiService.pay(
+          merchantVpa: 'infurnus@ybl',
+          merchantName: 'INFURNUS',
+          amount: amount,
+          transactionId: paymentId,
+          app: upiApp,
+        );
+        if (!upiResult.success) {
+          state = state.copyWith(
+            paymentStatus: 'unpaid',
+            errorMessage: upiResult.errorMessage ?? 'UPI payment failed',
+          );
+          return false;
+        }
+        final captureResult = await ref
+            .read(capturePaymentUseCaseProvider)
+            .execute(
+              paymentId: paymentId,
+              providerPaymentId: upiResult.transactionId,
+            );
+        captured = captureResult['status'] == 'CAPTURED';
+      }
+
+      if (captured) {
+        state = state.copyWith(paymentStatus: 'paid', errorMessage: null);
+        await getRideDetails(ride.id);
+        return true;
+      } else {
+        state = state.copyWith(
+          paymentStatus: 'unpaid',
+          errorMessage: 'Payment verification failed at server. Please retry.',
+        );
+        return false;
+      }
+    } catch (e) {
+      state = state.copyWith(
+        paymentStatus: 'unpaid',
+        errorMessage: e.toString(),
+      );
+      return false;
+    }
+  }
+
   Future<void> fetchPaymentHistory() async {
     try {
       final payments = await ref

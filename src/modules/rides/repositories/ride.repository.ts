@@ -190,6 +190,29 @@ const detailedRideColumns = (tableAlias = 'r') => `
   ${tableAlias}.driver_earning_amount AS "driverEarningAmount",
   (SELECT jsonb_build_object('currency',lp.currency,'totalPaise',lp.total_paise,'upfrontPaise',lp.upfront_paise,'finalPaise',lp.final_paise,'confirmedPaise',COALESCE((SELECT sum(round(p.amount*100)) FROM payments p WHERE p.ride_id=lp.ride_id AND p.status='CAPTURED'),0),'outstandingPaise',GREATEST(0,lp.total_paise-COALESCE((SELECT sum(round(p.amount*100)) FROM payments p WHERE p.ride_id=lp.ride_id AND p.status='CAPTURED'),0)),'upfrontConfirmed',EXISTS(SELECT 1 FROM payments p WHERE p.ride_id=lp.ride_id AND p.payment_stage='upfront' AND p.status='CAPTURED'),'settlementStatus',CASE WHEN COALESCE((SELECT sum(round(p.amount*100)) FROM payments p WHERE p.ride_id=lp.ride_id AND p.status='CAPTURED'),0)>=lp.total_paise THEN 'settled' ELSE 'outstanding' END) FROM logistics_ride_payment_plans lp WHERE lp.ride_id=${tableAlias}.id) AS "logisticsPayment",
   COALESCE((SELECT CASE WHEN COALESCE((SELECT sum(round(p.amount*100)) FROM payments p WHERE p.ride_id=lp.ride_id AND p.status='CAPTURED'),0)>=lp.total_paise THEN 'CAPTURED' ELSE 'INITIATED' END FROM logistics_ride_payment_plans lp WHERE lp.ride_id=${tableAlias}.id),(SELECT status::text FROM payments WHERE payments.ride_id = ${tableAlias}.id ORDER BY created_at DESC LIMIT 1)) AS "paymentStatus",
+  CASE
+    WHEN COALESCE(${tableAlias}.sector, ${tableAlias}.route_metadata->>'sector', 'passenger') != 'logistics' THEN 'NOT_REQUIRED'
+    WHEN EXISTS (
+      SELECT 1 FROM payments p
+      WHERE p.ride_id = ${tableAlias}.id AND p.status = 'CAPTURED'
+    ) THEN 'PAID_VERIFIED'
+    WHEN (
+      SELECT status FROM payments p
+      WHERE p.ride_id = ${tableAlias}.id
+      ORDER BY created_at DESC LIMIT 1
+    ) = 'FAILED' THEN 'FAILED'
+    ELSE 'PENDING'
+  END AS "upfrontPaymentStatus",
+  (
+    SELECT p.captured_at FROM payments p
+    WHERE p.ride_id = ${tableAlias}.id AND p.status = 'CAPTURED'
+    ORDER BY p.captured_at ASC LIMIT 1
+  ) AS "upfrontPaidAt",
+  (
+    SELECT p.id FROM payments p
+    WHERE p.ride_id = ${tableAlias}.id AND p.status = 'CAPTURED'
+    ORDER BY p.captured_at ASC LIMIT 1
+  ) AS "upfrontPaymentId",
   ${tableAlias}.route_metadata->>'bookingDistanceMeters' AS "bookingDistanceMeters",
   ${tableAlias}.route_metadata->'bookingFareSnapshot'->>'pricingVersion' AS "bookingPricingVersion",
   ${tableAlias}.route_metadata->'bookingFareSnapshot'->'vehicleConfiguration'->>'id' AS "bookingVehicleTypeId",
@@ -320,8 +343,32 @@ function mapRide(row: Record<string, unknown>, forCustomer = false): Ride {
     finalFare: row.finalFare != null ? Number(row.finalFare) : null,
     commissionAmount: row.commissionAmount != null ? Number(row.commissionAmount) : null,
     driverEarningAmount: row.driverEarningAmount != null ? Number(row.driverEarningAmount) : null,
-    logisticsPayment: (row.logisticsPayment as Record<string, unknown> | null) ?? null,
     paymentStatus: (row.paymentStatus as string | null) ?? null,
+    upfrontPaymentStatus:
+      (row.upfrontPaymentStatus as import('../types/ride.js').LogisticsPaymentStatus | null) ??
+      (row.sector === 'logistics' ? 'PENDING' : 'NOT_REQUIRED'),
+    logisticsPayment:
+      (row.logisticsPayment as Record<string, unknown> | null) ?? (row.sector === 'logistics'
+        ? (() => {
+            const totalFare =
+              Math.round(Number(row.finalFare ?? row.fareEstimate ?? 0) * 100) / 100;
+            const upfrontAmount = Math.round(totalFare * 0.4 * 100) / 100;
+            const remainingAmount = Math.round((totalFare - upfrontAmount) * 100) / 100;
+            const status =
+              (row.upfrontPaymentStatus as import('../types/ride.js').LogisticsPaymentStatus | null) ??
+              'PENDING';
+            return {
+              totalFare,
+              upfrontAmount,
+              remainingAmount,
+              status,
+              paidAt: row.upfrontPaidAt
+                ? new Date(row.upfrontPaidAt as string).toISOString()
+                : null,
+              paymentId: (row.upfrontPaymentId as string) || null,
+            };
+          })()
+        : null),
     actualDistanceMeters: row.actualDistanceMeters != null ? Number(row.actualDistanceMeters) : 0,
 
     actualFuelCost: row.actualFuelCost != null ? Number(row.actualFuelCost) : null,
@@ -1549,6 +1596,7 @@ export class PostgresRideRepository implements RideRepository {
         await client.query(
           `SELECT assigned_driver_id,status,COALESCE(pin,route_metadata->>'pin') AS pin,
           pin_ciphertext,pin_verifier,pin_verified,COALESCE(route_metadata,'{}'::jsonb) AS metadata,
+          COALESCE(sector,route_metadata->>'sector','passenger') AS sector,
           extract(epoch FROM clock_timestamp())*1000 AS now_ms
           FROM rides WHERE id=$1 FOR UPDATE`,
           [id],

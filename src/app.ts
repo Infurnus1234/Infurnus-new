@@ -118,6 +118,9 @@ import { VehicleService } from './modules/vehicles/services/vehicle.service.js';
 
 import { createDeviceTokenRouter } from './modules/notifications/device-tokens/routes/device-token.routes.js';
 import { createNotificationInboxRouter } from './modules/notifications/routes/notification-inbox.routes.js';
+import { PostgresWalletRepository } from './modules/wallet/repositories/wallet.repository.js';
+import { WalletController } from './modules/wallet/controllers/wallet.controller.js';
+import { createWalletRouter } from './modules/wallet/routes/wallet.routes.js';
 
 export interface AppOptions {
   enableAuthRateLimiting?: boolean;
@@ -549,6 +552,14 @@ export function createApp(
 
     app.use('/payments', createPaymentRouter(paymentController));
   }
+
+  // ==========================================================
+  // User Wallet & Pay
+  // ==========================================================
+
+  const walletRepository = new PostgresWalletRepository(pool);
+  const walletController = new WalletController(walletRepository);
+  app.use('/wallet', createWalletRouter(walletController));
 
   // ==========================================================
   // Fleet
