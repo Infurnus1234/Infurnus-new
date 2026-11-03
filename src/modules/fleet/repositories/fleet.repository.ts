@@ -46,23 +46,37 @@ export interface FleetRepository {
   getEarnings(ownerId: string): Promise<FleetEarningsSummary>;
 }
 
+export interface AllowedVehicleType {
+  sector: string;
+  code: string;
+  name: string;
+}
+
+export const ALLOWED_VEHICLE_TYPES: AllowedVehicleType[] = [
+  { sector: 'passenger', code: 'mini', name: 'Mini Cab' },
+  { sector: 'passenger', code: 'sedan', name: 'Sedan' },
+  { sector: 'passenger', code: 'suv', name: 'SUV' },
+  { sector: 'logistics', code: 'cargo_207_heavy', name: '207 Heavy' },
+  { sector: 'logistics', code: 'three_wheeler', name: '3-Wheeler (Goods)' },
+  { sector: 'logistics', code: 'mini_truck', name: 'Mini Truck (Tata Ace)' },
+  { sector: 'logistics', code: 'tata_407', name: 'Tata 407' },
+  { sector: 'service', code: 'ambulance', name: 'Ambulance' },
+  { sector: 'premium', code: 'thar', name: 'Mahindra Thar' },
+];
+
 export class PostgresFleetRepository implements FleetRepository {
   constructor(private readonly pool: Pool) {}
 
-  async catalog(ownerId?: string) {
-    const types = (
-      await this.pool.query(
-        `SELECT id::text,code,name,sector,active FROM vehicle_types UNION ALL SELECT ('registration:' || r.sector || ':' || r.code) AS id,r.code,r.name,r.sector,FALSE AS active FROM fleet_registration_vehicle_types r WHERE NOT EXISTS(SELECT 1 FROM vehicle_types t WHERE t.code=r.code AND t.sector=r.sector) ORDER BY sector,name`,
-      )
-    ).rows;
-    if (ownerId) {
-      const custom = await this.pool.query(
-        'SELECT id,code,name,sector,FALSE AS active,TRUE AS custom FROM fleet_custom_vehicle_types WHERE owner_id=$1 ORDER BY sector,name',
-        [ownerId],
-      );
-      types.push(...custom.rows);
-    }
-    return { sectors: ['passenger', 'logistics', 'service', 'premium', 'rental'], types };
+  async catalog(_ownerId?: string) {
+    const types = ALLOWED_VEHICLE_TYPES.map((t, idx) => ({
+      id: `allowed_${idx}`,
+      code: t.code,
+      name: t.name,
+      sector: t.sector,
+      active: true,
+    }));
+    const sectors = ['passenger', 'logistics', 'service', 'premium', 'rental'];
+    return { sectors, types };
   }
   async revenue(ownerId: string, filter: RevenueFilter = {}) {
     return new FleetRevenueRepository(this.pool).report(ownerId, filter);
@@ -333,11 +347,10 @@ export class PostgresFleetRepository implements FleetRepository {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      const configuredType = await client.query(
-        `SELECT id FROM vehicle_types WHERE code=$1 AND (sector=$2 OR ($2='rental' AND sector IN ('passenger','premium'))) UNION ALL SELECT NULL::uuid AS id FROM fleet_registration_vehicle_types WHERE code=$1 AND (sector=$2 OR ($2='rental' AND sector IN ('passenger','premium'))) UNION ALL SELECT id FROM fleet_custom_vehicle_types WHERE code=$1 AND sector=$2 AND owner_id=$3`,
-        [input.category, input.sector, ownerId],
+      const isAllowed = ALLOWED_VEHICLE_TYPES.some(
+        (t) => t.code === input.category && (t.sector === input.sector || (input.sector === 'rental' && ['passenger', 'premium'].includes(t.sector)))
       );
-      if (!configuredType.rowCount)
+      if (!isAllowed)
         throw new AppError(
           'INVALID_VEHICLE_CATEGORY',
           'Choose a configured vehicle type for this sector',
@@ -502,14 +515,10 @@ export class PostgresFleetRepository implements FleetRepository {
         }
         const sector = input.sector ?? current.sector,
           category = input.category ?? current.category;
-        if (
-          !(
-            await client.query(
-              "SELECT id FROM vehicle_types WHERE code=$1 AND (sector=$2 OR ($2='rental' AND sector IN ('passenger','premium'))) UNION ALL SELECT NULL::uuid AS id FROM fleet_registration_vehicle_types WHERE code=$1 AND (sector=$2 OR ($2='rental' AND sector IN ('passenger','premium'))) UNION ALL SELECT id FROM fleet_custom_vehicle_types WHERE code=$1 AND sector=$2 AND owner_id=$3",
-              [category, sector, ownerId],
-            )
-          ).rowCount
-        )
+        const isAllowed = ALLOWED_VEHICLE_TYPES.some(
+          (t) => t.code === category && (t.sector === sector || (sector === 'rental' && ['passenger', 'premium'].includes(t.sector)))
+        );
+        if (!isAllowed)
           throw new AppError(
             'INVALID_VEHICLE_CATEGORY',
             'Choose a configured vehicle type for this sector',
