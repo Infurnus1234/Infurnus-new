@@ -24,7 +24,35 @@ class _FakeRideRepository implements RideRepository {
   Future<List<FleetVehicleModel>> getFleet({
     String? sector,
     String? category,
-  }) async => [];
+  }) async => [
+    for (final entry
+        in (sector == 'passenger'
+                ? <String, String>{
+                    'hatchback': 'Hatchback',
+                    'sedan': 'Sedan',
+                    'innova': 'Innova Crysta',
+                    'winger': 'Winger',
+                    'traveller': 'Force Traveller',
+                    'bike': 'Bike',
+                    'auto': 'Auto',
+                    'e_rickshaw': 'E-Rickshaw',
+                  }
+                : <String, String>{
+                    'piaggio_ape': 'Piaggio Ape',
+                    'tata_magic': 'Tata Magic',
+                  })
+            .entries)
+      FleetVehicleModel(
+        id: entry.key,
+        make: '',
+        model: entry.value,
+        name: entry.value,
+        sector: sector ?? 'passenger',
+        category: entry.key,
+        fuelRatePerKm: 0,
+        loadCapacityKg: 0,
+      ),
+  ];
 
   @override
   Future<FareEstimateModel> estimateFare(Map<String, dynamic> data) async =>
@@ -99,7 +127,12 @@ void main() {
         });
 
         await tester.pumpWidget(
-          const ProviderScope(child: MaterialApp(home: PassengerRidesScreen())),
+          ProviderScope(
+            overrides: [
+              rideRepositoryProvider.overrideWithValue(_FakeRideRepository()),
+            ],
+            child: const MaterialApp(home: PassengerRidesScreen()),
+          ),
         );
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 100));
@@ -198,7 +231,12 @@ void main() {
 
         // Logistics retains cargo vehicles (Piaggio Ape, Tata Magic, etc.)
         await tester.pumpWidget(
-          const ProviderScope(child: MaterialApp(home: LogisticsScreen())),
+          ProviderScope(
+            overrides: [
+              rideRepositoryProvider.overrideWithValue(_FakeRideRepository()),
+            ],
+            child: const MaterialApp(home: LogisticsScreen()),
+          ),
         );
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 100));

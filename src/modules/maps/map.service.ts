@@ -405,7 +405,9 @@ export class CommonMapService implements MapProvider {
     point: Coordinates,
     options: MapRequestOptions = {},
   ): Promise<ReverseGeocodeResult | null> {
-    await this.area.assertSupported([point]);
+    // Address lookup also describes a remote customer's GPS position. Coverage
+    // belongs to route/booking validation, not to this informational lookup.
+    await this.area.assertSupported([]);
     const p = this.point(point, this.config.reversePrecision);
     if (!this.provider.reverseGeocode)
       throw new AppError('MAP_OPERATION_UNAVAILABLE', 'Reverse geocoding is not configured', 503);

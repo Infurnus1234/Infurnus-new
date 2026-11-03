@@ -39,32 +39,7 @@ class _PickupSelectionScreenState extends ConsumerState<PickupSelectionScreen> {
   List<PlaceSuggestion> _suggestions = [];
   bool _isLoadingSuggestions = false;
   String? _searchError;
-
-  // Recent places list matching reference screenshot 2
-  final List<Map<String, dynamic>> _recentPlaces = [
-    {
-      'title': 'Patna Junction',
-      'subtitle': 'Fraser Road Area, Patna, Bihar, India',
-      'coords': const LatLng(25.6027, 85.1376),
-    },
-    {
-      'title': 'Vaibhav Khand',
-      'subtitle': 'Vaibhav Khand, Gomti Nagar, Lucknow, Uttar Pradesh, India',
-      'coords': const LatLng(26.8528, 81.0028),
-    },
-    {
-      'title': 'Staff Training Center Union Bank Of India',
-      'subtitle':
-          'Mantri Awas Marg, Vibhuti Khand, Gomti Nagar, Lucknow, India',
-      'coords': const LatLng(26.8687, 81.0123),
-    },
-    {
-      'title': 'Panchmukhi Hanuman Mandir',
-      'subtitle':
-          'yogveer matth, Gandhi Nagar, Kankarbagh, Patna, Bihar, India',
-      'coords': const LatLng(25.5941, 85.1564),
-    },
-  ];
+  int _selectionGeneration = 0;
 
   @override
   void initState() {
@@ -104,9 +79,8 @@ class _PickupSelectionScreenState extends ConsumerState<PickupSelectionScreen> {
       }
     });
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initLocation();
-    });
+    // A selected booking location is independent of GPS. Read GPS only when
+    // the customer explicitly chooses "Use current location".
   }
 
   @override
@@ -121,31 +95,24 @@ class _PickupSelectionScreenState extends ConsumerState<PickupSelectionScreen> {
   }
 
   Future<void> _initLocation() async {
-    final rideState = ref.read(rideProvider);
-    if (rideState.pickupCoords != null &&
-        rideState.pickup != null &&
-        rideState.pickup!.trim().isNotEmpty &&
-        rideState.pickup!.toLowerCase() != 'current location') {
-      setState(() {
-        _isLocationFound = true;
-      });
-      if (_destinationController.text.trim().isEmpty) {
-        _destinationFocusNode.requestFocus();
-      }
-      return;
-    }
-
+    final generation = ++_selectionGeneration;
     setState(() => _isDetectingLocation = true);
 
     try {
       final pos = await ref.read(locationServiceProvider).getCurrentPosition();
-      if (!mounted) return;
+      if (!mounted || generation != _selectionGeneration) return;
       if (pos != null) {
         final coords = LatLng(pos.latitude, pos.longitude);
-        final address = await ref
-            .read(geocodingServiceProvider)
-            .reverseGeocode(coords);
-        if (!mounted) return;
+        ref.read(rideProvider.notifier).recordCurrentGps(coords);
+        String? address;
+        try {
+          address = await ref
+              .read(geocodingServiceProvider)
+              .reverseGeocode(coords);
+        } catch (_) {
+          // Address lookup failure must not make GPS mandatory for manual booking.
+        }
+        if (!mounted || generation != _selectionGeneration) return;
         final resolvedText = address ?? 'Current Location';
         _pickupController.text = resolvedText;
         ref
@@ -166,7 +133,7 @@ class _PickupSelectionScreenState extends ConsumerState<PickupSelectionScreen> {
         _pickupFocusNode.requestFocus();
       }
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || generation != _selectionGeneration) return;
       setState(() {
         _isLocationFound = false;
         _isDetectingLocation = false;
@@ -175,7 +142,14 @@ class _PickupSelectionScreenState extends ConsumerState<PickupSelectionScreen> {
     }
   }
 
-  void _onQueryChanged(String query) {
+  void _onQueryChanged(String query, {required bool isPickup}) {
+    _selectionGeneration++;
+    _isDetectingLocation = false;
+    if (isPickup) {
+      ref.read(rideProvider.notifier).updatePickupAddress(query);
+    } else {
+      ref.read(rideProvider.notifier).updateDestinationAddress(query);
+    }
     _debounceTimer?.cancel();
     _cancelToken?.cancel();
 
@@ -192,19 +166,20 @@ class _PickupSelectionScreenState extends ConsumerState<PickupSelectionScreen> {
     setState(() => _isLoadingSuggestions = true);
 
     _debounceTimer = Timer(const Duration(milliseconds: 250), () async {
-      _cancelToken = CancelToken();
+      final token = CancelToken();
+      _cancelToken = token;
       try {
         final results = await ref
             .read(placesAutocompleteServiceProvider)
-            .getSuggestions(trimmed, cancelToken: _cancelToken);
-        if (!mounted || (_cancelToken?.isCancelled ?? false)) return;
+            .getSuggestions(trimmed, cancelToken: token);
+        if (!mounted || token.isCancelled) return;
         setState(() {
           _suggestions = results;
           _searchError = null;
           _isLoadingSuggestions = false;
         });
       } catch (e) {
-        if (!mounted || (_cancelToken?.isCancelled ?? false)) return;
+        if (!mounted || token.isCancelled) return;
         setState(() {
           _searchError = locationSearchErrorMessage(e);
           _suggestions = [];
@@ -219,6 +194,8 @@ class _PickupSelectionScreenState extends ConsumerState<PickupSelectionScreen> {
     String subtitle, {
     LatLng? directCoords,
   }) async {
+    final generation = ++_selectionGeneration;
+    _isDetectingLocation = false;
     final fullAddress = subtitle.isNotEmpty ? '$title, $subtitle' : title;
     final isPickup = _isPickupActive;
 
@@ -240,7 +217,7 @@ class _PickupSelectionScreenState extends ConsumerState<PickupSelectionScreen> {
       } catch (_) {}
     }
 
-    if (!mounted) return;
+    if (!mounted || generation != _selectionGeneration) return;
 
     if (coords != null) {
       if (isPickup) {
@@ -271,9 +248,6 @@ class _PickupSelectionScreenState extends ConsumerState<PickupSelectionScreen> {
         rideState.destinationCoords != null;
 
     if (hasPickup && hasDest) {
-      if (rideState.selectedTier.trim().isEmpty) {
-        ref.read(rideProvider.notifier).selectTier('hatchback');
-      }
       // Calculate fare and advance to vehicle selection screen
       ref.read(rideProvider.notifier).estimateRouteFare();
       context.push('/ride-booking');
@@ -356,7 +330,10 @@ class _PickupSelectionScreenState extends ConsumerState<PickupSelectionScreen> {
 
             // Autocomplete Results or Recent Locations List
             Expanded(
-              child: _suggestions.isNotEmpty
+              child:
+                  _suggestions.isNotEmpty ||
+                      _isLoadingSuggestions ||
+                      _searchError != null
                   ? _buildSuggestionsList()
                   : _buildRecentPlacesList(),
             ),
@@ -408,7 +385,7 @@ class _PickupSelectionScreenState extends ConsumerState<PickupSelectionScreen> {
           const SizedBox(width: 12),
           const Expanded(
             child: Text(
-              "Uh oh, we can't find you! Enter your pickup location for a smooth ride.",
+              'Choose a pickup in Bihar. You can book from anywhere; GPS is optional.',
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
@@ -475,7 +452,7 @@ class _PickupSelectionScreenState extends ConsumerState<PickupSelectionScreen> {
                         _isLocationFound = true;
                       }
                     });
-                    _onQueryChanged(val);
+                    _onQueryChanged(val, isPickup: true);
                   },
                 ),
               ),
@@ -483,6 +460,7 @@ class _PickupSelectionScreenState extends ConsumerState<PickupSelectionScreen> {
                 GestureDetector(
                   onTap: () {
                     _pickupController.clear();
+                    _onQueryChanged('', isPickup: true);
                     setState(() {
                       _isLocationFound = false;
                       _suggestions = [];
@@ -550,13 +528,14 @@ class _PickupSelectionScreenState extends ConsumerState<PickupSelectionScreen> {
                     isDense: true,
                     contentPadding: EdgeInsets.zero,
                   ),
-                  onChanged: _onQueryChanged,
+                  onChanged: (value) => _onQueryChanged(value, isPickup: false),
                 ),
               ),
               if (_destinationController.text.isNotEmpty)
                 GestureDetector(
                   onTap: () {
                     _destinationController.clear();
+                    _onQueryChanged('', isPickup: false);
                     setState(() => _suggestions = []);
                     _destinationFocusNode.requestFocus();
                   },
@@ -584,7 +563,6 @@ class _PickupSelectionScreenState extends ConsumerState<PickupSelectionScreen> {
           Expanded(
             child: OutlinedButton.icon(
               onPressed: () {
-                // If pickup is missing, detect GPS or use default city center
                 _initLocation();
               },
               icon: const Icon(
@@ -593,7 +571,7 @@ class _PickupSelectionScreenState extends ConsumerState<PickupSelectionScreen> {
                 color: Color(0xFF111827),
               ),
               label: const Text(
-                'Select on map',
+                'Use current location',
                 style: TextStyle(
                   color: Color(0xFF111827),
                   fontSize: 13,
@@ -720,45 +698,11 @@ class _PickupSelectionScreenState extends ConsumerState<PickupSelectionScreen> {
   }
 
   Widget _buildRecentPlacesList() {
-    return ListView.separated(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: _recentPlaces.length,
-      separatorBuilder: (_, __) =>
-          const Divider(height: 1, indent: 56, color: Color(0xFFF3F4F6)),
-      itemBuilder: (context, index) {
-        final place = _recentPlaces[index];
-        return ListTile(
-          leading: const Icon(
-            Icons.history_rounded,
-            color: Color(0xFF6B7280),
-            size: 22,
-          ),
-          title: Text(
-            place['title'] as String,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF111827),
-            ),
-          ),
-          subtitle: Text(
-            place['subtitle'] as String,
-            style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          trailing: const Icon(
-            Icons.favorite_border_rounded,
-            color: Color(0xFF9CA3AF),
-            size: 20,
-          ),
-          onTap: () => _selectPlace(
-            place['title'] as String,
-            place['subtitle'] as String,
-            directCoords: place['coords'] as LatLng?,
-          ),
-        );
-      },
+    return const Padding(
+      padding: EdgeInsets.all(24),
+      child: Text(
+        'Search for a pickup and destination in Bihar. You can book from anywhere; GPS is optional.',
+      ),
     );
   }
 }

@@ -8,6 +8,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../../core/services/location_service.dart';
 import '../../../../shared/widgets/route_distance_summary.dart';
+import '../../../../shared/widgets/vehicle_visual_image.dart';
 import '../../../../core/services/geocoding_service.dart';
 import '../../../../core/services/places_autocomplete_service.dart';
 import '../../../../shared/widgets/infurnus_button.dart';
@@ -70,8 +71,11 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
   bool _isSubmittingBooking = false;
   // ignore: unused_field
   bool _isLoadingFleet = true;
+  String? _catalogError;
   List<FleetVehicleModel> _fleetVehicles = [];
   CancelToken _fleetCancelToken = CancelToken();
+  int _pickupSelectionGeneration = 0;
+  int _destinationSelectionGeneration = 0;
 
   @override
   void initState() {
@@ -82,7 +86,6 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
     _destinationController.text = rideState.destination ?? '';
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _detectCurrentLocation(preserveSelection: true);
       _fetchFleet(rideState.selectedSector);
       if (rideState.pickupCoords != null &&
           rideState.destinationCoords != null) {
@@ -104,7 +107,13 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
     _fleetCancelToken.cancel();
     _fleetCancelToken = CancelToken();
     final cancelToken = _fleetCancelToken;
-    if (mounted) setState(() => _isLoadingFleet = true);
+    if (mounted) {
+      setState(() {
+        _isLoadingFleet = true;
+        _catalogError = null;
+        _fleetVehicles = [];
+      });
+    }
     try {
       final rawFleet = await ref
           .read(getFleetUseCaseProvider)
@@ -127,12 +136,14 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
       if (e.type == DioExceptionType.cancel) return;
       if (mounted) {
         setState(() => _isLoadingFleet = false);
-        debugPrint('Fleet fetch fallback to catalog: $e');
+        _catalogError =
+            'Unable to load configured vehicles. Tap Select to retry.';
       }
     } catch (error) {
       if (mounted) {
         setState(() => _isLoadingFleet = false);
-        debugPrint('Fleet fetch fallback to catalog: $error');
+        _catalogError =
+            'Unable to load configured vehicles. Tap Select to retry.';
       }
     }
   }
@@ -149,9 +160,11 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
     previousToken?.cancel();
 
     if (isPickup) {
+      _pickupSelectionGeneration++;
       _pickupSearchError = null;
       ref.read(rideProvider.notifier).updatePickupAddress(query);
     } else {
+      _destinationSelectionGeneration++;
       _destinationSearchError = null;
       ref.read(rideProvider.notifier).updateDestinationAddress(query);
     }
@@ -234,6 +247,9 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
     PlaceSuggestion suggestion, {
     required bool isPickup,
   }) async {
+    final selectionGeneration = isPickup
+        ? ++_pickupSelectionGeneration
+        : ++_destinationSelectionGeneration;
     final controller = isPickup ? _pickupController : _destinationController;
     final selectedQuery = controller.text;
     LatLng? resolved;
@@ -263,6 +279,12 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
       return;
     }
 
+    if (selectionGeneration !=
+        (isPickup
+            ? _pickupSelectionGeneration
+            : _destinationSelectionGeneration)) {
+      return;
+    }
     final timer = isPickup
         ? _pickupAutocompleteTimer
         : _destinationAutocompleteTimer;
@@ -365,20 +387,14 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
     );
   }
 
-  Future<void> _detectCurrentLocation({bool preserveSelection = false}) async {
+  Future<void> _detectCurrentLocation() async {
+    final generation = ++_pickupSelectionGeneration;
     try {
-      final currentPickup = _pickupController.text.trim();
-      if (preserveSelection &&
-          currentPickup.isNotEmpty &&
-          currentPickup.toLowerCase() != 'current location') {
-        return;
-      }
       final pos = await ref.read(locationServiceProvider).getCurrentPosition();
-      if (pos != null && mounted) {
-        if (preserveSelection &&
-            _pickupController.text.trim() != currentPickup) {
-          return;
-        }
+      if (pos != null && mounted && generation == _pickupSelectionGeneration) {
+        ref
+            .read(rideProvider.notifier)
+            .recordCurrentGps(LatLng(pos.latitude, pos.longitude));
         _pickupController.text = 'Current Location';
         ref
             .read(rideProvider.notifier)
@@ -392,9 +408,14 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
   }
 
   Future<void> _reverseGeocodePickup(LatLng coordinates) async {
-    final address = await ref
-        .read(geocodingServiceProvider)
-        .reverseGeocode(coordinates);
+    String? address;
+    try {
+      address = await ref
+          .read(geocodingServiceProvider)
+          .reverseGeocode(coordinates);
+    } catch (_) {
+      return;
+    }
     if (!mounted || address == null) return;
 
     final pickupCoords = ref.read(rideProvider).pickupCoords;
@@ -429,11 +450,12 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
     if (_isSubmittingBooking) return;
 
     final initialRideState = ref.read(rideProvider);
+    if (_isLoadingFleet) return;
     if (_isUnsupportedVehicle(initialRideState)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Bike, Auto, and E-Rickshaw are not available. Please select a valid passenger vehicle.',
+            'Choose an enabled vehicle from the current service catalog.',
           ),
           backgroundColor: serviceRed,
         ),
@@ -1488,159 +1510,54 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
     );
   }
 
-  bool _isTierMatching(String selectedTier, String category, int index) {
-    if (selectedTier.isEmpty) return false;
-    final s = selectedTier.toLowerCase().trim();
-    final c = category.toLowerCase().trim();
-    if (s == c) return true;
-    if (s == 'innova crysta' && c == 'innova') return true;
-    if (s == 'force traveller' &&
-        (c == 'traveller' || c == 'force_traveller')) {
-      return true;
-    }
-    if (s == '207 cargo' && c == 'cargo_207') {
-      return true;
-    }
-    if (s == '407 cargo' && c == 'cargo_407') {
-      return true;
-    }
-    if (s == 'piaggio ape' && c == 'piaggio_ape') {
-      return true;
-    }
-    if (s == 'tata magic' && c == 'tata_magic') {
-      return true;
-    }
-    return false;
-  }
+  bool _isTierMatching(String selectedTier, String category, int index) =>
+      selectedTier == category;
 
-  List<Map<String, dynamic>> _getVehiclesForSector(String sector) {
-    switch (sector.toLowerCase()) {
-      case 'logistics':
-        return [
-          {
-            'name': 'Piaggio Ape',
-            'category': 'piaggio_ape',
-            'capacity': 'Up to 500 kg',
-            'icon': Icons.local_shipping_outlined,
-            'image': 'assets/images/piaggio_ape_yellow.png',
-          },
-          {
-            'name': 'Tata Magic',
-            'category': 'tata_magic',
-            'capacity': 'Up to 750 kg',
-            'icon': Icons.local_shipping_rounded,
-            'image': 'assets/images/tata_magic_cream.png',
-          },
-          {
-            'name': '207 Cargo',
-            'category': 'cargo_207',
-            'capacity': 'Up to 1500 kg',
-            'icon': Icons.local_shipping_rounded,
-            'image': 'assets/images/cargo_207_heavy.png',
-          },
-          {
-            'name': '407 Cargo',
-            'category': 'cargo_407',
-            'capacity': 'Up to 2500 kg',
-            'icon': Icons.local_shipping_rounded,
-            'image': 'assets/images/cargo_407.jpg',
-          },
-        ];
-      case 'service':
-        return _fleetVehicles
-            .map(
-              (v) => <String, dynamic>{
-                'name': v.displayName,
-                'category': v.category,
-                'capacity': v.range ?? 'Configured service radius',
-                'icon': Icons.medical_services_rounded,
-              },
-            )
-            .toList();
-      case 'premium':
-      case 'rental':
-      case 'rentals':
-        return [
-          {
-            'name': 'Scorpio N',
-            'category': 'scorpio',
-            'capacity': 'Rugged SUV',
-            'icon': Icons.directions_car_filled_rounded,
-            'image': 'assets/images/scorpio_n_white.png',
-          },
-          {
-            'name': 'Mahindra Thar',
-            'category': 'thar',
-            'capacity': 'Off-road 4x4',
-            'icon': Icons.terrain_rounded,
-            'image': 'assets/images/thar_visual.webp',
-          },
-          {
-            'name': 'Innova Crysta',
-            'category': 'innova',
-            'capacity': 'Executive 7S',
-            'icon': Icons.airport_shuttle_rounded,
-            'image': 'assets/images/innova_crysta.jpg',
-          },
-          {
-            'name': 'Force Urbania',
-            'category': 'traveller',
-            'capacity': 'Executive Van',
-            'icon': Icons.airport_shuttle_rounded,
-            'image': 'assets/images/force_urbania.jpg',
-          },
-        ];
-      case 'passenger':
-      default:
-        return [
-          {
-            'name': 'Hatchback',
-            'category': 'hatchback',
-            'capacity': '4 seats',
-            'icon': Icons.directions_car_rounded,
-            'image': 'assets/images/hatchback.jpg',
-          },
-          {
-            'name': 'Sedan',
-            'category': 'sedan',
-            'capacity': '4 seats',
-            'icon': Icons.directions_car_rounded,
-            'image': 'assets/images/sedan.jpg',
-          },
-          {
-            'name': 'Innova Crysta',
-            'category': 'innova',
-            'capacity': '6-7 seats',
-            'icon': Icons.directions_car_filled_rounded,
-            'image': 'assets/images/innova_crysta.jpg',
-          },
-          {
-            'name': 'Winger',
-            'category': 'winger',
-            'capacity': '9-12 seats',
-            'icon': Icons.directions_bus_rounded,
-            'image': 'assets/images/winger_tata.jpg',
-          },
-          {
-            'name': 'Force Traveller',
-            'category': 'traveller',
-            'capacity': '12 seats',
-            'icon': Icons.airport_shuttle_rounded,
-            'image': 'assets/images/force_urbania.jpg',
-          },
-        ];
-    }
-  }
+  List<Map<String, dynamic>> _getVehiclesForSector(String sector) =>
+      _fleetVehicles
+          .where((v) => v.sector == sector)
+          .map(
+            (v) => <String, dynamic>{
+              'name': v.displayName,
+              'category': v.category,
+              'capacity': sector == 'service'
+                  ? v.range ?? 'Configured service radius'
+                  : 'Availability checked near pickup',
+              'icon': sector == 'service'
+                  ? Icons.medical_services_rounded
+                  : sector == 'logistics'
+                  ? Icons.local_shipping_rounded
+                  : Icons.directions_car_rounded,
+              'image': VehicleVisualImage.getAssetPath(
+                v.displayName,
+                v.category,
+              ),
+            },
+          )
+          .toList();
 
   bool _isUnsupportedVehicle(RideState state) {
-    if (state.selectedSector != 'passenger' &&
-        state.selectedSector.isNotEmpty) {
-      return false;
-    }
-    return isExcludedPassengerVehicle(state.selectedTier);
+    return (state.selectedSector == 'passenger' &&
+            isExcludedPassengerVehicle(state.selectedTier)) ||
+        (!_isLoadingFleet &&
+            !_fleetVehicles.any(
+              (v) =>
+                  v.sector == state.selectedSector &&
+                  v.category == state.selectedTier,
+            ));
   }
 
-  void _showVehicleSelectionBottomSheet(RideState state) {
+  Future<void> _showVehicleSelectionBottomSheet(RideState state) async {
+    if (_catalogError != null) await _fetchFleet(state.selectedSector);
+    if (!mounted) return;
+    if (_isLoadingFleet) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Loading configured vehicles. Please try again.'),
+        ),
+      );
+      return;
+    }
     final vehicles = _getVehiclesForSector(state.selectedSector);
     showModalBottomSheet(
       context: context,
@@ -1686,6 +1603,13 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                   ],
                 ),
                 const SizedBox(height: 8),
+                if (vehicles.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      _catalogError ?? 'No enabled vehicles with configured pricing are available for this service.',
+                    ),
+                  ),
                 ConstrainedBox(
                   constraints: BoxConstraints(
                     maxHeight: MediaQuery.of(context).size.height * 0.5,
@@ -1829,7 +1753,8 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                       ),
                     ),
                     Text(
-                      'Bike, Auto & E-Rickshaw are excluded. Tap to choose a cab.',
+                      _catalogError ??
+                          'Choose an enabled vehicle for this service.',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.red.shade700,
@@ -1994,6 +1919,12 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
   }
 
   Widget _buildConfirmButton(RideState state) {
+    if (_isLoadingFleet) {
+      return const SizedBox(
+        height: 52,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
     if (_isUnsupportedVehicle(state)) {
       return SizedBox(
         width: double.infinity,
@@ -2008,9 +1939,11 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
             ),
           ),
           icon: const Icon(Icons.directions_car_rounded, size: 20),
-          label: const Text(
-            'Select a Valid Passenger Vehicle',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+          label: Text(
+            state.selectedSector == 'passenger'
+                ? 'Select a Valid Passenger Vehicle'
+                : 'Select a Vehicle',
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
           ),
           onPressed: () => _showVehicleSelectionBottomSheet(state),
         ),

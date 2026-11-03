@@ -47,6 +47,22 @@ const config = { ...mapConfig, providerContentCaching: true, reversePrecision: 4
 const service = (p = provider(), c: MapCache = new Cache()) =>
   new CommonMapService(p, c, config, Date.now, () => {});
 describe('CommonMapService', () => {
+  it('describes remote customer GPS without treating it as booking coverage', async () => {
+    const p = provider();
+    const assertSupported = vi.fn(async (points: { latitude: number; longitude: number }[]) => {
+      if (points.length) throw new Error('Outside booking area');
+    });
+    const s = new CommonMapService(p, new Cache(), config, Date.now, () => {}, {
+      configured: true,
+      required: true,
+      assertSupported,
+    });
+    const remote = { latitude: 28.6139, longitude: 77.209 };
+    await expect(s.reverseGeocode(remote)).resolves.toMatchObject({ address: 'Provider address' });
+    expect(assertSupported).toHaveBeenCalledWith([]);
+    await expect(s.calculateRoute(remote, a)).rejects.toThrow('Outside booking area');
+    expect(p.calculateRoute).not.toHaveBeenCalled();
+  });
   it('reuses a result published between the initial cache miss and lock acquisition', async () => {
     const p = provider(),
       c = new Cache();

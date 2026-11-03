@@ -114,24 +114,30 @@ class RideRemoteDataSourceImpl implements RideRemoteDataSource {
     String? sector,
     String? category,
   }) async {
+    final bookingSector = sector == 'rental' || sector == 'rentals'
+        ? 'premium'
+        : sector ?? 'passenger';
     final response = await _dio.get(
-      sector == 'service' ? '/vehicles/catalog' : '/vehicles/fleet',
-      queryParameters: {
-        if (sector != null) 'sector': sector,
-        if (sector != 'service' && category != null) 'category': category,
-        if (sector == 'service') 'limit': 100,
-      },
+      '/vehicles/catalog',
+      queryParameters: {'sector': bookingSector, 'limit': 100},
     );
     final List list = response.data['data'] as List;
-    return list.map((e) {
-      final value = Map<String, dynamic>.from(e as Map);
-      if (sector == 'service') {
-        value['category'] = value['code'];
-        value['pricing'] = value['serviceFixedFare'];
-        value['range'] =
-            '${((value['serviceRadiusMeters'] as num?) ?? 25000) / 1000} km service radius';
-      }
-      return FleetVehicleModel.fromJson(value);
-    }).toList();
+    return list
+        .map((e) {
+          final value = Map<String, dynamic>.from(e as Map);
+          if (value['code'] is! String ||
+              (value['code'] as String).trim().isEmpty) {
+            throw const FormatException('Vehicle catalog code is missing');
+          }
+          value['category'] = value['code'];
+          if (bookingSector == 'service') {
+            value['pricing'] = value['serviceFixedFare'];
+            value['range'] =
+                '${((value['serviceRadiusMeters'] as num?) ?? 25000) / 1000} km service radius';
+          }
+          return FleetVehicleModel.fromJson(value);
+        })
+        .where((v) => category == null || v.category == category)
+        .toList();
   }
 }

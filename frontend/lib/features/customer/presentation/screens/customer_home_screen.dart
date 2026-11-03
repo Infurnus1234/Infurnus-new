@@ -13,6 +13,8 @@ import '../../../../shared/widgets/infurnus_empty_state.dart';
 import '../../../../shared/widgets/infurnus_skeleton.dart';
 import '../../data/models/ride_model.dart' as model;
 import '../providers/ride_provider.dart';
+import '../providers/booking_catalog_provider.dart';
+import '../../../../shared/widgets/vehicle_visual_image.dart';
 import '../providers/ride_use_case_providers.dart';
 import '../../data/models/fleet_vehicle_model.dart';
 import '../widgets/vehicle_category_visual.dart';
@@ -64,7 +66,6 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
   // Green is strictly reserved for success states, confirmations, and active indicators
   static const Color successGreen = Color(0xFF16A34A);
   static const Color serviceRed = Color(0xFFDC2626);
-  static const Color goldAccent = Color(0xFFCA8A04);
 
   @override
   void initState() {
@@ -804,309 +805,91 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     );
   }
 
-  void _showSeeAllVehiclesModal(
+  Widget _buildConfiguredFleetSection(
     BuildContext context,
+    String sector,
     String title,
-    List<_VehicleCategoryItem> vehicles,
+    String subtitle,
+    String route,
   ) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: surfaceWhite,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w900,
-                      color: textBlack,
-                    ),
+    final catalog = ref.watch(bookingCatalogProvider(sector));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader(
+          title: title,
+          subtitle: subtitle,
+          onSeeAll: () => context.push(route),
+        ),
+        const SizedBox(height: 12),
+        catalog.when(
+          loading: () => const LinearProgressIndicator(),
+          error: (_, _) => TextButton(
+            onPressed: () => ref.invalidate(bookingCatalogProvider(sector)),
+            child: const Text('Unable to load vehicles. Tap to retry.'),
+          ),
+          data: (items) => items.isEmpty
+              ? const Text('No vehicles are configured for this service yet.')
+              : SizedBox(
+                  height: 130,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: items.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 12),
+                    itemBuilder: (context, index) {
+                      final vehicle = items[index];
+                      return _buildHorizontalVehicleCard(
+                        item: _VehicleCategoryItem(
+                          title: vehicle.displayName,
+                          capacity: 'Select pickup',
+                          rate: 'Route estimate',
+                          eta: 'Check availability',
+                          icon: sector == 'logistics'
+                              ? Icons.local_shipping_rounded
+                              : Icons.directions_car_rounded,
+                          category: sector == 'logistics'
+                              ? VehicleCategoryType.logistics
+                              : sector == 'premium'
+                              ? VehicleCategoryType.premium
+                              : VehicleCategoryType.rides,
+                          assetImagePath: VehicleVisualImage.getAssetPath(
+                            vehicle.displayName,
+                            vehicle.category,
+                          ),
+                        ),
+                        onTap: () {
+                          ref.read(rideProvider.notifier).selectSector(sector);
+                          ref
+                              .read(rideProvider.notifier)
+                              .selectTier(vehicle.category);
+                          context.push('/ride-booking');
+                        },
+                      );
+                    },
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded, color: textBlack),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Complete available vehicle list:',
-                style: TextStyle(fontSize: 13, color: textSecondary),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                height: 380,
-                child: ListView.separated(
-                  itemCount: vehicles.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (context, index) {
-                    final item = vehicles[index];
-                    return ListTile(
-                      tileColor: searchBg,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        side: const BorderSide(color: cardBorder),
-                      ),
-                      leading: Container(
-                        width: 44,
-                        height: 44,
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: surfaceWhite,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: item.assetImagePath != null
-                            ? Image.asset(
-                                item.assetImagePath!,
-                                fit: BoxFit.contain,
-                                errorBuilder: (_, __, ___) => Icon(
-                                  item.icon,
-                                  color: buttonBlack,
-                                  size: 22,
-                                ),
-                              )
-                            : Icon(item.icon, color: buttonBlack, size: 22),
-                      ),
-                      title: Text(
-                        item.title,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: textBlack,
-                        ),
-                      ),
-                      subtitle: Text(
-                        '${item.capacity} • ${item.eta}',
-                        style: const TextStyle(
-                          color: textSecondary,
-                          fontSize: 12,
-                        ),
-                      ),
-                      trailing: const Icon(
-                        Icons.arrow_forward_ios_rounded,
-                        size: 14,
-                        color: textBlack,
-                      ),
-                      onTap: () {
-                        Navigator.pop(context);
-                        final sector =
-                            item.category == VehicleCategoryType.logistics
-                            ? 'logistics'
-                            : (item.category == VehicleCategoryType.emergency
-                                  ? 'service'
-                                  : 'passenger');
-                        ref.read(rideProvider.notifier).selectSector(sector);
-                        ref
-                            .read(rideProvider.notifier)
-                            .selectTier(item.title.toLowerCase());
-                        context.push('/ride-booking');
-                      },
-                    );
-                  },
                 ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  String _passengerTierSlug(String title) {
-    switch (title.toLowerCase().trim()) {
-      case 'innova crysta':
-        return 'innova';
-      case 'force traveller':
-        return 'traveller';
-      default:
-        return title.toLowerCase().trim();
-    }
-  }
-
-  String _logisticsTierSlug(String title) {
-    switch (title.toLowerCase().trim()) {
-      case 'piaggio ape':
-        return 'piaggio_ape';
-      case 'tata magic':
-        return 'tata_magic';
-      case '207 cargo':
-      case '207 cargo heavy':
-        return 'cargo_207';
-      case '407 cargo':
-        return 'cargo_407';
-      default:
-        return title.toLowerCase().replaceAll(' ', '_');
-    }
-  }
-
-  Widget _buildPassengerSection(BuildContext context) {
-    const items = [
-      _VehicleCategoryItem(
-        title: 'Hatchback',
-        capacity: '4 seater',
-        rate: 'Route Estimate',
-        eta: 'Instant',
-        icon: Icons.directions_car_rounded,
-        category: VehicleCategoryType.rides,
-        assetImagePath: 'assets/images/hatchback_clean.jpg',
-      ),
-      _VehicleCategoryItem(
-        title: 'Sedan',
-        capacity: '4 seater',
-        rate: 'Route Estimate',
-        eta: 'Instant',
-        icon: Icons.directions_car_rounded,
-        category: VehicleCategoryType.rides,
-        assetImagePath: 'assets/images/sedan_clean.jpg',
-      ),
-      _VehicleCategoryItem(
-        title: 'Innova Crysta',
-        capacity: '6-7 seater',
-        rate: 'Route Estimate',
-        eta: 'Instant',
-        icon: Icons.directions_car_filled_rounded,
-        category: VehicleCategoryType.premium,
-        assetImagePath: 'assets/images/innova_crysta_clean.jpg',
-      ),
-      _VehicleCategoryItem(
-        title: 'Winger',
-        capacity: '9-12 seater',
-        rate: 'Route Estimate',
-        eta: 'Scheduled',
-        icon: Icons.directions_bus_rounded,
-        category: VehicleCategoryType.rides,
-        assetImagePath: 'assets/images/winger_clean.jpg',
-      ),
-      _VehicleCategoryItem(
-        title: 'Force Traveller',
-        capacity: '12 seater',
-        rate: 'Route Estimate',
-        eta: 'Scheduled',
-        icon: Icons.airport_shuttle_rounded,
-        category: VehicleCategoryType.rides,
-        assetImagePath: 'assets/images/force_traveller_clean.jpg',
-      ),
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionHeader(
-          title: 'Passenger Rides',
-          subtitle: 'Everyday rides across the city',
-          onSeeAll: () => context.push('/passenger-rides'),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: 130,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: items.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
-            itemBuilder: (context, index) {
-              final item = items[index];
-              return _buildHorizontalVehicleCard(
-                item: item,
-                onTap: () {
-                  ref.read(rideProvider.notifier).selectSector('passenger');
-                  ref
-                      .read(rideProvider.notifier)
-                      .selectTier(_passengerTierSlug(item.title));
-                  context.push('/ride-booking');
-                },
-              );
-            },
-          ),
         ),
       ],
     );
   }
 
-  Widget _buildLogisticsSection(BuildContext context) {
-    const items = [
-      _VehicleCategoryItem(
-        title: 'Piaggio Ape',
-        capacity: 'Up to 500 kg',
-        rate: 'Server Rate',
-        eta: 'On-demand',
-        icon: Icons.local_shipping_outlined,
-        category: VehicleCategoryType.logistics,
-        assetImagePath: 'assets/images/piaggio_ape_yellow.png',
-      ),
-      _VehicleCategoryItem(
-        title: 'Tata Magic',
-        capacity: 'Up to 750 kg',
-        rate: 'Server Rate',
-        eta: 'On-demand',
-        icon: Icons.local_shipping_rounded,
-        category: VehicleCategoryType.logistics,
-        assetImagePath: 'assets/images/tata_magic_cream.png',
-      ),
-      _VehicleCategoryItem(
-        title: '207 Cargo',
-        capacity: 'Up to 1500 kg',
-        rate: 'Server Rate',
-        eta: 'On-demand',
-        icon: Icons.local_shipping_rounded,
-        category: VehicleCategoryType.logistics,
-        assetImagePath: 'assets/images/cargo_207_heavy.png',
-      ),
-      _VehicleCategoryItem(
-        title: '407 Cargo',
-        capacity: 'Up to 2500 kg',
-        rate: 'Server Rate',
-        eta: 'On-demand',
-        icon: Icons.local_shipping_rounded,
-        category: VehicleCategoryType.logistics,
-        assetImagePath: 'assets/images/cargo_407.jpg',
-      ),
-    ];
+  Widget _buildPassengerSection(BuildContext context) =>
+      _buildConfiguredFleetSection(
+        context,
+        'passenger',
+        'Passenger Rides',
+        'Everyday rides across Bihar',
+        '/passenger-rides',
+      );
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionHeader(
-          title: 'Logistics',
-          subtitle: 'Move goods with muscle',
-          onSeeAll: () =>
-              _showSeeAllVehiclesModal(context, 'Logistics & Cargo', items),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: 130,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: items.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
-            itemBuilder: (context, index) {
-              final item = items[index];
-              return _buildHorizontalVehicleCard(
-                item: item,
-                onTap: () {
-                  ref.read(rideProvider.notifier).selectSector('logistics');
-                  ref
-                      .read(rideProvider.notifier)
-                      .selectTier(_logisticsTierSlug(item.title));
-                  context.push('/ride-booking');
-                },
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
+  Widget _buildLogisticsSection(BuildContext context) =>
+      _buildConfiguredFleetSection(
+        context,
+        'logistics',
+        'Logistics',
+        'Move goods across Bihar',
+        '/logistics',
+      );
 
   Widget _buildServiceFleetSection(BuildContext context) {
     final catalog = ref.watch(serviceCatalogProvider);
@@ -1176,237 +959,14 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     );
   }
 
-  Widget _buildConciergeFleetSection(BuildContext context) {
-    const luxuryVehicles = [
-      _LuxuryVehicleItem(
-        title: 'Innova Crysta',
-        badge: 'Executive',
-        subtitle: 'Flagship comfort & space',
-        price: 'Chauffeur + Fuel',
-        assetImagePath: 'assets/images/innova_crysta_clean.jpg',
-      ),
-      _LuxuryVehicleItem(
-        title: 'Force Traveller',
-        badge: 'Luxury Van',
-        subtitle: 'VIP group executive transit',
-        price: 'Chauffeur + Fuel',
-        assetImagePath: 'assets/images/force_traveller_clean.jpg',
-      ),
-      _LuxuryVehicleItem(
-        title: 'Toyota Fortuner',
-        badge: 'Executive SUV',
-        subtitle: 'Commanding road presence',
-        price: 'Chauffeur + Fuel',
-        assetImagePath: 'assets/images/fortuner_visual.jpg',
-      ),
-      _LuxuryVehicleItem(
-        title: 'Scorpio N',
-        badge: 'Rugged SUV',
-        subtitle: 'The Big Daddy of SUVs',
-        price: 'Chauffeur + Fuel',
-        assetImagePath: 'assets/images/scorpio_n_white.png',
-      ),
-      _LuxuryVehicleItem(
-        title: 'Mahindra Thar',
-        badge: 'Off-road 4x4',
-        subtitle: 'Iconic all-terrain adventure',
-        price: 'Chauffeur + Fuel',
-        assetImagePath: 'assets/images/thar_visual.webp',
-      ),
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFEF9C3),
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: const Color(0xFFFDE047)),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('👑 ', style: TextStyle(fontSize: 10)),
-                      Text(
-                        'PREMIUM',
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w900,
-                          color: goldAccent,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'The Concierge Fleet',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                    color: textBlack,
-                  ),
-                ),
-                const Text(
-                  'Luxury on-demand • Sky, road, off-road',
-                  style: TextStyle(fontSize: 12, color: textSecondary),
-                ),
-              ],
-            ),
-            GestureDetector(
-              onTap: () => context.push('/rentals'),
-              child: const Text(
-                'See all →',
-                style: TextStyle(
-                  color: textBlack,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-        Column(
-          children: luxuryVehicles
-              .map(
-                (item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _buildLuxuryVehicleCard(context, item),
-                ),
-              )
-              .toList(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLuxuryVehicleCard(
-    BuildContext context,
-    _LuxuryVehicleItem item,
-  ) {
-    return _PressableScaleCard(
-      onTap: () => context.push('/rentals'),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: surfaceWhite,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: cardBorder),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                width: 80,
-                height: 60,
-                color: Colors.white,
-                child: item.assetImagePath != null
-                    ? Image.asset(
-                        item.assetImagePath!,
-                        width: 80,
-                        height: 60,
-                        fit: BoxFit.contain,
-                      )
-                    : const VehicleCategoryVisual(
-                        category: VehicleCategoryType.premium,
-                        size: 60,
-                        borderRadius: 12,
-                      ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: searchBg,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      item.badge,
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: textBlack,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    item.title,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w900,
-                      color: textBlack,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    item.subtitle,
-                    style: const TextStyle(fontSize: 12, color: textSecondary),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    item.price,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      color: textBlack,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () => context.push('/rentals'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: buttonBlack,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
-                ),
-                elevation: 0,
-              ),
-              child: const Text(
-                'Book →',
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget _buildConciergeFleetSection(BuildContext context) =>
+      _buildConfiguredFleetSection(
+        context,
+        'premium',
+        'Premium & Rentals',
+        'Book in a configured service city',
+        '/rentals',
+      );
 
   Widget _buildSectionHeader({
     required String title,
@@ -1878,22 +1438,6 @@ class _VehicleCategoryItem {
     required this.eta,
     required this.icon,
     required this.category,
-    this.assetImagePath,
-  });
-}
-
-class _LuxuryVehicleItem {
-  final String title;
-  final String badge;
-  final String subtitle;
-  final String price;
-  final String? assetImagePath;
-
-  const _LuxuryVehicleItem({
-    required this.title,
-    required this.badge,
-    required this.subtitle,
-    required this.price,
     this.assetImagePath,
   });
 }

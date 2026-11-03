@@ -258,7 +258,9 @@ export class RideService {
       throw new AppError('RIDE_MAP_UNAVAILABLE', 'Ride location is unavailable', 503);
     const snapshot = await this.repository.getRideMapSnapshot(id, userId, 'user');
     if (!snapshot) throw new AppError('RIDE_NOT_FOUND', 'Ride not found', 404);
-    await this.area.assertSupported([location, snapshot.ride.pickup, snapshot.ride.destination]);
+    // The customer may be booking for someone else from outside the service area.
+    // Their live position is telemetry, never a booking endpoint or dispatch origin.
+    await this.area.assertSupported([snapshot.ride.pickup, snapshot.ride.destination]);
     const value = {
       latitude: location.latitude,
       longitude: location.longitude,
