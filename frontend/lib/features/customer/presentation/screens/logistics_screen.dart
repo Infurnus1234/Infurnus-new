@@ -15,38 +15,38 @@ class LogisticsScreen extends ConsumerStatefulWidget {
 class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
   String _selectedFilter = 'All';
 
-  final List<String> _filters = ['All', '3-Wheeler', 'Mini Truck', 'Truck'];
+  final List<String> _filters = ['All', '3-Wheeler', 'Tata Magic', '207', '407'];
 
   final List<Map<String, dynamic>> _vehicles = [
     {
-      'title': 'Piaggio Ape',
+      'title': '3-Wheeler (Goods)',
       'category': 'piaggio_ape',
       'filter': '3-Wheeler',
-      'subtitle': 'Up to 700 kg • City delivery',
+      'subtitle': 'Up to 500 kg • City delivery',
       'image': 'assets/images/piaggio_ape_yellow.png',
       'fallbackIcon': Icons.electric_rickshaw_rounded,
     },
     {
       'title': 'Tata Magic',
       'category': 'tata_magic',
-      'filter': 'Mini Truck',
-      'subtitle': 'Up to 1700 kg • Goods transport',
+      'filter': 'Tata Magic',
+      'subtitle': 'Up to 750 kg • Goods transport',
       'image': 'assets/images/tata_magic_cream.png',
       'fallbackIcon': Icons.local_shipping_rounded,
     },
     {
-      'title': 'Pickup 207',
+      'title': '207 Cargo',
       'category': 'cargo_207',
-      'filter': 'Mini Truck',
-      'subtitle': 'Up to 2500 kg • Medium cargo',
-      'image': 'assets/images/mahindra_207_white.png',
+      'filter': '207',
+      'subtitle': 'Up to 1500 kg • Medium cargo',
+      'image': 'assets/images/cargo_207_heavy.png',
       'fallbackIcon': Icons.local_shipping_rounded,
     },
     {
       'title': '407 Cargo',
       'category': 'cargo_407',
-      'filter': 'Truck',
-      'subtitle': 'Up to 4000 kg • Heavy cargo',
+      'filter': '407',
+      'subtitle': 'Up to 2500 kg • Heavy cargo',
       'image': 'assets/images/tata_407_beige.png',
       'fallbackIcon': Icons.local_shipping_rounded,
     },

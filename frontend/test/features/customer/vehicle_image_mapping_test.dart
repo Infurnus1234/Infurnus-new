@@ -7,15 +7,19 @@ void main() {
     test('Passenger Rides exact mappings', () {
       expect(
         VehicleVisualImage.getAssetPath('Hatchback', 'rides'),
-        'assets/images/hatchback.jpg',
+        'assets/images/hatchback_clean.jpg',
+      );
+      expect(
+        VehicleVisualImage.getAssetPath('Mini Cab', 'rides'),
+        'assets/images/hatchback_clean.jpg',
       );
       expect(
         VehicleVisualImage.getAssetPath('Baleno', 'rides'),
-        'assets/images/hatchback.jpg',
+        'assets/images/hatchback_clean.jpg',
       );
       expect(
         VehicleVisualImage.getAssetPath('Sedan', 'passenger'),
-        'assets/images/sedan.jpg',
+        'assets/images/sedan_clean.jpg',
       );
       expect(
         VehicleVisualImage.getAssetPath('Innova Crysta', 'rides'),
@@ -41,12 +45,16 @@ void main() {
 
     test('Logistics exact mappings', () {
       expect(
+        VehicleVisualImage.getAssetPath('3-Wheeler (Goods)', 'logistics'),
+        'assets/images/piaggio_ape_yellow.png',
+      );
+      expect(
         VehicleVisualImage.getAssetPath('Tata Magic', 'logistics'),
         'assets/images/tata_magic_cream.png',
       );
       expect(
         VehicleVisualImage.getAssetPath('207 Cargo', 'logistics'),
-        'assets/images/cargo_207_normal.png',
+        'assets/images/cargo_207_heavy.png',
       );
       expect(
         VehicleVisualImage.getAssetPath('207 Heavy Cargo', 'logistics'),
@@ -54,11 +62,11 @@ void main() {
       );
       expect(
         VehicleVisualImage.getAssetPath('407 Cargo', 'logistics'),
-        'assets/images/cargo_407.jpg',
+        'assets/images/tata_407_beige.png',
       );
       expect(
         VehicleVisualImage.getAssetPath('Mini Truck', 'logistics'),
-        'assets/images/mini_truck.jpg',
+        'assets/images/tata_magic_cream.png',
       );
       expect(
         VehicleVisualImage.getAssetPath('E-Rickshaw', 'logistics'),

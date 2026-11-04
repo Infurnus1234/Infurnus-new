@@ -918,6 +918,13 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
 
   String _passengerTierSlug(String title) {
     switch (title.toLowerCase().trim()) {
+      case 'mini cab':
+      case 'hatchback':
+        return 'hatchback';
+      case 'sedan':
+        return 'sedan';
+      case 'suv':
+        return 'suv';
       case 'innova crysta':
         return 'innova';
       case 'force traveller':
@@ -929,14 +936,20 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
 
   String _logisticsTierSlug(String title) {
     switch (title.toLowerCase().trim()) {
+      case '3-wheeler (goods)':
+      case '3-wheeler':
       case 'piaggio ape':
         return 'piaggio_ape';
       case 'tata magic':
+      case 'magic':
+      case 'mini truck':
         return 'tata_magic';
       case '207 cargo':
       case '207 cargo heavy':
+      case 'pickup 207':
         return 'cargo_207';
       case '407 cargo':
+      case '407 cargo heavy':
         return 'cargo_407';
       default:
         return title.toLowerCase().replaceAll(' ', '_');
@@ -963,7 +976,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
   Widget _buildPassengerSection(BuildContext context) {
     const items = [
       _VehicleCategoryItem(
-        title: 'Hatchback',
+        title: 'Mini Cab',
         capacity: '4 seater',
         rate: 'Route Estimate',
         eta: 'Instant',
@@ -981,13 +994,13 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         assetImagePath: 'assets/images/sedan_clean.jpg',
       ),
       _VehicleCategoryItem(
-        title: 'Innova Crysta',
+        title: 'SUV',
         capacity: '6-7 seater',
         rate: 'Route Estimate',
         eta: 'Instant',
         icon: Icons.directions_car_filled_rounded,
-        category: VehicleCategoryType.premium,
-        assetImagePath: 'assets/images/innova_crysta_clean.jpg',
+        category: VehicleCategoryType.rides,
+        assetImagePath: 'assets/images/suv_green_white.png',
       ),
       _VehicleCategoryItem(
         title: 'Winger',
@@ -1046,11 +1059,11 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
   Widget _buildLogisticsSection(BuildContext context) {
     const items = [
       _VehicleCategoryItem(
-        title: 'Piaggio Ape',
+        title: '3-Wheeler (Goods)',
         capacity: 'Up to 500 kg',
         rate: 'Server Rate',
         eta: 'On-demand',
-        icon: Icons.local_shipping_outlined,
+        icon: Icons.electric_rickshaw_rounded,
         category: VehicleCategoryType.logistics,
         assetImagePath: 'assets/images/piaggio_ape_yellow.png',
       ),
@@ -1079,7 +1092,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         eta: 'On-demand',
         icon: Icons.local_shipping_rounded,
         category: VehicleCategoryType.logistics,
-        assetImagePath: 'assets/images/cargo_407.jpg',
+        assetImagePath: 'assets/images/tata_407_beige.png',
       ),
     ];
 

@@ -194,14 +194,14 @@ void main() {
           tester.view.resetDevicePixelRatio();
         });
 
-        // Logistics retains cargo vehicles (Piaggio Ape, Tata Magic, etc.)
+        // Logistics retains cargo vehicles (3-Wheeler (Goods), Tata Magic, etc.)
         await tester.pumpWidget(
           const ProviderScope(child: MaterialApp(home: LogisticsScreen())),
         );
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 100));
-        expect(find.text('Piaggio Ape'), findsOneWidget);
-        expect(find.text('Tata Magic'), findsOneWidget);
+        expect(find.text('3-Wheeler (Goods)'), findsOneWidget);
+        expect(find.text('Tata Magic'), findsAtLeast(1));
       },
     );
   });

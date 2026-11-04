@@ -41,6 +41,13 @@ class VehicleVisualImage extends StatelessWidget {
         (key.contains('rickshaw') && key.contains('electric'))) {
       return 'assets/images/e_rickshaw_green_white.png';
     }
+    if (key.contains('3-wheeler') ||
+        key.contains('three_wheeler') ||
+        key.contains('3 wheeler') ||
+        key.contains('ape') ||
+        key.contains('piaggio')) {
+      return 'assets/images/piaggio_ape_yellow.png';
+    }
     if (key.contains('auto') || key.contains('rickshaw')) {
       return 'assets/images/auto_rickshaw.png';
     }
@@ -78,37 +85,6 @@ class VehicleVisualImage extends StatelessWidget {
         key.contains('tow')) {
       return 'assets/images/towing_van.jpg';
     }
-    if (key.contains('mini truck') || key.contains('mini_truck')) {
-      return 'assets/images/mini_truck.jpg';
-    }
-    if (key.contains('407')) {
-      return 'assets/images/cargo_407.jpg';
-    }
-    if (key.contains('mini / commercial') ||
-        key.contains('mini commercial') ||
-        key.contains('commercial') ||
-        key.contains('ape')) {
-      return 'assets/images/mini_commercial.jpg';
-    }
-    if (key.contains('sedan')) {
-      return 'assets/images/sedan.jpg';
-    }
-    if (key.contains('tata magic') || key.contains('magic')) {
-      return 'assets/images/tata_magic_cream.png';
-    }
-    if (key.contains('207') &&
-        (key.contains('heavy') || key.contains('truck'))) {
-      return 'assets/images/cargo_207_heavy.png';
-    }
-    if (key.contains('207')) {
-      return 'assets/images/cargo_207_normal.png';
-    }
-    if (key.contains('pickup')) {
-      return 'assets/images/cargo_407.jpg';
-    }
-    if (key.contains('truck') || key.contains('logistics')) {
-      return 'assets/images/mini_truck.jpg';
-    }
     if (key.contains('ambulance') || key.contains('emergency')) {
       return 'assets/images/ambulance_van.png';
     }
@@ -120,10 +96,36 @@ class VehicleVisualImage extends StatelessWidget {
         key.contains('van')) {
       return 'assets/images/force_urbania.jpg';
     }
-    if (key.contains('hatchback') ||
+    if (key.contains('407')) {
+      return 'assets/images/tata_407_beige.png';
+    }
+    if (key.contains('tata magic') ||
+        key.contains('magic') ||
+        key.contains('mini truck') ||
+        key.contains('mini_truck')) {
+      return 'assets/images/tata_magic_cream.png';
+    }
+    if (key.contains('207') &&
+        (key.contains('heavy') || key.contains('truck'))) {
+      return 'assets/images/cargo_207_heavy.png';
+    }
+    if (key.contains('207')) {
+      return 'assets/images/cargo_207_heavy.png';
+    }
+    if (key.contains('mini / commercial') ||
+        key.contains('mini commercial') ||
+        key.contains('commercial')) {
+      return 'assets/images/mini_commercial.jpg';
+    }
+    if (key.contains('mini cab') ||
+        key.contains('mini_cab') ||
+        key.contains('hatchback') ||
         key.contains('compact') ||
         key.contains('baleno')) {
-      return 'assets/images/hatchback.jpg';
+      return 'assets/images/hatchback_clean.jpg';
+    }
+    if (key.contains('sedan')) {
+      return 'assets/images/sedan_clean.jpg';
     }
     if (key.contains('suv')) {
       return 'assets/images/scorpio_n_white.png';
