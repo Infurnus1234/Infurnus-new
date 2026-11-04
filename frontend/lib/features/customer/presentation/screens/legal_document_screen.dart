@@ -219,7 +219,7 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
                   ),
                   const SizedBox(height: 10),
                   _buildGrievanceRow('Officer', 'Legal Compliance Officer'),
-                  _buildGrievanceRow('Email', 'support@infurnus.com'),
+                  _buildGrievanceRow('Email', 'support@infurnuslogistics.com'),
                   _buildGrievanceRow(
                     'Address',
                     'INFURNUS Logistics Head Office, India',

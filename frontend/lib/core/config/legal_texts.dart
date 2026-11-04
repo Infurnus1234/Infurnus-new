@@ -52,7 +52,7 @@ We do not sell personal data to third parties for marketing purposes.
 
 6. Grievance Officer
 Grievance Officer: Legal Compliance Officer
-Email: support@infurnus.com
+Email: support@infurnuslogistics.com
 Address: INFURNUS Logistics Head Office, India
 Response Timeline: Acknowledgment within 24 hours; resolution within 15 days.
 ''';
@@ -84,7 +84,7 @@ Users and Vehicle Partners shall not use the Platform to transport contraband, n
 7. Dispute Resolution & Grievance Officer
 Disputes between Users and Vehicle Partners should first be raised through the in-app support mechanism.
 Grievance Officer: Legal Compliance Officer
-Email: support@infurnus.com
+Email: support@infurnuslogistics.com
 ''';
 
   static const String contentPolicy = '''
@@ -108,7 +108,7 @@ INFURNUS prohibits content that is harmful, harassing, defamatory, obscene, inva
 4. Grievance Redressal
 In compliance with Rule 3(2) of the IT Rules, 2021:
 Grievance Officer: Legal Compliance Officer
-Email: support@infurnus.com
+Email: support@infurnuslogistics.com
 Acknowledgment: within 24 hours
 Resolution: within 15 days
 ''';

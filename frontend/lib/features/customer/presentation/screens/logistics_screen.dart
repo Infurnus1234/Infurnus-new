@@ -15,7 +15,13 @@ class LogisticsScreen extends ConsumerStatefulWidget {
 class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
   String _selectedFilter = 'All';
 
-  final List<String> _filters = ['All', '3-Wheeler', 'Tata Magic', '207', '407'];
+  final List<String> _filters = [
+    'All',
+    '3-Wheeler',
+    'Tata Magic',
+    '207',
+    '407',
+  ];
 
   final List<Map<String, dynamic>> _vehicles = [
     {

@@ -184,25 +184,24 @@ void main() {
       },
     );
 
-    testWidgets(
-      'Other sectors (Logistics, Emergency, Rentals) are unaffected',
-      (tester) async {
-        tester.view.physicalSize = const Size(800, 1600);
-        tester.view.devicePixelRatio = 1.0;
-        addTearDown(() {
-          tester.view.resetPhysicalSize();
-          tester.view.resetDevicePixelRatio();
-        });
+    testWidgets('Other sectors (Logistics, Emergency, Rentals) are unaffected', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
 
-        // Logistics retains cargo vehicles (3-Wheeler (Goods), Tata Magic, etc.)
-        await tester.pumpWidget(
-          const ProviderScope(child: MaterialApp(home: LogisticsScreen())),
-        );
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 100));
-        expect(find.text('3-Wheeler (Goods)'), findsOneWidget);
-        expect(find.text('Tata Magic'), findsAtLeast(1));
-      },
-    );
+      // Logistics retains cargo vehicles (3-Wheeler (Goods), Tata Magic, etc.)
+      await tester.pumpWidget(
+        const ProviderScope(child: MaterialApp(home: LogisticsScreen())),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.text('3-Wheeler (Goods)'), findsOneWidget);
+      expect(find.text('Tata Magic'), findsAtLeast(1));
+    });
   });
 }

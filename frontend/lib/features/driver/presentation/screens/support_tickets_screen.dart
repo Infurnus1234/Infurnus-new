@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_button.dart';
@@ -225,137 +226,157 @@ class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen> {
             const InfurnusLoader(message: 'Loading support tickets...'),
         error: (err, _) => Center(child: Text('Error: $err')),
         data: (tickets) {
-          if (tickets.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.support_agent, size: 64, color: Colors.grey[600]),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'No Support Tickets',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Need assistance? Tap "New Ticket" to contact support.',
-                    style: TextStyle(color: Colors.grey[400], fontSize: 13),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return ListView.separated(
+          return ListView(
             padding: const EdgeInsets.all(20),
-            itemCount: tickets.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
-            itemBuilder: (context, idx) {
-              final ticket = tickets[idx];
-              final isResolved =
-                  ticket.status == 'RESOLVED' || ticket.status == 'CLOSED';
-
-              return InfurnusCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          ticket.ticketNumber,
-                          style: const TextStyle(
-                            color: AppColors.primaryGreen,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
+            children: [
+              _buildEmailSupportBanner(context),
+              const SizedBox(height: 16),
+              if (tickets.isEmpty) ...[
+                const SizedBox(height: 32),
+                Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.support_agent,
+                        size: 64,
+                        color: Colors.grey[600],
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'No Support Tickets',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Need assistance? Tap "New Ticket" to contact support or email support@infurnuslogistics.com.',
+                        style: TextStyle(color: Colors.grey[400], fontSize: 13),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              ] else ...[
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: tickets.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (context, idx) {
+                    final ticket = tickets[idx];
+                    final isResolved =
+                        ticket.status == 'RESOLVED' ||
+                        ticket.status == 'CLOSED';
+
+                    return InfurnusCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                ticket.ticketNumber,
+                                style: const TextStyle(
+                                  color: AppColors.primaryGreen,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isResolved
+                                      ? AppColors.primaryGreen.withValues(
+                                          alpha: 0.15,
+                                        )
+                                      : Colors.amber.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: isResolved
+                                        ? AppColors.primaryGreen
+                                        : Colors.amber,
+                                    width: 0.8,
+                                  ),
+                                ),
+                                child: Text(
+                                  ticket.status,
+                                  style: TextStyle(
+                                    color: isResolved
+                                        ? AppColors.primaryGreen
+                                        : Colors.amber,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          decoration: BoxDecoration(
-                            color: isResolved
-                                ? AppColors.primaryGreen.withValues(alpha: 0.15)
-                                : Colors.amber.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: isResolved
-                                  ? AppColors.primaryGreen
-                                  : Colors.amber,
-                              width: 0.8,
-                            ),
-                          ),
-                          child: Text(
-                            ticket.status,
-                            style: TextStyle(
-                              color: isResolved
-                                  ? AppColors.primaryGreen
-                                  : Colors.amber,
-                              fontSize: 10,
+                          const SizedBox(height: 8),
+                          Text(
+                            ticket.subject,
+                            style: const TextStyle(
+                              fontSize: 15,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      ticket.subject,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      ticket.message,
-                      style: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 13,
-                        height: 1.3,
-                      ),
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.06),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            ticket.category,
-                            style: TextStyle(
-                              color: Colors.grey[300],
-                              fontSize: 11,
-                            ),
-                          ),
-                        ),
-                        if (ticket.createdAt != null)
+                          const SizedBox(height: 4),
                           Text(
-                            ticket.createdAt!.toLocal().toString().split(
-                              '.',
-                            )[0],
+                            ticket.message,
                             style: TextStyle(
-                              color: Colors.grey[500],
-                              fontSize: 11,
+                              color: Colors.grey[400],
+                              fontSize: 13,
+                              height: 1.3,
                             ),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                      ],
-                    ),
-                  ],
+                          const SizedBox(height: 10),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.06),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  ticket.category,
+                                  style: TextStyle(
+                                    color: Colors.grey[300],
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ),
+                              if (ticket.createdAt != null)
+                                Text(
+                                  ticket.createdAt!.toLocal().toString().split(
+                                    '.',
+                                  )[0],
+                                  style: TextStyle(
+                                    color: Colors.grey[500],
+                                    fontSize: 11,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
-              );
-            },
+              ],
+            ],
           );
         },
       ),
@@ -380,6 +401,78 @@ class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildEmailSupportBanner(BuildContext context) {
+    const supportEmail = 'support@infurnuslogistics.com';
+    return InfurnusCard(
+      onTap: () async {
+        final emailUri = Uri(
+          scheme: 'mailto',
+          path: supportEmail,
+          queryParameters: {'subject': 'INFURNUS Driver Support Request'},
+        );
+        try {
+          if (await launchUrl(emailUri, mode: LaunchMode.externalApplication)) {
+            return;
+          }
+        } catch (_) {}
+
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Opening email client (mailto:$supportEmail)...'),
+          ),
+        );
+      },
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.primaryGreen.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.email_outlined,
+              color: AppColors.primaryGreen,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Email Driver Support',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                SelectableText(
+                  supportEmail,
+                  style: const TextStyle(
+                    color: AppColors.primaryGreen,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Icon(
+            Icons.open_in_new_rounded,
+            size: 16,
+            color: Color(0xFF9CA3AF),
+          ),
+        ],
       ),
     );
   }
