@@ -43,7 +43,7 @@ void main() {
       ..addFont(
         Future.value(
           ByteData.sublistView(
-            File('test/fixtures/fonts/Roboto-Regular.ttf').readAsBytesSync(),
+            File('test/fixtures/fonts/roboto-regular.ttf').readAsBytesSync(),
           ),
         ),
       );
