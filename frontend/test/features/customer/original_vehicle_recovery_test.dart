@@ -39,13 +39,11 @@ void main() {
   ) as List;
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
   setUpAll(() async {
-    final fontDirectory =
-        '${File(Platform.resolvedExecutable).parent.parent.parent.path}/material_fonts';
     final font = FontLoader('Roboto')
       ..addFont(
         Future.value(
           ByteData.sublistView(
-            File('$fontDirectory/roboto-regular.ttf').readAsBytesSync(),
+            File('test/fixtures/fonts/Roboto-Regular.ttf').readAsBytesSync(),
           ),
         ),
       );
