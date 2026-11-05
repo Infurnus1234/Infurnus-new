@@ -1431,7 +1431,7 @@ export class PostgresProviderOperationsRepository {
     await this.driverAccess(userId, role, profileId);
     return (
       await this.pool.query(
-        `SELECT dp.id,dp.user_id AS "userId",u.first_name AS "firstName",u.last_name AS "lastName",u.phone,u.email,
+        `SELECT provider_public_id(dp.user_id) AS "publicId",dp.id,dp.user_id AS "userId",u.first_name AS "firstName",u.last_name AS "lastName",u.phone,u.email,
        dp.license_number AS "licenseNumber",dp.license_expiry AS "licenseExpiry",dp.verification_status AS "verificationStatus",dp.availability_status AS availability,
        dp.city,dp.state,dp.pin_code AS "postalCode",dp.emergency_contact_name AS "emergencyContactName",dp.emergency_contact_phone AS "emergencyContactPhone",
        dp.emergency_contact_relationship AS "emergencyContactRelationship",dp.active_vehicle_id AS "vehicleId"

@@ -5,6 +5,7 @@ import '../../../../core/errors/support_error_message.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/infurnus_button.dart';
@@ -318,6 +319,11 @@ class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: _buildEmailSupportBanner(context),
+                  ),
+                  const SizedBox(height: 16),
                   Icon(Icons.support_agent, size: 64, color: Colors.grey[600]),
                   const SizedBox(height: 16),
                   const Text(
@@ -336,10 +342,11 @@ class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen>
 
           return ListView.separated(
             padding: const EdgeInsets.all(20),
-            itemCount: tickets.length,
+            itemCount: tickets.length + 1,
             separatorBuilder: (_, __) => const SizedBox(height: 12),
             itemBuilder: (context, idx) {
-              final ticket = tickets[idx];
+              if (idx == 0) return _buildEmailSupportBanner(context);
+              final ticket = tickets[idx - 1];
               final isResolved =
                   ticket.status == 'RESOLVED' || ticket.status == 'CLOSED';
 
@@ -469,6 +476,80 @@ class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen>
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildEmailSupportBanner(BuildContext context) {
+    const supportEmail = 'support@infurnuslogistics.com';
+    return InfurnusCard(
+      onTap: () async {
+        final emailUri = Uri(
+          scheme: 'mailto',
+          path: supportEmail,
+          queryParameters: {'subject': 'INFURNUS Driver Support Request'},
+        );
+        try {
+          if (await launchUrl(emailUri, mode: LaunchMode.externalApplication)) {
+            return;
+          }
+        } catch (_) {}
+
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'No email app is available. You can open a support ticket instead.',
+            ),
+          ),
+        );
+      },
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.primaryGreen.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.email_outlined,
+              color: AppColors.primaryGreen,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Email Driver Support',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+                SizedBox(height: 2),
+                SelectableText(
+                  supportEmail,
+                  style: TextStyle(
+                    color: AppColors.primaryGreen,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Icon(
+            Icons.open_in_new_rounded,
+            size: 16,
+            color: Color(0xFF9CA3AF),
+          ),
+        ],
       ),
     );
   }

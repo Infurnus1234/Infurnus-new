@@ -142,6 +142,7 @@ export interface DriverRepository {
 const driverProjection = `
   id,
   user_id AS "userId",
+  provider_public_id(user_id) AS "publicId",
   license_number AS "licenseNumber",
   license_expiry::text AS "licenseExpiry",
   verification_status AS "verificationStatus",
@@ -501,9 +502,11 @@ export class PostgresDriverRepository implements DriverRepository {
       `UPDATE driver_profiles
        SET availability_status = 'stale'
        WHERE id = $1
-         AND availability_status IN (
-           'available',
-           'busy'
+         AND availability_status = 'available'
+         AND NOT EXISTS (
+           SELECT 1 FROM rides r
+           WHERE r.assigned_driver_id = driver_profiles.id
+             AND r.status IN ('driver_assigned','driver_arriving','driver_arrived','in_progress')
          )
        RETURNING id`,
       [profileId],

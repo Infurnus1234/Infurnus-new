@@ -92,10 +92,16 @@ class LocationService {
 
   Stream<Position> getPositionStream() {
     return Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 10,
-      ),
+      locationSettings: defaultTargetPlatform == TargetPlatform.iOS
+          ? AppleSettings(
+              accuracy: LocationAccuracy.high,
+              distanceFilter: 10,
+              allowBackgroundLocationUpdates: false,
+            )
+          : const LocationSettings(
+              accuracy: LocationAccuracy.high,
+              distanceFilter: 10,
+            ),
     );
   }
 

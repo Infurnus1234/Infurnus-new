@@ -1,0 +1,133 @@
+[
+  {
+    "label": "service",
+    "sector": "service",
+    "vehicles": [
+      {
+        "name": "Ambulance",
+        "code": "ambulance"
+      },
+      {
+        "name": "Towing Van",
+        "code": "towing"
+      },
+      {
+        "name": "JCB",
+        "code": "jcb"
+      }
+    ],
+    "assets": [
+      "assets/images/ambulance_clean.jpg",
+      "assets/images/flatbed_towing_truck.png",
+      "assets/images/jcb_excavator.jpg"
+    ]
+  },
+  {
+    "label": "logistics",
+    "sector": "logistics",
+    "vehicles": [
+      {
+        "name": "Piaggio Ape",
+        "code": "piaggio_ape"
+      },
+      {
+        "name": "Tata Magic",
+        "code": "tata_magic"
+      },
+      {
+        "name": "Tata 207",
+        "code": "cargo_207"
+      },
+      {
+        "name": "Tata 407",
+        "code": "tata_407"
+      }
+    ],
+    "assets": [
+      "assets/images/piaggio_ape_yellow.png",
+      "assets/images/tata_magic_cream.png",
+      "assets/images/cargo_207_heavy.png",
+      "assets/images/cargo_407.jpg"
+    ]
+  },
+  {
+    "label": "premium",
+    "sector": "premium",
+    "vehicles": [
+      {
+        "name": "Scorpio N",
+        "code": "scorpio"
+      },
+      {
+        "name": "Mahindra Thar",
+        "code": "thar"
+      },
+      {
+        "name": "Innova Crysta",
+        "code": "innova"
+      },
+      {
+        "name": "Force Traveller",
+        "code": "traveller"
+      },
+      {
+        "name": "Mercedes V-Class",
+        "code": "mercedes"
+      },
+      {
+        "name": "Helicopter",
+        "code": "helicopter"
+      }
+    ],
+    "assets": [
+      "assets/images/premium_scorpio_n_black.png",
+      "assets/images/premium_mercedes_v_class_black.png",
+      "assets/images/premium_helicopter.png"
+    ]
+  },
+  {
+    "label": "rentals",
+    "sector": "premium",
+    "vehicles": [
+      {
+        "name": "Innova Crysta",
+        "code": "innova"
+      },
+      {
+        "name": "Toyota Fortuner",
+        "code": "fortuner"
+      },
+      {
+        "name": "Force Traveller",
+        "code": "traveller"
+      },
+      {
+        "name": "Off-road SUV (Thar)",
+        "code": "thar"
+      },
+      {
+        "name": "Scorpio N",
+        "code": "scorpio_n"
+      },
+      {
+        "name": "Helicopter",
+        "code": "helicopter"
+      },
+      {
+        "name": "Charter Flight",
+        "code": "charter_flight"
+      },
+      {
+        "name": "Yacht",
+        "code": "yacht"
+      }
+    ],
+    "assets": [
+      "assets/images/force_traveller_clean.jpg",
+      "assets/images/fortuner_visual.jpg",
+      "assets/images/innova_crysta_clean.jpg",
+      "assets/images/scorpio_n_white.png",
+      "assets/images/thar_visual.webp"
+    ]
+  }
+]

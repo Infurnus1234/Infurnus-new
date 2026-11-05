@@ -85,6 +85,7 @@ const userProjection = `
 
 const driverProjection = `
   dp.id,
+  provider_public_id(u.id) AS "publicId",
   u.id AS "userId",
   u.role::text AS role,
   u.first_name AS "firstName",
@@ -144,7 +145,7 @@ const driverApplicationProjection = `
 `;
 
 const partnerProjection = `
-  p.id, p.user_id AS "userId", p.business_name AS "businessName",
+  p.id, provider_public_id(p.user_id) AS "publicId", p.user_id AS "userId", p.business_name AS "businessName",
   (SELECT COALESCE(NULLIF(btrim(concat_ws(' ',u.first_name,u.last_name)),''),p.owner_name) FROM users u WHERE u.id=p.user_id AND u.deleted_at IS NULL) AS "ownerName",
   p.business_description AS "businessDescription", p.approval_status AS "approvalStatus",
   p.availability_status AS "availabilityStatus", p.created_at AS "createdAt",
@@ -171,6 +172,7 @@ const partnerProjection = `
   COALESCE((SELECT jsonb_agg(jsonb_build_object(
     'id', d.id,
     'userId', d.user_id,
+    'publicId', provider_public_id(d.user_id),
     'firstName', u.first_name,
     'lastName', u.last_name,
     'email', u.email,
@@ -376,6 +378,7 @@ export class PostgresAdminRepository implements AdminRepository {
     const sql = `
       SELECT
         dp.id,
+        provider_public_id(dp.user_id) AS "publicId",
         dp.user_id AS "userId",
 
         dp.license_number AS "licenseNumber",
@@ -1264,6 +1267,7 @@ function driverWhere(filters: AdminFilters) {
         OR u.last_name ILIKE $${values.length}
         OR u.email ILIKE $${values.length}
         OR u.phone ILIKE $${values.length}
+        OR provider_public_id(u.id) LIKE $${values.length}
         OR dp.license_number ILIKE $${values.length}
         OR v.plate_number ILIKE $${values.length})`,
     );
@@ -1358,7 +1362,9 @@ function driverApplicationWhere(filters: AdminFilters) {
 }
 
 function partnerWhere(filters: AdminFilters) {
-  const conditions: string[] = ['EXISTS (SELECT 1 FROM users account WHERE account.id=p.user_id AND account.deleted_at IS NULL)'];
+  const conditions: string[] = [
+    'EXISTS (SELECT 1 FROM users account WHERE account.id=p.user_id AND account.deleted_at IS NULL)',
+  ];
   const values: unknown[] = [];
 
   if (filters.search) {
@@ -1366,7 +1372,8 @@ function partnerWhere(filters: AdminFilters) {
 
     conditions.push(
       `(p.business_name ILIKE $${values.length}
-        OR p.business_description ILIKE $${values.length})`,
+        OR p.business_description ILIKE $${values.length}
+        OR provider_public_id(p.user_id) LIKE $${values.length})`,
     );
   }
 
@@ -1407,7 +1414,9 @@ function partnerWhere(filters: AdminFilters) {
 }
 
 function vehicleWhere(filters: AdminFilters) {
-  const conditions: string[] = ["NOT EXISTS (SELECT 1 FROM user_history deleted WHERE deleted.event_type='ADMIN_RECORD_DELETED' AND deleted.entity_id=v.id AND deleted.metadata->>'module'='vehicles')"];
+  const conditions: string[] = [
+    "NOT EXISTS (SELECT 1 FROM user_history deleted WHERE deleted.event_type='ADMIN_RECORD_DELETED' AND deleted.entity_id=v.id AND deleted.metadata->>'module'='vehicles')",
+  ];
   const values: unknown[] = [];
 
   if (filters.partnerId) {
@@ -1461,7 +1470,9 @@ function vehicleWhere(filters: AdminFilters) {
 }
 
 function fleetWhere(filters: FleetFilters) {
-  const conditions: string[] = ["NOT EXISTS (SELECT 1 FROM user_history deleted WHERE deleted.event_type='ADMIN_RECORD_DELETED' AND deleted.entity_id=v.id AND deleted.metadata->>'module'='vehicles')"];
+  const conditions: string[] = [
+    "NOT EXISTS (SELECT 1 FROM user_history deleted WHERE deleted.event_type='ADMIN_RECORD_DELETED' AND deleted.entity_id=v.id AND deleted.metadata->>'module'='vehicles')",
+  ];
   const values: unknown[] = [];
 
   if (filters.state) {

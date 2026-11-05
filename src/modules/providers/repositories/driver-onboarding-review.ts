@@ -90,7 +90,7 @@ export async function groupedApprovals(
     ${approvalFleetJoins}
     WHERE ($1='ALL' OR r.onboarding_status=$1)
       AND ($3::text IS NULL OR ($3='driver' AND r.target_type IN ('driver_profile','driver_document')) OR ($3='vehicle' AND request_vehicle.id IS NOT NULL))
-      AND ($4::text='' OR concat_ws(' ',u.first_name,u.last_name,u.email,fleet_user.first_name,fleet_user.last_name,fleet.user_id::text,r.id::text,request_vehicle.plate_number,request_vehicle.make,request_vehicle.model) ILIKE '%'||$4||'%')
+      AND ($4::text='' OR concat_ws(' ',provider_public_id(u.id),provider_public_id(fleet.user_id),u.first_name,u.last_name,u.email,fleet_user.first_name,fleet_user.last_name,fleet.user_id::text,r.id::text,request_vehicle.plate_number,request_vehicle.make,request_vehicle.model) ILIKE '%'||$4||'%')
     ORDER BY ${newestFirstSql('r.first_submitted_at', 'r.id')} LIMIT $5 OFFSET $6`,
       [
         status,

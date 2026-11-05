@@ -1,12 +1,242 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
-import '../widgets/configured_vehicle_screen.dart';
+import '../providers/ride_provider.dart';
 
-class SpecialtyEmergencyScreen extends StatelessWidget {
+class SpecialtyEmergencyScreen extends ConsumerStatefulWidget {
   const SpecialtyEmergencyScreen({super.key});
+
+  static const List<Map<String, dynamic>> vehicles = [
+    {
+      'title': 'Ambulance',
+      'category': 'ambulance',
+      'filter': 'Emergency',
+      'subtitle': 'Patient + Medical Triage • Trip-Based',
+      'image': 'assets/images/ambulance_clean.jpg',
+      'fallbackIcon': Icons.medical_services_rounded,
+    },
+    {
+      'title': 'Towing Van',
+      'category': 'towing',
+      'filter': 'Emergency',
+      'subtitle': 'Breakdown Assistance • Trip-Based',
+      'image': 'assets/images/flatbed_towing_truck.png',
+      'fallbackIcon': Icons.car_repair_rounded,
+    },
+    {
+      'title': 'JCB',
+      'category': 'jcb',
+      'filter': 'Construction',
+      'subtitle': 'Excavation Assistance • Trip-Based',
+      'image': 'assets/images/jcb_excavator.jpg',
+      'fallbackIcon': Icons.construction_rounded,
+    },
+  ];
+
   @override
-  Widget build(BuildContext context) => const ConfiguredVehicleScreen(
-    title: 'Specialty & Emergency',
-    sector: 'service',
-  );
+  ConsumerState<SpecialtyEmergencyScreen> createState() =>
+      _SpecialtyEmergencyScreenState();
+}
+
+class _SpecialtyEmergencyScreenState
+    extends ConsumerState<SpecialtyEmergencyScreen> {
+  String _selectedFilter = 'All';
+
+  final List<String> _filters = ['All', 'Emergency', 'Construction'];
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _selectedFilter == 'All'
+        ? SpecialtyEmergencyScreen.vehicles
+        : SpecialtyEmergencyScreen.vehicles
+              .where((v) => v['filter'] == _selectedFilter)
+              .toList();
+
+    return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: false,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF111827)),
+          onPressed: () => context.pop(),
+        ),
+        title: const Text(
+          'Specialty & Emergency',
+          style: TextStyle(
+            color: Color(0xFF111827),
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+      body: Column(
+        children: [
+          // Filter Chips Horizontal Row
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: SizedBox(
+              height: 36,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _filters.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final filter = _filters[index];
+                  final isSelected = filter == _selectedFilter;
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedFilter = filter),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? const Color(0xFF16A34A)
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isSelected
+                              ? const Color(0xFF16A34A)
+                              : const Color(0xFFE5E7EB),
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          filter,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: isSelected
+                                ? Colors.white
+                                : const Color(0xFF374151),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          const Divider(height: 1, color: Color(0xFFE5E7EB)),
+
+          // Vertical Vehicle List
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              itemCount: filtered.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                final item = filtered[index];
+                return GestureDetector(
+                  onTap: () {
+                    ref.read(rideProvider.notifier).selectSector('service');
+                    ref
+                        .read(rideProvider.notifier)
+                        .selectTier(item['category']);
+                    context.push('/ride-booking');
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.03),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        // Image Thumbnail
+                        Container(
+                          width: 72,
+                          height: 56,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: const Color(0xFFE5E7EB),
+                              width: 0.5,
+                            ),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: item['image'] != null
+                                ? Image.asset(
+                                    item['image'] as String,
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (_, __, ___) => Icon(
+                                      item['fallbackIcon'] as IconData,
+                                      size: 30,
+                                      color: const Color(0xFFDC2626),
+                                    ),
+                                  )
+                                : Icon(
+                                    item['fallbackIcon'] as IconData,
+                                    size: 30,
+                                    color: const Color(0xFFDC2626),
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+
+                        // Title & Subtitle
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                item['title'],
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF111827),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                item['subtitle'],
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF6B7280),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // Trailing Chevron
+                        const Icon(
+                          Icons.chevron_right_rounded,
+                          size: 20,
+                          color: Color(0xFF9CA3AF),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

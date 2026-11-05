@@ -1,3 +1,5 @@
+import '../../domain/utils/passenger_catalog.dart';
+
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -18,9 +20,13 @@ import '../../data/models/fleet_vehicle_model.dart';
 import '../../data/models/ride_model.dart' as model;
 import '../providers/ride_provider.dart';
 import '../widgets/fare_range_details.dart';
+import '../widgets/ride_contact_action.dart';
 import '../widgets/waiting_timer_widget.dart';
 import '../providers/ride_use_case_providers.dart';
 import '../../domain/utils/passenger_vehicle_filter.dart';
+import '../../domain/utils/vehicle_visibility.dart';
+import '../widgets/vehicle_presentation_catalog.dart';
+import 'specialty_emergency_screen.dart';
 
 // Top-level color constants (shared between _RideBookingScreenState and sub-widgets)
 const Color _kCardElevated = Color(0xFFFFFFFF);
@@ -77,6 +83,8 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
   int _pickupSelectionGeneration = 0;
   int _destinationSelectionGeneration = 0;
 
+  int _durationFieldRevision = 0;
+
   @override
   void initState() {
     super.initState();
@@ -92,15 +100,6 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
         ref.read(rideProvider.notifier).estimateRouteFare();
       }
     });
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed || !mounted) return;
-    final rideId = ref.read(rideProvider).currentRide?.id;
-    if (rideId != null) {
-      unawaited(ref.read(rideProvider.notifier).getRideDetails(rideId));
-    }
   }
 
   Future<void> _fetchFleet(String sector) async {
@@ -119,13 +118,11 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
           .read(getFleetUseCaseProvider)
           .call(sector: sector);
       if (cancelToken.isCancelled) return;
-      final fleet = sector == 'passenger'
-          ? rawFleet
-                .where(
-                  (v) => !isExcludedPassengerVehicle(v.category, v.displayName),
-                )
-                .toList()
-          : rawFleet;
+      final fleet = rawFleet
+          .where(
+            (v) => isCustomerVehicleVisible(sector, v.category, v.displayName),
+          )
+          .toList();
       if (mounted) {
         setState(() {
           _fleetVehicles = fleet;
@@ -802,6 +799,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
           children: [
             // 1. Google Map
             InfurnusMap(
+              rideStatus: rideState.currentRide?.status.name,
               bottomOverlayHeight: constraints.maxHeight * .55,
               pickup: pickupLatLng,
               destination: destinationLatLng,
@@ -1090,10 +1088,18 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
             },
           ),
           const SizedBox(height: 12),
+        ],
+        if (['premium', 'rental'].contains(state.selectedSector)) ...[
           DropdownButtonFormField<int>(
+            key: ValueKey(
+              'duration:${state.selectedSector}:${state.rentalDetails?['hours']}:$_durationFieldRevision',
+            ),
             initialValue:
-                (state.rentalDetails?['hours'] as num?)?.toInt() ??
-                (state.selectedTier == 'thar' ? 6 : 1),
+                state.selectedSector == 'rental' &&
+                    ((state.rentalDetails?['hours'] as num?) ?? 1) > 12
+                ? 13
+                : (state.rentalDetails?['hours'] as num?)?.toInt() ??
+                      (state.selectedTier == 'thar' ? 6 : 1),
             decoration: const InputDecoration(labelText: 'Booking duration'),
             items: [
               for (final hours in [
@@ -1110,12 +1116,63 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                 11,
                 12,
                 13,
-                24,
+                if (state.selectedSector == 'premium') 24,
               ])
-                DropdownMenuItem(value: hours, child: Text('$hours hours')),
+                DropdownMenuItem(
+                  value: hours,
+                  child: Text(
+                    hours == 13 && state.selectedSector == 'rental'
+                        ? '12+ Hours${((state.rentalDetails?['hours'] as num?) ?? 1) > 12 ? ' (${state.rentalDetails?['hours']} hours)' : ''}'
+                        : '$hours hours',
+                  ),
+                ),
             ],
-            onChanged: (hours) {
-              if (hours != null) {
+            onChanged: (hours) async {
+              if (hours == 13 && state.selectedSector == 'rental') {
+                final form = GlobalKey<FormState>();
+                int? extendedHours;
+                hours = await showDialog<int>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Rental duration'),
+                    content: Form(
+                      key: form,
+                      child: TextFormField(
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Hours (13 or more)',
+                        ),
+                        validator: (value) {
+                          final parsed = int.tryParse(value?.trim() ?? '');
+                          return parsed == null || parsed < 13
+                              ? 'Enter a whole number of at least 13 hours'
+                              : null;
+                        },
+                        onSaved: (value) =>
+                            extendedHours = int.parse(value!.trim()),
+                      ),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          if (!form.currentState!.validate()) return;
+                          form.currentState!.save();
+                          Navigator.of(context).pop(extendedHours);
+                        },
+                        child: const Text('Apply'),
+                      ),
+                    ],
+                  ),
+                );
+                if (hours == null && mounted) {
+                  setState(() => _durationFieldRevision++);
+                }
+              }
+              if (hours != null && mounted) {
                 ref.read(rideProvider.notifier).setRentalDetails({
                   ...?state.rentalDetails,
                   'hours': hours,
@@ -1513,30 +1570,150 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
   bool _isTierMatching(String selectedTier, String category, int index) =>
       selectedTier == category;
 
-  List<Map<String, dynamic>> _getVehiclesForSector(String sector) =>
-      _fleetVehicles
-          .where((v) => v.sector == sector)
-          .map(
-            (v) => <String, dynamic>{
-              'name': v.displayName,
-              'category': v.category,
-              'capacity': sector == 'service'
-                  ? v.range ?? 'Configured service radius'
-                  : 'Availability checked near pickup',
-              'icon': sector == 'service'
-                  ? Icons.medical_services_rounded
-                  : sector == 'logistics'
-                  ? Icons.local_shipping_rounded
-                  : Icons.directions_car_rounded,
-              'image': VehicleVisualImage.getAssetPath(
-                v.displayName,
-                v.category,
-              ),
-            },
-          )
-          .toList();
+  List<Map<String, dynamic>> _getVehiclesForSector(String sector) {
+    switch (sector.toLowerCase()) {
+      case 'logistics':
+        return customerVehiclePresentation(sector, _fleetVehicles)
+            .map(
+              (v) => <String, dynamic>{
+                ...v,
+                'icon': Icons.local_shipping_rounded,
+              },
+            )
+            .toList();
+      case 'service':
+        return SpecialtyEmergencyScreen.vehicles
+            .map(
+              (v) => <String, dynamic>{
+                'name': v['title'],
+                'category': v['category'],
+                'capacity': v['subtitle'],
+                'image': v['image'],
+                'icon': v['fallbackIcon'],
+              },
+            )
+            .toList();
+      case 'premium':
+        return [
+          {
+            'name': 'Scorpio N',
+            'category': 'scorpio',
+            'capacity': 'Rugged SUV',
+            'icon': Icons.directions_car_filled_rounded,
+            'image': sector == 'premium'
+                ? premiumVehicleImages['scorpio']
+                : 'assets/images/scorpio_n_white.png',
+          },
+          {
+            'name': 'Mahindra Thar',
+            'category': 'thar',
+            'capacity': 'Off-road 4x4',
+            'icon': Icons.terrain_rounded,
+            'image': 'assets/images/thar_visual.webp',
+          },
+          {
+            'name': 'Innova Crysta',
+            'category': 'innova',
+            'capacity': 'Executive 7S',
+            'icon': Icons.airport_shuttle_rounded,
+            'image': 'assets/images/innova_crysta.jpg',
+          },
+          {
+            'name': 'Force Traveller',
+            'category': 'traveller',
+            'capacity': 'Executive Van',
+            'icon': Icons.airport_shuttle_rounded,
+            'image': 'assets/images/force_traveller_clean.jpg',
+          },
+          {
+            'name': 'Mercedes V-Class',
+            'category': 'mercedes',
+            'capacity': 'Luxury Van',
+            'icon': Icons.airport_shuttle_rounded,
+            if (sector == 'premium') 'image': premiumVehicleImages['mercedes'],
+          },
+          {
+            'name': 'Helicopter',
+            'category': 'helicopter',
+            'capacity': 'On-demand',
+            'icon': Icons.flight_takeoff_rounded,
+            if (sector == 'premium')
+              'image': premiumVehicleImages['helicopter'],
+          },
+          {
+            'name': 'Toyota Fortuner',
+            'category': 'fortuner',
+            'capacity': 'Commanding SUV',
+            'icon': Icons.directions_car_filled_rounded,
+            'image': 'assets/images/fortuner_visual.jpg',
+          },
+          {
+            'name': 'Scorpio N',
+            'category': 'scorpio_n',
+            'capacity': 'Rugged SUV',
+            'icon': Icons.directions_car_filled_rounded,
+            'image': 'assets/images/scorpio_n_white.png',
+          },
+          {
+            'name': 'Charter Flight',
+            'category': 'charter_flight',
+            'capacity': 'Private Aircraft',
+            'icon': Icons.flight_rounded,
+          },
+          {
+            'name': 'Yacht',
+            'category': 'yacht',
+            'capacity': 'Luxury Cruise',
+            'icon': Icons.directions_boat_rounded,
+          },
+        ];
+      case 'rental':
+      case 'passenger':
+        return customerVehiclePresentation(sector, _fleetVehicles)
+            .map(
+              (v) => <String, dynamic>{
+                ...v,
+                'icon': Icons.directions_car_rounded,
+              },
+            )
+            .toList();
+      default:
+        return _fleetVehicles
+            .where((v) => v.sector == sector)
+            .map(
+              (v) => <String, dynamic>{
+                'name': v.displayName,
+                'category': v.category,
+                'capacity': sector == 'service'
+                    ? v.range ?? 'Configured service radius'
+                    : 'Availability checked near pickup',
+                'icon': sector == 'service'
+                    ? Icons.medical_services_rounded
+                    : sector == 'logistics'
+                    ? Icons.local_shipping_rounded
+                    : Icons.directions_car_rounded,
+                'image': VehicleVisualImage.getAssetPath(
+                  v.displayName,
+                  v.category,
+                ),
+              },
+            )
+            .toList();
+    }
+  }
 
   bool _isUnsupportedVehicle(RideState state) {
+    if (!isCustomerVehicleVisible(state.selectedSector, state.selectedTier)) {
+      return true;
+    }
+    if (state.selectedSector == 'passenger' &&
+        passengerVehicles.any((v) => v['category'] == state.selectedTier)) {
+      return false;
+    }
+    if (state.selectedSector != 'passenger' &&
+        state.selectedSector.isNotEmpty) {
+      return false;
+    }
     return (state.selectedSector == 'passenger' &&
             isExcludedPassengerVehicle(state.selectedTier)) ||
         (!_isLoadingFleet &&
@@ -1548,9 +1725,11 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
   }
 
   Future<void> _showVehicleSelectionBottomSheet(RideState state) async {
-    if (_catalogError != null) await _fetchFleet(state.selectedSector);
+    if (state.selectedSector == 'passenger' && _catalogError != null) {
+      await _fetchFleet(state.selectedSector);
+    }
     if (!mounted) return;
-    if (_isLoadingFleet) {
+    if (state.selectedSector == 'passenger' && _isLoadingFleet) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Loading configured vehicles. Please try again.'),
@@ -1717,6 +1896,34 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
 
   /// Compact chip showing which vehicle/service the customer already selected
   /// on the dashboard — no sector tabs, no full catalogue repeated here.
+  Map<String, dynamic> _selectedVehicleData(RideState state) {
+    final historical = _getVehiclesForSector(state.selectedSector)
+        .where((v) => v['category'] == state.selectedTier)
+        .firstOrNull;
+    if (historical != null) return historical;
+    final configured = _fleetVehicles
+        .where(
+          (v) =>
+              v.sector == state.selectedSector &&
+              v.category == state.selectedTier,
+        )
+        .firstOrNull;
+    if (configured == null) return {};
+    return {
+      'name': configured.displayName,
+      'category': configured.category,
+      'capacity': 'Availability checked near pickup',
+      'icon': VehicleVisualImage.getFallbackIcon(
+        configured.displayName,
+        configured.category,
+      ),
+      'image': VehicleVisualImage.getAssetPath(
+        configured.displayName,
+        configured.category,
+      ),
+    };
+  }
+
   Widget _buildSelectedVehicleChip(RideState state) {
     if (_isUnsupportedVehicle(state)) {
       return InkWell(
@@ -1787,17 +1994,13 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
       );
     }
 
-    final vehicles = _getVehiclesForSector(state.selectedSector);
-    final selected = vehicles.firstWhere(
-      (v) => _isTierMatching(state.selectedTier, v['category'] as String, 0),
-      orElse: () => <String, dynamic>{},
-    );
-
+    final selected = _selectedVehicleData(state);
     if (selected.isEmpty) return const SizedBox.shrink();
 
     final sectorLabel =
         {
           'passenger': 'Rides',
+          'rental': 'Rental',
           'logistics': 'Logistics',
           'service': 'Emergency',
           'premium': 'Premium',
@@ -1950,18 +2153,39 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
       );
     }
 
+    if (state.selectedSector == 'service' &&
+        state.fareEstimate?.bookingAmount == null) {
+      return SizedBox(
+        width: double.infinity,
+        height: 52,
+        child: ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFDC2626),
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(26),
+            ),
+          ),
+          icon: const Icon(Icons.phone_rounded, size: 20),
+          label: const Text(
+            'Call',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+          ),
+          onPressed: () =>
+              callAssignedRideContact(context, ref, serviceOnly: true),
+        ),
+      );
+    }
+
     final hasLocations =
         state.pickupCoords != null &&
         state.destinationCoords != null &&
         _pickupController.text.trim().isNotEmpty &&
         _destinationController.text.trim().isNotEmpty;
 
-    final vehicles = _getVehiclesForSector(state.selectedSector);
-    final selectedVehicle = vehicles.firstWhere(
-      (v) => v['category'] == state.selectedTier,
-      orElse: () => {'name': 'Ride'},
-    );
-    final vehicleName = selectedVehicle['name'] as String;
+    final selectedVehicle = _selectedVehicleData(state);
+    final vehicleName = selectedVehicle['name'] as String? ?? 'Ride';
 
     if (!hasLocations) {
       return SizedBox(
@@ -2443,14 +2667,9 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                 ),
               ),
               IconButton(
+                tooltip: 'Call driver',
                 icon: const Icon(Icons.phone_rounded, color: brandGreen),
-                onPressed: (driver?.phone != null && driver!.phone!.isNotEmpty)
-                    ? () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Calling ${driver.name}...')),
-                        );
-                      }
-                    : null,
+                onPressed: () => callAssignedRideContact(context, ref),
               ),
             ],
           ),

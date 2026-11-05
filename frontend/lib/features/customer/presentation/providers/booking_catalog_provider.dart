@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/models/fleet_vehicle_model.dart';
-import '../../domain/utils/passenger_vehicle_filter.dart';
+import '../../domain/utils/vehicle_visibility.dart';
 import 'ride_use_case_providers.dart';
 
 final bookingCatalogProvider = FutureProvider.autoDispose
@@ -13,8 +13,7 @@ final bookingCatalogProvider = FutureProvider.autoDispose
           .where(
             (v) =>
                 v.sector == sector &&
-                (sector != 'passenger' ||
-                    !isExcludedPassengerVehicle(v.category, v.displayName)),
+                isCustomerVehicleVisible(sector, v.category, v.displayName),
           )
           .toList();
     });

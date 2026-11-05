@@ -1,3 +1,7 @@
+import { VehicleService } from '../../vehicles/services/vehicle.service.js';
+import { VehicleController } from '../../vehicles/controllers/vehicle.controller.js';
+import { FareController } from '../../fares/controllers/fare.controller.js';
+import { RENTAL_VEHICLE_CODES } from '../../vehicles/services/rental-inventory.js';
 import express from 'express';
 import request from 'supertest';
 import { createRideRouter } from '../routes/ride.routes.js';
@@ -31,22 +35,33 @@ const categories: { sector: CreateRideInput['sector']; code: string }[] = JSON.p
   readFileSync(new URL('./configured-category-inventory.json', import.meta.url), 'utf8'),
 );
 const durationHours = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 24];
-const scenarios = categories.flatMap(({ sector, code }) => [
-  { sector, code, hours: undefined as number | undefined, tripType: 'round_trip', hourly: false },
-  ...(['premium', 'passenger'].includes(sector)
-    ? durationHours.flatMap((hours) =>
-        (sector === 'premium' ? ['one_way', 'round_trip'] : ['round_trip']).flatMap((tripType) =>
-          (sector === 'premium' ? [false, true] : [true]).map((hourly) => ({
-            sector,
-            code,
-            hours,
-            tripType,
-            hourly,
-          })),
-        ),
-      )
-    : []),
-]);
+const scenarios = [
+  ...categories.flatMap(({ sector, code }) => [
+    { sector, code, hours: undefined as number | undefined, tripType: 'round_trip', hourly: false },
+    ...(['premium', 'passenger'].includes(sector)
+      ? durationHours.flatMap((hours) =>
+          (sector === 'premium' ? ['one_way', 'round_trip'] : ['round_trip']).flatMap((tripType) =>
+            (sector === 'premium' ? [false, true] : [true]).map((hourly) => ({
+              sector,
+              code,
+              hours,
+              tripType,
+              hourly,
+            })),
+          ),
+        )
+      : []),
+  ]),
+  ...RENTAL_VEHICLE_CODES.flatMap((code) =>
+    durationHours.map((hours) => ({
+      sector: 'rental' as const,
+      code,
+      hours,
+      tripType: 'round_trip',
+      hourly: true,
+    })),
+  ),
+];
 const hourlySchedule = Object.fromEntries(
   [...Array.from({ length: 12 }, (_, i) => String(i + 1)), '12_plus'].map((key, i) => [
     key,
@@ -78,6 +93,11 @@ const service = new RideService(
 const app = express();
 app.use(express.json());
 app.use('/rides', createRideRouter(new RideController(service)));
+app.post('/fares/estimate', new FareController(estimator).estimate);
+app.get(
+  '/vehicles/catalog',
+  new VehicleController(new VehicleService(new PostgresVehicleRepository(pool))).catalog,
+);
 app.use(errorMiddleware);
 const payments = new PostgresPaymentRepository(pool);
 const logistics = new LogisticsPaymentService(pool, payments);
@@ -142,13 +162,14 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
     it.each(scenarios)(
       '$sector/$code hours=$hours trip=$tripType hourly=$hourly: rejects unavailable supply, persists exact identity, dispatches once, accepts, completes and pays',
       async ({ sector, code, hours, tripType, hourly }) => {
+        const inventorySector = sector === 'rental' ? 'passenger' : sector;
         restore = (
           await pool.query('SELECT * FROM vehicle_types WHERE sector=$1 AND code=$2', [
-            sector,
+            inventorySector,
             code,
           ])
         ).rows[0];
-        if (!restore) addedTypeIdentity = { sector, code };
+        if (!restore) addedTypeIdentity = { sector: inventorySector, code };
         const slabs =
           sector === 'logistics'
             ? {
@@ -164,7 +185,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           [
             'TEST ONLY ' + code,
             code,
-            sector,
+            inventorySector,
             slabs || sector === 'service' ? null : 10000,
             slabs || sector === 'service' ? null : 1000,
             slabs ? JSON.stringify(slabs) : null,
@@ -174,7 +195,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
         if (hourly)
           await pool.query(
             "UPDATE vehicle_types SET hourly_base_fares_paise=$3::jsonb,hourly_missing_duration_policy='require_duration',extended_duration_policy='booked_duration' WHERE sector=$1 AND code=$2",
-            [sector, code, JSON.stringify(hourlySchedule)],
+            [inventorySector, code, JSON.stringify(hourlySchedule)],
           );
         const customer = randomUUID(),
           user = randomUUID(),
@@ -196,7 +217,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
             user,
             profile,
             vehicle.slice(0, 20),
-            sector,
+            inventorySector,
             code,
             syntheticDispatchCity.cityId,
           ],
@@ -218,14 +239,14 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           ...(sector === 'logistics' ? { goods: { weightKg: 1 } } : {}),
         };
         await pool.query('UPDATE vehicle_types SET active=FALSE WHERE sector=$1 AND code=$2', [
-          sector,
+          inventorySector,
           code,
         ]);
         await expect(service.createRide(customer, input)).rejects.toMatchObject({
           code: 'FARE_CONFIGURATION_MISSING',
         });
         await pool.query('UPDATE vehicle_types SET active=TRUE WHERE sector=$1 AND code=$2', [
-          sector,
+          inventorySector,
           code,
         ]);
         await expect(
@@ -269,7 +290,40 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           'UPDATE driver_profiles SET last_location=ST_SetSRID(ST_MakePoint(77.5,13),4326)::geography,last_location_at=NOW() WHERE id=$1',
           [profile],
         );
-        const booked = await service.createRide(customer, input);
+        let booked: Ride;
+        if (sector === 'rental') {
+          const { pickup, destination, vehicleCategory, bookingHours } = input;
+          const requestBody = { sector, pickup, destination, vehicleCategory, bookingHours };
+          const quote = await request(app).post('/fares/estimate').send(requestBody);
+          expect(quote.status, quote.text).toBe(200);
+          const bookingFare = quote.body.data.bookingFare;
+          const catalog = await request(app).get('/vehicles/catalog').query({ sector: 'rental' });
+          expect(catalog.status, catalog.text).toBe(200);
+          expect(catalog.body.data).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({
+                id: bookingFare.vehicleConfiguration.id,
+                code,
+                sector: 'rental',
+              }),
+            ]),
+          );
+          const response = await request(app)
+            .post('/rides')
+            .auth(token, { type: 'bearer' })
+            .send({
+              ...requestBody,
+              pricingQuote: {
+                vehicleTypeId: bookingFare.vehicleConfiguration.id,
+                pricingVersion: bookingFare.pricingVersion,
+                amountPaise: bookingFare.grossAmount,
+              },
+            });
+          expect(response.status, response.text).toBe(201);
+          booked = response.body.data as Ride;
+        } else {
+          booked = await service.createRide(customer, input);
+        }
         expect(booked).toMatchObject({ sector, vehicleCategory: code, status: 'searching' });
         if (hourly) {
           const snapshot = (
@@ -288,6 +342,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           );
           if (sector === 'premium')
             expect(snapshot.rental_details).toMatchObject({ hours, tripType });
+          if (sector === 'rental') expect(snapshot.rental_details).toEqual({ hours });
         }
         const notify = vi.fn(async (candidate: DriverCandidate, ride: Ride) => {
           expect(candidate.driverProfileId).toBe(profile);
@@ -325,6 +380,20 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
         const completed = await service.completeRide(booked.id, profile);
         expect(completed.status).toBe('completed');
         expect(completed.finalFare).toBe(booked.fareEstimate);
+        if (sector === 'rental') {
+          const history = await request(app).get('/rides').auth(token, { type: 'bearer' });
+          expect(history.status, history.text).toBe(200);
+          expect(history.body.data).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({
+                id: booked.id,
+                sector: 'rental',
+                status: 'completed',
+                rentalDetails: { hours },
+              }),
+            ]),
+          );
+        }
         if (sector === 'logistics') {
           await cash('final');
           expect((await logistics.summary(booked.id, customer, 'customer')).outstandingPaise).toBe(

@@ -301,12 +301,13 @@ async function startServer() {
             await new NotificationService().send({
               userId,
               type: 'ride.created',
-              title: 'New ride offer',
+              title: ride.sector === 'rental' ? 'New Rental offer' : 'New ride offer',
               body: 'Open INFURNUS to review the current offer.',
               resourceId: `${ride.id}:${expiresAt.getTime()}`,
               eventVersion: 1,
               data: {
                 rideId: ride.id,
+                sector: ride.sector ?? 'passenger',
                 expiresAt: expiresAt.toISOString(),
                 dispatchNotificationRequestedAt: new Date().toISOString(),
                 channelId: 'infurnus_driver_channel_v2',

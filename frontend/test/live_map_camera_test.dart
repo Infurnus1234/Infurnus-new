@@ -1,3 +1,4 @@
+import 'package:infurnus/shared/widgets/vehicle_motion.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -19,6 +20,7 @@ void main() {
   testWidgets(
     'map marker animates; follow pauses on pan, resumes on recenter, and reports stale GPS',
     (tester) async {
+      await tester.runAsync(navigationArrow);
       final previous = GoogleMapsFlutterPlatform.instance;
       final maps = RecordingMaps();
       GoogleMapsFlutterPlatform.instance = maps;

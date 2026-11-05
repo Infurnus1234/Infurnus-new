@@ -350,7 +350,9 @@ class _PickupSelectionScreenState extends ConsumerState<PickupSelectionScreen> {
       case 'service':
         return 'For Emergency';
       case 'premium':
-        return 'For Rentals';
+        return 'For Premium';
+      case 'rental':
+        return 'For Rental';
       case 'passenger':
       default:
         return 'For me';

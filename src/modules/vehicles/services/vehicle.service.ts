@@ -1,3 +1,4 @@
+import { RENTAL_VEHICLE_CODES } from './rental-inventory.js';
 import { AppError } from '../../../common/errors/app-error.js';
 
 import type {
@@ -63,10 +64,25 @@ export class VehicleService {
   }
 
   async catalog(
-    sector: 'passenger' | 'premium' | 'logistics' | 'service',
+    sector: 'passenger' | 'premium' | 'logistics' | 'service' | 'rental',
     limit: number,
     offset: number,
   ) {
+    if (sector === 'rental') {
+      const findType = this.repository.findTypeByCode?.bind(this.repository);
+      if (!findType)
+        throw new AppError('VEHICLE_CATALOG_UNAVAILABLE', 'Vehicle catalog is unavailable', 503);
+      const types = await Promise.all(
+        RENTAL_VEHICLE_CODES.map((code) => findType(code, 'passenger')),
+      );
+      return types
+        .filter(
+          (type) =>
+            type?.active && type.hourlyBaseFares != null && type.pricingStatus === 'available',
+        )
+        .slice(offset, offset + limit)
+        .map((type) => ({ ...type!, sector: 'rental' as const }));
+    }
     if (!this.repository.listTypes)
       throw new AppError('VEHICLE_CATALOG_UNAVAILABLE', 'Vehicle catalog is unavailable', 503);
     const types = await this.repository.listTypes(limit, offset, sector, true);

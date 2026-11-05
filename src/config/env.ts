@@ -17,6 +17,8 @@ export const envSchema = z
       .transform((value) => value === true || value === 'true'),
 
     DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+    // Bootstrap/documentation only; activation is shared database configuration.
+    ID_LENGTH: z.coerce.number().int().min(6).max(64).default(6),
     LOCAL_DOCUMENT_STORAGE_ROOT: z.string().min(1).optional(),
     // Operator reference to an approved necessary/lawful masked-identity policy.
     // Absent by default: no Aadhaar collection is authorized.

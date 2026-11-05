@@ -183,16 +183,24 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
       for (const roles of combinations) {
         it(`${kind}: ${roles.join(' + ')} registration, verification, login, profile and authorization stay isolated`, async () => {
           const value = contact(kind),
-            accounts = [];
+            accounts: { role: string; id: string; token: string }[] = [];
           for (const role of roles) {
-            const r = await register(role, kind, value);
+            const r = await finish(await start(role, kind, value));
+            if (role !== 'customer' && accounts.some((a) => a.role !== 'customer')) {
+              expect(r.status).toBe(409);
+              expect(r.body.error.code).toBe('PROVIDER_IDENTITY_RECONCILIATION_REQUIRED');
+              noCredential(r);
+              continue;
+            }
+            expect(r.status).toBe(200);
+            if (role !== 'customer') expect(r.body.data.publicId).toMatch(/^[1-9][0-9]{5}$/);
             accounts.push({
               role,
               id: r.body.data.userId as string,
               token: r.body.data.accessToken as string,
             });
           }
-          expect(new Set(accounts.map((a) => a.id)).size).toBe(roles.length);
+          expect(new Set(accounts.map((a) => a.id)).size).toBe(roles.includes('customer') ? 2 : 1);
           for (const a of accounts) {
             const r = await login(a.role, kind, value);
             expect(r.body.data.userId === a.id).toBe(true);
@@ -225,9 +233,11 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
           const ambiguous = await request(app)
             .post('/auth/login')
             .send({ [kind]: value, password });
-          expect(ambiguous.status).toBe(409);
-          expect(ambiguous.body.error.code).toBe('ACCOUNT_ROLE_REQUIRED');
-          expect(delivery.sends).toBe(before);
+          expect(ambiguous.status).toBe(accounts.length > 1 ? 409 : 400);
+          if (accounts.length > 1) {
+            expect(ambiguous.body.error.code).toBe('ACCOUNT_ROLE_REQUIRED');
+            expect(delivery.sends).toBe(before);
+          }
         });
       }
     for (const role of ['customer', 'driver', 'fleet_owner'])
@@ -271,8 +281,19 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
         expect(wrong.status).toBe(400);
         noCredential(wrong);
         const verified = await Promise.all(ids.map((id) => finish(id)));
-        expect(verified.map((r) => r.status)).toEqual([200, 200, 200]);
-        expect(new Set(verified.map((r) => r.body.data.userId)).size).toBe(3);
+        expect(verified[0]!.status).toBe(200);
+        expect(
+          verified
+            .slice(1)
+            .map((r) => r.status)
+            .sort(),
+        ).toEqual([200, 409]);
+        expect(verified.find((r) => r.status === 409)!.body.error.code).toBe(
+          'PROVIDER_IDENTITY_RECONCILIATION_REQUIRED',
+        );
+        expect(
+          new Set(verified.filter((r) => r.status === 200).map((r) => r.body.data.userId)).size,
+        ).toBe(2);
       });
     for (const kind of ['email', 'phone'])
       it(`${kind}: same-contact cross-role login OTP, expiry and replay cannot switch identity`, async () => {
@@ -328,13 +349,23 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
               accountRole: role,
               ...(role === 'customer' ? {} : { driverFlow: 'signup' }),
             });
+          const priorProviders = roles
+            .slice(0, roles.indexOf(role))
+            .filter((r) => r !== 'customer').length;
+          if (role !== 'customer' && priorProviders > 0) {
+            expect(r.status).toBe(409);
+            expect(r.body.error.code).toBe('PROVIDER_IDENTITY_RECONCILIATION_REQUIRED');
+            continue;
+          }
           expect(r.status).toBe(200);
           ids.push(r.body.data.userId);
           const claims = await verifyAccessToken(r.body.data.accessToken);
           expect(claims.sub === r.body.data.userId && claims.role === role).toBe(true);
         }
-        expect(new Set(ids).size).toBe(roles.length);
-        expect((await request(app).post('/auth/google').send({ idToken })).status).toBe(409);
+        expect(new Set(ids).size).toBe(roles.includes('customer') ? 2 : 1);
+        expect((await request(app).post('/auth/google').send({ idToken })).status).toBe(
+          ids.length > 1 ? 409 : 200,
+        );
       });
     it('logout and refresh reuse revoke only the selected role family, preserving a same-email Fleet account', async () => {
       const email = contact('email'),

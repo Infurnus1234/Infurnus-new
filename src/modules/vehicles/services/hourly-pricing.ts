@@ -25,9 +25,9 @@ export function requestedBookingHours(input: {
   rentalHours?: number | undefined;
   rentalDetails?: { hours?: unknown; rentalHours?: unknown } | null | undefined;
 }): number | undefined {
-  if (!['passenger', 'premium'].includes(input.sector ?? '')) return undefined;
+  if (!['passenger', 'premium', 'rental'].includes(input.sector ?? '')) return undefined;
   const aliases =
-    input.sector === 'premium'
+    input.sector === 'premium' || input.sector === 'rental'
       ? [input.rentalHours, input.rentalDetails?.hours, input.rentalDetails?.rentalHours]
       : [];
   const values = [input.bookingHours, ...aliases]
@@ -37,6 +37,8 @@ export function requestedBookingHours(input: {
     throw new AppError('FARE_DURATION_INVALID', 'Select a valid booking duration', 422);
   if (new Set(values).size > 1)
     throw new AppError('FARE_DURATION_CONFLICT', 'Booking duration fields must agree', 422);
+  if (input.sector === 'rental' && !Number.isSafeInteger(values[0]))
+    throw new AppError('FARE_DURATION_REQUIRED', 'Select a whole-hour rental duration', 422);
   return values[0];
 }
 

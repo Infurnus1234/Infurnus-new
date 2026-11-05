@@ -1,3 +1,4 @@
+import { bookingInventorySector } from '../../vehicles/services/rental-inventory.js';
 import { serviceArea } from '../../maps/service-area.js';
 import { demandProvenance } from './demand-pricing.js';
 import { VEHICLE_PRICING_ALIASES } from '../config/fare.config.js';
@@ -178,13 +179,14 @@ export class FareEstimateService {
     sector?: string | undefined;
     vehicleCategory?: string | undefined;
   }) {
-    const code = canonicalVehicleCode(input.sector ?? '', input.vehicleCategory ?? '');
+    const inventorySector = bookingInventorySector(input.sector);
+    const code = canonicalVehicleCode(inventorySector ?? '', input.vehicleCategory ?? '');
     const configured = this.vehicles?.findTypeByCode
-      ? await this.vehicles.findTypeByCode(code, input.sector)
+      ? await this.vehicles.findTypeByCode(code, inventorySector)
       : null;
     // A shared legacy identifier (e.g. passenger/goods bike) keeps its own sector tariff.
-    if (configured && configured.sector === input.sector) {
-      if (!configured.active || configured.sector !== input.sector)
+    if (configured && configured.sector === inventorySector) {
+      if (!configured.active)
         throw new AppError('FARE_CONFIGURATION_MISSING', VEHICLE_UNAVAILABLE_MESSAGE, 422);
       return configured;
     }

@@ -1,3 +1,7 @@
+import {
+  bookingInventorySector,
+  isRentalVehicleCode,
+} from '../../vehicles/services/rental-inventory.js';
 import { serviceConfiguration } from '../../vehicles/services/service-pricing.js';
 import { logisticsSlab } from '../../vehicles/services/logistics-pricing.js';
 import { hourlyBaseFare } from '../../vehicles/services/hourly-pricing.js';
@@ -79,12 +83,23 @@ export class FareCalculatorService {
     explicitReference?: VehiclePricing,
     demand?: DemandPricingProvenance,
   ): FareEstimateResult {
+    const inventorySector = bookingInventorySector(input.sector);
+    if (
+      input.sector === 'rental' &&
+      (!configured?.hourlyBaseFares || !isRentalVehicleCode(input.vehicleCategory ?? ''))
+    ) {
+      throw new AppError(
+        'FARE_CONFIGURATION_MISSING',
+        'Rental requires an approved hourly schedule for this vehicle',
+        422,
+      );
+    }
     if (configured) {
       this.validateInput(input);
       if (
         !configured.active ||
-        configured.sector !== input.sector ||
-        configured.code !== canonicalVehicleCode(input.sector ?? '', input.vehicleCategory ?? '')
+        configured.sector !== inventorySector ||
+        configured.code !== canonicalVehicleCode(inventorySector ?? '', input.vehicleCategory ?? '')
       )
         throw new AppError('FARE_CONFIGURATION_MISSING', VEHICLE_UNAVAILABLE_MESSAGE, 422);
       if (configured.sector === 'service') {

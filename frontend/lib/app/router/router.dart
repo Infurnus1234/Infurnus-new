@@ -178,6 +178,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/rentals',
+        builder: (context, state) => const PassengerRidesScreen(),
+      ),
+      GoRoute(
+        path: '/premium-showcase',
         builder: (context, state) => const RentalsScreen(),
       ),
       GoRoute(

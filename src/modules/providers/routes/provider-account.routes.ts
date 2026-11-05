@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { AppError } from '../../../common/errors/app-error.js';
 import { updateUserSchema } from '../../users/schemas/user.schemas.js';
 import { requireFleetOwner } from '../../auth/middleware/authorization.middleware.js';
+import { ProviderIdentityRepository } from '../repositories/provider-identity.repository.js';
+import { verifyAccessToken } from '../../auth/utils/jwt.js';
 
 export const customVehicleTypeSchema = z
   .object({
@@ -24,7 +26,7 @@ export const customVehicleTypeSchema = z
   })
   .strict();
 
-const projection = `u.id,u.first_name AS "firstName",u.last_name AS "lastName",
+const projection = `provider_public_id(u.id) AS "publicId",u.id,u.first_name AS "firstName",u.last_name AS "lastName",
  COALESCE(c.email,u.email) AS email,COALESCE(c.phone,u.phone) AS phone,
  (c.email IS NULL AND u.email_verified) AS "emailVerified",
  (c.phone IS NULL AND u.phone_verified) AS "phoneVerified",
@@ -35,6 +37,49 @@ const projection = `u.id,u.first_name AS "firstName",u.last_name AS "lastName",
 // Mounted behind the existing provider authentication, role and rate-limit middleware.
 export function createProviderAccountRouter(pool: Pool) {
   const router = Router();
+  const identities = new ProviderIdentityRepository(pool);
+  router.get('/identity/:publicId', async (req, res, next) => {
+    try {
+      const publicId = z
+        .string()
+        .regex(/^[1-9][0-9]{5,63}$/)
+        .parse(req.params.publicId);
+      res.json({ success: true, data: await identities.lookup(publicId, req.auth!.userId) });
+    } catch (error) {
+      next(error);
+    }
+  });
+  router.post('/identity/link', async (req, res, next) => {
+    try {
+      const { otherAccessToken } = z
+        .object({ otherAccessToken: z.string().min(1).max(8192) })
+        .strict()
+        .parse(req.body);
+      const other = await verifyAccessToken(otherAccessToken).catch(() => {
+        throw new AppError(
+          'INVALID_LINK_SESSION',
+          'Sign in to the other account again before linking',
+          401,
+        );
+      });
+      if (!req.auth!.sessionId || !other.sid)
+        throw new AppError(
+          'SESSION_REFRESH_REQUIRED',
+          'Sign in to both accounts before linking',
+          401,
+        );
+      res.json({
+        success: true,
+        data: await identities.linkVerified(
+          req.auth!.userId,
+          other.sub,
+          `dual-session:${req.auth!.sessionId}:${other.sid}`,
+        ),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
   router.use(createProviderModelRouter(pool));
   router.get('/account', async (req, res, next) => {
     try {

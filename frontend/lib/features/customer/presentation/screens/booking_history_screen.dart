@@ -1,3 +1,5 @@
+import '../../domain/utils/logistics_catalog.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -362,7 +364,13 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
                                 Text(
                                   ride.driverDetails?.name.isNotEmpty == true
                                       ? ride.driverDetails!.name
-                                      : (ride.vehicleCategory?.toUpperCase() ??
+                                      : ((ride.sector == 'logistics'
+                                                ? logisticsVehicleName(
+                                                    ride.vehicleCategory,
+                                                  )
+                                                : null) ??
+                                            ride.vehicleCategory
+                                                ?.toUpperCase() ??
                                             'INFURNUS RIDE'),
                                   style: const TextStyle(
                                     fontSize: 12,
@@ -588,8 +596,8 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
             SizedBox(
               width: 200,
               child: InfurnusButton(
-                text: 'Book a Ride Now',
-                onPressed: () => context.push('/ride-booking'),
+                text: 'Book a Rental Now',
+                onPressed: () => context.push('/rentals'),
                 isFullWidth: true,
               ),
             ),

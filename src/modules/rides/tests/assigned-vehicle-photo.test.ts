@@ -62,7 +62,7 @@ describe('assigned vehicle photo and pickup privacy', () => {
       await new DriverService(repo as unknown as DriverRepository).getAssignedVehicle('driver'),
     ).toMatchObject({ photoUrl: null, photoStatus: 'unavailable' });
   });
-  it('redacts destination coordinates, address and arbitrary details until consumed PIN and started status', () => {
+  it('reveals assigned destination marker but keeps address and details PIN gated', () => {
     const ride = {
       id: 'ride',
       assignedDriverId: 'driver',
@@ -75,7 +75,7 @@ describe('assigned vehicle photo and pickup privacy', () => {
       pickup: { latitude: 13, longitude: 78 },
     } as unknown as Ride;
     expect(sanitizeRideForDriver(ride)).toMatchObject({
-      destination: null,
+      destination: ride.destination,
       destinationAddress: null,
       serviceDetails: null,
       rideInformation: { drop: null },
@@ -88,7 +88,7 @@ describe('assigned vehicle photo and pickup privacy', () => {
       rideInformation: { drop: { latitude: 12, longitude: 77 } },
     });
     expect(sanitizeRideForDriver({ ...ride, pinVerified: true })).toMatchObject({
-      destination: null,
+      destination: ride.destination,
     });
   });
 });

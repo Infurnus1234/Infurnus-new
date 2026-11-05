@@ -30,7 +30,7 @@ class VehicleCategoryConfig {
       category: VehicleCategoryType.rides,
       title: 'Rides & Cabs',
       subtitle: 'Daily city rides',
-      assetImagePath: 'assets/images/sedan.jpg',
+      assetImagePath: 'assets/images/hatchback_clean.jpg',
       fallbackIcon: Icons.directions_car_rounded,
     ),
     VehicleCategoryType.logistics: VehicleCategoryConfig(

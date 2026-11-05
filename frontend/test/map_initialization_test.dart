@@ -45,12 +45,10 @@ void main() {
       );
       await tester.pump();
       expect(
-        tester
-            .widget<GoogleMap>(find.byType(GoogleMap))
-            .markers
-            .any((m) => m.markerId.value == 'current'),
+        tester.widget<GoogleMap>(find.byType(GoogleMap)).myLocationEnabled,
         isTrue,
       );
+      expect(tester.widget<GoogleMap>(find.byType(GoogleMap)).markers, isEmpty);
       maps.completeCreation();
       await tester.pump();
       await tester.pump();

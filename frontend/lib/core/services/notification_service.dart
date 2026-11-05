@@ -85,6 +85,15 @@ class NotificationService {
   final _rideUpdates = StreamController<String>.broadcast();
   final List<StreamSubscription<dynamic>> _subscriptions = [];
   final Set<String> _seen = {};
+  final _openedRides = StreamController<String>.broadcast();
+  String? _pendingOpenedRide;
+  Stream<String> get openedRides => _openedRides.stream;
+  String? takePendingOpenedRide() {
+    final id = _pendingOpenedRide;
+    _pendingOpenedRide = null;
+    return id;
+  }
+
   String? _pendingRide;
   Stream<String> get rideUpdates => _rideUpdates.stream;
   String? takePendingRide() {
@@ -108,6 +117,10 @@ class NotificationService {
     if (_seen.length > 200) _seen.remove(_seen.first);
     if (!_rideUpdates.hasListener) _pendingRide = id;
     _rideUpdates.add(id);
+    if (opened) {
+      if (!_openedRides.hasListener) _pendingOpenedRide = id;
+      _openedRides.add(id);
+    }
     return true;
   }
 
@@ -117,6 +130,7 @@ class NotificationService {
     }
     _subscriptions.clear();
     unawaited(_rideUpdates.close());
+    unawaited(_openedRides.close());
   }
 
   Future<void> init() async {

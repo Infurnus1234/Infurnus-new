@@ -160,6 +160,7 @@ class RideState {
     Map<String, dynamic>? goods,
     Map<String, dynamic>? serviceDetails,
     Map<String, dynamic>? rentalDetails,
+    bool clearRentalDetails = false,
     String? paymentStatus,
     String? paymentId,
     String? paymentMethod,
@@ -203,7 +204,9 @@ class RideState {
       isReviewSubmitted: isReviewSubmitted ?? this.isReviewSubmitted,
       goods: goods ?? this.goods,
       serviceDetails: serviceDetails ?? this.serviceDetails,
-      rentalDetails: rentalDetails ?? this.rentalDetails,
+      rentalDetails: clearRentalDetails
+          ? null
+          : rentalDetails ?? this.rentalDetails,
       paymentStatus: paymentStatus ?? this.paymentStatus,
       paymentId: paymentId ?? this.paymentId,
       paymentMethod: paymentMethod ?? this.paymentMethod,
@@ -791,6 +794,10 @@ class RideNotifier extends StateNotifier<RideState> {
     state = state.copyWith(
       selectedSector: sector,
       selectedTier: state.selectedSector == sector ? state.selectedTier : '',
+      clearRentalDetails: state.selectedSector != sector && sector != 'rental',
+      rentalDetails: state.selectedSector != sector && sector == 'rental'
+          ? {'hours': 1}
+          : null,
       clearFareData: true,
       isEstimatingFare: false,
       clearError: true,
@@ -916,7 +923,9 @@ class RideNotifier extends StateNotifier<RideState> {
       if (serviceDetails != null) {
         payload['serviceDetails'] = serviceDetails;
       }
-      if (rentalDetails != null) {
+      if (sector == 'rental') {
+        payload['bookingHours'] = rentalDetails?['hours'];
+      } else if (rentalDetails != null) {
         payload['rentalDetails'] = rentalDetails;
         if (rentalDetails['hours'] != null) {
           payload['rentalHours'] = rentalDetails['hours'];
@@ -1015,7 +1024,9 @@ class RideNotifier extends StateNotifier<RideState> {
       if (state.serviceDetails != null) {
         data['serviceDetails'] = state.serviceDetails;
       }
-      if (state.rentalDetails != null) {
+      if (state.selectedSector == 'rental') {
+        data['bookingHours'] = state.rentalDetails?['hours'];
+      } else if (state.rentalDetails != null) {
         data['rentalDetails'] = state.rentalDetails;
       }
 
@@ -1134,6 +1145,24 @@ class RideNotifier extends StateNotifier<RideState> {
     }
   }
 
+  /// Rehydrate from authorized backend state after resume or process recreation.
+  Future<void> restoreActiveRide() async {
+    final existing = state.currentRide;
+    if (existing != null && _activeRide) {
+      await getRideDetails(existing.id);
+      return;
+    }
+    await fetchRideHistory();
+    if (!mounted || state.isUnauthenticated) return;
+    for (final ride in state.history) {
+      if (ride.status != model.RideStatus.completed &&
+          ride.status != model.RideStatus.cancelled) {
+        await getRideDetails(ride.id);
+        break;
+      }
+    }
+  }
+
   Future<void> getRideDetails(String id) async {
     final generation = ++_rideReadGeneration;
     try {
@@ -1142,6 +1171,13 @@ class RideNotifier extends StateNotifier<RideState> {
       state = state.copyWith(
         status: _mapBackendStatus(ride.status),
         currentRide: ride,
+        pickup: ride.pickupAddress,
+        destination: ride.destinationAddress,
+        pickupCoords: LatLng(ride.pickup.latitude, ride.pickup.longitude),
+        destinationCoords: LatLng(
+          ride.destination.latitude,
+          ride.destination.longitude,
+        ),
         driverName: ride.driverDetails?.name,
         vehicleInfo: ride.vehicleDetails != null
             ? '${ride.vehicleDetails!.make} ${ride.vehicleDetails!.model} • ${ride.vehicleDetails!.plateNumber}'

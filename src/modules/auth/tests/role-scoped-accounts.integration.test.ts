@@ -220,14 +220,25 @@ describe('Role-scoped verified account identities', () => {
     expect(results.filter((r) => r.status === 200)).toHaveLength(1);
     expect((await pool.query('SELECT id FROM users WHERE email=$1', [email])).rowCount).toBe(1);
   });
-  it('concurrent different-role signup does not reserve the contact globally', async () => {
+  it('concurrent provider roles require reconciliation while Customer remains separate', async () => {
     const results = await Promise.all([
       signup('customer'),
       signup('driver'),
       signup('fleet_owner'),
     ]);
-    expect(results.map((r) => r.status)).toEqual([200, 200, 200]);
-    expect(new Set(results.map((r) => r.body.data.userId)).size).toBe(3);
+    expect(results[0]!.status).toBe(200);
+    expect(
+      results
+        .slice(1)
+        .map((r) => r.status)
+        .sort(),
+    ).toEqual([200, 409]);
+    expect(results.find((r) => r.status === 409)!.body.error.code).toBe(
+      'PROVIDER_IDENTITY_RECONCILIATION_REQUIRED',
+    );
+    expect(
+      new Set(results.filter((r) => r.status === 200).map((r) => r.body.data.userId)).size,
+    ).toBe(2);
   });
   it('database rejects same-role normalized contact aliases while allowing different roles', async () => {
     await signup('customer', { phone, email });
@@ -293,7 +304,7 @@ describe('Role-scoped verified account identities', () => {
   it('Google verified subject creates separate explicit-role accounts and refuses ambiguity', async () => {
     const idToken = await fixture.token({ sub: prefix, email });
     const results = [];
-    for (const role of ['customer', 'driver', 'fleet_owner']) {
+    for (const role of ['customer', 'driver']) {
       const r = await request(app)
         .post('/auth/google')
         .send({
@@ -312,7 +323,12 @@ describe('Role-scoped verified account identities', () => {
         });
       expect(again.body.data.userId).toBe(r.body.data.userId);
     }
-    expect(new Set(results.map((r) => r.body.data.userId)).size).toBe(3);
+    expect(new Set(results.map((r) => r.body.data.userId)).size).toBe(2);
+    const blocked = await request(app)
+      .post('/auth/google')
+      .send({ idToken, accountRole: 'fleet_owner', driverFlow: 'signup' });
+    expect(blocked.status).toBe(409);
+    expect(blocked.body.error.code).toBe('PROVIDER_IDENTITY_RECONCILIATION_REQUIRED');
     const ambiguous = await request(app).post('/auth/google').send({ idToken });
     expect(ambiguous.status).toBe(409);
     expect(ambiguous.body.error.code).toBe('ACCOUNT_ROLE_REQUIRED');
@@ -333,7 +349,7 @@ describe('Role-scoped verified account identities', () => {
   it('recovery resolves explicit role but never resets public-role credentials or sessions', async () => {
     await signup('customer');
     const fleet = await signup('fleet_owner'),
-      combined = await signup('driver_fleet_owner');
+      combined = await signup('driver_fleet_owner', { email: prefix + '-separate@example.test' });
     const ambiguous = await request(app).post('/auth/forgot-password').send({ email });
     expect(ambiguous.status).toBe(409);
     const reset = await request(app)
@@ -430,23 +446,22 @@ describe('Role-scoped verified account identities', () => {
     expect(emailAttempt.status).toBe(400);
     expect((await login('customer', { phone })).body.data.userId).toBe(a.body.data.userId);
   });
-  it('provisional role choice cannot overwrite another existing role account', async () => {
-    const driver = await signup('driver'),
-      fleet = await signup('fleet_owner');
+  it('a duplicate provider signup is blocked and provisional choice preserves its identity', async () => {
+    const driver = await signup('driver');
+    const fleet = await signup('fleet_owner');
+    expect(fleet.status).toBe(409);
+    expect(fleet.body.error.code).toBe('PROVIDER_IDENTITY_RECONCILIATION_REQUIRED');
+    const id = driver.body.data.userId;
+    const original = driver.body.data.publicId;
     await pool.query(
       'UPDATE provider_onboarding SET role_selection_pending=TRUE WHERE user_id=$1',
-      [driver.body.data.userId],
+      [id],
     );
-    const repo = new RoleEnrolmentRepository(pool);
-    await expect(
-      repo.selectRole(driver.body.data.userId, 'driver', 'fleet_owner'),
-    ).rejects.toMatchObject({ code: 'ACCOUNT_ROLE_EXISTS' });
-    expect((await pool.query('SELECT id,role FROM users WHERE email=$1', [email])).rows).toEqual(
-      expect.arrayContaining([
-        { id: driver.body.data.userId, role: 'driver' },
-        { id: fleet.body.data.userId, role: 'fleet_owner' },
-      ]),
+    await new RoleEnrolmentRepository(pool).selectRole(id, 'driver', 'fleet_owner');
+    expect((await pool.query('SELECT provider_public_id($1) AS id', [id])).rows[0].id).toBe(
+      original,
     );
+    expect((await pool.query('SELECT id FROM users WHERE email=$1', [email])).rowCount).toBe(1);
   });
   it('unverified secondary Fleet email cannot become a password recovery identity', async () => {
     const fleet = await signup('fleet_owner', { phone, email });

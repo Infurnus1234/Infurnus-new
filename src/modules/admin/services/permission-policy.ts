@@ -67,6 +67,8 @@ export function requiredPermissions(
   body?: { status?: string },
 ): string[] | null {
   const path = rawPath.replace(/\/+$/, '');
+  if (method === 'GET' && /^\/admin\/provider-identities\/[1-9][0-9]{5,63}$/.test(path))
+    return ['users.read', 'users.detail'];
   const deletion = path.match(
     /^\/admin\/records\/(users|drivers|partners|vehicles|vehicle-types|coupons|support|notifications|approvals|fleet-applications)\/[\da-f-]{36}$/i,
   );

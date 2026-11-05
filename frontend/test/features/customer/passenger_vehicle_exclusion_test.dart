@@ -147,8 +147,9 @@ void main() {
         expect(find.text('Hatchback'), findsWidgets);
         expect(find.text('Sedan'), findsWidgets);
         expect(find.text('Innova Crysta'), findsOneWidget);
-        expect(find.text('Winger'), findsOneWidget);
-        expect(find.text('Force Traveller'), findsOneWidget);
+        expect(find.text('Minicab'), findsOneWidget);
+        expect(find.text('Winger'), findsNothing);
+        expect(find.text('Force Traveller'), findsNothing);
       },
     );
 

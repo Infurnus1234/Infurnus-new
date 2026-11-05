@@ -4,6 +4,8 @@ export const approvalFleetFields = `
   r.requester_id AS submitted_by_id,
   CASE WHEN submitter.deleted_at IS NULL THEN NULLIF(btrim(concat_ws(' ',submitter.first_name,submitter.last_name)),'') END AS submitted_by_name,
   fleet.id AS fleet_id, fleet.user_id AS fleet_owner_id,
+  provider_public_id(fleet.user_id) AS fleet_owner_public_id,
+  provider_public_id(r.requester_id) AS requester_public_id,
   CASE WHEN fleet_user.deleted_at IS NULL THEN COALESCE(NULLIF(btrim(concat_ws(' ',fleet_user.first_name,fleet_user.last_name)),''),NULLIF(btrim(fleet.owner_name),''),NULLIF(btrim(fleet.business_name),'')) END AS fleet_owner_name`;
 export const approvalFleetJoins = `
   LEFT JOIN users submitter ON submitter.id=r.requester_id

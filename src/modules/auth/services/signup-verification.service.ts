@@ -7,6 +7,7 @@ import type { PendingSignupRepository } from '../repositories/pending-signup.rep
 import type { SignupCompletionRepository } from '../repositories/signup-completion.repository.js';
 
 export interface SignupVerificationResult {
+  publicId?: string | null;
   userId: string;
   role: string;
   status: string;
@@ -161,6 +162,7 @@ export class SignupVerificationService {
       case 'completed':
         return {
           userId: result.user.id,
+          ...(result.user.publicId ? { publicId: result.user.publicId } : {}),
           role: result.user.role,
           status: result.user.status,
         };

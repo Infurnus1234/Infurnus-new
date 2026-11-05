@@ -8,6 +8,31 @@ import { StorageValidationError } from '../../infrastructure/storage/validation.
 import { MulterError } from 'multer';
 
 export function errorMiddleware(err: unknown, _req: Request, res: Response, _next: NextFunction) {
+  if (
+    err &&
+    typeof err === 'object' &&
+    'code' in err &&
+    ['P1001', 'P1002', 'P1003'].includes(String(err.code))
+  ) {
+    const exhausted = err.code === 'P1002';
+    const paused = err.code === 'P1003';
+    res.status(exhausted || paused ? 503 : 409).json({
+      success: false,
+      error: {
+        code: paused
+          ? 'PROVIDER_ID_ALLOCATION_PAUSED'
+          : exhausted
+            ? 'PROVIDER_ID_CAPACITY_EXHAUSTED'
+            : 'PROVIDER_IDENTITY_RECONCILIATION_REQUIRED',
+        message: paused
+          ? 'Provider registration is temporarily paused.'
+          : exhausted
+            ? 'Provider ID capacity is exhausted. A Super Admin must activate a larger ID length.'
+            : 'Sign in to your existing provider account or verify both accounts before linking them.',
+      },
+    });
+    return;
+  }
   if (err && typeof err === 'object' && 'code' in err && err.code === '23514') {
     res.status(409).json({
       success: false,

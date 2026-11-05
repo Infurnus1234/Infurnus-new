@@ -161,7 +161,7 @@ export const operationQuerySchema = z
     pageSize: z.coerce.number().int().min(1).max(100).default(25),
     search: z.string().trim().min(1).max(150).optional(),
     recordId: z.string().uuid().optional(),
-    sector: z.enum(['passenger', 'logistics', 'premium', 'service']).optional(),
+    sector: z.enum(['passenger', 'logistics', 'premium', 'service', 'rental']).optional(),
     status: z.string().max(40).optional(),
     from: z.string().date().optional(),
     to: z.string().date().optional(),

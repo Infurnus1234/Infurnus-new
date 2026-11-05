@@ -21,6 +21,10 @@ export function freshRideLocation(location: LiveRideLocation | null, now = Date.
     ? { ...location }
     : null;
 }
+/** Coordinates for the assigned driver's destination pin; navigation remains PIN gated. */
+export function driverDestinationMarkerAllowed(ride: Ride): boolean {
+  return !!ride.assignedDriverId && activeMapStatuses.includes(ride.status);
+}
 export function driverDestinationAllowed(ride: Ride): boolean {
   return (
     !!ride.assignedDriverId &&

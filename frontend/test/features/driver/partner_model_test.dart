@@ -3,6 +3,33 @@ import 'package:infurnus/features/driver/data/models/partner_model.dart';
 
 void main() {
   group('PartnerModel JSON serialization', () {
+    test(
+      'public ID preserves resource identity, old caches and wider strings',
+      () {
+        final record = <String, dynamic>{
+          'id': 'resource-uuid',
+          'userId': 'account-uuid',
+          'businessName': 'Fleet',
+          'approvalStatus': 'pending',
+          'availabilityStatus': 'offline',
+          'createdAt': '2026-01-01T00:00:00Z',
+          'updatedAt': '2026-01-01T00:00:00Z',
+        };
+        expect(PartnerModel.fromJson(record).publicId, isNull);
+        for (final id in ['100001', '1000000', '100000000000']) {
+          final model = PartnerModel.fromJson({...record, 'publicId': id});
+          expect(model.publicId, id);
+          expect(model.id, 'resource-uuid');
+          expect(model.toJson()['publicId'], id);
+        }
+        for (final invalid in ['UUID-123', '100001\n', 100001]) {
+          expect(
+            PartnerModel.fromJson({...record, 'publicId': invalid}).publicId,
+            isNull,
+          );
+        }
+      },
+    );
     test('should correctly deserialize valid partner JSON', () {
       final json = {
         'id': 'p-123',

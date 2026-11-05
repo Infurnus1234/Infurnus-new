@@ -1,4 +1,8 @@
-import { rideInformation, driverDestinationAllowed } from './ride-map-mapper.js';
+import {
+  rideInformation,
+  driverDestinationAllowed,
+  driverDestinationMarkerAllowed,
+} from './ride-map-mapper.js';
 import type { RideInformation } from '../types/ride-map.js';
 import type { Ride } from '../types/ride.js';
 
@@ -33,11 +37,16 @@ export function sanitizeRideForDriver(ride: Ride): DriverSafeRide {
   return {
     ...driverSafe,
     serverTime: new Date().toISOString(),
-    destination: reveal ? destination : null,
+    destination: reveal || driverDestinationMarkerAllowed(ride) ? destination : null,
     destinationAddress: reveal ? destinationAddress : null,
     goods: reveal ? (ride.goods ?? null) : null,
     serviceDetails: reveal ? (ride.serviceDetails ?? null) : null,
-    rentalDetails: reveal ? (ride.rentalDetails ?? null) : null,
+    rentalDetails:
+      ride.sector === 'rental'
+        ? { hours: ride.rentalDetails?.hours ?? null }
+        : reveal
+          ? (ride.rentalDetails ?? null)
+          : null,
     rideInformation: rideInformation(ride, reveal),
   };
 }

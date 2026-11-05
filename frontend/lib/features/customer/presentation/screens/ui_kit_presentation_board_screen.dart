@@ -33,8 +33,8 @@ class UiKitPresentationBoardScreen extends ConsumerWidget {
         'widget': const RideBookingScreen(),
       },
       {
-        'title': '4. Passenger Rides',
-        'route': '/passenger-rides',
+        'title': '4. Rental',
+        'route': '/rentals',
         'widget': const PassengerRidesScreen(),
       },
       {
@@ -75,7 +75,7 @@ class UiKitPresentationBoardScreen extends ConsumerWidget {
               ),
             ),
             Text(
-              'Move. Haul. Rise. • All 8 Production Screens (390x844 Frame)',
+              'Move. Haul. Ride. • All 8 Production Screens (390x844 Frame)',
               style: TextStyle(color: Color(0xFF22C55E), fontSize: 12),
             ),
           ],

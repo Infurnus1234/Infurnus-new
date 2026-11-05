@@ -9,6 +9,7 @@ import {
   freshRideLocation,
   rideInformation,
   driverDestinationAllowed,
+  driverDestinationMarkerAllowed,
 } from '../utils/ride-map-mapper.js';
 import {
   geographicDistance,
@@ -210,6 +211,9 @@ export class RideService {
     }
     const ride = await this.repository.create(customerId, {
       ...input,
+      ...(input.sector === 'rental'
+        ? { rentalDetails: { hours: requestedBookingHours(input) } }
+        : {}),
       fareEstimate: bookingFare.grossAmount / 100,
       bookingDistanceMeters: bookingFare.distanceMeters,
       bookingFareSnapshot: bookingFare,
@@ -382,6 +386,14 @@ export class RideService {
     }
     return {
       ...rideInformation(ride, view === 'user' || driverDestinationAllowed(ride)),
+      ...(view === 'driver' && driverDestinationMarkerAllowed(ride)
+        ? {
+            drop: {
+              ...ride.destination,
+              address: driverDestinationAllowed(ride) ? ride.destinationAddress : null,
+            },
+          }
+        : {}),
       rideId: ride.id,
       driverLocation,
       userLocation,

@@ -42,11 +42,35 @@ class CatalogRepository extends RecordingRepository {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+  test('Rental can browse bundled vehicles when the old catalog rejects the sector', () async {
+    final dio = Dio()
+      ..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (request, handler) {
+            handler.reject(
+              DioException(
+                requestOptions: request,
+                response: Response(requestOptions: request, statusCode: 400),
+                type: DioExceptionType.badResponse,
+              ),
+            );
+          },
+        ),
+      );
+    final source = RideRemoteDataSourceImpl(dio);
+    expect(await source.getFleet(sector: 'rental'), isEmpty);
+    await expectLater(
+      source.getFleet(sector: 'premium'),
+      throwsA(isA<DioException>()),
+    );
+  });
   for (final entry in [
-    ('passenger', 'innova_crysta', 'Configured Innova'),
+    ('passenger', 'innova', 'Innova Crysta'),
+    ('passenger', 'mini', 'Minicab'),
+    ('rental', 'mini', 'Minicab'),
     ('logistics', 'tata_407', 'Tata 407'),
     ('premium', 'thar', 'Mahindra Thar'),
-    ('service', 'configured_crane', 'Configured Crane'),
+    ('service', 'ambulance', 'Ambulance'),
   ]) {
     test(
       'catalog ${entry.$1} retains its configured code, not a display-name alias',
@@ -122,6 +146,13 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(
+          find.text(entry.$3),
+          180,
+          scrollable: find.byType(Scrollable).last,
+        );
+        await tester.ensureVisible(find.text(entry.$3));
+        await tester.pumpAndSettle();
         expect(find.text(entry.$3), findsOneWidget);
         await tester.tap(find.text(entry.$3));
         await tester.pumpAndSettle();
@@ -133,12 +164,19 @@ void main() {
           pickupCoords: const LatLng(25.6, 85.1),
           destCoords: const LatLng(26.1, 85.3),
         );
+        if (entry.$1 == 'rental') notifier.setRentalDetails({'hours': 17});
         await notifier.estimateRouteFare();
         if (entry.$1 != 'service') {
           await notifier.requestRide();
           expect(repository.bookingPayload?['vehicleCategory'], entry.$2);
         }
         expect(repository.payloads.last['vehicleCategory'], entry.$2);
+        if (entry.$1 == 'rental') {
+          expect(repository.payloads.last['sector'], 'rental');
+          expect(repository.payloads.last['bookingHours'], 17);
+          expect(repository.bookingPayload?['sector'], 'rental');
+          expect(repository.bookingPayload?['bookingHours'], 17);
+        }
         await tester.pump(const Duration(milliseconds: 50));
         await tester.pumpWidget(const SizedBox.shrink());
         container.dispose();

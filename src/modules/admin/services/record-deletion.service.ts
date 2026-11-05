@@ -170,6 +170,14 @@ export class RecordDeletionService {
     );
     const blocked: string[] = [];
     for (const ref of refs.rows) {
+      // Issuance history survives through account_id. This FK only tracks the live
+      // account and PostgreSQL clears it on deletion; it is not operational history.
+      if (
+        table === 'users' &&
+        ref.table === 'provider_identity_accounts' &&
+        ref.column === 'user_id'
+      )
+        continue;
       const result = await client.query(
         `SELECT 1 FROM ${quote(ref.schema)}.${quote(ref.table)} WHERE ${quote(ref.column)}=$1 LIMIT 1`,
         [id],

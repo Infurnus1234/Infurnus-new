@@ -127,6 +127,36 @@ describeDatabase('ride PostgreSQL integration', () => {
     await restoreServiceFixtures(pool, serviceCatalog);
   });
 
+  it('a socket disconnect preserves availability and assignment throughout an active ride', async () => {
+    const id = fixture.rideIds[0]!;
+    await service.acceptRide(fixture.driverProfileId, id);
+    for (const status of ['driver_assigned', 'driver_arriving', 'driver_arrived', 'in_progress']) {
+      if (status === 'in_progress') {
+        expect(await repository.verifyPinAttempt(id, fixture.driverProfileId, '7391')).toBe(
+          'verified',
+        );
+      } else {
+        await pool.query('UPDATE rides SET status=$2 WHERE id=$1', [id, status]);
+      }
+      for (const availability of ['available', 'busy']) {
+        await pool.query('UPDATE driver_profiles SET availability_status=$2 WHERE id=$1', [
+          fixture.driverProfileId,
+          availability,
+        ]);
+        expect(await driverRepository.markStale(fixture.driverProfileId)).toBe(false);
+        const row = (
+          await pool.query('SELECT availability_status FROM driver_profiles WHERE id=$1', [
+            fixture.driverProfileId,
+          ])
+        ).rows[0];
+        expect(row.availability_status).toBe(availability);
+        const ride = await repository.findById(id);
+        expect(ride?.status).toBe(status);
+        expect(ride?.assignedDriverId).toBe(fixture.driverProfileId);
+      }
+    }
+  });
+
   it('exposes customer contact only after actual acceptance and revokes it on cancellation/reassignment', async () => {
     const driverService = new DriverService(driverRepository, undefined, repository);
     const app = express();
@@ -148,16 +178,18 @@ describeDatabase('ride PostgreSQL integration', () => {
       request(app)
         .get(`/rides/driver/rides/${id}/customer-contact`)
         .auth(token, { type: 'bearer' });
-    await pool.query('UPDATE users SET phone=$2 WHERE id=$1', [
-      fixture.customerId,
-      '+919876543210',
-    ]);
+    const customerPhone =
+      '+91' +
+      (BigInt('0x' + fixture.customerId.replaceAll('-', '')) % 10_000_000_000n)
+        .toString()
+        .padStart(10, '0');
+    await pool.query('UPDATE users SET phone=$2 WHERE id=$1', [fixture.customerId, customerPhone]);
     expect((await get()).status).toBe(404); // live offer is not permission
     await service.acceptRide(fixture.driverProfileId, id);
     expect((await get()).body.data).toEqual({
       rideId: id,
       name: 'Ride Customer',
-      phone: '+919876543210',
+      phone: customerPhone,
     });
     await pool.query('UPDATE users SET deleted_at=NOW() WHERE id=$1', [fixture.driverUserId]);
     expect((await get()).status).toBe(404);
@@ -232,20 +264,22 @@ describeDatabase('ride PostgreSQL integration', () => {
   it('allows each real accepted-trip phase and stops exposing contact after completion', async () => {
     const contactService = new DriverService(driverRepository, undefined, repository);
     const id = fixture.rideIds[0]!;
-    await pool.query('UPDATE users SET phone=$2 WHERE id=$1', [
-      fixture.customerId,
-      '+919876543210',
-    ]);
+    const customerPhone =
+      '+91' +
+      (BigInt('0x' + fixture.customerId.replaceAll('-', '')) % 10_000_000_000n)
+        .toString()
+        .padStart(10, '0');
+    await pool.query('UPDATE users SET phone=$2 WHERE id=$1', [fixture.customerId, customerPhone]);
     await service.acceptRide(fixture.driverProfileId, id);
     for (const status of ['driver_arriving', 'driver_arrived'] as const) {
       await service.transitionRide(id, status, fixture.driverProfileId);
       expect((await contactService.getCustomerContact(fixture.driverUserId, id)).phone).toBe(
-        '+919876543210',
+        customerPhone,
       );
     }
     await service.transitionRide(id, 'in_progress', fixture.driverProfileId, '7391');
     expect((await contactService.getCustomerContact(fixture.driverUserId, id)).phone).toBe(
-      '+919876543210',
+      customerPhone,
     );
     await service.completeRide(id, fixture.driverProfileId);
     await expect(contactService.getCustomerContact(fixture.driverUserId, id)).rejects.toMatchObject(
@@ -444,7 +478,11 @@ describeDatabase('ride PostgreSQL integration', () => {
       expect(driver.totalDistance).toEqual(user.totalDistance);
       expect(user.pickup).toEqual(driver.pickup);
       expect(user.drop).not.toBeNull();
-      expect(driver.drop).toBeNull();
+      expect(driver.drop).toMatchObject({
+        latitude: expect.any(Number),
+        longitude: expect.any(Number),
+        address: null,
+      });
       expect(driver.rideType).toBe(sector);
       expect(user.driverLocation).not.toBeNull();
       expect(user.routeStatus).toBe('not_requested');
@@ -624,7 +662,7 @@ describeDatabase('ride PostgreSQL integration', () => {
     );
     expect(await repository.findByIdForCustomer(booked.id, fixture.driverUserId)).toBeNull();
   });
-  it('starts once with a leading-zero PIN, rejects replay and never leaks destination before verification', async () => {
+  it('starts once with a leading-zero PIN, rejects replay and preserves the assigned destination marker', async () => {
     await prepareMap();
     const id = fixture.rideIds[0]!;
     await pool.query(`UPDATE rides SET pin=NULL,pin_ciphertext=$2,pin_verifier=$3 WHERE id=$1`, [
@@ -635,7 +673,7 @@ describeDatabase('ride PostgreSQL integration', () => {
     await service.transitionRide(id, 'driver_arriving', fixture.driverProfileId);
     await service.transitionRide(id, 'driver_arrived', fixture.driverProfileId);
     const m = mapService();
-    expect((await m.service.getDriverMap(fixture.driverUserId, id, true)).drop).toBeNull();
+    expect((await m.service.getDriverMap(fixture.driverUserId, id, true)).drop).not.toBeNull();
     await expect(
       service.transitionRide(id, 'in_progress', fixture.driverProfileId),
     ).rejects.toMatchObject({ code: 'PIN_VERIFICATION_REQUIRED' });

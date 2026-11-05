@@ -7,15 +7,15 @@ void main() {
     test('Passenger Rides exact mappings', () {
       expect(
         VehicleVisualImage.getAssetPath('Hatchback', 'rides'),
-        'assets/images/hatchback.jpg',
+        'assets/images/hatchback_clean.jpg',
       );
       expect(
         VehicleVisualImage.getAssetPath('Baleno', 'rides'),
-        'assets/images/hatchback.jpg',
+        'assets/images/hatchback_clean.jpg',
       );
       expect(
         VehicleVisualImage.getAssetPath('Sedan', 'passenger'),
-        'assets/images/sedan.jpg',
+        'assets/images/sedan_clean.jpg',
       );
       expect(
         VehicleVisualImage.getAssetPath('Innova Crysta', 'rides'),
@@ -46,7 +46,7 @@ void main() {
       );
       expect(
         VehicleVisualImage.getAssetPath('207 Cargo', 'logistics'),
-        'assets/images/cargo_207_normal.png',
+        'assets/images/cargo_207_heavy.png',
       );
       expect(
         VehicleVisualImage.getAssetPath('207 Heavy Cargo', 'logistics'),
@@ -108,7 +108,7 @@ void main() {
       );
       expect(
         VehicleVisualImage.getAssetPath('Force Traveller', 'rides'),
-        'assets/images/force_urbania.jpg',
+        'assets/images/force_traveller_clean.jpg',
       );
       expect(
         VehicleVisualImage.getAssetPath('Mahindra Thar', 'suv'),
@@ -124,7 +124,7 @@ void main() {
       expect(
         VehicleCategoryConfig.getConfig(VehicleCategoryType.rides)
             .assetImagePath,
-        'assets/images/sedan.jpg',
+        'assets/images/hatchback_clean.jpg',
       );
       expect(
         VehicleCategoryConfig.getConfig(VehicleCategoryType.logistics)

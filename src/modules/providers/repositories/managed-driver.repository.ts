@@ -72,7 +72,7 @@ export class ManagedDriverRepository {
     const partner = await this.owner(this.pool, owner, role);
     return (
       await this.pool.query(
-        `SELECT u.id AS "userId",dp.id AS "profileId",u.first_name AS "firstName",u.last_name AS "lastName",u.email,
+        `SELECT provider_public_id(u.id) AS "publicId",u.id AS "userId",dp.id AS "profileId",u.first_name AS "firstName",u.last_name AS "lastName",u.email,
    CASE WHEN m.provisioned_email IS NOT NULL OR m.provisioned_phone IS NOT NULL THEN 'fleet_provisioned' ELSE 'self_registered' END AS "accountOrigin",
    dp.verification_status AS "verificationStatus",dp.active_vehicle_id AS "vehicleId",m.onboarding_submitted_at AS "submittedAt"
    FROM fleet_managed_driver_accounts m JOIN users u ON u.id=m.driver_user_id JOIN driver_profiles dp ON dp.user_id=u.id
@@ -228,7 +228,7 @@ export class ManagedDriverRepository {
     const target = await this.authorizedProfile(owner, role, userId);
     const profile = (
       await this.pool.query(
-        `SELECT dp.id,u.id AS "userId",u.first_name AS "firstName",u.last_name AS "lastName",u.email,u.phone,
+        `SELECT provider_public_id(u.id) AS "publicId",dp.id,u.id AS "userId",u.first_name AS "firstName",u.last_name AS "lastName",u.email,u.phone,
    dp.license_number AS "licenseNumber",dp.license_expiry::text AS "licenseExpiry",dp.verification_status AS "verificationStatus"
    FROM driver_profiles dp JOIN users u ON u.id=dp.user_id WHERE dp.id=$1`,
         [target.id],

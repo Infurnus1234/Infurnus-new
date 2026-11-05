@@ -145,7 +145,7 @@ describe('validated booking-demand pricing', () => {
   });
   it('rejects invalid thresholds', () =>
     expect(() => demandProvenance({ ...settings, highBookingCount: 5 })).toThrow());
-  it('Scorpio N requires an explicitly saved approved tariff, not SUV fallback', async () => {
+  it('Scorpio N stays in Premium and requires an explicitly saved tariff', async () => {
     const repo = { findTypeByCode: vi.fn(async () => null) } as unknown as VehicleRepository;
     const maps = { calculateRoute: vi.fn() } as unknown as MapProvider;
     await expect(
@@ -157,14 +157,14 @@ describe('validated booking-demand pricing', () => {
     ).rejects.toMatchObject({ code: 'FARE_CONFIGURATION_MISSING' });
     expect(maps.calculateRoute).not.toHaveBeenCalled();
     // Hypothetical explicitly approved tariff exists only in this isolated unit fixture.
-    const approved = vehicle('rental', 'scorpio_n', {
+    const approved = vehicle('premium', 'scorpio_n', {
       displayName: 'Scorpio N',
       baseFare: { minimum: 10000, maximum: 10000 },
       perKmRate: { minimum: 2000, maximum: 2000 },
     });
     expect(
       calc.calculateEstimate(
-        { ...input, sector: 'rental', vehicleCategory: 'scorpio_n' },
+        { ...input, sector: 'premium', vehicleCategory: 'scorpio_n' },
         approved,
       ),
     ).toMatchObject({ bookable: true });

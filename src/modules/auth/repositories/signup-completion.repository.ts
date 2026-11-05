@@ -1,3 +1,4 @@
+import { ProviderPublicIdService } from '../../providers/services/provider-public-id.service.js';
 import { AppError } from '../../../common/errors/app-error.js';
 import { withTransaction } from '../../../infrastructure/database/postgres.js';
 
@@ -6,6 +7,7 @@ import { withTransaction } from '../../../infrastructure/database/postgres.js';
 // ============================================================
 
 export interface CompletedSignupUser {
+  publicId?: string | null;
   id: string;
   role: string;
   status: string;
@@ -329,6 +331,8 @@ export class PostgresSignupCompletionRepository implements SignupCompletionRepos
         // completes successfully.
         // ======================================================
 
+        if (['driver', 'driver_fleet_owner', 'fleet_owner'].includes(user.role))
+          user.publicId = await new ProviderPublicIdService().ensure(client, user.id);
         if (['driver', 'driver_fleet_owner', 'fleet_owner'].includes(user.role))
           await client.query(
             'INSERT INTO provider_onboarding(user_id,role_flow_active) VALUES($1,TRUE) ON CONFLICT DO NOTHING',

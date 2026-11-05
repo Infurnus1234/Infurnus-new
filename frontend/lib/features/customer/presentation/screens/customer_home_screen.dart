@@ -1,3 +1,6 @@
+import '../../domain/utils/logistics_catalog.dart';
+import '../widgets/vehicle_presentation_catalog.dart';
+
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -18,6 +21,8 @@ import '../../../../shared/widgets/vehicle_visual_image.dart';
 import '../providers/ride_use_case_providers.dart';
 import '../../data/models/fleet_vehicle_model.dart';
 import '../widgets/vehicle_category_visual.dart';
+import 'specialty_emergency_screen.dart';
+import 'concierge_fleet_screen.dart';
 import '../../../auth/presentation/providers/user_provider.dart';
 
 final serviceCatalogProvider =
@@ -147,6 +152,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     _searchController.clear();
     setState(() => _suggestions = []);
 
+    ref.read(rideProvider.notifier).selectSector('rental');
     ref
         .read(rideProvider.notifier)
         .setRoute('Current Location', suggestion.title);
@@ -310,7 +316,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
             ),
             const SizedBox(height: 2),
             const Text(
-              'Move. Haul. Rise.',
+              'Move. Haul. Ride.',
               style: TextStyle(
                 fontSize: 12,
                 color: textSecondary,
@@ -398,7 +404,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
 
   Widget _buildDestinationSearchBar(BuildContext context) {
     return GestureDetector(
-      onTap: () => context.push('/pickup-selection'),
+      onTap: () => context.push('/pickup-selection', extra: 'rental'),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
@@ -604,7 +610,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                     const SizedBox(height: 16),
                     ElevatedButton(
                       onPressed: () {
-                        context.push('/passenger-rides');
+                        context.push('/rentals');
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF16A34A),
@@ -695,12 +701,12 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
   Widget _buildQuickServicesGrid(BuildContext context) {
     final services = [
       {
-        'title': 'Rides',
+        'title': 'Rental',
         'subtitle': 'Cab, Sedan & More',
         'category': VehicleCategoryType.rides,
         'action': () {
-          ref.read(rideProvider.notifier).selectSector('passenger');
-          context.push('/pickup-selection', extra: 'passenger');
+          ref.read(rideProvider.notifier).selectSector('rental');
+          context.push('/rentals');
         },
       },
       {
@@ -709,7 +715,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         'category': VehicleCategoryType.logistics,
         'action': () {
           ref.read(rideProvider.notifier).selectSector('logistics');
-          context.push('/pickup-selection', extra: 'logistics');
+          context.push('/logistics');
         },
       },
       {
@@ -718,16 +724,16 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         'category': VehicleCategoryType.emergency,
         'action': () {
           ref.read(rideProvider.notifier).selectSector('service');
-          context.push('/pickup-selection', extra: 'service');
+          context.push('/specialty-emergency');
         },
       },
       {
-        'title': 'Rentals',
+        'title': 'Premium',
         'subtitle': 'Luxury & Chauffeur',
         'category': VehicleCategoryType.rental,
         'action': () {
           ref.read(rideProvider.notifier).selectSector('premium');
-          context.push('/pickup-selection', extra: 'premium');
+          context.push('/premium-showcase');
         },
       },
     ];
@@ -828,46 +834,23 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
             onPressed: () => ref.invalidate(bookingCatalogProvider(sector)),
             child: const Text('Unable to load vehicles. Tap to retry.'),
           ),
-          data: (items) => items.isEmpty
-              ? const Text('No vehicles are configured for this service yet.')
-              : SizedBox(
-                  height: 130,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: items.length,
-                    separatorBuilder: (_, _) => const SizedBox(width: 12),
-                    itemBuilder: (context, index) {
-                      final vehicle = items[index];
-                      return _buildHorizontalVehicleCard(
-                        item: _VehicleCategoryItem(
-                          title: vehicle.displayName,
-                          capacity: 'Select pickup',
-                          rate: 'Route estimate',
-                          eta: 'Check availability',
-                          icon: sector == 'logistics'
-                              ? Icons.local_shipping_rounded
-                              : Icons.directions_car_rounded,
-                          category: sector == 'logistics'
-                              ? VehicleCategoryType.logistics
-                              : sector == 'premium'
-                              ? VehicleCategoryType.premium
-                              : VehicleCategoryType.rides,
-                          assetImagePath: VehicleVisualImage.getAssetPath(
-                            vehicle.displayName,
-                            vehicle.category,
-                          ),
-                        ),
-                        onTap: () {
-                          ref.read(rideProvider.notifier).selectSector(sector);
-                          ref
-                              .read(rideProvider.notifier)
-                              .selectTier(vehicle.category);
-                          context.push('/ride-booking');
-                        },
-                      );
-                    },
+          data: (items) => _buildHorizontalFleet(
+            sector,
+            customerVehiclePresentation(sector, items)
+                .map(
+                  (vehicle) => _VehicleCategoryItem(
+                    code: vehicle['category']!,
+                    title: vehicle['name']!,
+                    capacity: vehicle['capacity']!,
+                    rate: 'Route estimate',
+                    eta: 'Check availability',
+                    icon: Icons.directions_car_rounded,
+                    category: VehicleCategoryType.rides,
+                    assetImagePath: vehicle['image'],
                   ),
-                ),
+                )
+                .toList(),
+          ),
         ),
       ],
     );
@@ -876,97 +859,130 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
   Widget _buildPassengerSection(BuildContext context) =>
       _buildConfiguredFleetSection(
         context,
-        'passenger',
-        'Passenger Rides',
-        'Everyday rides across Bihar',
-        '/passenger-rides',
-      );
-
-  Widget _buildLogisticsSection(BuildContext context) =>
-      _buildConfiguredFleetSection(
-        context,
-        'logistics',
-        'Logistics',
-        'Move goods across Bihar',
-        '/logistics',
-      );
-
-  Widget _buildServiceFleetSection(BuildContext context) {
-    final catalog = ref.watch(serviceCatalogProvider);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Expanded(
-              child: Text(
-                'Service Vehicles',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-            ),
-            IconButton(
-              tooltip: 'Refresh Service Vehicles',
-              onPressed: () => ref.invalidate(serviceCatalogProvider),
-              icon: const Icon(Icons.refresh),
-            ),
-          ],
-        ),
-        const Text('Fixed fares · availability checked near your pickup'),
-        const SizedBox(height: 12),
-        catalog.when(
-          loading: () => const LinearProgressIndicator(),
-          error: (_, _) => const Text(
-            'Service types are temporarily unavailable. Tap refresh to try again.',
-          ),
-          data: (items) => items.isEmpty
-              ? const Text(
-                  'No Service types are enabled with a configured fixed fare.',
-                )
-              : SizedBox(
-                  height: 130,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: items.length,
-                    separatorBuilder: (_, _) => const SizedBox(width: 12),
-                    itemBuilder: (context, index) {
-                      final service = items[index];
-                      return _buildHorizontalVehicleCard(
-                        item: _VehicleCategoryItem(
-                          title: service.displayName,
-                          capacity: service.range ?? 'Service radius',
-                          rate: '₹${service.pricing!.toStringAsFixed(2)} fixed',
-                          eta: 'Check availability',
-                          icon: service.category == 'ambulance'
-                              ? Icons.medical_services_rounded
-                              : Icons.build_rounded,
-                          category: VehicleCategoryType.emergency,
-                        ),
-                        onTap: () {
-                          ref
-                              .read(rideProvider.notifier)
-                              .selectSector('service');
-                          ref
-                              .read(rideProvider.notifier)
-                              .selectTier(service.category);
-                          context.push('/ride-booking');
-                        },
-                      );
-                    },
-                  ),
-                ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildConciergeFleetSection(BuildContext context) =>
-      _buildConfiguredFleetSection(
-        context,
-        'premium',
-        'Premium & Rentals',
-        'Book in a configured service city',
+        'rental',
+        'Rental',
+        'Comfort by the hour',
         '/rentals',
       );
+
+  Widget _buildLogisticsSection(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _buildSectionHeader(
+        title: 'Logistics',
+        subtitle: 'Moving goods made easy',
+        onSeeAll: () => context.push('/logistics'),
+      ),
+      const SizedBox(height: 12),
+      _buildHorizontalFleet(
+        'logistics',
+        logisticsVehicles
+            .map(
+              (vehicle) => _VehicleCategoryItem(
+                code: vehicle['category']!,
+                title: vehicle['name']!,
+                capacity: vehicle['capacity']!,
+                rate: 'Route estimate',
+                eta: 'Check availability',
+                icon: Icons.local_shipping_rounded,
+                category: VehicleCategoryType.logistics,
+                assetImagePath: vehicle['image'],
+              ),
+            )
+            .toList(),
+      ),
+    ],
+  );
+
+  Widget _buildHorizontalFleet(
+    String sector,
+    List<_VehicleCategoryItem> items,
+  ) => SizedBox(
+    height: 130,
+    child: ListView.separated(
+      key: ValueKey('vehicle-row:$sector'),
+      scrollDirection: Axis.horizontal,
+      itemCount: items.length,
+      separatorBuilder: (_, _) => const SizedBox(width: 12),
+      itemBuilder: (context, index) {
+        final item = items[index];
+        return _buildHorizontalVehicleCard(
+          item: item,
+          onTap: () {
+            ref.read(rideProvider.notifier).selectSector(sector);
+            ref.read(rideProvider.notifier).selectTier(item.code);
+            context.push('/ride-booking');
+          },
+        );
+      },
+    ),
+  );
+
+  Widget _buildServiceFleetSection(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _buildSectionHeader(
+        title: 'Service Vehicles',
+        subtitle: 'Ready when you need help',
+        onSeeAll: () => context.push('/specialty-emergency'),
+      ),
+      const SizedBox(height: 12),
+      _buildHorizontalFleet(
+        'service',
+        SpecialtyEmergencyScreen.vehicles
+            .map(
+              (item) => _VehicleCategoryItem(
+                code: item['category'] as String,
+                title: item['title'] as String,
+                capacity: item['subtitle'] as String,
+                rate: 'Server fare',
+                eta: 'Check availability',
+                icon: item['fallbackIcon'] as IconData,
+                category: VehicleCategoryType.emergency,
+                assetImagePath: item['image'] as String?,
+              ),
+            )
+            .toList(),
+      ),
+    ],
+  );
+
+  Widget _buildConciergeFleetSection(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _buildSectionHeader(
+        title: 'Premium',
+        subtitle: 'Experience the extraordinary',
+        onSeeAll: () => context.push('/concierge-fleet'),
+      ),
+      const SizedBox(height: 12),
+      _buildHorizontalFleet(
+        'premium',
+        ConciergeFleetScreen.vehicles
+            .map(
+              (item) => _VehicleCategoryItem(
+                code: item['category']!,
+                title: item['title']!,
+                capacity: item['subtitle']!,
+                rate: item['service']!,
+                eta: 'Check availability',
+                icon: VehicleVisualImage.getFallbackIcon(
+                  item['title'],
+                  item['category'],
+                ),
+                category: VehicleCategoryType.premium,
+                assetImagePath:
+                    premiumVehicleImages[item['category']] ??
+                    VehicleVisualImage.getAssetPath(
+                      item['title'],
+                      item['category'],
+                    ),
+              ),
+            )
+            .toList(),
+      ),
+    ],
+  );
 
   Widget _buildSectionHeader({
     required String title,
@@ -1054,11 +1070,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                         borderRadius: 10,
                       ),
                     )
-                  : VehicleCategoryVisual(
-                      category: item.category,
-                      size: 44,
-                      borderRadius: 10,
-                    ),
+                  : Icon(item.icon, size: 44),
             ),
             const SizedBox(height: 6),
             Text(
@@ -1218,10 +1230,10 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
             title: 'No trips yet',
             description:
                 'Your completed rides and deliveries will appear here.',
-            actionLabel: 'Book a Ride',
+            actionLabel: 'Book a Rental',
             onAction: () {
-              ref.read(rideProvider.notifier).selectSector('passenger');
-              context.push('/ride-booking');
+              ref.read(rideProvider.notifier).selectSector('rental');
+              context.push('/rentals');
             },
           ),
       ],
@@ -1423,6 +1435,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
 }
 
 class _VehicleCategoryItem {
+  final String code;
   final String title;
   final String capacity;
   final String rate;
@@ -1432,6 +1445,7 @@ class _VehicleCategoryItem {
   final String? assetImagePath;
 
   const _VehicleCategoryItem({
+    required this.code,
     required this.title,
     required this.capacity,
     required this.rate,

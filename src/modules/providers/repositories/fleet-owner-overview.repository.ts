@@ -31,7 +31,7 @@ export class FleetOwnerOverviewRepository {
       );
     const owner = (
       await this.pool.query(
-        `SELECT p.id,p.user_id AS "userId",p.business_name AS "businessName",p.approval_status AS "approvalStatus",(SELECT CASE WHEN count(*)=0 THEN 'NOT_SUBMITTED' WHEN bool_or(d.expires_at<CURRENT_DATE OR d.status='EXPIRED') THEN 'EXPIRED' WHEN bool_or(d.status='REJECTED') THEN 'REJECTED' WHEN bool_and(d.status='VERIFIED') THEN 'VERIFIED' ELSE 'PENDING' END FROM partner_documents d WHERE d.partner_id=p.id AND d.vehicle_id IS NULL AND d.document_type IN ('AADHAAR','PAN','DRIVING_LICENCE')) AS "identityReviewStatus",
+        `SELECT provider_public_id(p.user_id) AS "publicId",p.id,p.user_id AS "userId",p.business_name AS "businessName",p.approval_status AS "approvalStatus",(SELECT CASE WHEN count(*)=0 THEN 'NOT_SUBMITTED' WHEN bool_or(d.expires_at<CURRENT_DATE OR d.status='EXPIRED') THEN 'EXPIRED' WHEN bool_or(d.status='REJECTED') THEN 'REJECTED' WHEN bool_and(d.status='VERIFIED') THEN 'VERIFIED' ELSE 'PENDING' END FROM partner_documents d WHERE d.partner_id=p.id AND d.vehicle_id IS NULL AND d.document_type IN ('AADHAAR','PAN','DRIVING_LICENCE')) AS "identityReviewStatus",
       (SELECT count(*)::int FROM partner_documents d WHERE d.partner_id=p.id AND (d.status IN ('PENDING','REJECTED','EXPIRED') OR d.expires_at<CURRENT_DATE)) AS "actionRequiredDocuments",
       (SELECT count(*)::int FROM partner_documents d WHERE d.partner_id=p.id AND d.expires_at BETWEEN CURRENT_DATE AND CURRENT_DATE+30) AS "expiringSoonDocuments",u.first_name AS "firstName",u.last_name AS "lastName",u.email,u.phone,u.role
       FROM partners p JOIN users u ON u.id=p.user_id WHERE p.id=$1 AND u.deleted_at IS NULL`,
@@ -73,10 +73,10 @@ export class FleetOwnerOverviewRepository {
       FROM vehicles v JOIN partners p ON p.user_id=v.owner_id WHERE p.id=$1 AND NOT EXISTS (SELECT 1 FROM user_history deleted WHERE deleted.event_type='ADMIN_RECORD_DELETED' AND deleted.entity_id=v.id AND deleted.metadata->>'module'='vehicles') AND concat_ws(' ',v.plate_number,v.make,v.model) ILIKE $4 AND ($5='ALL' OR upper(v.verification_status::text)=$5 OR ($5='ACTION_REQUIRED' AND (v.verification_status::text<>'approved' OR NOT v.is_active)))
       ORDER BY v.created_at DESC,v.id DESC LIMIT $2 OFFSET $3`;
     else if (section === 'drivers')
-      sql = `SELECT dp.id,dp.user_id AS "userId",u.first_name AS "firstName",u.last_name AS "lastName",u.phone,u.email,dp.verification_status AS status,dp.license_expiry AS "licenseExpiry",dp.active_vehicle_id AS "vehicleId",
+      sql = `SELECT provider_public_id(dp.user_id) AS "publicId",dp.id,dp.user_id AS "userId",u.first_name AS "firstName",u.last_name AS "lastName",u.phone,u.email,dp.verification_status AS status,dp.license_expiry AS "licenseExpiry",dp.active_vehicle_id AS "vehicleId",
       EXISTS(SELECT 1 FROM fleet_managed_driver_accounts m WHERE m.partner_id=$1 AND m.driver_user_id=u.id AND m.status='ACTIVE') AS "managementAuthorized"
       FROM driver_profiles dp JOIN users u ON u.id=dp.user_id WHERE u.deleted_at IS NULL AND (EXISTS(SELECT 1 FROM partner_drivers pd WHERE pd.partner_id=$1 AND pd.driver_profile_id=dp.id) OR EXISTS(SELECT 1 FROM fleet_managed_driver_accounts m WHERE m.partner_id=$1 AND m.driver_user_id=u.id))
-      AND concat_ws(' ',u.first_name,u.last_name,u.phone) ILIKE $4 AND ($5='ALL' OR upper(dp.verification_status::text)=$5 OR ($5='ACTION_REQUIRED' AND (dp.verification_status::text<>'approved' OR dp.license_expiry<CURRENT_DATE)))
+      AND concat_ws(' ',provider_public_id(u.id),u.first_name,u.last_name,u.phone) ILIKE $4 AND ($5='ALL' OR upper(dp.verification_status::text)=$5 OR ($5='ACTION_REQUIRED' AND (dp.verification_status::text<>'approved' OR dp.license_expiry<CURRENT_DATE)))
       ORDER BY dp.created_at DESC,dp.id DESC LIMIT $2 OFFSET $3`;
     else
       sql = `SELECT r.id,r.target_type AS "targetType",r.target_id AS "targetId",r.request_type AS "requestType",r.status,r.submitted_at AS "submittedAt",r.reviewer_id AS "reviewerId",r.reviewed_at AS "reviewedAt",r.rejection_reason AS "rejectionReason"

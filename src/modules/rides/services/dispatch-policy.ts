@@ -38,7 +38,7 @@ export function dispatchPolicy(sector = 'passenger', category = ''): DispatchPol
       cityWide: false,
       rankByDistance: category === 'ambulance',
     };
-  if (sector === 'passenger')
+  if (sector === 'passenger' || sector === 'rental')
     return {
       kind: 'normal',
       radiiMeters: [2000, 5000, 10000],

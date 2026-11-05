@@ -1,3 +1,5 @@
+import 'ride_map_phase.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -11,6 +13,7 @@ import '../../features/customer/data/models/route_model.dart';
 import '../../features/customer/presentation/providers/ride_provider.dart';
 
 class InfurnusMap extends ConsumerStatefulWidget {
+  final String? rideStatus;
   final LatLng? pickup;
   final LatLng? destination;
   final DriverLocation? driverLocation;
@@ -20,6 +23,7 @@ class InfurnusMap extends ConsumerStatefulWidget {
 
   const InfurnusMap({
     super.key,
+    this.rideStatus,
     this.pickup,
     this.destination,
     this.driverLocation,
@@ -46,8 +50,6 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap>
       _driverStale = false;
       return;
     }
-    _driverStale =
-        DateTime.now().difference(fix.timestamp) > const Duration(seconds: 10);
     if (_motion.sample(
           LatLng(fix.latitude, fix.longitude),
           fix.timestamp,
@@ -56,10 +58,11 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap>
           accuracy: fix.accuracy,
         ) &&
         !_manualCamera) {
-      _mapService
-          .animateToLocation(LatLng(fix.latitude, fix.longitude))
-          .catchError((_) {});
+      _mapService.animateToLocation(_motion.target!).catchError((_) {});
     }
+    _driverStale =
+        DateTime.now().difference(_motion.timestamp ?? fix.timestamp) >
+        const Duration(seconds: 10);
   }
 
   late MapService _mapService;
@@ -76,6 +79,7 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap>
     WidgetsBinding.instance.addObserver(this);
     _mapService = ref.read(mapServiceProvider(this));
     _motion = VehicleMotion(this);
+    _arrow = cachedNavigationArrow;
     navigationArrow().then((icon) {
       if (mounted) setState(() => _arrow = icon);
     });
@@ -84,7 +88,7 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap>
       final fix = widget.driverLocation;
       final stale =
           fix != null &&
-          DateTime.now().difference(fix.timestamp) >
+          DateTime.now().difference(_motion.timestamp ?? fix.timestamp) >
               const Duration(seconds: 10);
       if (mounted && stale != _driverStale) {
         setState(() => _driverStale = stale);
@@ -172,25 +176,14 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap>
     ref.watch(mapServiceProvider(this));
     final Set<Marker> markers = {};
     final Set<Polyline> polylines = {};
-    if (_currentLocation != null) {
-      markers.add(
-        _mapService.createMarker(
-          markerId: 'current',
-          position: _currentLocation!,
-          title: 'Your location',
-        ),
-      );
-    }
 
-    if (widget.pickup != null) {
+    if (widget.pickup != null && !rideHasStarted(widget.rideStatus)) {
       markers.add(
         _mapService.createMarker(
           markerId: 'pickup',
           position: widget.pickup!,
           title: 'Pickup Location',
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-            BitmapDescriptor.hueGreen,
-          ),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
         ),
       );
     }
@@ -201,7 +194,9 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap>
           markerId: 'destination',
           position: widget.destination!,
           title: 'Destination',
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueGreen,
+          ),
         ),
       );
     }
@@ -233,7 +228,10 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap>
       fit: StackFit.expand,
       children: [
         Listener(
-          onPointerDown: (_) => _manualCamera = true,
+          onPointerDown: (_) {
+            _manualCamera = true;
+            _mapService.cancelCamera();
+          },
           child: AnimatedBuilder(
             animation: _motion,
             builder: (context, _) => GoogleMap(
@@ -243,18 +241,16 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap>
                   CameraPosition(target: fallbackCenter, zoom: defaultZoom),
               markers: {
                 ...markers,
-                if (widget.driverLocation != null && _motion.position != null)
+                if (widget.driverLocation != null &&
+                    _motion.position != null &&
+                    _arrow != null)
                   Marker(
                     markerId: const MarkerId('driver'),
                     position: _motion.position!,
                     flat: true,
                     anchor: const Offset(0.5, 0.5),
                     rotation: _motion.heading,
-                    icon:
-                        _arrow ??
-                        BitmapDescriptor.defaultMarkerWithHue(
-                          BitmapDescriptor.hueAzure,
-                        ),
+                    icon: _arrow!,
                     infoWindow: InfoWindow(
                       title: _driverStale
                           ? 'Last known driver location'
@@ -276,7 +272,8 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap>
                   _fitBounds();
                 }
               },
-              myLocationEnabled: _currentLocation != null,
+              myLocationEnabled:
+                  _currentLocation != null && widget.driverLocation == null,
               myLocationButtonEnabled: false,
               zoomControlsEnabled: false,
               mapToolbarEnabled: false,
@@ -368,7 +365,7 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap>
     _receiveDriver();
     if (widget.pickup != oldWidget.pickup ||
         widget.destination != oldWidget.destination ||
-        widget.route != oldWidget.route ||
+        widget.route?.encodedPolyline != oldWidget.route?.encodedPolyline ||
         widget.bottomOverlayHeight != oldWidget.bottomOverlayHeight) {
       _fitBounds();
     }
@@ -377,7 +374,9 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap>
   void _fitBounds() {
     if (!mounted || _manualCamera) return;
     final points = <LatLng>[];
-    if (widget.pickup != null) points.add(widget.pickup!);
+    if (widget.pickup != null && !rideHasStarted(widget.rideStatus)) {
+      points.add(widget.pickup!);
+    }
     if (widget.destination != null) points.add(widget.destination!);
     final encoded = widget.route?.encodedPolyline;
     if (encoded != null) {

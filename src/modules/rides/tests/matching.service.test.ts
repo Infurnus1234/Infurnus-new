@@ -81,7 +81,7 @@ describe('policy-aware dispatch matching', () => {
           20000,
           expect.any(Number),
           expect.any(Date),
-          sector,
+          sector === 'rental' ? 'passenger' : sector,
           vehicleCategory,
           expect.objectContaining({ rideId: 'remote-booking', customerId: 'customer' }),
         );

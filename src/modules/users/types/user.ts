@@ -1,4 +1,5 @@
 export interface User {
+  publicId?: string | null;
   id: string;
   firstName: string;
   lastName: string;

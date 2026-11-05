@@ -196,6 +196,28 @@ export class RoleEnrolmentRepository {
       return role;
     });
   }
+  async upgradeCapabilities(id: string, currentRole: string) {
+    return this.transaction(async (c) => {
+      await c.query('SELECT id FROM users WHERE id=$1 FOR UPDATE', [id]);
+      await this.actor(c, id, currentRole);
+      if (!roles.includes(currentRole))
+        throw new AppError('FORBIDDEN', 'Provider account required', 403);
+      const existing = await c.query('SELECT provider_public_id($1) AS "publicId"', [id]);
+      if (!existing.rows[0]?.publicId)
+        throw new AppError(
+          'PROVIDER_IDENTITY_RECONCILIATION_REQUIRED',
+          'Resolve your public identity before upgrading',
+          409,
+        );
+      // The existing contact and external-identity constraints also prevent a conflicting upgrade.
+      await c.query("UPDATE users SET role='driver_fleet_owner' WHERE id=$1", [id]);
+      await c.query(
+        "INSERT INTO provider_identity_audit(event,account_id,actor_id,details) VALUES('capabilities_upgraded',$1,$1,jsonb_build_object('from',$2::text,'to','driver_fleet_owner'))",
+        [id, currentRole],
+      );
+      return { role: 'driver_fleet_owner' as const, publicId: existing.rows[0].publicId as string };
+    });
+  }
   async fleetReport(id: string, role: string, month: string) {
     return new FleetFinancialReportRepository(this.pool).report(id, role, month);
   }

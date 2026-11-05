@@ -45,6 +45,7 @@ class SocketService {
     _socket = io.io(envConfigProvider.socketUrl, <String, dynamic>{
       'transports': ['websocket'],
       'autoConnect': false,
+      'forceNew': true,
       'auth': {'token': token},
     });
 

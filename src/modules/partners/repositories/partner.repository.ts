@@ -27,6 +27,7 @@ export interface PartnerRepository {
 const partnerProjection = `
   id,
   user_id AS "userId",
+  provider_public_id(user_id) AS "publicId",
   business_name AS "businessName",
   business_type AS "businessType",gst_number AS "gstNumber",
   business_description AS "businessDescription",

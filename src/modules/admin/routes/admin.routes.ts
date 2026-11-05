@@ -1,4 +1,7 @@
 import { Router } from 'express';
+import { z } from 'zod';
+import { pool } from '../../../infrastructure/database/postgres.js';
+import { ProviderIdentityRepository } from '../../providers/repositories/provider-identity.repository.js';
 
 import { requireAuth } from '../../auth/middleware/auth.middleware.js';
 import { requireRoles } from '../../auth/middleware/authorization.middleware.js';
@@ -9,6 +12,47 @@ export function createAdminRouter(controller: AdminController) {
   const router = Router();
 
   router.use(requireAuth, requireRoles('admin', 'super_admin'), controller.authorize);
+  const identities = new ProviderIdentityRepository(pool);
+  router.get(
+    '/provider-identities/capacity',
+    requireRoles('super_admin'),
+    async (_req, res, next) => {
+      try {
+        res.json({ success: true, data: await identities.capacity() });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+  router.post(
+    '/provider-identities/length',
+    requireRoles('super_admin'),
+    async (req, res, next) => {
+      try {
+        const { length } = z
+          .object({ length: z.number().int().min(6).max(64) })
+          .strict()
+          .parse(req.body);
+        res.json({
+          success: true,
+          data: await identities.activateLength(length, req.auth!.userId),
+        });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+  router.get('/provider-identities/:publicId', async (req, res, next) => {
+    try {
+      const id = z
+        .string()
+        .regex(/^[1-9][0-9]{5,63}$/)
+        .parse(req.params.publicId);
+      res.json({ success: true, data: await identities.lookup(id, req.auth!.userId) });
+    } catch (error) {
+      next(error);
+    }
+  });
 
   // Physical /vehicles inventory endpoints retain their existing meaning.
   router.post('/vehicle-types', controller.createVehicleType);

@@ -1,3 +1,4 @@
+import { bookingInventorySector } from '../../vehicles/services/rental-inventory.js';
 import { bookingRequestFingerprint } from '../services/booking-request.js';
 import { serviceEligibilitySql } from './service-eligibility.js';
 import { logisticsSlab } from '../../vehicles/services/logistics-pricing.js';
@@ -493,18 +494,25 @@ export class PostgresRideRepository implements RideRepository {
             return previous;
           }
         }
-        const code = canonicalVehicleCode(input.sector, input.vehicleCategory);
+        const inventorySector = bookingInventorySector(input.sector);
+        const code = canonicalVehicleCode(inventorySector ?? '', input.vehicleCategory);
         await client.query('SELECT pg_advisory_xact_lock_shared(hashtextextended($1,648032))', [
           code,
         ]);
         const config = snapshot.vehicleConfiguration;
         const locked = await client.query(
           'SELECT * FROM vehicle_types WHERE code=$1 AND sector=$2 FOR SHARE',
-          [code, input.sector],
+          [code, inventorySector],
         );
         const row = locked.rows[0];
+        if (input.sector === 'rental' && (!config || !row?.hourly_base_fares_paise))
+          throw new AppError(
+            'FARE_CONFIGURATION_MISSING',
+            'An approved rental schedule is required',
+            422,
+          );
         if (!config) {
-          if (row && row.sector === input.sector) {
+          if (row && row.sector === inventorySector) {
             if (!row.active)
               throw new AppError('FARE_CONFIGURATION_MISSING', VEHICLE_UNAVAILABLE_MESSAGE, 422);
             throw new AppError(
@@ -521,7 +529,7 @@ export class PostgresRideRepository implements RideRepository {
           !row ||
           !row.active ||
           row.id !== config.id ||
-          row.sector !== input.sector ||
+          row.sector !== inventorySector ||
           row.code !== config.code ||
           (row.code === 'ftl' && !row.logistics_slabs)
         )
@@ -825,7 +833,7 @@ export class PostgresRideRepository implements RideRepository {
                )
                AND v.is_active = TRUE
                AND v.verification_status = 'approved'
-               AND v.sector = r.sector
+               AND v.sector = (CASE WHEN r.sector='rental' THEN 'passenger' ELSE r.sector END)
                AND v.category = r.vehicle_category
              ORDER BY v.created_at DESC
              LIMIT 1
@@ -850,8 +858,8 @@ export class PostgresRideRepository implements RideRepository {
              WHERE dp.id=$2 AND ${driverEligibilitySql("NOW() - ($3::int * INTERVAL '1 second')", 'r.id', 'r.customer_id')}
                AND (CASE WHEN r.sector='premium' THEN EXISTS(SELECT 1 FROM ride_dispatch_attempts area_offer CROSS JOIN jsonb_array_elements($5::jsonb) approved WHERE area_offer.ride_id=r.id AND area_offer.driver_profile_id=$2 AND area_offer.status='offered' AND v.operating_city_id=area_offer.city_id AND area_offer.city_id=approved->>'cityId' AND area_offer.boundary_geojson=approved->'boundary' AND ${cityCoverageSql('area_offer.boundary_geojson', 'r.pickup_location::geometry')} AND ${cityCoverageSql('area_offer.boundary_geojson', 'dp.last_location::geometry')})
                  WHEN r.sector='service' THEN ${serviceEligibilitySql()}
-                 ELSE ST_DWithin(dp.last_location,r.pickup_location,(CASE WHEN r.sector='passenger' THEN 10000 WHEN r.sector='logistics' OR (r.sector='service' AND r.vehicle_category IN ('towing','towing_van')) THEN 20000 ELSE $4 END)+0.000001) END)
-               AND v.sector=r.sector AND v.category=r.vehicle_category
+                 ELSE ST_DWithin(dp.last_location,r.pickup_location,(CASE WHEN r.sector IN ('passenger','rental') THEN 10000 WHEN r.sector='logistics' OR (r.sector='service' AND r.vehicle_category IN ('towing','towing_van')) THEN 20000 ELSE $4 END)+0.000001) END)
+               AND v.sector=(CASE WHEN r.sector='rental' THEN 'passenger' ELSE r.sector END) AND v.category=r.vehicle_category
            )
          RETURNING *
        ), accepted_attempt AS (
@@ -919,7 +927,7 @@ export class PostgresRideRepository implements RideRepository {
       const leased = await client.query<{ attempt: number }>(
         `UPDATE rides r
          SET dispatch_driver_id = $2,
-             dispatch_expires_at = NOW() + ((CASE WHEN r.sector='premium' THEN 3600000 WHEN r.sector='logistics' THEN 120000 WHEN r.sector='passenger' THEN 25000 WHEN r.sector='service' AND r.vehicle_category IN ('towing','towing_van') THEN 600000 WHEN r.sector='service' AND r.vehicle_category='ambulance' THEN 30000 ELSE $3::int END) * INTERVAL '1 millisecond'),
+             dispatch_expires_at = NOW() + ((CASE WHEN r.sector='premium' THEN 3600000 WHEN r.sector='logistics' THEN 120000 WHEN r.sector IN ('passenger','rental') THEN 25000 WHEN r.sector='service' AND r.vehicle_category IN ('towing','towing_van') THEN 600000 WHEN r.sector='service' AND r.vehicle_category='ambulance' THEN 30000 ELSE $3::int END) * INTERVAL '1 millisecond'),
              dispatch_attempt = dispatch_attempt + 1
          WHERE r.id = $1
            AND r.status = 'searching'
@@ -937,10 +945,10 @@ export class PostgresRideRepository implements RideRepository {
              JOIN vehicles v ON v.driver_profile_id = dp.id
              WHERE dp.id = $2
                AND ${driverEligibilitySql("NOW() - ($4::int * INTERVAL '1 second')", undefined, 'r.customer_id')}
-               AND v.sector=r.sector AND v.category=r.vehicle_category
+               AND v.sector=(CASE WHEN r.sector='rental' THEN 'passenger' ELSE r.sector END) AND v.category=r.vehicle_category
                AND (CASE WHEN r.sector='premium' THEN $6::text IS NOT NULL AND EXISTS(SELECT 1 FROM jsonb_array_elements($8::jsonb) approved WHERE v.operating_city_id=$7 AND approved->>'cityId'=$7 AND approved->'boundary'=$6::jsonb AND ${cityCoverageSql('$6', 'r.pickup_location::geometry')} AND ${cityCoverageSql('$6', 'dp.last_location::geometry')})
                  WHEN r.sector='service' THEN ${serviceEligibilitySql()}
-                 ELSE ST_DWithin(dp.last_location,r.pickup_location,(CASE WHEN r.sector='passenger' THEN 10000 WHEN r.sector='logistics' OR (r.sector='service' AND r.vehicle_category IN ('towing','towing_van')) THEN 20000 ELSE $5 END)+0.000001) END)
+                 ELSE ST_DWithin(dp.last_location,r.pickup_location,(CASE WHEN r.sector IN ('passenger','rental') THEN 10000 WHEN r.sector='logistics' OR (r.sector='service' AND r.vehicle_category IN ('towing','towing_van')) THEN 20000 ELSE $5 END)+0.000001) END)
            )
          RETURNING dispatch_attempt AS attempt`,
         [
@@ -1338,7 +1346,7 @@ export class PostgresRideRepository implements RideRepository {
         JOIN vehicles v ON v.id=dp.active_vehicle_id
         WHERE dp.id=r.dispatch_driver_id
         AND ${driverEligibilitySql("NOW()-($2::int*INTERVAL '1 second')", 'r.id', 'r.customer_id')}
-        AND v.sector=r.sector AND v.category=r.vehicle_category
+        AND v.sector=(CASE WHEN r.sector='rental' THEN 'passenger' ELSE r.sector END) AND v.category=r.vehicle_category
         AND (r.sector<>'service' OR ${serviceEligibilitySql()})
         AND (r.sector<>'premium' OR EXISTS(
           SELECT 1 FROM ride_dispatch_attempts area_offer CROSS JOIN jsonb_array_elements($3::jsonb) approved

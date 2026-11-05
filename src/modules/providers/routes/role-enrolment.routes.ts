@@ -16,6 +16,32 @@ import { normalizePhone } from '../../auth/utils/contact.js';
 export function createRoleEnrolmentRouter(repo: RoleEnrolmentRepository) {
   const router = Router();
   const invitations = new FleetInvitationRepository(pool);
+  router.post('/enrolment/upgrade', async (req, res, next) => {
+    try {
+      z.object({}).strict().parse(req.body);
+      if (!req.auth!.sessionId)
+        throw new AppError(
+          'SESSION_REFRESH_REQUIRED',
+          'Refresh your session before upgrading',
+          401,
+        );
+      const result = await repo.upgradeCapabilities(req.auth!.userId, req.auth!.role);
+      res.json({
+        success: true,
+        data: {
+          ...result,
+          accessToken: await signAccessToken({
+            sub: req.auth!.userId,
+            role: result.role,
+            type: 'access',
+            sid: req.auth!.sessionId,
+          }),
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
   router.get('/fleet-invitations', async (req, res, next) => {
     try {
       res.json({ success: true, data: await invitations.list(req.auth!.userId, req.auth!.role) });

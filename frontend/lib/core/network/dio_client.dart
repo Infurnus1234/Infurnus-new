@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
@@ -13,6 +15,32 @@ import '../storage/secure_storage.dart';
 import 'session_events.dart';
 
 const String _csrfCookieName = 'infurnus_csrf_token';
+
+void _traceVehicleFlow(
+  RequestOptions options, {
+  String stage = 'request',
+  int? status,
+  dynamic response,
+  String? errorCode,
+}) {
+  if (!const bool.fromEnvironment('VEHICLE_FLOW_DIAGNOSTICS')) return;
+  if (![
+        '/fares/estimate',
+        '/rides/service-availability',
+        '/rides',
+      ].contains(options.path) ||
+      options.method != 'POST' ||
+      options.data is! Map) {
+    return;
+  }
+  final request = options.data as Map;
+  if (request['vehicleCategory'] is! String) return;
+  final data = response is Map ? response['data'] : null;
+  final fare = data is Map ? data['bookingFare'] : null;
+  debugPrint(
+    'VEHICLE_FLOW ${jsonEncode({'stage': stage, 'path': options.path, 'sector': request['sector'], 'vehicleCategory': request['vehicleCategory'], if (status != null) 'status': status, if (errorCode != null) 'errorCode': errorCode, if (data is Map && data['bookable'] is bool) 'bookable': data['bookable'], if (data is Map && data['available'] is bool) 'available': data['available'], if (fare is Map && fare['grossAmount'] is num) 'grossAmountPaise': fare['grossAmount']})}',
+  );
+}
 
 final cookieJarProvider = FutureProvider<PersistCookieJar>((ref) async {
   final directory = await getApplicationDocumentsDirectory();
@@ -46,6 +74,7 @@ final dioProvider = Provider<Dio>((ref) {
   dio.interceptors.add(
     InterceptorsWrapper(
       onRequest: (options, handler) async {
+        _traceVehicleFlow(options);
         debugPrint('Dio: Requesting ${options.method}');
         debugPrint('Dio: Base URL is ${options.baseUrl}');
         // Browsers own HttpOnly cookies; native requests use the persistent jar below.
@@ -88,6 +117,12 @@ final dioProvider = Provider<Dio>((ref) {
         handler.next(options);
       },
       onResponse: (response, handler) async {
+        _traceVehicleFlow(
+          response.requestOptions,
+          stage: 'response',
+          status: response.statusCode,
+          response: response.data,
+        );
         final body = response.data;
         final data = body is Map ? body['data'] : null;
         final csrf = data is Map ? data['csrfToken'] : null;
@@ -99,6 +134,14 @@ final dioProvider = Provider<Dio>((ref) {
         handler.next(response);
       },
       onError: (error, handler) async {
+        final body = error.response?.data;
+        final details = body is Map ? body['error'] : null;
+        _traceVehicleFlow(
+          error.requestOptions,
+          stage: 'error',
+          status: error.response?.statusCode,
+          errorCode: details is Map ? details['code'] as String? : null,
+        );
         if (_shouldAttemptRefresh(error)) {
           final storage = ref.read(secureStorageProvider);
           final currentToken = await storage.read(key: 'auth_token');

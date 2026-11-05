@@ -29,6 +29,7 @@ export interface DriverCandidate {
 }
 
 export interface DriverProfile {
+  publicId?: string | null;
   id: string;
   userId: string;
   licenseNumber: string;

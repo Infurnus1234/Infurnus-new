@@ -1,3 +1,4 @@
+import { bookingInventorySector } from '../../vehicles/services/rental-inventory.js';
 import { serviceArea, type ServiceAreaGate } from '../../maps/service-area.js';
 import { premiumCityAreas, type PremiumCityAreas } from '../../maps/premium-city-areas.js';
 import type { DriverRepository } from '../repositories/driver.repository.js';
@@ -76,7 +77,7 @@ export class MatchingService {
       radiusMeters ?? 20000,
       env.MAX_DRIVER_MATCH_CANDIDATES,
       new Date(Date.now() - env.DRIVER_LOCATION_STALE_SECONDS * 1000),
-      ride.sector ?? 'passenger',
+      bookingInventorySector(ride.sector ?? 'passenger'),
       ride.vehicleCategory ?? undefined,
       {
         rideId: ride.id,
