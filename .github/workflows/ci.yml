@@ -152,7 +152,8 @@ jobs:
         run: npm run build
 
   frontend:
-    runs-on: ubuntu-latest
+    # Match the Windows host used for the approved exact-pixel visual baselines.
+    runs-on: windows-latest
     defaults:
       run:
         working-directory: frontend
@@ -173,6 +174,7 @@ jobs:
           channel: stable
           cache: true
       - name: Select Android Java toolchain
+        shell: bash
         run: flutter config --jdk-dir="$JAVA_HOME"
       - name: Resolve locked dependencies
         run: flutter pub get --enforce-lockfile
