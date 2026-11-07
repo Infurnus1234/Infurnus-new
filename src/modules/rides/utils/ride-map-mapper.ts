@@ -23,7 +23,11 @@ export function freshRideLocation(location: LiveRideLocation | null, now = Date.
 }
 /** Coordinates for the assigned driver's destination pin; navigation remains PIN gated. */
 export function driverDestinationMarkerAllowed(ride: Ride): boolean {
-  return !!ride.assignedDriverId && activeMapStatuses.includes(ride.status);
+  return (
+    !!ride.assignedDriverId &&
+    activeMapStatuses.includes(ride.status) &&
+    (ride.sector !== 'logistics' || driverDestinationAllowed(ride))
+  );
 }
 export function driverDestinationAllowed(ride: Ride): boolean {
   return (
@@ -64,7 +68,11 @@ export function rideInformation(ride: Ride, includeDestination = true): RideInfo
             : 'unavailable',
     },
     pickup: { ...ride.pickup, address: ride.pickupAddress },
-    drop: includeDestination ? { ...ride.destination, address: ride.destinationAddress } : null,
+    drop: includeDestination
+      ? { ...ride.destination, address: ride.destinationAddress }
+      : ride.sector === 'logistics'
+        ? { address: ride.destinationDistrict ?? null }
+        : null,
     rideType: ride.sector ?? 'passenger',
     vehicleCategory: ride.vehicleCategory ?? null,
     rideStatus: ride.status,

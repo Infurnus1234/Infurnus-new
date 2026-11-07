@@ -50,7 +50,7 @@ Map<String, dynamic> range({bool open = false, bool quote = false}) => {
 
 class NoLocation extends LocationService {
   @override
-  Future<Position?> getCurrentPosition() async => null;
+  Future<Position?> getCurrentPosition({bool retry = false}) async => null;
 }
 
 class ConnectedSocket extends SocketService {
@@ -332,7 +332,7 @@ void main() {
         'maximum': null,
       };
       final estimate = FareEstimateModel.fromJson(json);
-      expect(estimate.displayFare, '₹840.00+');
+      expect(estimate.displayFare, '₹840+');
       expect(estimate.pricingDescription, 'Base ₹775.00+; ₹25.00–₹30.00/km');
       expect(estimate.bookingAmount, isNull);
     },
@@ -399,11 +399,11 @@ void main() {
     final estimate = FareEstimateModel.fromJson(fixed(2000));
     expect(estimate.grossAmount, 20);
     expect(estimate.bookingAmount, 20);
-    expect(estimate.displayFare, '₹20.00');
+    expect(estimate.displayFare, '₹20');
   });
   test('parses and displays a bounded range without a booking amount', () {
     final estimate = FareEstimateModel.fromJson(range());
-    expect(estimate.displayFare, '₹20.00–₹28.00');
+    expect(estimate.displayFare, '₹20–₹28');
     expect(estimate.bookingAmount, isNull);
     expect(estimate.bookable, isFalse);
     expect(estimate.pricingDescription, contains('₹5.00–₹8.00/km'));
@@ -411,13 +411,13 @@ void main() {
   test('preserves open upper bound', () {
     expect(
       FareEstimateModel.fromJson(range(open: true)).displayFare,
-      '₹20.00+',
+      '₹20+',
     );
   });
   test('uses explicit booking quote rather than either range bound', () {
     final estimate = FareEstimateModel.fromJson(range(quote: true));
     expect(estimate.bookingAmount, 24);
-    expect(estimate.displayFare, '₹20.00–₹28.00');
+    expect(estimate.displayFare, '₹20–₹28');
   });
   test('FTL information cannot become a booking amount', () {
     final estimate = FareEstimateModel.fromJson({

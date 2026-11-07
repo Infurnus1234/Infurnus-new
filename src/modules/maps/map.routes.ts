@@ -133,12 +133,18 @@ export function createMapRouter(maps: CommonMapService, drivers?: DriverReposito
           radiusMeters: z.coerce
             .number()
             .positive()
-            .max(env.MAP_DRIVER_RADII_METERS.at(-1)!)
+            .max(Math.max(25000, env.MAP_DRIVER_RADII_METERS.at(-1)!))
             .default(env.MAP_DRIVER_RADII_METERS[0]!),
           sector: z.enum(['passenger', 'logistics', 'service', 'premium']),
           vehicleCategory: z.string().trim().min(1).max(50),
         })
         .strict()
+        .refine(
+          (input) =>
+            input.radiusMeters <=
+            (input.sector === 'premium' ? 25000 : env.MAP_DRIVER_RADII_METERS.at(-1)!),
+          { path: ['radiusMeters'], message: 'Driver radius exceeds the configured maximum' },
+        )
         .parse(req.query);
       new FareCalculatorService().validateEstimateCategory(input);
       await maps.assertServiceArea([input]);
@@ -151,14 +157,14 @@ export function createMapRouter(maps: CommonMapService, drivers?: DriverReposito
       const count = await drivers.countNearbyEligible(
         input.latitude,
         input.longitude,
-        input.radiusMeters,
+        input.sector === 'premium' ? 25000 : input.radiusMeters,
         new Date(Date.now() - env.DRIVER_LOCATION_STALE_SECONDS * 1000),
         input.sector,
         input.vehicleCategory,
       );
       res.json({
         success: true,
-        data: { count, radiusMeters: input.radiusMeters },
+        data: { count, radiusMeters: input.sector === 'premium' ? 25000 : input.radiusMeters },
         message: 'Driver availability retrieved',
       });
     } catch (error) {

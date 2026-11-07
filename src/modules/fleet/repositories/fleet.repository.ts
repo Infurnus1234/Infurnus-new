@@ -1,3 +1,9 @@
+import {
+  validateOperatingLocation,
+  requirePremiumOperatingLocation,
+} from '../../maps/vehicle-operating-location.js';
+import type { VehicleType } from '../../vehicles/types/vehicle.js';
+import { PostgresVehicleRepository } from '../../vehicles/repositories/vehicle.repository.js';
 import { assignFirstOwnerVehicle } from '../../providers/repositories/default-owner-vehicle.js';
 import { premiumCityAreas } from '../../maps/premium-city-areas.js';
 import { paidRideRevenueSql } from './fleet-revenue.repository.js';
@@ -50,22 +56,36 @@ export interface FleetRepository {
 export class PostgresFleetRepository implements FleetRepository {
   constructor(private readonly pool: Pool) {}
 
-  async catalog(ownerId?: string) {
-    const types = (
-      await this.pool.query(
-        `SELECT id::text,code,name,sector,active FROM vehicle_types UNION ALL SELECT ('registration:' || r.sector || ':' || r.code) AS id,r.code,r.name,r.sector,FALSE AS active FROM fleet_registration_vehicle_types r WHERE NOT EXISTS(SELECT 1 FROM vehicle_types t WHERE t.code=r.code AND t.sector=r.sector) ORDER BY sector,name`,
-      )
-    ).rows;
-    if (ownerId) {
-      const custom = await this.pool.query(
-        'SELECT id,code,name,sector,FALSE AS active,TRUE AS custom FROM fleet_custom_vehicle_types WHERE owner_id=$1 ORDER BY sector,name',
-        [ownerId],
-      );
-      types.push(...custom.rows);
-    }
+  async catalog(_ownerId?: string) {
+    const repository = new PostgresVehicleRepository(this.pool);
+    const sectors = ['rental', 'logistics', 'premium', 'service'] as const;
+    const pages = await Promise.all(
+      sectors.map(async (sector) => {
+        const types: VehicleType[] = [];
+        let offset = 0;
+        for (;;) {
+          const page = await repository.listTypes(
+            100,
+            offset,
+            sector === 'rental' ? 'passenger' : sector,
+            false,
+            undefined,
+            true,
+            true,
+          );
+          types.push(...page);
+          if (page.length < 100) return types;
+          offset += page.length;
+        }
+      }),
+    );
     return {
-      sectors: ['passenger', 'logistics', 'service', 'premium', 'rental'],
-      types,
+      selectionCatalogVersion: 2,
+      // Rental bookings retain their existing passenger inventory identifiers.
+      sectors: ['passenger', 'logistics', 'premium', 'service'],
+      types: pages
+        .flat()
+        .map((type) => ({ ...type, sector: type.sector === 'rental' ? 'passenger' : type.sector })),
       operatingCities: premiumCityAreas.cities.map(({ id, name }) => ({ id, name })),
     };
   }
@@ -204,6 +224,7 @@ export class PostgresFleetRepository implements FleetRepository {
       ownershipType: string;
       ownerNotes: string | null;
       operatingCityId: string | null;
+      operatingLocation: FleetVehicle['operatingLocation'];
       verificationStatus: string;
       isActive: boolean;
       driverUserId: string | null;
@@ -244,7 +265,7 @@ export class PostgresFleetRepository implements FleetRepository {
            TRUE
          ) AS "isCommercial",
          v.permit_details AS "permitDetails",
-         v.ownership_type AS "ownershipType",v.owner_notes AS "ownerNotes", operating_city_id AS "operatingCityId",
+         v.ownership_type AS "ownershipType",v.owner_notes AS "ownerNotes", operating_city_id AS "operatingCityId", operating_location AS "operatingLocation",
          COALESCE(
            v.verification_status,
            'pending'
@@ -319,6 +340,7 @@ export class PostgresFleetRepository implements FleetRepository {
       ownershipType: row.ownershipType,
       ownerNotes: row.ownerNotes,
       operatingCityId: row.operatingCityId,
+      operatingLocation: row.operatingLocation,
       verificationStatus: row.verificationStatus,
       isActive: row.isActive,
       assignedDriver:
@@ -341,6 +363,8 @@ export class PostgresFleetRepository implements FleetRepository {
   }
 
   async createVehicle(ownerId: string, input: CreateFleetVehicleInput): Promise<FleetVehicle> {
+    requirePremiumOperatingLocation(input.sector, input.operatingLocation);
+    if (input.operatingLocation) await validateOperatingLocation(input.operatingLocation);
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
@@ -371,23 +395,15 @@ export class PostgresFleetRepository implements FleetRepository {
           409,
         );
       await client.query("SELECT set_config('infurnus.actor_id',$1,TRUE)", [ownerId]);
-      if (
-        input.operatingCityId !== undefined &&
-        !premiumCityAreas.cities.some((city) => city.id === input.operatingCityId)
-      )
-        throw new AppError(
-          'INVALID_OPERATING_CITY',
-          'Choose a configured premium operating city',
-          400,
-        );
+
       const configuredType = await client.query(
-        `SELECT id FROM vehicle_types WHERE code=$1 AND (sector=$2 OR ($2='rental' AND sector IN ('passenger','premium'))) UNION ALL SELECT NULL::uuid AS id FROM fleet_registration_vehicle_types WHERE code=$1 AND (sector=$2 OR ($2='rental' AND sector IN ('passenger','premium'))) UNION ALL SELECT id FROM fleet_custom_vehicle_types WHERE code=$1 AND sector=$2 AND owner_id=$3`,
-        [input.category, input.sector, ownerId],
+        `SELECT id FROM vehicle_types WHERE code=$1 AND sector=CASE WHEN $2='rental' THEN 'passenger' ELSE $2 END AND catalog_visible AND registration_active FOR SHARE`,
+        [input.category, input.sector],
       );
       if (!configuredType.rowCount)
         throw new AppError(
           'INVALID_VEHICLE_CATEGORY',
-          'Choose a configured vehicle type for this sector',
+          'Choose a published vehicle option from the current catalog',
           400,
         );
 
@@ -409,7 +425,7 @@ export class PostgresFleetRepository implements FleetRepository {
          registration_expiry,
          is_commercial,
          permit_details,
-         ownership_type, owner_notes, operating_city_id,
+         ownership_type, owner_notes, operating_city_id, operating_location,
          verification_status,
          is_active
        )
@@ -430,7 +446,7 @@ export class PostgresFleetRepository implements FleetRepository {
          $14,
          $15,
          $16,
-         $17, $18, $19,
+         $17, $18, $19, $20,
          'pending',
          FALSE
        )
@@ -459,7 +475,7 @@ export class PostgresFleetRepository implements FleetRepository {
          registration_expiry::text AS "registrationExpiry",
          is_commercial AS "isCommercial",
          permit_details AS "permitDetails",
-         ownership_type AS "ownershipType", owner_notes AS "ownerNotes", operating_city_id AS "operatingCityId",
+         ownership_type AS "ownershipType", owner_notes AS "ownerNotes", operating_city_id AS "operatingCityId", operating_location AS "operatingLocation",
          verification_status AS "verificationStatus",
          is_active AS "isActive",
          created_at AS "createdAt",
@@ -484,6 +500,7 @@ export class PostgresFleetRepository implements FleetRepository {
           input.ownershipType ?? 'OWNED',
           input.ownerNotes ?? null,
           input.operatingCityId ?? null,
+          input.operatingLocation ? JSON.stringify(input.operatingLocation) : null,
         ],
       );
 
@@ -523,18 +540,30 @@ export class PostgresFleetRepository implements FleetRepository {
     vehicleId: string,
     input: UpdateFleetVehicleInput,
   ): Promise<FleetVehicle | null> {
+    if (input.operatingLocation) await validateOperatingLocation(input.operatingLocation);
+    if (input.sector === 'premium' || input.operatingCityId !== undefined) {
+      const current = (
+        await this.pool.query(
+          'SELECT sector,operating_city_id,operating_location FROM vehicles WHERE id=$1 AND owner_id=$2',
+          [vehicleId, ownerId],
+        )
+      ).rows[0];
+      if (
+        current &&
+        ((input.sector === 'premium' && current.sector !== 'premium') ||
+          (input.operatingCityId !== undefined &&
+            input.operatingCityId !== current.operating_city_id &&
+            !current.operating_location))
+      )
+        requirePremiumOperatingLocation(
+          input.sector ?? current.sector,
+          input.operatingLocation ?? current.operating_location,
+        );
+    }
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      if (
-        input.operatingCityId !== undefined &&
-        !premiumCityAreas.cities.some((city) => city.id === input.operatingCityId)
-      )
-        throw new AppError(
-          'INVALID_OPERATING_CITY',
-          'Choose a configured premium operating city',
-          400,
-        );
+
       await client.query(
         "SELECT pg_advisory_xact_lock(hashtextextended('provider_vehicle:'||$1::text,0))",
         [vehicleId],
@@ -559,6 +588,7 @@ export class PostgresFleetRepository implements FleetRepository {
         ownershipType: 'ownership_type',
         ownerNotes: 'owner_notes',
         operatingCityId: 'operating_city_id',
+        operatingLocation: 'operating_location',
       };
 
       if (input.sector != null || input.category != null) {
@@ -575,16 +605,17 @@ export class PostgresFleetRepository implements FleetRepository {
         const sector = input.sector ?? current.sector,
           category = input.category ?? current.category;
         if (
+          (sector !== current.sector || category !== current.category) &&
           !(
             await client.query(
-              "SELECT id FROM vehicle_types WHERE code=$1 AND (sector=$2 OR ($2='rental' AND sector IN ('passenger','premium'))) UNION ALL SELECT NULL::uuid AS id FROM fleet_registration_vehicle_types WHERE code=$1 AND (sector=$2 OR ($2='rental' AND sector IN ('passenger','premium'))) UNION ALL SELECT id FROM fleet_custom_vehicle_types WHERE code=$1 AND sector=$2 AND owner_id=$3",
-              [category, sector, ownerId],
+              "SELECT id FROM vehicle_types WHERE code=$1 AND sector=CASE WHEN $2='rental' THEN 'passenger' ELSE $2 END AND catalog_visible AND registration_active FOR SHARE",
+              [category, sector],
             )
           ).rowCount
         )
           throw new AppError(
             'INVALID_VEHICLE_CATEGORY',
-            'Choose a configured vehicle type for this sector',
+            'Choose a published vehicle option from the current catalog',
             400,
           );
       }
@@ -595,7 +626,13 @@ export class PostgresFleetRepository implements FleetRepository {
         return null;
       }
 
-      const values = fields.map((field) => (input[field] === undefined ? null : input[field]));
+      const values = fields.map((field) =>
+        field === 'operatingLocation'
+          ? JSON.stringify(input.operatingLocation)
+          : input[field] === undefined
+            ? null
+            : input[field],
+      );
 
       const assignments = fields.map((field, index) => `${columns[field]} = $${index + 1}`);
 
@@ -614,7 +651,7 @@ export class PostgresFleetRepository implements FleetRepository {
          color,
          plate_number AS "plateNumber",
          sector,
-         category, operating_city_id AS "operatingCityId",
+         category, operating_city_id AS "operatingCityId", operating_location AS "operatingLocation",
          is_active AS "isActive",
          created_at AS "createdAt",
          updated_at AS "updatedAt"`,

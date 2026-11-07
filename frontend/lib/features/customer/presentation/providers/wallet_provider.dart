@@ -1,3 +1,4 @@
+import 'package:infurnus/core/utils/currency_formatter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/errors/failures.dart';
@@ -151,6 +152,10 @@ class WalletNotifier extends StateNotifier<WalletState> {
     await fetchHistory(filter: filter, showLoading: true);
   }
 
+  double? _lastTopUpAmount;
+  double? get lastTopUpAmount => _lastTopUpAmount;
+  Future<double> quotePayment(double amount) => _repository.quotePayment(amount);
+
   /// Top-up flow with double-submit protection, idempotency, and server verification.
   Future<bool> topUp({
     required double amount,
@@ -162,12 +167,12 @@ class WalletNotifier extends StateNotifier<WalletState> {
 
     // Minimum / Maximum validation
     if (amount < 10.0) {
-      state = state.copyWith(errorMessage: 'Minimum top-up amount is ₹10.00');
+      state = state.copyWith(errorMessage: 'Minimum top-up amount is ₹10');
       return false;
     }
     if (amount > 100000.0) {
       state = state.copyWith(
-        errorMessage: 'Maximum top-up amount is ₹1,00,000.00',
+        errorMessage: 'Maximum top-up amount is ₹1,00,000',
       );
       return false;
     }
@@ -191,10 +196,11 @@ class WalletNotifier extends StateNotifier<WalletState> {
         throw Exception('Server did not return a valid order ID');
       }
 
+      final finalizedAmount = (initiateRes['amount'] as num).toDouble();
       // 2. Gateway checkout
       final checkoutRes = await gateway.startCheckout(
         orderId: orderId,
-        amount: amount,
+        amount: finalizedAmount,
         currency: 'INR',
         paymentSessionId: paymentSessionId,
         extraData: extraData,
@@ -220,7 +226,7 @@ class WalletNotifier extends StateNotifier<WalletState> {
       final updatedWallet = await _repository.verifyTopUp(
         orderId: orderId,
         referenceId: checkoutRes.referenceId,
-        amount: amount,
+        amount: finalizedAmount,
         idempotencyKey: idempotencyKey,
         paymentMethod: paymentMethod,
       );
@@ -231,6 +237,7 @@ class WalletNotifier extends StateNotifier<WalletState> {
         clearError: true,
       );
 
+      _lastTopUpAmount = finalizedAmount;
       await fetchHistory(showLoading: false);
       return true;
     } catch (e) {
@@ -262,7 +269,7 @@ class WalletNotifier extends StateNotifier<WalletState> {
     if (amount > currentBalance) {
       state = state.copyWith(
         errorMessage:
-            'Insufficient wallet balance (Available: ₹${currentBalance.toStringAsFixed(2)})',
+            'Insufficient wallet balance (Available: ₹${currentBalance.rupeeText})',
       );
       return null;
     }

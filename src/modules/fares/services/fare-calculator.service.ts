@@ -1,7 +1,5 @@
-import {
-  bookingInventorySector,
-  isRentalVehicleCode,
-} from '../../vehicles/services/rental-inventory.js';
+import { wholeRupeePaise, wholeRupeeShare, logisticsSplit } from '../../../common/utils/whole-rupee.js';
+import { bookingInventorySector } from '../../vehicles/services/rental-inventory.js';
 import { serviceConfiguration } from '../../vehicles/services/service-pricing.js';
 import { logisticsSlab } from '../../vehicles/services/logistics-pricing.js';
 import { hourlyBaseFare } from '../../vehicles/services/hourly-pricing.js';
@@ -84,10 +82,7 @@ export class FareCalculatorService {
     demand?: DemandPricingProvenance,
   ): FareEstimateResult {
     const inventorySector = bookingInventorySector(input.sector);
-    if (
-      input.sector === 'rental' &&
-      (!configured?.hourlyBaseFares || !isRentalVehicleCode(input.vehicleCategory ?? ''))
-    ) {
+    if (input.sector === 'rental' && !configured?.hourlyBaseFares) {
       throw new AppError(
         'FARE_CONFIGURATION_MISSING',
         'Rental requires an approved hourly schedule for this vehicle',
@@ -166,13 +161,7 @@ export class FareCalculatorService {
           perKmRatePaise: slab.distanceRatePerKm,
           logisticsSlab: slab.key,
         };
-        const upfront = Math.round(bookingFare.grossAmount * 0.4);
-        bookingFare.logisticsPayment = {
-          totalPaise: bookingFare.grossAmount,
-          upfrontPaise: upfront,
-          finalPaise: bookingFare.grossAmount - upfront,
-          currency: 'INR',
-        };
+        bookingFare.logisticsPayment = logisticsSplit(bookingFare.grossAmount);
         return {
           estimateType: 'range',
           vehicleCategory: configured.code,
@@ -527,9 +516,10 @@ export class FareCalculatorService {
       taxAmount = Math.round(subtotal * 0.05);
     }
 
-    const grossAmount = subtotal + (taxAmount ?? 0);
+    const unroundedGrossAmount = subtotal + (taxAmount ?? 0);
+    const grossAmount = wholeRupeePaise(unroundedGrossAmount);
     const commissionRate = 0.1;
-    const commissionAmount = Math.round(baseAmount * commissionRate);
+    const commissionAmount = wholeRupeeShare(baseAmount, 1, 10);
     const driverEarnings = grossAmount - commissionAmount;
 
     this.assertSafeMoney(grossAmount, 'grossAmount');
@@ -546,6 +536,8 @@ export class FareCalculatorService {
       distanceAmount,
       timeAmount,
       grossAmount,
+      roundingAdjustmentPaise: grossAmount - unroundedGrossAmount,
+      monetaryPolicy: 'whole_rupee_half_up_v1',
       commissionRate,
       commissionAmount,
       driverEarnings,

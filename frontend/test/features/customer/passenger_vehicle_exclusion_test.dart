@@ -16,7 +16,7 @@ import 'package:infurnus/features/customer/presentation/screens/ride_booking_scr
 
 class NoLocation extends LocationService {
   @override
-  Future<Position?> getCurrentPosition() async => null;
+  Future<Position?> getCurrentPosition({bool retry = false}) async => null;
 }
 
 class _FakeRideRepository implements RideRepository {
@@ -26,11 +26,12 @@ class _FakeRideRepository implements RideRepository {
     String? category,
   }) async => [
     for (final entry
-        in (sector == 'passenger'
+        in ((sector == 'passenger' || sector == 'rental')
                 ? <String, String>{
                     'hatchback': 'Hatchback',
                     'sedan': 'Sedan',
                     'innova': 'Innova Crysta',
+                    'mini': 'Mini',
                     'winger': 'Winger',
                     'traveller': 'Force Traveller',
                     'bike': 'Bike',
@@ -43,6 +44,12 @@ class _FakeRideRepository implements RideRepository {
                   })
             .entries)
       FleetVehicleModel(
+        catalogVisible:
+            sector == 'logistics' ||
+            const {'hatchback', 'sedan', 'innova', 'mini'}.contains(entry.key),
+        active:
+            sector == 'logistics' ||
+            const {'hatchback', 'sedan', 'innova', 'mini'}.contains(entry.key),
         id: entry.key,
         make: '',
         model: entry.value,
@@ -147,7 +154,7 @@ void main() {
         expect(find.text('Hatchback'), findsWidgets);
         expect(find.text('Sedan'), findsWidgets);
         expect(find.text('Innova Crysta'), findsOneWidget);
-        expect(find.text('Minicab'), findsOneWidget);
+        expect(find.text('Mini'), findsOneWidget);
         expect(find.text('Winger'), findsNothing);
         expect(find.text('Force Traveller'), findsNothing);
       },

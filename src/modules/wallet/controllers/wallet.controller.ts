@@ -1,3 +1,4 @@
+import { wholeRupees, rupeesToPaise, sameMoney } from '../../../common/utils/whole-rupee.js';
 import type { PaymentProvider } from '../../payments/providers/payment.provider.js';
 import { AppError } from '../../../common/errors/app-error.js';
 import type { NextFunction, Request, Response } from 'express';
@@ -96,14 +97,16 @@ export class WalletController {
       }
 
       const input = topUpInitiateSchema.parse(req.body);
-      const amountPaise = Math.round(input.amount * 100);
+      const roundedPaise = wholeRupees(input.amount) * 100;
       if (!this.provider)
         throw new AppError('PAYMENT_PROVIDER_UNAVAILABLE', 'Wallet checkout is unavailable', 503);
       const stored = await this.repository.createTopUpOrder(
         userId,
-        amountPaise,
+        roundedPaise,
         input.idempotencyKey,
+        rupeesToPaise(input.amount),
       );
+      const amountPaise = Number(stored.amountPaise);
       const orderId = stored.orderId;
       const order = await this.provider.createOrder({
         orderId,
@@ -112,7 +115,7 @@ export class WalletController {
         customerId: userId,
         orderNote: 'INFURNUS Wallet Top-Up',
       });
-      if (order.providerOrderId !== orderId || !order.paymentSessionId)
+      if (order.providerOrderId !== orderId || !order.paymentSessionId || order.orderCurrency !== 'INR' || !sameMoney(order.orderAmount, amountPaise / 100))
         throw new AppError(
           'PAYMENT_PROVIDER_UNAVAILABLE',
           'Wallet checkout session unavailable',
@@ -123,7 +126,7 @@ export class WalletController {
         success: true,
         data: {
           orderId,
-          amount: input.amount,
+          amount: amountPaise / 100,
           amountPaise,
           currency: 'INR',
           paymentMethod: input.paymentMethod,
@@ -156,7 +159,7 @@ export class WalletController {
         status.orderStatus !== 'PAID' ||
         status.providerOrderId !== order.orderId ||
         status.orderCurrency !== 'INR' ||
-        Math.round(Number(status.orderAmount) * 100) !== amountPaise ||
+        !sameMoney(status.orderAmount, amountPaise / 100) ||
         !status.providerPaymentId
       )
         throw new AppError(
@@ -183,6 +186,15 @@ export class WalletController {
     }
   };
 
+  quotePayment = (req: Request, res: Response, next: NextFunction): void => {
+    try {
+      const input = z.object({ amount: z.number().positive().max(99999999) }).strict().parse(req.body);
+      const amount = wholeRupees(input.amount);
+      if (!amount) throw new AppError('INVALID_AMOUNT', 'Rounded payment amount must be positive', 400);
+      res.json({ success: true, data: { amount, currency: 'INR' } });
+    } catch (error) { next(error); }
+  };
+
   pay = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const userId = req.auth?.userId;
@@ -192,7 +204,7 @@ export class WalletController {
       }
 
       const input = paySchema.parse(req.body);
-      const amountPaise = Math.round(input.amount * 100);
+      const amountPaise = wholeRupees(input.amount) * 100;
 
       const result = await this.repository.pay(
         userId,

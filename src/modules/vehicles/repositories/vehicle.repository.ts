@@ -1,5 +1,8 @@
+import {
+  validateOperatingLocation,
+  requirePremiumOperatingLocation,
+} from '../../maps/vehicle-operating-location.js';
 import { hourlyPricingFromRow } from '../services/hourly-pricing.js';
-import { premiumCityAreas } from '../../maps/premium-city-areas.js';
 import { vehiclePricingReferenceSchema } from '../schemas/vehicle.schemas.js';
 import { vehiclePricingStatus } from '../services/vehicle-pricing-status.js';
 import { AppError } from '../../../common/errors/app-error.js';
@@ -37,6 +40,8 @@ export interface VehicleRepository {
     sector?: string,
     activeOnly?: boolean,
     excludeSector?: string,
+    catalogOnly?: boolean,
+    registrationOnly?: boolean,
   ): Promise<VehicleType[]>;
   driverProfileExists(id: string): Promise<boolean>;
 
@@ -61,7 +66,7 @@ const vehicleProjection = `
   model,
   color,
   plate_number AS "plateNumber",
-  operating_city_id AS "operatingCityId",
+  operating_city_id AS "operatingCityId", operating_location AS "operatingLocation",
   COALESCE(sector, 'passenger') AS "sector",
   COALESCE(category, 'sedan') AS "category",
   COALESCE(fuel_rate_per_km, 0)::numeric AS "fuelRatePerKm",
@@ -130,10 +135,20 @@ export class PostgresVehicleRepository implements VehicleRepository {
     sector?: string,
     activeOnly?: boolean,
     excludeSector?: string,
+    catalogOnly?: boolean,
+    registrationOnly?: boolean,
   ): Promise<VehicleType[]> {
     const result = await this.pool.query(
-      'SELECT * FROM vehicle_types WHERE ($3::text IS NULL OR sector=$3) AND (NOT $4::boolean OR active) AND ($5::text IS NULL OR sector<>$5) ORDER BY name,sector,id LIMIT $1 OFFSET $2',
-      [limit, offset, sector ?? null, activeOnly ?? false, excludeSector ?? null],
+      'SELECT * FROM vehicle_types WHERE ($3::text IS NULL OR sector=$3) AND (NOT $4::boolean OR active) AND ($5::text IS NULL OR sector<>$5) AND (NOT $6::boolean OR catalog_visible) AND (NOT $7::boolean OR registration_active) ORDER BY catalog_order,name,sector,id LIMIT $1 OFFSET $2',
+      [
+        limit,
+        offset,
+        sector ?? null,
+        activeOnly ?? false,
+        excludeSector ?? null,
+        catalogOnly ?? false,
+        registrationOnly ?? false,
+      ],
     );
     return result.rows.map(mapType);
   }
@@ -201,7 +216,7 @@ export class PostgresVehicleRepository implements VehicleRepository {
             reference = { ...reference, demandPricing: old.pricingReference.demandPricing };
         }
         result = await client.query(
-          'UPDATE vehicle_types SET name=$2,base_fare_paise=$3,per_km_rate_paise=$4,active=$5,pricing_reference=$6::jsonb,hourly_base_fares_paise=$7::jsonb,hourly_missing_duration_policy=$8,extended_duration_policy=$9,logistics_slabs=$10::jsonb,service_fixed_fare_paise=$11,service_radius_meters=$12,version=version+1 WHERE id=$1 RETURNING *',
+          'UPDATE vehicle_types SET name=$2,base_fare_paise=$3,per_km_rate_paise=$4,active=$5,pricing_reference=$6::jsonb,hourly_base_fares_paise=$7::jsonb,hourly_missing_duration_policy=$8,extended_duration_policy=$9,logistics_slabs=$10::jsonb,service_fixed_fare_paise=$11,service_radius_meters=$12,catalog_visible=$13,registration_active=$14,version=version+1 WHERE id=$1 RETURNING *',
           [
             id,
             update.name ?? old.name,
@@ -247,12 +262,14 @@ export class PostgresVehicleRepository implements VehicleRepository {
                     : update.serviceFixedFare!) * 100,
                 ),
             update.serviceRadiusMeters ?? old.serviceRadiusMeters ?? 25000,
+            update.catalogVisible ?? old.catalogVisible ?? true,
+            update.registrationActive ?? old.registrationActive ?? false,
           ],
         );
       } else {
         const create = input as CreateVehicleTypeInput;
         result = await client.query(
-          'INSERT INTO vehicle_types(name,code,sector,base_fare_paise,per_km_rate_paise,currency,active,pricing_reference,hourly_base_fares_paise,hourly_missing_duration_policy,extended_duration_policy,logistics_slabs,service_fixed_fare_paise,service_radius_meters) VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11,$12::jsonb,$13,$14) RETURNING *',
+          'INSERT INTO vehicle_types(name,code,sector,base_fare_paise,per_km_rate_paise,currency,active,pricing_reference,hourly_base_fares_paise,hourly_missing_duration_policy,extended_duration_policy,logistics_slabs,service_fixed_fare_paise,service_radius_meters,catalog_visible,registration_active) VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11,$12::jsonb,$13,$14,$15,$16) RETURNING *',
           [
             create.name,
             create.code,
@@ -272,6 +289,8 @@ export class PostgresVehicleRepository implements VehicleRepository {
             logisticsJson(create.logisticsSlabs),
             create.serviceFixedFare == null ? null : Math.round(create.serviceFixedFare * 100),
             create.serviceRadiusMeters ?? 25000,
+            create.catalogVisible ?? true,
+            create.registrationActive ?? false,
           ],
         );
       }
@@ -376,15 +395,9 @@ export class PostgresVehicleRepository implements VehicleRepository {
   }
 
   async create(data: CreateVehicleData): Promise<Vehicle> {
-    if (
-      data.operatingCityId !== undefined &&
-      !premiumCityAreas.cities.some((city) => city.id === data.operatingCityId)
-    )
-      throw new AppError(
-        'INVALID_OPERATING_CITY',
-        'Choose a configured premium operating city',
-        400,
-      );
+    requirePremiumOperatingLocation(data.sector ?? 'passenger', data.operatingLocation);
+    if (data.operatingLocation) await validateOperatingLocation(data.operatingLocation);
+
     const result = await this.pool.query<Vehicle>(
       `
         INSERT INTO vehicles (
@@ -404,7 +417,7 @@ export class PostgresVehicleRepository implements VehicleRepository {
           registration_date,
           registration_expiry,
           is_commercial,
-          permit_details, operating_city_id
+          permit_details, operating_city_id, operating_location
         )
         VALUES (
           $1,
@@ -423,7 +436,7 @@ export class PostgresVehicleRepository implements VehicleRepository {
           $14,
           $15,
           COALESCE($16, TRUE),
-          $17, $18
+          $17, $18, $19
         )
         RETURNING ${vehicleProjection}
       `,
@@ -446,6 +459,7 @@ export class PostgresVehicleRepository implements VehicleRepository {
         data.isCommercial ?? true,
         data.permitDetails ?? null,
         data.operatingCityId ?? null,
+        data.operatingLocation ? JSON.stringify(data.operatingLocation) : null,
       ],
     );
 
@@ -489,15 +503,22 @@ export class PostgresVehicleRepository implements VehicleRepository {
   }
 
   async update(id: string, data: UpdateVehicleData): Promise<Vehicle | null> {
-    if (
-      data.operatingCityId !== undefined &&
-      !premiumCityAreas.cities.some((city) => city.id === data.operatingCityId)
-    )
-      throw new AppError(
-        'INVALID_OPERATING_CITY',
-        'Choose a configured premium operating city',
-        400,
-      );
+    if (data.operatingLocation) await validateOperatingLocation(data.operatingLocation);
+    if (data.sector === 'premium' || data.operatingCityId !== undefined) {
+      const current = await this.findById(id);
+      if (
+        current &&
+        ((data.sector === 'premium' && current.sector !== 'premium') ||
+          (data.operatingCityId !== undefined &&
+            data.operatingCityId !== current.operatingCityId &&
+            !current.operatingLocation))
+      )
+        requirePremiumOperatingLocation(
+          data.sector ?? current.sector,
+          data.operatingLocation ?? current.operatingLocation,
+        );
+    }
+
     const columns: Record<keyof UpdateVehicleData, string> = {
       make: 'make',
       model: 'model',
@@ -506,6 +527,7 @@ export class PostgresVehicleRepository implements VehicleRepository {
       sector: 'sector',
       category: 'category',
       operatingCityId: 'operating_city_id',
+      operatingLocation: 'operating_location',
       fuelRatePerKm: 'fuel_rate_per_km',
       loadCapacityKg: 'load_capacity_kg',
       manufacturingYear: 'manufacturing_year',
@@ -525,7 +547,9 @@ export class PostgresVehicleRepository implements VehicleRepository {
       return this.findById(id);
     }
 
-    const values = entries.map(([, value]) => value);
+    const values = entries.map(([field, value]) =>
+      field === 'operatingLocation' ? JSON.stringify(value) : value,
+    );
 
     const assignments = entries.map(([field], index) => `${columns[field]} = $${index + 1}`);
 
@@ -641,6 +665,8 @@ function mapType(row: Record<string, unknown>): VehicleType {
     ...hourlyPricingFromRow(row),
     logisticsSlabs: (row.logistics_slabs as VehicleType['logisticsSlabs']) ?? null,
     active: row.active as boolean,
+    catalogVisible: row.catalog_visible !== false,
+    registrationActive: row.registration_active === true,
     version: Number(row.version),
     createdAt: row.created_at as Date,
     updatedAt: row.updated_at as Date,

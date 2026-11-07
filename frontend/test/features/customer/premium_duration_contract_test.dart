@@ -14,7 +14,7 @@ import 'vehicle_fare_ranges_test.dart'
 
 void main() {
   testWidgets(
-    'Premium duration menu exposes every hour through twelve and extended exact hours',
+    'Premium duration menu exposes every whole hour from one through twenty-four',
     (tester) async {
       tester.view.physicalSize = const Size(1000, 2400);
       tester.view.devicePixelRatio = 1;
@@ -44,22 +44,17 @@ void main() {
       final field = tester.widget<DropdownButton<int>>(
         find.byType(DropdownButton<int>),
       );
-      expect(field.items!.map((item) => item.value).toList(), [
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11,
-        12,
-        13,
-        24,
-      ]);
+      expect(
+        field.items!.map((item) => item.value).toList(),
+        List.generate(24, (index) => index + 1),
+      );
+      for (var hours = 1; hours <= 24; hours++) {
+        tester
+            .widget<DropdownButton<int>>(find.byType(DropdownButton<int>))
+            .onChanged!(hours);
+        await tester.pump();
+        expect(container.read(rideProvider).rentalDetails?['hours'], hours);
+      }
       await tester.pumpWidget(const SizedBox());
       container.dispose();
       socket.dispose();

@@ -1,0 +1,192 @@
+[
+  {
+    "district": "Araria",
+    "latitude": 26.149,
+    "longitude": 87.514
+  },
+  {
+    "district": "Arwal",
+    "latitude": 25.244,
+    "longitude": 84.664
+  },
+  {
+    "district": "Aurangabad",
+    "latitude": 24.752,
+    "longitude": 84.374
+  },
+  {
+    "district": "Banka",
+    "latitude": 24.887,
+    "longitude": 86.919
+  },
+  {
+    "district": "Begusarai",
+    "latitude": 25.418,
+    "longitude": 86.127
+  },
+  {
+    "district": "Bhagalpur",
+    "latitude": 25.242,
+    "longitude": 86.984
+  },
+  {
+    "district": "Bhojpur",
+    "latitude": 25.556,
+    "longitude": 84.663
+  },
+  {
+    "district": "Buxar",
+    "latitude": 25.564,
+    "longitude": 83.978
+  },
+  {
+    "district": "Darbhanga",
+    "latitude": 26.154,
+    "longitude": 85.891
+  },
+  {
+    "district": "East Champaran",
+    "latitude": 26.65,
+    "longitude": 84.916
+  },
+  {
+    "district": "Gaya",
+    "latitude": 24.795,
+    "longitude": 85.0
+  },
+  {
+    "district": "Gopalganj",
+    "latitude": 26.468,
+    "longitude": 84.444
+  },
+  {
+    "district": "Jamui",
+    "latitude": 24.926,
+    "longitude": 86.225
+  },
+  {
+    "district": "Jehanabad",
+    "latitude": 25.214,
+    "longitude": 84.986
+  },
+  {
+    "district": "Kaimur",
+    "latitude": 25.041,
+    "longitude": 83.608
+  },
+  {
+    "district": "Katihar",
+    "latitude": 25.539,
+    "longitude": 87.572
+  },
+  {
+    "district": "Khagaria",
+    "latitude": 25.508,
+    "longitude": 86.472
+  },
+  {
+    "district": "Kishanganj",
+    "latitude": 26.104,
+    "longitude": 87.946
+  },
+  {
+    "district": "Lakhisarai",
+    "latitude": 25.167,
+    "longitude": 86.094
+  },
+  {
+    "district": "Madhepura",
+    "latitude": 25.922,
+    "longitude": 86.792
+  },
+  {
+    "district": "Madhubani",
+    "latitude": 26.35,
+    "longitude": 86.071
+  },
+  {
+    "district": "Munger",
+    "latitude": 25.374,
+    "longitude": 86.474
+  },
+  {
+    "district": "Muzaffarpur",
+    "latitude": 26.122,
+    "longitude": 85.39
+  },
+  {
+    "district": "Nalanda",
+    "latitude": 25.199,
+    "longitude": 85.523
+  },
+  {
+    "district": "Nawada",
+    "latitude": 24.885,
+    "longitude": 85.539
+  },
+  {
+    "district": "Patna",
+    "latitude": 25.612,
+    "longitude": 85.144
+  },
+  {
+    "district": "Purnia",
+    "latitude": 25.777,
+    "longitude": 87.476
+  },
+  {
+    "district": "Rohtas",
+    "latitude": 24.948,
+    "longitude": 84.003
+  },
+  {
+    "district": "Saharsa",
+    "latitude": 25.884,
+    "longitude": 86.601
+  },
+  {
+    "district": "Samastipur",
+    "latitude": 25.862,
+    "longitude": 85.782
+  },
+  {
+    "district": "Saran",
+    "latitude": 25.784,
+    "longitude": 84.727
+  },
+  {
+    "district": "Sheikhpura",
+    "latitude": 25.14,
+    "longitude": 85.85
+  },
+  {
+    "district": "Sheohar",
+    "latitude": 26.514,
+    "longitude": 85.294
+  },
+  {
+    "district": "Sitamarhi",
+    "latitude": 26.593,
+    "longitude": 85.492
+  },
+  {
+    "district": "Siwan",
+    "latitude": 26.22,
+    "longitude": 84.36
+  },
+  {
+    "district": "Supaul",
+    "latitude": 26.126,
+    "longitude": 86.605
+  },
+  {
+    "district": "Vaishali",
+    "latitude": 25.686,
+    "longitude": 85.213
+  },
+  {
+    "district": "West Champaran",
+    "latitude": 26.803,
+    "longitude": 84.503
+  }
+]

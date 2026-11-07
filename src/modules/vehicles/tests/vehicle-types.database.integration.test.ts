@@ -100,8 +100,12 @@ live(
     let app: ReturnType<typeof express>;
     const ids: string[] = [];
     let restoreCatalog: (() => Promise<void>) | undefined;
-    beforeAll(async () => { restoreCatalog = await preserveCatalogFixture(pool); });
-    afterAll(async () => { await restoreCatalog?.(); });
+    beforeAll(async () => {
+      restoreCatalog = await preserveCatalogFixture(pool);
+    });
+    afterAll(async () => {
+      await restoreCatalog?.();
+    });
     async function token(role = 'admin', id = adminId) {
       return signAccessToken({ sub: id, role, type: 'access' });
     }
@@ -767,6 +771,7 @@ live(
           service.createRide(customerId, {
             ...booking,
             sector,
+            ...(sector === 'premium' ? { bookingHours: 1 } : {}),
             ...(sector === 'service' ? { clientRequestId: randomUUID() } : {}),
           }),
         ).rejects.toMatchObject({

@@ -15,7 +15,7 @@ import 'package:infurnus/shared/widgets/infurnus_map.dart';
 
 class NoGps extends LocationService {
   @override
-  Future<Position?> getCurrentPosition() async => null;
+  Future<Position?> getCurrentPosition({bool retry = false}) async => null;
   @override
   Stream<Position> getPositionStream() => const Stream.empty();
 }

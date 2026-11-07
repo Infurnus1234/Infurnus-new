@@ -1,5 +1,4 @@
 import { serviceEligibilitySql } from './service-eligibility.js';
-import { premiumCityAreas } from '../../maps/premium-city-areas.js';
 import type { LiveLocationCache } from './live-location.cache.js';
 import { cityCoverageSql } from '../../maps/city-radius.js';
 import { driverEligibilitySql, driverOperationalEligibilitySql } from './driver-eligibility.js';
@@ -626,11 +625,18 @@ export class PostgresDriverRepository implements DriverRepository {
     },
   ): Promise<(DriverCandidate & { count?: number })[]> {
     validateCoordinates({ latitude, longitude });
+    if (sector === 'premium') radiusMeters = 25000;
     if (
       !Number.isFinite(radiusMeters) ||
       radiusMeters <= 0 ||
       radiusMeters >
-        (sector === 'service' ? 200000 : dispatch ? 20000 : env.MAP_DRIVER_RADII_METERS.at(-1)!)
+        (sector === 'premium'
+          ? 25000
+          : sector === 'service'
+            ? 200000
+            : dispatch
+              ? 20000
+              : env.MAP_DRIVER_RADII_METERS.at(-1)!)
     )
       throw new AppError('MAP_INPUT_INVALID', 'Driver radius exceeds the configured maximum', 400);
     if (!Number.isInteger(limit) || limit < 1 || limit > env.MAX_DRIVER_MATCH_CANDIDATES)
@@ -663,20 +669,8 @@ export class PostgresDriverRepository implements DriverRepository {
       conditions.push(
         `NOT EXISTS (SELECT 1 FROM ride_dispatch_attempts previous WHERE previous.ride_id=$${rideParameter} AND previous.driver_profile_id=dp.id)`,
       );
-      if (dispatch.boundaryGeoJson) {
+      if (dispatch.boundaryGeoJson && sector !== 'premium') {
         values.push(dispatch.boundaryGeoJson);
-        conditions.push(cityCoverageSql(`$${values.length}`, 'dp.last_location::geometry'));
-      }
-    }
-
-    if (sector === 'premium') {
-      const city = dispatch?.cityId
-        ? { cityId: dispatch.cityId, boundaryGeoJson: dispatch.boundaryGeoJson }
-        : await premiumCityAreas.resolve({ latitude, longitude });
-      values.push(city.cityId);
-      conditions.push(`v.operating_city_id = $${values.length}::text`);
-      if (!dispatch?.boundaryGeoJson && city.boundaryGeoJson) {
-        values.push(city.boundaryGeoJson);
         conditions.push(cityCoverageSql(`$${values.length}`, 'dp.last_location::geometry'));
       }
     }
@@ -696,9 +690,11 @@ export class PostgresDriverRepository implements DriverRepository {
     }
 
     const radiusExpression =
-      sector === 'service'
-        ? `(SELECT service_radius_meters::float8 FROM vehicle_types WHERE sector='service' AND code=$${values.length} AND active AND service_fixed_fare_paise IS NOT NULL)`
-        : '$3';
+      sector === 'premium'
+        ? '25000'
+        : sector === 'service'
+          ? `(SELECT service_radius_meters::float8 FROM vehicle_types WHERE sector='service' AND code=$${values.length} AND active AND service_fixed_fare_paise IS NOT NULL)`
+          : '$3';
 
     const fallbackVehicleConditions = [
       'v2.driver_profile_id = dp.id',
@@ -759,9 +755,9 @@ export class PostgresDriverRepository implements DriverRepository {
          ) active_rides ON TRUE
          WHERE ${conditions.join('\nAND ')}
            AND COALESCE(active_rides.count, 0) = 0
-           ${sector !== 'service' && dispatch?.radiusMeters === null ? '' : 'AND ST_DWithin('}
+           ${sector !== 'premium' && sector !== 'service' && dispatch?.radiusMeters === null ? '' : 'AND ST_DWithin('}
            ${
-             sector !== 'service' && dispatch?.radiusMeters === null
+             sector !== 'premium' && sector !== 'service' && dispatch?.radiusMeters === null
                ? ''
                : `
              dp.last_location,

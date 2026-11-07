@@ -48,7 +48,7 @@ describe('driver customer-contact HTTP boundary', () => {
       lastName: 'Customer',
       phone: '9876543210',
     });
-    expect((await service.getCustomerContact(userId, rideId)).phone).toBe('9876543210');
+    expect((await service.getCustomerContact(userId, rideId)).phone).toBeNull();
   });
   it('uses the verified token user, not a supplied driver ID, and returns only the allowed projection', async () => {
     const { app, repository } = setup();
@@ -61,7 +61,7 @@ describe('driver customer-contact HTTP boundary', () => {
     expect(repository.forAssignedDriver).toHaveBeenCalledExactlyOnceWith(rideId, userId);
     expect(response.body).toEqual({
       success: true,
-      data: { rideId, name: 'Actual Customer', phone: '+919876543210' },
+      data: { rideId, name: 'Actual Customer', phone: null, callingNumber: '+919153787859' },
     });
   });
   it('rejects unauthenticated callers', async () => {

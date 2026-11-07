@@ -133,6 +133,11 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')('dynamic Bihar Premium city
         sector: 'premium',
         category: 'thar',
         operatingCityId: cities[2],
+        operatingLocation: {
+          address: 'Configured city operating point',
+          latitude: 24.78,
+          longitude: 85.0,
+        },
       }),
     );
     vehicleId = vehicle.id;

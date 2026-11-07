@@ -267,7 +267,13 @@ async function startServer() {
     googleMapsProvider,
   );
 
-  const driverService = new DriverService(driverRepository, undefined, rideRepository);
+  const driverService = new DriverService(
+    driverRepository,
+    undefined,
+    rideRepository,
+    undefined,
+    (ride) => rideService.prepareDriverRide(ride),
+  );
 
   const routeRecalculationService = googleMapsProvider.navigation;
 
@@ -432,6 +438,22 @@ async function startServer() {
   // Start server
   // ==========================================================
 
+  // Expiry reads and allocations are already safe if a maintenance tick is delayed.
+  let releasingBookingIds = false;
+  const releaseBookingIds = async () => {
+    if (releasingBookingIds) return;
+    releasingBookingIds = true;
+    try {
+      await pool.query('SELECT release_expired_booking_ids()');
+    } catch {
+      console.warn(JSON.stringify({ event: 'booking_id_release_unavailable' }));
+    } finally {
+      releasingBookingIds = false;
+    }
+  };
+  const bookingReleaseTimer = setInterval(() => void releaseBookingIds(), 60000);
+  bookingReleaseTimer.unref();
+  void releaseBookingIds();
   active = true;
   process.off('SIGINT', stopStandby);
   process.off('SIGTERM', stopStandby);
@@ -442,6 +464,7 @@ async function startServer() {
   // ==========================================================
 
   const shutdown = async (signal: string) => {
+    clearInterval(bookingReleaseTimer);
     console.log(`${signal} received. Shutting down gracefully...`);
 
     io.disconnectSockets(true);

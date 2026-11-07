@@ -5,7 +5,7 @@ import type { MapProvider } from '../providers/map.provider.js';
 import type { Ride } from '../types/ride.js';
 
 describe('policy-aware dispatch matching', () => {
-  it('does not query or assign drivers outside approved Premium city coverage', async () => {
+  it('queries live GPS near pickup without requiring saved Premium city coverage', async () => {
     const repo = driverRepository();
     const area = {
       configured: true,
@@ -24,8 +24,9 @@ describe('policy-aware dispatch matching', () => {
       } as Ride,
       null,
     );
-    expect(result).toEqual([]);
-    expect(repo.findNearbyEligible).not.toHaveBeenCalled();
+    expect(result).toHaveLength(2);
+    expect(resolve).not.toHaveBeenCalled();
+    expect(vi.mocked(repo.findNearbyEligible).mock.calls[0]?.[2]).toBe(25000);
   });
 
   it.each([
@@ -78,7 +79,7 @@ describe('policy-aware dispatch matching', () => {
         expect(repo.findNearbyEligible).toHaveBeenLastCalledWith(
           pickup.latitude,
           pickup.longitude,
-          20000,
+          sector === 'premium' ? 25000 : 20000,
           expect.any(Number),
           expect.any(Date),
           sector === 'rental' ? 'passenger' : sector,
@@ -86,7 +87,7 @@ describe('policy-aware dispatch matching', () => {
           expect.objectContaining({ rideId: 'remote-booking', customerId: 'customer' }),
         );
       }
-      if (sector === 'premium') expect(resolve).toHaveBeenLastCalledWith(pickup, true);
+      if (sector === 'premium') expect(resolve).not.toHaveBeenCalled();
     },
   );
   const ride = {
@@ -142,7 +143,7 @@ describe('policy-aware dispatch matching', () => {
       expect(result.map((c) => c.driverProfileId)).toEqual(['a-driver', 'b-driver']);
     }
   });
-  it('resolves premium coverage before querying and attaches the selected city', async () => {
+  it('uses current pickup radius without attaching a legacy city', async () => {
     const repo = driverRepository(),
       resolve = vi
         .fn()
@@ -150,15 +151,12 @@ describe('policy-aware dispatch matching', () => {
     const result = await new MatchingService(repo, undefined, undefined, {
       resolve,
     }).findDispatchDrivers({ ...ride, sector: 'premium', vehicleCategory: 'sedan' }, null);
-    expect(resolve).toHaveBeenCalledWith(ride.pickup, true);
-    expect(result[0]).toMatchObject({
-      dispatchCityId: 'TEST_CITY',
-      dispatchBoundaryGeoJson: 'test-geometry',
-    });
+    expect(resolve).not.toHaveBeenCalled();
+    expect(result[0]).not.toHaveProperty('dispatchCityId');
     expect(repo.findNearbyEligible).toHaveBeenLastCalledWith(
       12,
       77,
-      20000,
+      25000,
       expect.any(Number),
       expect.any(Date),
       'premium',
@@ -166,13 +164,11 @@ describe('policy-aware dispatch matching', () => {
       {
         rideId: 'test-ride',
         customerId: ride.customerId,
-        radiusMeters: null,
-        boundaryGeoJson: 'test-geometry',
-        cityId: 'TEST_CITY',
+        radiusMeters: 25000,
       },
     );
   });
-  it('does not query drivers when premium city coverage is missing', async () => {
+  it('uses live pickup radius when legacy city coverage is missing', async () => {
     const repo = driverRepository(),
       resolve = vi.fn().mockRejectedValue(new Error('city missing'));
     await expect(
@@ -180,8 +176,8 @@ describe('policy-aware dispatch matching', () => {
         { ...ride, sector: 'premium' },
         null,
       ),
-    ).rejects.toThrow('city missing');
-    expect(repo.findNearbyEligible).not.toHaveBeenCalled();
+    ).resolves.toHaveLength(2);
+    expect(resolve).not.toHaveBeenCalled();
   });
 });
 

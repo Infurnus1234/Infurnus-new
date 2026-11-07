@@ -533,7 +533,7 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
     },
   );
   it.each(['missing', 'incorrect'])(
-    'HD-CITY-%s: refuses corrupt persisted premium city identity',
+    'HD-CITY-%s: legacy metadata does not override valid live GPS',
     async (kind) => {
       const c = await customer(),
         d = await driver('premium'),
@@ -543,13 +543,11 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
         r.id,
         kind === 'missing' ? null : 'NOT_THE_APPROVED_CITY',
       ]);
-      await expect(service.acceptRide(d.profileId, r.id)).rejects.toMatchObject({
-        statusCode: 409,
-      });
-      record(`HD-CITY-${kind}`, { acceptance: '409', persistedCity: kind });
+      expect((await service.acceptRide(d.profileId, r.id)).status).toBe('driver_assigned');
+      record(`HD-CITY-${kind}`, { acceptance: 'accepted using live GPS', persistedCity: kind });
     },
   );
-  it('HD-CITY-FORGE: unregistered city identity cannot create a premium offer', async () => {
+  it('HD-CITY-FORGE: city metadata cannot bypass live GPS acceptance', async () => {
     const c = await customer(),
       d = await driver('premium'),
       r = await ride(c, 'premium');
@@ -558,11 +556,16 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
         ...syntheticDispatchCity,
         cityId: 'UNREGISTERED_CITY',
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       await pool.query('SELECT ride_id FROM ride_dispatch_attempts WHERE ride_id=$1', [r.id]),
-    ).toMatchObject({ rowCount: 0 });
-    record('HD-CITY-FORGE', { unregisteredOffer: false });
+    ).toMatchObject({ rowCount: 1 });
+    await pool.query(
+      'UPDATE driver_profiles SET last_location=ST_Project(last_location,30000::float8,0::float8) WHERE id=$1',
+      [d.profileId],
+    );
+    expect(await repo.accept(r.id, d.profileId)).toBeNull();
+    record('HD-CITY-FORGE', { outOfRadiusAcceptance: false });
   });
   it.each([
     ['passenger', 'sedan', [2000, 5000, 10000]],
@@ -1034,7 +1037,7 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
     ['patna', 85.1, 25.6, 'muzaffarpur', 85.4, 26.12],
     ['muzaffarpur', 85.4, 26.12, 'patna', 85.1, 25.6],
   ] as const)(
-    'INTERCITY: %s pickup selects its own vehicle, never destination city',
+    'INTERCITY: %s pickup matches nearby live GPS independently of saved vehicle city',
     async (pickupCity, pickupLon, pickupLat, destinationCity, destinationLon, destinationLat) => {
       const areas = new PremiumCityAreas('config/service-area/premium-city-radius.json');
       const cityRepo = new PostgresRideRepository(pool, areas);
@@ -1065,40 +1068,27 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
       const city = await areas.resolve(actual.pickup);
       const matching = new MatchingService(drivers, undefined, undefined, areas);
       const ids = (await matching.findDispatchDrivers(actual, null)).map((d) => d.driverProfileId);
-      expect(ids).toContain(local.profileId);
-      expect(ids).not.toContain(visiting.profileId);
-      expect(ids).not.toContain(unknown.profileId);
+      expect(ids).toEqual(
+        expect.arrayContaining([local.profileId, visiting.profileId, unknown.profileId]),
+      );
+      expect(await cityRepo.offerDispatch(r.id, visiting.profileId, 1, city)).toBe(true);
+      expect(await cityRepo.finishDispatchAttempt(r.id, visiting.profileId, 'rejected')).toBe(true);
       expect(await cityRepo.offerDispatch(r.id, visiting.profileId, 1, city)).toBe(false);
-      expect(await cityRepo.offerDispatch(r.id, unknown.profileId, 1, city)).toBe(false);
+      expect(await cityRepo.offerDispatch(r.id, unknown.profileId, 1, city)).toBe(true);
+      expect(await cityRepo.finishDispatchAttempt(r.id, unknown.profileId, 'rejected')).toBe(true);
       expect(await cityRepo.offerDispatch(r.id, local.profileId, 1, city)).toBe(true);
-      // Recheck persisted city at acceptance, even after a valid offer was issued.
       await pool.query('UPDATE vehicles SET operating_city_id=$2 WHERE id=$1', [
         local.vehicleId,
         destinationCity,
       ]);
-      await expect(
-        new RideService(cityRepo, drivers).acceptRide(local.profileId, r.id),
-      ).rejects.toMatchObject({ statusCode: 409 });
-      expect(await cityRepo.pendingDispatch(r.id)).toBeNull();
-      await pool.query('UPDATE vehicles SET operating_city_id=$2 WHERE id=$1', [
-        local.vehicleId,
-        pickupCity,
-      ]);
-      // Previously rejected drivers are never re-offered the same ride.
-      expect(await cityRepo.offerDispatch(r.id, local.profileId, 2, city)).toBe(false);
-      await pool.query('UPDATE vehicles SET operating_city_id=$2 WHERE id=$1', [
-        unknown.vehicleId,
-        pickupCity,
-      ]);
-      expect(await cityRepo.offerDispatch(r.id, unknown.profileId, 2, city)).toBe(true);
-      await new RideService(cityRepo, drivers).acceptRide(unknown.profileId, r.id);
-      expect((await cityRepo.findById(r.id))?.assignedDriverId).toBe(unknown.profileId);
+      await new RideService(cityRepo, drivers).acceptRide(local.profileId, r.id);
+      expect((await cityRepo.findById(r.id))?.assignedDriverId).toBe(local.profileId);
       record('INTERCITY', {
         pickupCity,
         destinationCity,
         localAssigned: true,
-        visitingRejected: true,
-        unknownRejected: true,
+        savedCityIgnored: true,
+        rejectedOffersNotRepeated: true,
       });
     },
   );

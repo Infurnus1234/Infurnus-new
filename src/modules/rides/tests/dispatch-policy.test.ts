@@ -6,7 +6,7 @@ describe('approved dispatch policies', () => {
     ['logistics', 'truck', [7000, 15000, 20000], 120000],
     ['service', 'towing', [25000], 600000],
     ['service', 'towing_van', [25000], 600000],
-    ['premium', 'sedan', [], 3600000],
+    ['premium', 'sedan', [25000], 3600000],
     ['service', 'ambulance', [25000], 30000],
   ])('%s/%s uses approved radii and deadline', (sector, category, radii, responseMs) => {
     expect(dispatchPolicy(sector as string, category as string)).toMatchObject({
@@ -18,8 +18,8 @@ describe('approved dispatch policies', () => {
     for (const category of ['jcb', 'recovery', 'roadside_service'])
       expect(dispatchPolicy('service', category).kind).toBe('legacy');
   });
-  it('ranks ambulance by distance and makes premium city-wide', () => {
+  it('ranks ambulance by distance and keeps Premium within the live pickup radius', () => {
     expect(dispatchPolicy('service', 'ambulance').rankByDistance).toBe(true);
-    expect(dispatchPolicy('premium', 'sedan').cityWide).toBe(true);
+    expect(dispatchPolicy('premium', 'sedan').cityWide).toBe(false);
   });
 });

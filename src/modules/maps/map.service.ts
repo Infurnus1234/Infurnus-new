@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { serviceArea, type ServiceAreaGate } from './service-area.js';
 import { AppError } from '../../common/errors/app-error.js';
 import type {
+  AdministrativeDistrict,
   Coordinates,
   MapProvider,
   MapRequestOptions,
@@ -131,7 +132,8 @@ export class CommonMapService implements MapProvider {
     }
   }
   private valid(kind: string, value: unknown): boolean {
-    if (value === null) return kind === 'geocode' || kind === 'reverse' || kind === 'route';
+    if (value === null)
+      return kind === 'district' || kind === 'geocode' || kind === 'reverse' || kind === 'route';
     const point = (v: unknown) => {
       try {
         validateCoordinates(v as Coordinates);
@@ -141,6 +143,16 @@ export class CommonMapService implements MapProvider {
       }
     };
     const route = validRouteResult;
+    if (kind === 'district') {
+      const d = value as AdministrativeDistrict;
+      return (
+        typeof d.name === 'string' &&
+        d.name.length > 0 &&
+        d.name.length <= 120 &&
+        /^[A-Z]{2}$/.test(d.countryCode) &&
+        [2, 3].includes(d.level)
+      );
+    }
     if (kind === 'geocode') return point(value);
     if (kind === 'route') return route(value);
     if (kind === 'reverse') {
@@ -399,6 +411,21 @@ export class CommonMapService implements MapProvider {
         return p;
       },
       options,
+    );
+  }
+  async resolveDistrict(
+    point: Coordinates,
+    options: MapRequestOptions = {},
+  ): Promise<AdministrativeDistrict | null> {
+    validateCoordinates(point);
+    if (!this.provider.resolveDistrict) return null;
+    // Exact selected coordinates: rounding a reverse-geocode cache key can cross a district boundary.
+    return this.request(
+      'district',
+      point,
+      0,
+      (callOptions) => this.provider.resolveDistrict!(point, callOptions),
+      { ...options, source: 'LOGISTICS' },
     );
   }
   async reverseGeocode(

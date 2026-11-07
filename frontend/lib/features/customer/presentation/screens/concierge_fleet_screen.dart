@@ -1,3 +1,5 @@
+import '../providers/booking_catalog_provider.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,51 +11,6 @@ import '../providers/ride_provider.dart';
 
 class ConciergeFleetScreen extends ConsumerStatefulWidget {
   const ConciergeFleetScreen({super.key});
-
-  static const List<Map<String, String>> vehicles = [
-    {
-      'title': 'Scorpio N',
-      'category': 'scorpio',
-      'subtitle': 'Rugged SUV',
-      'service': 'Chauffeur + Fuel',
-      'filterCategory': 'SUV',
-    },
-    {
-      'title': 'Mahindra Thar',
-      'category': 'thar',
-      'subtitle': 'Off-road',
-      'service': 'Chauffeur + Fuel',
-      'filterCategory': 'Off-road',
-    },
-    {
-      'title': 'Innova Crysta',
-      'category': 'innova',
-      'subtitle': 'Executive',
-      'service': 'Chauffeur + Fuel',
-      'filterCategory': 'Luxury',
-    },
-    {
-      'title': 'Force Traveller',
-      'category': 'traveller',
-      'subtitle': '12 seater',
-      'service': 'Chauffeur + Fuel',
-      'filterCategory': 'Vans',
-    },
-    {
-      'title': 'Mercedes V-Class',
-      'category': 'mercedes',
-      'subtitle': 'Luxury Van',
-      'service': 'Chauffeur + Fuel',
-      'filterCategory': 'Luxury',
-    },
-    {
-      'title': 'Helicopter',
-      'category': 'helicopter',
-      'subtitle': 'On-demand',
-      'service': 'Chauffeur + Pilot',
-      'filterCategory': 'Luxury',
-    },
-  ];
 
   @override
   ConsumerState<ConciergeFleetScreen> createState() =>
@@ -67,7 +24,11 @@ class _ConciergeFleetScreenState extends ConsumerState<ConciergeFleetScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final filteredVehicles = ConciergeFleetScreen.vehicles.where((item) {
+    final vehicles = customerVehiclePresentation(
+      'premium',
+      ref.watch(bookingCatalogProvider('premium')).value ?? [],
+    ).map((item) => <String, String>{...item, 'title': item['name']!}).toList();
+    final filteredVehicles = vehicles.where((item) {
       if (_selectedFilter == 'All') return true;
       return item['filterCategory'] == _selectedFilter;
     }).toList();

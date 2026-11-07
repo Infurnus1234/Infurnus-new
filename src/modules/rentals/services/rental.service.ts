@@ -1,3 +1,4 @@
+import { wholeRupees } from '../../../common/utils/whole-rupee.js';
 import { AppError } from '../../../common/errors/app-error.js';
 import { withTransaction } from '../../../infrastructure/database/postgres.js';
 import type {
@@ -12,6 +13,7 @@ export class RentalService {
   constructor(private readonly repository: RentalRepository) {}
 
   async createRental(userId: string, input: CreateRentalInput, idempotencyKey: string) {
+    input = { ...input, totalAmount: wholeRupees(input.totalAmount) };
     try {
       const result = await withTransaction((client) =>
         this.repository.create(userId, input, idempotencyKey, client),

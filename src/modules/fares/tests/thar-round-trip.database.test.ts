@@ -23,9 +23,9 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
   'Saved Thar round-trip tariff and payment consistency',
   () => {
     it.each([
-      [5.99, 'round_trip', 9500, 2],
+      [5, 'round_trip', 9500, 2],
       [6, 'round_trip', 9500, 2],
-      [6.01, 'round_trip', 9500, 2],
+      [7, 'round_trip', 9500, 2],
       [6, 'one_way', 5000, 1],
     ] as const)(
       'books %s hours %s without inventing time, fuel or tax charges',

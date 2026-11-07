@@ -1,5 +1,4 @@
-import '../../domain/utils/passenger_catalog.dart';
-
+import 'package:infurnus/core/utils/currency_formatter.dart';
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -21,12 +20,11 @@ import '../../data/models/ride_model.dart' as model;
 import '../providers/ride_provider.dart';
 import '../widgets/fare_range_details.dart';
 import '../widgets/ride_contact_action.dart';
+import '../widgets/assigned_driver_summary.dart';
 import '../widgets/waiting_timer_widget.dart';
 import '../providers/ride_use_case_providers.dart';
-import '../../domain/utils/passenger_vehicle_filter.dart';
 import '../../domain/utils/vehicle_visibility.dart';
 import '../widgets/vehicle_presentation_catalog.dart';
-import 'specialty_emergency_screen.dart';
 
 // Top-level color constants (shared between _RideBookingScreenState and sub-widgets)
 const Color _kCardElevated = Color(0xFFFFFFFF);
@@ -387,7 +385,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
   Future<void> _detectCurrentLocation() async {
     final generation = ++_pickupSelectionGeneration;
     try {
-      final pos = await ref.read(locationServiceProvider).getCurrentPosition();
+      final pos = await ref.read(locationServiceProvider).getCurrentPosition(retry: true);
       if (pos != null && mounted && generation == _pickupSelectionGeneration) {
         ref
             .read(rideProvider.notifier)
@@ -586,95 +584,95 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
               ] else if (isService) ...[
                 _buildBreakdownRow(
                   'Base Mobilization / Dispatch',
-                  '₹${estimate.baseAmount.toStringAsFixed(2)}',
+                  '₹${estimate.baseAmount.rupeeText}',
                 ),
                 const SizedBox(height: 8),
                 _buildBreakdownRow(
                   'Service & Transit Charge (${estimate.distanceKm.toStringAsFixed(1)} km)',
-                  '₹${estimate.distanceAmount.toStringAsFixed(2)}',
+                  '₹${estimate.distanceAmount.rupeeText}',
                 ),
                 if ((estimate.taxAmount ?? 0) > 0) ...[
                   const SizedBox(height: 8),
                   _buildBreakdownRow(
                     'Taxes & Regulatory Fees (5% GST)',
-                    '₹${estimate.taxAmount!.toStringAsFixed(2)}',
+                    '₹${estimate.taxAmount!.rupeeText}',
                   ),
                 ],
               ] else if (isPremium) ...[
                 _buildBreakdownRow(
                   'Chauffeur Standby Package Base',
-                  '₹${estimate.baseAmount.toStringAsFixed(2)}',
+                  '₹${estimate.baseAmount.rupeeText}',
                 ),
                 const SizedBox(height: 8),
                 _buildBreakdownRow(
                   'Standby Duration Charge (~${estimate.durationMinutes} mins)',
-                  '₹${estimate.timeAmount.toStringAsFixed(2)}',
+                  '₹${estimate.timeAmount.rupeeText}',
                 ),
                 if ((estimate.taxAmount ?? 0) > 0) ...[
                   const SizedBox(height: 8),
                   _buildBreakdownRow(
                     'Taxes & Regulatory Fees (5% GST)',
-                    '₹${estimate.taxAmount!.toStringAsFixed(2)}',
+                    '₹${estimate.taxAmount!.rupeeText}',
                   ),
                 ],
               ] else if (isLogistics) ...[
                 _buildBreakdownRow(
                   'Base Logistics Charge',
-                  '₹${estimate.baseAmount.toStringAsFixed(2)}',
+                  '₹${estimate.baseAmount.rupeeText}',
                 ),
                 const SizedBox(height: 8),
                 _buildBreakdownRow(
                   'Distance Charge (${estimate.distanceKm.toStringAsFixed(1)} km)',
-                  '₹${estimate.distanceAmount.toStringAsFixed(2)}',
+                  '₹${estimate.distanceAmount.rupeeText}',
                 ),
                 if ((estimate.weightAmount ?? 0) > 0) ...[
                   const SizedBox(height: 8),
                   _buildBreakdownRow(
                     'Weight Surcharge',
-                    '₹${estimate.weightAmount!.toStringAsFixed(2)}',
+                    '₹${estimate.weightAmount!.rupeeText}',
                   ),
                 ],
                 if ((estimate.loadingAmount ?? 0) > 0) ...[
                   const SizedBox(height: 8),
                   _buildBreakdownRow(
                     'Loading/Unloading Helper',
-                    '₹${estimate.loadingAmount!.toStringAsFixed(2)}',
+                    '₹${estimate.loadingAmount!.rupeeText}',
                   ),
                 ],
                 if ((estimate.taxAmount ?? 0) > 0) ...[
                   const SizedBox(height: 8),
                   _buildBreakdownRow(
                     'Taxes & Regulatory Fees (5% GST)',
-                    '₹${estimate.taxAmount!.toStringAsFixed(2)}',
+                    '₹${estimate.taxAmount!.rupeeText}',
                   ),
                 ],
               ] else ...[
                 _buildBreakdownRow(
                   'Base Fare',
-                  '₹${estimate.baseAmount.toStringAsFixed(2)}',
+                  '₹${estimate.baseAmount.rupeeText}',
                 ),
                 const SizedBox(height: 8),
                 _buildBreakdownRow(
                   'Distance Charge (${estimate.distanceKm.toStringAsFixed(1)} km)',
-                  '₹${estimate.distanceAmount.toStringAsFixed(2)}',
+                  '₹${estimate.distanceAmount.rupeeText}',
                 ),
                 const SizedBox(height: 8),
                 _buildBreakdownRow(
                   'Time Charge (~${estimate.durationMinutes} mins)',
-                  '₹${estimate.timeAmount.toStringAsFixed(2)}',
+                  '₹${estimate.timeAmount.rupeeText}',
                 ),
                 if ((estimate.waitingAmount ?? 0) > 0) ...[
                   const SizedBox(height: 8),
                   _buildBreakdownRow(
                     'Waiting Charge (>3 min)',
-                    '₹${estimate.waitingAmount!.toStringAsFixed(2)}',
+                    '₹${estimate.waitingAmount!.rupeeText}',
                   ),
                 ],
                 if ((estimate.taxAmount ?? 0) > 0) ...[
                   const SizedBox(height: 8),
                   _buildBreakdownRow(
                     'Taxes & Regulatory Fees (5% GST)',
-                    '₹${estimate.taxAmount!.toStringAsFixed(2)}',
+                    '₹${estimate.taxAmount!.rupeeText}',
                   ),
                 ],
               ],
@@ -1010,6 +1008,26 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
   }
 
   Widget _buildPanelContent(RideState rideState) {
+    final panel = _buildRidePhaseContent(rideState);
+    if (rideState.status == RideStatus.matched ||
+        rideState.currentRide?.bookingId == null) {
+      return panel;
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Booking ID: ${rideState.currentRide!.bookingId}',
+          style: const TextStyle(color: textGray, fontSize: 12),
+        ),
+        const SizedBox(height: 12),
+        panel,
+      ],
+    );
+  }
+
+  Widget _buildRidePhaseContent(RideState rideState) {
     switch (rideState.status) {
       case RideStatus.initial:
       case RideStatus.error:
@@ -1071,6 +1089,8 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
         // Sector-specific options
         if (state.selectedSector == 'premium') ...[
           DropdownButtonFormField<String>(
+            isExpanded: true,
+            itemHeight: null,
             initialValue:
                 state.rentalDetails?['tripType'] as String? ?? 'round_trip',
             decoration: const InputDecoration(labelText: 'Journey type'),
@@ -1091,6 +1111,8 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
         ],
         if (['premium', 'rental'].contains(state.selectedSector)) ...[
           DropdownButtonFormField<int>(
+            isExpanded: true,
+            itemHeight: null,
             key: ValueKey(
               'duration:${state.selectedSector}:${state.rentalDetails?['hours']}:$_durationFieldRevision',
             ),
@@ -1102,22 +1124,10 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                       (state.selectedTier == 'thar' ? 6 : 1),
             decoration: const InputDecoration(labelText: 'Booking duration'),
             items: [
-              for (final hours in [
-                1,
-                2,
-                3,
-                4,
-                5,
-                6,
-                7,
-                8,
-                9,
-                10,
-                11,
-                12,
-                13,
-                if (state.selectedSector == 'premium') 24,
-              ])
+              for (final hours in List.generate(
+                state.selectedSector == 'premium' ? 24 : 13,
+                (index) => index + 1,
+              ))
                 DropdownMenuItem(
                   value: hours,
                   child: Text(
@@ -1197,12 +1207,14 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                   children: [
                     Icon(Icons.emergency_rounded, color: serviceRed, size: 18),
                     SizedBox(width: 8),
-                    Text(
-                      'Emergency & Special Dispatch',
-                      style: TextStyle(
-                        color: serviceRed,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
+                    Expanded(
+                      child: Text(
+                        'Emergency & Special Dispatch',
+                        style: TextStyle(
+                          color: serviceRed,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
                   ],
@@ -1364,7 +1376,9 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
         const SizedBox(height: 16),
 
         // Payment Method & Coupon Row
-        Row(
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
           children: [
             // Interactive Payment method selector
             GestureDetector(
@@ -1380,6 +1394,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                   border: Border.all(color: const Color(0xFFE5E7EB)),
                 ),
                 child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
                       _getPaymentMethodIcon(_selectedPaymentMethod),
@@ -1387,12 +1402,14 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                       color: _getPaymentMethodColor(_selectedPaymentMethod),
                     ),
                     const SizedBox(width: 6),
-                    Text(
-                      _getPaymentMethodLabel(_selectedPaymentMethod),
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF111827),
+                    Flexible(
+                      child: Text(
+                        _getPaymentMethodLabel(_selectedPaymentMethod),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF111827),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 4),
@@ -1415,6 +1432,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                 border: Border.all(color: const Color(0xFFE5E7EB)),
               ),
               child: const Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
                     Icons.local_offer_outlined,
@@ -1422,12 +1440,14 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                     color: Color(0xFF16A34A),
                   ),
                   SizedBox(width: 6),
-                  Text(
-                    'Apply Coupon',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF111827),
+                  Flexible(
+                    child: Text(
+                      'Apply Coupon',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF111827),
+                      ),
                     ),
                   ),
                 ],
@@ -1570,159 +1590,28 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
   bool _isTierMatching(String selectedTier, String category, int index) =>
       selectedTier == category;
 
-  List<Map<String, dynamic>> _getVehiclesForSector(String sector) {
-    switch (sector.toLowerCase()) {
-      case 'logistics':
-        return customerVehiclePresentation(sector, _fleetVehicles)
-            .map(
-              (v) => <String, dynamic>{
-                ...v,
-                'icon': Icons.local_shipping_rounded,
-              },
-            )
-            .toList();
-      case 'service':
-        return SpecialtyEmergencyScreen.vehicles
-            .map(
-              (v) => <String, dynamic>{
-                'name': v['title'],
-                'category': v['category'],
-                'capacity': v['subtitle'],
-                'image': v['image'],
-                'icon': v['fallbackIcon'],
-              },
-            )
-            .toList();
-      case 'premium':
-        return [
-          {
-            'name': 'Scorpio N',
-            'category': 'scorpio',
-            'capacity': 'Rugged SUV',
-            'icon': Icons.directions_car_filled_rounded,
-            'image': sector == 'premium'
-                ? premiumVehicleImages['scorpio']
-                : 'assets/images/scorpio_n_white.png',
-          },
-          {
-            'name': 'Mahindra Thar',
-            'category': 'thar',
-            'capacity': 'Off-road 4x4',
-            'icon': Icons.terrain_rounded,
-            'image': 'assets/images/thar_visual.webp',
-          },
-          {
-            'name': 'Innova Crysta',
-            'category': 'innova',
-            'capacity': 'Executive 7S',
-            'icon': Icons.airport_shuttle_rounded,
-            'image': 'assets/images/innova_crysta.jpg',
-          },
-          {
-            'name': 'Force Traveller',
-            'category': 'traveller',
-            'capacity': 'Executive Van',
-            'icon': Icons.airport_shuttle_rounded,
-            'image': 'assets/images/force_traveller_clean.jpg',
-          },
-          {
-            'name': 'Mercedes V-Class',
-            'category': 'mercedes',
-            'capacity': 'Luxury Van',
-            'icon': Icons.airport_shuttle_rounded,
-            if (sector == 'premium') 'image': premiumVehicleImages['mercedes'],
-          },
-          {
-            'name': 'Helicopter',
-            'category': 'helicopter',
-            'capacity': 'On-demand',
-            'icon': Icons.flight_takeoff_rounded,
-            if (sector == 'premium')
-              'image': premiumVehicleImages['helicopter'],
-          },
-          {
-            'name': 'Toyota Fortuner',
-            'category': 'fortuner',
-            'capacity': 'Commanding SUV',
-            'icon': Icons.directions_car_filled_rounded,
-            'image': 'assets/images/fortuner_visual.jpg',
-          },
-          {
-            'name': 'Scorpio N',
-            'category': 'scorpio_n',
-            'capacity': 'Rugged SUV',
-            'icon': Icons.directions_car_filled_rounded,
-            'image': 'assets/images/scorpio_n_white.png',
-          },
-          {
-            'name': 'Charter Flight',
-            'category': 'charter_flight',
-            'capacity': 'Private Aircraft',
-            'icon': Icons.flight_rounded,
-          },
-          {
-            'name': 'Yacht',
-            'category': 'yacht',
-            'capacity': 'Luxury Cruise',
-            'icon': Icons.directions_boat_rounded,
-          },
-        ];
-      case 'rental':
-      case 'passenger':
-        return customerVehiclePresentation(sector, _fleetVehicles)
-            .map(
-              (v) => <String, dynamic>{
-                ...v,
-                'icon': Icons.directions_car_rounded,
-              },
-            )
-            .toList();
-      default:
-        return _fleetVehicles
-            .where((v) => v.sector == sector)
-            .map(
-              (v) => <String, dynamic>{
-                'name': v.displayName,
-                'category': v.category,
-                'capacity': sector == 'service'
-                    ? v.range ?? 'Configured service radius'
-                    : 'Availability checked near pickup',
-                'icon': sector == 'service'
-                    ? Icons.medical_services_rounded
-                    : sector == 'logistics'
-                    ? Icons.local_shipping_rounded
-                    : Icons.directions_car_rounded,
-                'image': VehicleVisualImage.getAssetPath(
-                  v.displayName,
-                  v.category,
-                ),
-              },
-            )
-            .toList();
-    }
-  }
+  List<Map<String, dynamic>> _getVehiclesForSector(String sector) =>
+      customerVehiclePresentation(sector, _fleetVehicles)
+          .map(
+            (item) => <String, dynamic>{
+              ...item,
+              'icon': VehicleVisualImage.getFallbackIcon(
+                item['name'],
+                item['category'],
+              ),
+            },
+          )
+          .toList();
 
-  bool _isUnsupportedVehicle(RideState state) {
-    if (!isCustomerVehicleVisible(state.selectedSector, state.selectedTier)) {
-      return true;
-    }
-    if (state.selectedSector == 'passenger' &&
-        passengerVehicles.any((v) => v['category'] == state.selectedTier)) {
-      return false;
-    }
-    if (state.selectedSector != 'passenger' &&
-        state.selectedSector.isNotEmpty) {
-      return false;
-    }
-    return (state.selectedSector == 'passenger' &&
-            isExcludedPassengerVehicle(state.selectedTier)) ||
-        (!_isLoadingFleet &&
-            !_fleetVehicles.any(
-              (v) =>
-                  v.sector == state.selectedSector &&
-                  v.category == state.selectedTier,
-            ));
-  }
+  bool _isUnsupportedVehicle(RideState state) =>
+      _isLoadingFleet ||
+      _catalogError != null ||
+      !_fleetVehicles.any(
+        (vehicle) =>
+            vehicle.catalogVisible &&
+            vehicle.sector == state.selectedSector &&
+            vehicle.category == state.selectedTier,
+      );
 
   Future<void> _showVehicleSelectionBottomSheet(RideState state) async {
     if (state.selectedSector == 'passenger' && _catalogError != null) {
@@ -2059,12 +1948,14 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                 children: [
                   Row(
                     children: [
-                      Text(
-                        selected['name'] as String,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF111827),
+                      Expanded(
+                        child: Text(
+                          selected['name'] as String,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF111827),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 6),
@@ -2086,34 +1977,39 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                 ],
               ),
             ),
-            // Fare / capacity badge
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: state.fareEstimate != null
-                    ? const Color(0xFF16A34A)
-                    : const Color(0xFFE5E7EB),
-                borderRadius: BorderRadius.circular(20),
+            Flexible(
+              child: // Fare / capacity badge
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: state.fareEstimate != null
+                      ? const Color(0xFF16A34A)
+                      : const Color(0xFFE5E7EB),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: state.isEstimatingFare
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFF16A34A),
+                        ),
+                      )
+                    : Text(
+                        fareBadge,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: state.fareEstimate != null
+                              ? Colors.white
+                              : const Color(0xFF374151),
+                        ),
+                      ),
               ),
-              child: state.isEstimatingFare
-                  ? const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Color(0xFF16A34A),
-                      ),
-                    )
-                  : Text(
-                      fareBadge,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: state.fareEstimate != null
-                            ? Colors.white
-                            : const Color(0xFF374151),
-                      ),
-                    ),
             ),
           ],
         ),
@@ -2274,7 +2170,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
 
     final fareText =
         state.fareEstimate?.displayFare ??
-        (state.fare != null ? '₹${state.fare!.toStringAsFixed(2)}' : '');
+        (state.fare != null ? '₹${state.fare!.rupeeText}' : '');
     final buttonTitle = fareText.isNotEmpty
         ? 'Book $vehicleName • $fareText'
         : 'Book $vehicleName';
@@ -2524,7 +2420,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
         ),
         const SizedBox(height: 6),
         Text(
-          'Matching in ${state.selectedSector.toUpperCase()} sector • Fare ₹${state.fare?.toStringAsFixed(2) ?? "---"}',
+          'Matching in ${state.selectedSector.toUpperCase()} sector • Fare ₹${state.fare?.rupeeText ?? "---"}',
           style: const TextStyle(color: textGray, fontSize: 13),
         ),
         const SizedBox(height: 24),
@@ -2539,180 +2435,22 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
   // --- Step 3: Driver Assigned & Arriving ---
   Widget _buildDriverAssignedPanel(RideState state, String title) {
     final ride = state.currentRide;
-    final driver = ride?.driverDetails;
-    final vehicle = ride?.vehicleDetails;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: textWhite,
-                  ),
-                ),
-                const Text(
-                  'ETA: ~3 mins away',
-                  style: TextStyle(
-                    color: brandGreen,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: brandGreen.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: const Text(
-                'MATCHED',
-                style: TextStyle(
-                  color: brandGreen,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 11,
-                ),
-              ),
-            ),
-          ],
-        ),
+        DriverMatchedHeader(title: title),
         const SizedBox(height: 16),
-
-        // Driver Card
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: cardElevated,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: borderCard),
-          ),
-          child: Row(
-            children: [
-              const CircleAvatar(
-                radius: 26,
-                backgroundColor: Color(0xFF1A1A1A),
-                child: Icon(Icons.person_rounded, color: textWhite, size: 28),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      driver?.name.isNotEmpty == true
-                          ? driver!.name
-                          : (state.driverName ??
-                                'Matching driver details from fleet server...'),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: textWhite,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        if (driver?.rating != null) ...[
-                          const Icon(
-                            Icons.star_rounded,
-                            color: goldAccent,
-                            size: 14,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${driver!.rating!.toStringAsFixed(1)} • Verified Driver',
-                            style: const TextStyle(
-                              color: textGray,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ] else ...[
-                          const Icon(
-                            Icons.verified_rounded,
-                            color: brandGreen,
-                            size: 14,
-                          ),
-                          const SizedBox(width: 4),
-                          const Text(
-                            'Verified Driver',
-                            style: TextStyle(color: textGray, fontSize: 12),
-                          ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      vehicle != null && vehicle.make.isNotEmpty
-                          ? '${vehicle.make} ${vehicle.model} • ${vehicle.plateNumber}'
-                          : (state.vehicleInfo ??
-                                'Vehicle details pending assignment from fleet...'),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                        color: textWhite,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                tooltip: 'Call driver',
-                icon: const Icon(Icons.phone_rounded, color: brandGreen),
-                onPressed: () => callAssignedRideContact(context, ref),
-              ),
-            ],
-          ),
+        AssignedDriverSummary(
+          ride: ride,
+          fallbackName: state.driverName,
+          fallbackVehicle: state.vehicleInfo,
+          onCall: () => callAssignedRideContact(context, ref),
         ),
         if (ride?.pin != null && ride?.pinVerified != true) ...[
           const SizedBox(height: 12),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: cardElevated,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: borderCard),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Pickup PIN (share with driver):',
-                  style: TextStyle(color: textGray, fontSize: 13),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: brandGreen,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    ride!.pin!,
-                    style: const TextStyle(
-                      color: Colors.black,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 16,
-                      letterSpacing: 2,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          RidePickupPin(pin: ride!.pin!),
         ],
         // ── Logistics 40% Upfront Payment Card ─────────────────────────────────
         if (ride != null && ride.isLogistics && !ride.upfrontPaid) ...[
@@ -2826,9 +2564,11 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Share PIN with Driver:',
-                style: TextStyle(color: textGray, fontSize: 13),
+              const Expanded(
+                child: Text(
+                  'Share PIN with Driver:',
+                  style: TextStyle(color: textGray, fontSize: 13),
+                ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(
@@ -2868,19 +2608,23 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Row(
-              children: [
-                Icon(Icons.navigation_rounded, color: brandGreen, size: 20),
-                SizedBox(width: 8),
-                Text(
-                  'Trip in Progress',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: textWhite,
+            const Expanded(
+              child: Row(
+                children: [
+                  Icon(Icons.navigation_rounded, color: brandGreen, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Trip in Progress',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: textWhite,
+                      ),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -2963,7 +2707,13 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
   Widget _buildRideCompletedPanel(RideState state) {
     final ride = state.currentRide;
     final fare = ride?.finalFare ?? ride?.fareEstimate ?? state.fare ?? 0.0;
-    final isPaid = state.paymentStatus == 'paid';
+    final plan = ride?.logisticsPayment;
+    final isLogistics = ride?.isLogistics == true;
+    final balancePaise = (plan?['outstandingPaise'] ?? plan?['finalPaise']) as num?;
+    final payable = isLogistics
+        ? (balancePaise != null ? balancePaise / 100 : (plan?['remainingAmount'] as num?)?.toDouble())
+        : fare;
+    final isPaid = state.paymentStatus == 'paid' || (isLogistics && payable == 0);
     final isPremium = ride?.sector == 'premium';
 
     return Column(
@@ -3040,7 +2790,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                 _buildBreakdownRow(
                   'Booking Estimate',
                   ride?.fareEstimate != null
-                      ? '₹${ride!.fareEstimate!.toStringAsFixed(2)}'
+                      ? '₹${ride!.fareEstimate!.rupeeText}'
                       : '--',
                 ),
                 const SizedBox(height: 6),
@@ -3051,50 +2801,54 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                 const SizedBox(height: 6),
                 _buildBreakdownRow(
                   'Actual Fuel Cost',
-                  '₹${ride?.actualFuelCost?.toStringAsFixed(2) ?? "0.00"}',
+                  '₹${ride?.actualFuelCost?.rupeeText ?? "0"}',
                 ),
                 const Divider(height: 16, color: borderCard),
               ],
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        isPremium
-                            ? 'Authoritative Final Fare'
-                            : 'Total Trip Fare',
-                        style: const TextStyle(color: textGray, fontSize: 12),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '₹${fare.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                          color: brandGreen,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isPremium
+                              ? 'Authoritative Final Fare'
+                              : 'Total Trip Fare',
+                          style: const TextStyle(color: textGray, fontSize: 12),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 4),
+                        Text(
+                          '₹${fare.rupeeText}',
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            color: brandGreen,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isPaid
-                          ? brandGreen.withValues(alpha: 0.15)
-                          : const Color(0xFF3A290A),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      isPaid ? 'PAID' : 'PAYMENT DUE',
-                      style: TextStyle(
-                        color: isPaid ? brandGreen : goldAccent,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 11,
+                  Flexible(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isPaid
+                            ? brandGreen.withValues(alpha: 0.15)
+                            : const Color(0xFF3A290A),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        isPaid ? 'PAID' : 'PAYMENT DUE',
+                        style: TextStyle(
+                          color: isPaid ? brandGreen : goldAccent,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                        ),
                       ),
                     ),
                   ),
@@ -3153,14 +2907,14 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
 
                 const SizedBox(height: 14),
                 InfurnusButton(
-                  text: 'Pay ₹${fare.toStringAsFixed(2)}',
+                  text: payable == null ? 'Final balance unavailable' : 'Pay ₹${payable.rupeeText}',
                   isLoading: _isProcessingPayment,
-                  onPressed: () async {
+                  onPressed: payable == null || payable <= 0 ? null : () async {
                     setState(() => _isProcessingPayment = true);
                     final success = await ref
                         .read(rideProvider.notifier)
                         .initiateTripPayment(
-                          amount: fare,
+                          amount: payable,
                           paymentMethod: _selectedPaymentMethod,
                         );
                     if (mounted) {
@@ -3473,8 +3227,9 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                 ]
               : [],
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
           children: [
             Icon(icon, size: 16, color: isSelected ? Colors.white : textGray),
             const SizedBox(width: 6),
@@ -3604,7 +3359,8 @@ class _LogisticsUpfrontCardState extends ConsumerState<_LogisticsUpfrontCard> {
   @override
   Widget build(BuildContext context) {
     final ride = widget.ride;
-    final totalFare = ride.fareEstimate ?? 0.0;
+    final planTotalPaise = ride.logisticsPayment?['totalPaise'] as num?;
+    final totalFare = planTotalPaise == null ? ride.displayFare : planTotalPaise / 100;
     final upfrontAmt = ride.upfrontAmount;
     final status = ride.upfrontPaymentStatus;
 
@@ -3617,46 +3373,52 @@ class _LogisticsUpfrontCardState extends ConsumerState<_LogisticsUpfrontCard> {
         border: Border.all(color: _kBrandGreen.withValues(alpha: 0.3)),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Row(
             children: [
               Icon(Icons.local_shipping_rounded, color: _kBrandGreen, size: 16),
               SizedBox(width: 6),
-              Text(
-                'Logistics \u2013 40% Upfront Payment Required',
-                style: TextStyle(
-                  color: _kTextWhite,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
+              Expanded(
+                child: Text(
+                  'Logistics \u2013 40% Upfront Payment Required',
+                  style: TextStyle(
+                    color: _kTextWhite,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            spacing: 8,
+            runSpacing: 4,
             children: [
               const Text(
                 'Total Fare',
                 style: TextStyle(color: _kTextGray, fontSize: 12),
               ),
               Text(
-                '\u20B9${totalFare.toStringAsFixed(2)}',
+                '\u20B9${totalFare.rupeeText}',
                 style: const TextStyle(color: _kTextWhite, fontSize: 12),
               ),
             ],
           ),
           const SizedBox(height: 4),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            spacing: 8,
+            runSpacing: 4,
             children: [
               const Text(
                 'Pay Now (40%)',
                 style: TextStyle(color: _kTextGray, fontSize: 12),
               ),
               Text(
-                '\u20B9${upfrontAmt.toStringAsFixed(2)}',
+                '\u20B9${upfrontAmt.rupeeText}',
                 style: const TextStyle(
                   color: _kBrandGreen,
                   fontWeight: FontWeight.bold,
@@ -3666,8 +3428,10 @@ class _LogisticsUpfrontCardState extends ConsumerState<_LogisticsUpfrontCard> {
             ],
           ),
           const SizedBox(height: 4),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            spacing: 8,
+            runSpacing: 4,
             children: [
               const Text(
                 'Status',
@@ -3706,8 +3470,8 @@ class _LogisticsUpfrontCardState extends ConsumerState<_LogisticsUpfrontCard> {
                   )
                 : InfurnusButton(
                     text: status == 'FAILED'
-                        ? 'Retry Payment (\u20B9${upfrontAmt.toStringAsFixed(2)})'
-                        : 'Pay \u20B9${upfrontAmt.toStringAsFixed(2)} Now',
+                        ? 'Retry Payment (\u20B9${upfrontAmt.rupeeText})'
+                        : 'Pay \u20B9${upfrontAmt.rupeeText} Now',
                     onPressed: _pay,
                   ),
           ),

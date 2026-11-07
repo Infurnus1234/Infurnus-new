@@ -13,7 +13,7 @@ import 'recording_maps.dart';
 
 class NoGps extends LocationService {
   @override
-  Future<Position?> getCurrentPosition() async => null;
+  Future<Position?> getCurrentPosition({bool retry = false}) async => null;
 }
 
 void main() {

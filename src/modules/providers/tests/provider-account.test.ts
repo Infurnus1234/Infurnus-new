@@ -92,8 +92,8 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
       const { id } = await fixture();
       const code = `test_${randomUUID().replaceAll('-', '')}`;
       await pool.query(
-        `INSERT INTO vehicle_types(name,code,sector,active,base_fare_paise,per_km_rate_paise)
-         VALUES('TEST ONLY dynamic catalog',$1,'passenger',TRUE,10000,1000)`,
+        `INSERT INTO vehicle_types(name,code,sector,active,registration_active,base_fare_paise,per_km_rate_paise)
+         VALUES('TEST ONLY dynamic catalog',$1,'passenger',TRUE,TRUE,10000,1000)`,
         [code],
       );
       try {
@@ -103,8 +103,8 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
         expect(passenger.some((type) => type.code === code)).toBe(true);
         for (const sector of ['passenger', 'logistics', 'service', 'premium'] as const) {
           const types = await customer.catalog(sector, 100, 0);
-          for (const type of types) {
-            expect(type.pricingStatus).toBe('available');
+          for (const type of types.filter((type) => type.registrationActive)) {
+            expect(type.catalogVisible).not.toBe(false);
             expect(
               catalog.types.some((entry) => entry.code === type.code && entry.sector === sector),
               `${sector}/${type.code}`,
@@ -198,10 +198,10 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
         sector: 'logistics',
         category: code,
       });
-      const vehicle = await fleet.createVehicle(owner.id, input);
-      expect(vehicle.ownerId).toBe(owner.id);
-      expect((await fleet.listVehicles(owner.id)).some((v) => v.id === vehicle.id)).toBe(true);
-      expect((await fleet.catalog(owner.id)).types.some((t) => t.code === code)).toBe(true);
+      await expect(fleet.createVehicle(owner.id, input)).rejects.toMatchObject({
+        code: 'INVALID_VEHICLE_CATEGORY',
+      });
+      expect((await fleet.catalog(owner.id)).types.some((t) => t.code === code)).toBe(false);
       const other = await fixture();
       await expect(
         fleet.createVehicle(other.id, { ...input, plateNumber: randomUUID().slice(0, 20) }),

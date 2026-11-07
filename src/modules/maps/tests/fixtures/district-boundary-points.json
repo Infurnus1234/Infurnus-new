@@ -1,0 +1,14 @@
+[
+  {
+    "district": "Patna",
+    "latitude": 25.328238393272844,
+    "longitude": 85.63512278398046,
+    "reference": "Bihar FMIS district boundary, approximately 200m on each side"
+  },
+  {
+    "district": "Nalanda",
+    "latitude": 25.33223561544934,
+    "longitude": 85.63527183052277,
+    "reference": "Bihar FMIS district boundary, approximately 200m on each side"
+  }
+]

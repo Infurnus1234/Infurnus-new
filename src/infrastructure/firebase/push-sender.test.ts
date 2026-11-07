@@ -36,11 +36,6 @@ describe('FCM adapter request contract (mock SDK, no FCM network acceptance)', (
       android: {
         priority: 'high',
         collapseKey: 'notification',
-        notification: {
-          channelId: 'infurnus_driver_channel_v2',
-          tag: 'notification',
-          sound: 'infurnus_alert',
-        },
       },
       apns: {
         payload: {
@@ -49,6 +44,12 @@ describe('FCM adapter request contract (mock SDK, no FCM network acceptance)', (
           },
         },
       },
+    });
+    expect(sendEachForMulticast.mock.calls[0]![0]).not.toHaveProperty('notification');
+    expect(sendEachForMulticast.mock.calls[0]![0].android).not.toHaveProperty('notification');
+    expect(sendEachForMulticast.mock.calls[0]![0].apns.payload.aps.alert).toEqual({
+      title: 'Ride offer',
+      body: 'Open the app',
     });
     expect(sendEachForMulticast.mock.calls[0]![0].android.ttl).toBeGreaterThan(0);
     expect(results).toEqual([

@@ -103,6 +103,8 @@ export function createRideRouter(controller: RideController, driverController?: 
     // Driver Rides
     // ==========================================================
 
+    router.get('/driver/today-summary', requireRoles('driver'), driverController.todaySummary);
+
     router.get('/driver/history', requireRoles('driver'), driverController.history);
 
     router.patch(

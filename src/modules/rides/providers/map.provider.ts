@@ -24,6 +24,13 @@ export interface ReverseGeocodeResult {
   placeId?: string;
   coordinates: Coordinates;
 }
+export interface AdministrativeDistrict {
+  name: string;
+  countryCode: string;
+  state: string | null;
+  level: 2 | 3;
+  source: 'google_geocoding';
+}
 export interface MapRequestOptions {
   locationBias?: Coordinates;
   mode?: 'driving' | 'walking' | 'bicycling';
@@ -37,6 +44,10 @@ export interface MapProvider {
   forSource?(source: NonNullable<MapRequestOptions['source']>): MapProvider;
   readonly providerName?: string;
   readonly navigationStorageAllowed?: boolean;
+  resolveDistrict?(
+    point: Coordinates,
+    options?: MapRequestOptions,
+  ): Promise<AdministrativeDistrict | null>;
   reverseGeocode?(
     point: Coordinates,
     options?: MapRequestOptions,

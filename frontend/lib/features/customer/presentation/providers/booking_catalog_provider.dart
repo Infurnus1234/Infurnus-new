@@ -12,6 +12,7 @@ final bookingCatalogProvider = FutureProvider.autoDispose
       return items
           .where(
             (v) =>
+                v.catalogVisible &&
                 v.sector == sector &&
                 isCustomerVehicleVisible(sector, v.category, v.displayName),
           )

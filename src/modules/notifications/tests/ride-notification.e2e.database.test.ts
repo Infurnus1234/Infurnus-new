@@ -247,7 +247,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           .get(`/rides/driver/rides/${id}/customer-contact`)
           .auth(driver.token, { type: 'bearer' });
         expect(contact.status).toBe(200);
-        expect(contact.body.data).toMatchObject({ rideId: id, phone: '+919876543210' });
+        expect(contact.body.data).toMatchObject({ rideId: id, phone: null, callingNumber: '+919153787859' });
         expect(
           (
             await request(app)

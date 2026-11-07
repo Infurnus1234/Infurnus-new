@@ -46,6 +46,8 @@ export interface FareCalculationInput {
  *   1250 = ₹12.50
  */
 export interface FareBreakdown {
+  roundingAdjustmentPaise?: number;
+  monetaryPolicy?: 'whole_rupee_half_up_v1';
   baseAmount: number;
   distanceAmount: number;
   timeAmount: number;

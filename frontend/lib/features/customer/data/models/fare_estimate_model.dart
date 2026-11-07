@@ -1,3 +1,4 @@
+import 'package:infurnus/core/utils/currency_formatter.dart';
 class FareEstimateModel {
   final String estimateType;
   final bool bookable;
@@ -35,13 +36,13 @@ class FareEstimateModel {
     if (isUnavailable) return 'Available Soon';
     if (isRange && minimum != null) {
       if (maximum?.grossAmount == minimum!.grossAmount) {
-        return '₹${minimum!.grossAmount.toStringAsFixed(2)}';
+        return '₹${minimum!.grossAmount.rupeeText}';
       }
       return maximum == null
-          ? '₹${minimum!.grossAmount.toStringAsFixed(2)}+'
-          : '₹${minimum!.grossAmount.toStringAsFixed(2)}–₹${maximum!.grossAmount.toStringAsFixed(2)}';
+          ? '₹${minimum!.grossAmount.rupeeText}+'
+          : '₹${minimum!.grossAmount.rupeeText}–₹${maximum!.grossAmount.rupeeText}';
     }
-    return '₹${grossAmount.toStringAsFixed(2)}';
+    return '₹${grossAmount.rupeeText}';
   }
 
   final double grossAmount; // In ₹ (converted from paise)

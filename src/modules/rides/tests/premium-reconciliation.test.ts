@@ -723,227 +723,234 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
       }
     });
 
-    it('full flow: first GPS zero dist -> accumulate distance -> duplicate 0 dist -> only in_progress -> server-side fuel reconciliation', async () => {
-      // 1. Create a Premium ride (4 hours rental)
-      const ride = await repo.create(customerId, {
-        pickup: {
-          latitude: 12.9716,
-          longitude: 77.5946,
-        },
-        destination: {
-          latitude: 13.0,
-          longitude: 77.65,
-        },
-        sector: 'premium',
-        vehicleCategory: 'fortuner',
-        rentalDetails: {
-          hours: 4,
-          rentalHours: 4,
-        },
-        fareEstimate: 4000,
-      });
+    it.each([50000, 100000, 300000])(
+      'full flow: %s metres accumulated, deduplicated and reconciled without a travel cap',
+      async (distanceMeters) => {
+        const fuel = (distanceMeters / 1000) * 18;
+        const subtotal = 4000 + fuel;
+        const tax = subtotal * 0.05;
+        const total = subtotal + tax;
+        // 1. Create a Premium ride (4 hours rental)
+        const ride = await repo.create(customerId, {
+          pickup: {
+            latitude: 12.9716,
+            longitude: 77.5946,
+          },
+          destination: {
+            latitude: 13.0,
+            longitude: 77.65,
+          },
+          sector: 'premium',
+          vehicleCategory: 'fortuner',
+          rentalDetails: {
+            hours: 4,
+            rentalHours: 4,
+          },
+          fareEstimate: 4000,
+        });
 
-      expect(ride.sector).toBe('premium');
-      expect(ride.status).toBe('searching');
+        expect(ride.sector).toBe('premium');
+        expect(ride.status).toBe('searching');
 
-      // 2. Non-in_progress ride must not accumulate distance
-      const inactiveRes = await repo.recordBreadcrumbAndAccumulateDistance(
-        ride.id,
-        12.9716,
-        77.5946,
-      );
+        // 2. Non-in_progress ride must not accumulate distance
+        const inactiveRes = await repo.recordBreadcrumbAndAccumulateDistance(
+          ride.id,
+          12.9716,
+          77.5946,
+        );
 
-      expect(inactiveRes).toBeNull();
+        expect(inactiveRes).toBeNull();
 
-      const check1 = await repo.findById(ride.id);
+        const check1 = await repo.findById(ride.id);
 
-      expect(check1?.actualDistanceMeters).toBe(0);
+        expect(check1?.actualDistanceMeters).toBe(0);
 
-      // 3. Driver accepts ride
-      expect(await repo.offerDispatch(ride.id, driverProfileId, 15000, syntheticDispatchCity)).toBe(
-        true,
-      );
-      expect(await repo.offerDispatch(ride.id, driverProfileId, 15000, syntheticDispatchCity)).toBe(
-        false,
-      );
-      expect(await repo.listAvailableForDriver(driverProfileId)).toHaveLength(1);
-      expect(
-        await repo.listAvailableForDriver('00000000-0000-0000-0000-000000000001'),
-      ).toHaveLength(0);
-      const simultaneousAccepts = await Promise.allSettled([
-        rideService.acceptRide(driverProfileId, ride.id),
-        rideService.acceptRide(driverProfileId, ride.id),
-      ]);
-      expect(simultaneousAccepts.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
-      expect(simultaneousAccepts.filter((result) => result.status === 'rejected')).toHaveLength(1);
+        // 3. Driver accepts ride
+        expect(
+          await repo.offerDispatch(ride.id, driverProfileId, 15000, syntheticDispatchCity),
+        ).toBe(true);
+        expect(
+          await repo.offerDispatch(ride.id, driverProfileId, 15000, syntheticDispatchCity),
+        ).toBe(false);
+        expect(await repo.listAvailableForDriver(driverProfileId)).toHaveLength(1);
+        expect(
+          await repo.listAvailableForDriver('00000000-0000-0000-0000-000000000001'),
+        ).toHaveLength(0);
+        const simultaneousAccepts = await Promise.allSettled([
+          rideService.acceptRide(driverProfileId, ride.id),
+          rideService.acceptRide(driverProfileId, ride.id),
+        ]);
+        expect(simultaneousAccepts.filter((result) => result.status === 'fulfilled')).toHaveLength(
+          1,
+        );
+        expect(simultaneousAccepts.filter((result) => result.status === 'rejected')).toHaveLength(
+          1,
+        );
 
-      const acceptedRide = await repo.findById(ride.id);
+        const acceptedRide = await repo.findById(ride.id);
 
-      expect(acceptedRide?.assignedDriverId).toBe(driverProfileId);
+        expect(acceptedRide?.assignedDriverId).toBe(driverProfileId);
 
-      expect(acceptedRide?.assignedVehicleId).toBe(vehicleId);
+        expect(acceptedRide?.assignedVehicleId).toBe(vehicleId);
 
-      // Still driver_assigned, so distance must not accumulate
-      const notStartedRes = await repo.recordBreadcrumbAndAccumulateDistance(
-        ride.id,
-        12.9716,
-        77.5946,
-      );
+        // Still driver_assigned, so distance must not accumulate
+        const notStartedRes = await repo.recordBreadcrumbAndAccumulateDistance(
+          ride.id,
+          12.9716,
+          77.5946,
+        );
 
-      expect(notStartedRes).toBeNull();
+        expect(notStartedRes).toBeNull();
 
-      // 4. Transition through valid lifecycle
-      await repo.transition(ride.id, 'driver_arriving', driverProfileId);
+        // 4. Transition through valid lifecycle
+        await repo.transition(ride.id, 'driver_arriving', driverProfileId);
 
-      await repo.transition(ride.id, 'driver_arrived', driverProfileId);
+        await repo.transition(ride.id, 'driver_arrived', driverProfileId);
 
-      expect(await repo.verifyPinAttempt(ride.id, driverProfileId, ride.pin!)).toBe('verified');
+        expect(await repo.verifyPinAttempt(ride.id, driverProfileId, ride.pin!)).toBe('verified');
 
-      // 5. First GPS point
-      const firstPoint = await repo.recordBreadcrumbAndAccumulateDistance(
-        ride.id,
-        12.9716,
-        77.5946,
-        20,
-        90,
-      );
+        // 5. First GPS point
+        const firstPoint = await repo.recordBreadcrumbAndAccumulateDistance(
+          ride.id,
+          12.9716,
+          77.5946,
+          20,
+          90,
+        );
 
-      expect(firstPoint).toEqual({
-        actualDistanceMeters: 0,
-        incrementalDistanceMeters: 0,
-      });
+        expect(firstPoint).toEqual({
+          actualDistanceMeters: 0,
+          incrementalDistanceMeters: 0,
+        });
 
-      const breadcrumbsRes1 = await pool.query(
-        `SELECT id, ride_id, speed, heading
+        const breadcrumbsRes1 = await pool.query(
+          `SELECT id, ride_id, speed, heading
              FROM ride_location_breadcrumbs
              WHERE ride_id = $1
              ORDER BY recorded_at ASC`,
-        [ride.id],
-      );
+          [ride.id],
+        );
 
-      expect(breadcrumbsRes1.rows).toHaveLength(1);
-      expect(breadcrumbsRes1.rows[0].ride_id).toBe(ride.id);
+        expect(breadcrumbsRes1.rows).toHaveLength(1);
+        expect(breadcrumbsRes1.rows[0].ride_id).toBe(ride.id);
 
-      // 6. Second GPS point
-      const secondPoint = await repo.recordBreadcrumbAndAccumulateDistance(
-        ride.id,
-        12.9816,
-        77.5946,
-        45,
-        0,
-      );
+        // 6. Second GPS point
+        const secondPoint = await repo.recordBreadcrumbAndAccumulateDistance(
+          ride.id,
+          12.9816,
+          77.5946,
+          45,
+          0,
+        );
 
-      expect(secondPoint).not.toBeNull();
+        expect(secondPoint).not.toBeNull();
 
-      expect(secondPoint!.incrementalDistanceMeters).toBeGreaterThan(1000);
+        expect(secondPoint!.incrementalDistanceMeters).toBeGreaterThan(1000);
 
-      expect(secondPoint!.incrementalDistanceMeters).toBeLessThan(1200);
+        expect(secondPoint!.incrementalDistanceMeters).toBeLessThan(1200);
 
-      expect(secondPoint!.actualDistanceMeters).toBe(secondPoint!.incrementalDistanceMeters);
+        expect(secondPoint!.actualDistanceMeters).toBe(secondPoint!.incrementalDistanceMeters);
 
-      const recordedDistanceAfterStep2 = secondPoint!.actualDistanceMeters;
+        const recordedDistanceAfterStep2 = secondPoint!.actualDistanceMeters;
 
-      // 7. Duplicate GPS point
-      const duplicatePoint = await repo.recordBreadcrumbAndAccumulateDistance(
-        ride.id,
-        12.9816,
-        77.5946,
-        0,
-        0,
-      );
+        // 7. Duplicate GPS point
+        const duplicatePoint = await repo.recordBreadcrumbAndAccumulateDistance(
+          ride.id,
+          12.9816,
+          77.5946,
+          0,
+          0,
+        );
 
-      expect(duplicatePoint).toEqual({
-        actualDistanceMeters: recordedDistanceAfterStep2,
-        incrementalDistanceMeters: 0,
-      });
+        expect(duplicatePoint).toEqual({
+          actualDistanceMeters: recordedDistanceAfterStep2,
+          incrementalDistanceMeters: 0,
+        });
 
-      // 8. Third GPS point
-      const thirdPoint = await repo.recordBreadcrumbAndAccumulateDistance(
-        ride.id,
-        12.9916,
-        77.5946,
-        50,
-        0,
-      );
+        // 8. Third GPS point
+        const thirdPoint = await repo.recordBreadcrumbAndAccumulateDistance(
+          ride.id,
+          12.9916,
+          77.5946,
+          50,
+          0,
+        );
 
-      expect(thirdPoint).not.toBeNull();
+        expect(thirdPoint).not.toBeNull();
 
-      expect(thirdPoint!.actualDistanceMeters).toBeGreaterThan(recordedDistanceAfterStep2 + 1000);
+        expect(thirdPoint!.actualDistanceMeters).toBeGreaterThan(recordedDistanceAfterStep2 + 1000);
 
-      const breadcrumbsAll = await pool.query(
-        `SELECT COUNT(*)::int AS count
+        const breadcrumbsAll = await pool.query(
+          `SELECT COUNT(*)::int AS count
              FROM ride_location_breadcrumbs
              WHERE ride_id = $1`,
-        [ride.id],
-      );
+          [ride.id],
+        );
 
-      expect(breadcrumbsAll.rows[0].count).toBe(4);
+        expect(breadcrumbsAll.rows[0].count).toBe(4);
 
-      // 9. Complete Premium Ride
-      await pool.query(
-        `UPDATE rides
-             SET actual_distance_meters = 50000
+        // 9. Complete Premium Ride
+        await pool.query(
+          `UPDATE rides
+             SET actual_distance_meters = $2
              WHERE id = $1`,
-        [ride.id],
-      );
+          [ride.id, distanceMeters],
+        );
 
-      const completedRide = await rideService.completeRide(ride.id, driverProfileId);
+        const completedRide = await rideService.completeRide(ride.id, driverProfileId);
 
-      expect(completedRide.status).toBe('completed');
+        expect(completedRide.status).toBe('completed');
 
-      expect(completedRide.actualDistanceMeters).toBe(50000);
+        expect(completedRide.actualDistanceMeters).toBe(distanceMeters);
 
-      // Hourly base = 4 * 1000 = Ã¢â€šÂ¹4,000
-      // Fuel = 50 * Ã¢â€šÂ¹18 = Ã¢â€šÂ¹900
-      // Subtotal = Ã¢â€šÂ¹4,900
-      // Tax = Ã¢â€šÂ¹245
-      // Final = Ã¢â€šÂ¹5,145
-      expect(completedRide.actualFuelCost).toBe(900);
+        // Hourly base = 4 * 1000 = Ã¢â€šÂ¹4,000
+        expect(completedRide.actualFuelCost).toBe(fuel);
 
-      expect(completedRide.finalFare).toBe(5145);
+        expect(completedRide.finalFare).toBe(total);
 
-      expect(completedRide.billing).toEqual({
-        currency: 'INR',
-        hourlyRate: 1000,
-        bookedHours: 4,
-        hourlyBase: 4000,
-        fuelRatePerKm: 18,
-        actualDistanceKm: 50,
-        actualDistanceMeters: 50000,
-        actualFuelCost: 900,
-        subtotal: 4900,
-        taxAmount: 245,
-        finalFare: 5145,
-      });
+        expect(completedRide.billing).toEqual({
+          currency: 'INR',
+          hourlyRate: 1000,
+          bookedHours: 4,
+          hourlyBase: 4000,
+          fuelRatePerKm: 18,
+          actualDistanceKm: distanceMeters / 1000,
+          actualDistanceMeters: distanceMeters,
+          actualFuelCost: fuel,
+          subtotal,
+          taxAmount: tax,
+          finalFare: total,
+        });
 
-      // 10. Verify persisted values
-      const dbRow = await pool.query(
-        `SELECT
+        // 10. Verify persisted values
+        const dbRow = await pool.query(
+          `SELECT
                actual_distance_meters,
                actual_fuel_cost,
                final_fare,
                status
              FROM rides
              WHERE id = $1`,
-        [ride.id],
-      );
+          [ride.id],
+        );
 
-      expect(dbRow.rows[0].status).toBe('completed');
+        expect(dbRow.rows[0].status).toBe('completed');
 
-      expect(Number(dbRow.rows[0].actual_distance_meters)).toBe(50000);
+        expect(Number(dbRow.rows[0].actual_distance_meters)).toBe(distanceMeters);
 
-      expect(Number(dbRow.rows[0].actual_fuel_cost)).toBe(900);
+        expect(Number(dbRow.rows[0].actual_fuel_cost)).toBe(fuel);
 
-      expect(Number(dbRow.rows[0].final_fare)).toBe(5145);
+        expect(Number(dbRow.rows[0].final_fare)).toBe(total);
 
-      await pool.query(
-        `DELETE FROM ride_location_breadcrumbs
+        await pool.query(
+          `DELETE FROM ride_location_breadcrumbs
              WHERE ride_id = $1`,
-        [ride.id],
-      );
+          [ride.id],
+        );
 
-      await pool.query('DELETE FROM rides WHERE id = $1', [ride.id]);
-    });
+        await pool.query('DELETE FROM rides WHERE id = $1', [ride.id]);
+      },
+    );
 
     it('safely falls back to Ã¢â€šÂ¹15.00/km if vehicle fuel_rate_per_km is 0 or null', async () => {
       const suffix = randomUUID();

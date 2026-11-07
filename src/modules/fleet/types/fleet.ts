@@ -1,3 +1,4 @@
+import type { OperatingLocation } from '../../maps/vehicle-operating-location.js';
 export interface FleetDashboardMetrics {
   totalVehicles: number;
   activeVehicles: number;
@@ -31,6 +32,7 @@ export interface FleetVehicle {
   permitDetails?: string | null;
   ownershipType?: string;
   ownerNotes?: string | null;
+  operatingLocation?: OperatingLocation | null | undefined;
   operatingCityId?: string | null;
   verificationStatus: string;
   isActive: boolean;

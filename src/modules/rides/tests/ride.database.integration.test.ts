@@ -127,6 +127,85 @@ describeDatabase('ride PostgreSQL integration', () => {
     await restoreServiceFixtures(pool, serviceCatalog);
   });
 
+  describe('Premium live pickup radius', () => {
+    async function premiumAt(distance: number, pickup = { longitude: 85.145, latitude: 25.617 }) {
+      const id = fixture.rideIds[0]!;
+      await pool.query('DELETE FROM ride_dispatch_attempts WHERE ride_id=$1', [id]);
+      await pool.query(
+        `UPDATE rides SET sector='premium',vehicle_category='sedan',dispatch_driver_id=NULL,dispatch_expires_at=NULL,
+        pickup_location=ST_SetSRID(ST_MakePoint($2,$3),4326)::geography WHERE id=$1`,
+        [id, pickup.longitude, pickup.latitude],
+      );
+      await pool.query(
+        "UPDATE vehicles SET sector='premium',category='sedan',operating_city_id=NULL WHERE id=$1",
+        [fixture.vehicleId],
+      );
+      await pool.query(
+        `UPDATE driver_profiles SET last_location=ST_Project(ST_SetSRID(ST_MakePoint($2,$3),4326)::geography,$4::float8,0::float8),last_location_at=NOW() WHERE id=$1`,
+        [fixture.driverProfileId, pickup.longitude, pickup.latitude, distance],
+      );
+      await pool.query(
+        "UPDATE vehicles SET verification_status='approved',is_active=TRUE WHERE id=$1",
+        [fixture.vehicleId],
+      );
+      return id;
+    }
+    it.each([5000, 10000, 15000, 20000, 25000, 25000.01, 26000, 30000, 50000])(
+      'dispatch and acceptance at %s metres',
+      async (distance) => {
+        const id = await premiumAt(distance);
+        const eligible = distance <= 25000;
+        const candidates = await driverRepository.findNearbyEligible(
+          25.617,
+          85.145,
+          1000,
+          10,
+          new Date(Date.now() - 60000),
+          'premium',
+          'sedan',
+          { rideId: id, radiusMeters: null },
+        );
+        expect(candidates.some((c) => c.driverProfileId === fixture.driverProfileId)).toBe(
+          eligible,
+        );
+        expect(await repository.offerDispatch(id, fixture.driverProfileId, 3600000)).toBe(eligible);
+        expect(Boolean(await repository.accept(id, fixture.driverProfileId))).toBe(eligible);
+      },
+    );
+    it.each(['missing', 'stale', 'moved'])(
+      'rejects %s GPS after an offer at acceptance and recovery',
+      async (mode) => {
+        const id = await premiumAt(10000);
+        expect(await repository.offerDispatch(id, fixture.driverProfileId, 3600000)).toBe(true);
+        if (mode === 'missing')
+          await pool.query(
+            'UPDATE driver_profiles SET last_location=NULL,last_location_at=NULL WHERE id=$1',
+            [fixture.driverProfileId],
+          );
+        if (mode === 'stale')
+          await pool.query(
+            "UPDATE driver_profiles SET last_location_at=NOW()-INTERVAL '1 day' WHERE id=$1",
+            [fixture.driverProfileId],
+          );
+        if (mode === 'moved')
+          await pool.query(
+            'UPDATE driver_profiles SET last_location=ST_Project(last_location,30000::float8,0::float8) WHERE id=$1',
+            [fixture.driverProfileId],
+          );
+        expect(await repository.accept(id, fixture.driverProfileId)).toBeNull();
+        expect(await repository.pendingDispatch(id)).toBeNull();
+      },
+    );
+    it.each([
+      { longitude: 85.145, latitude: 25.617 },
+      { longitude: 84.917, latitude: 26.647 },
+    ])('matches dynamically around selected pickup $latitude', async (pickup) => {
+      const id = await premiumAt(20000, pickup);
+      expect(await repository.offerDispatch(id, fixture.driverProfileId, 3600000)).toBe(true);
+      expect(await repository.accept(id, fixture.driverProfileId)).not.toBeNull();
+    });
+  });
+
   it('a socket disconnect preserves availability and assignment throughout an active ride', async () => {
     const id = fixture.rideIds[0]!;
     await service.acceptRide(fixture.driverProfileId, id);
@@ -189,7 +268,8 @@ describeDatabase('ride PostgreSQL integration', () => {
     expect((await get()).body.data).toEqual({
       rideId: id,
       name: 'Ride Customer',
-      phone: customerPhone,
+      phone: null,
+      callingNumber: '+919153787859',
     });
     await pool.query('UPDATE users SET deleted_at=NOW() WHERE id=$1', [fixture.driverUserId]);
     expect((await get()).status).toBe(404);
@@ -273,14 +353,10 @@ describeDatabase('ride PostgreSQL integration', () => {
     await service.acceptRide(fixture.driverProfileId, id);
     for (const status of ['driver_arriving', 'driver_arrived'] as const) {
       await service.transitionRide(id, status, fixture.driverProfileId);
-      expect((await contactService.getCustomerContact(fixture.driverUserId, id)).phone).toBe(
-        customerPhone,
-      );
+      expect((await contactService.getCustomerContact(fixture.driverUserId, id)).phone).toBeNull();
     }
     await service.transitionRide(id, 'in_progress', fixture.driverProfileId, '7391');
-    expect((await contactService.getCustomerContact(fixture.driverUserId, id)).phone).toBe(
-      customerPhone,
-    );
+    expect((await contactService.getCustomerContact(fixture.driverUserId, id)).phone).toBeNull();
     await service.completeRide(id, fixture.driverProfileId);
     await expect(contactService.getCustomerContact(fixture.driverUserId, id)).rejects.toMatchObject(
       { statusCode: 404 },
@@ -478,11 +554,13 @@ describeDatabase('ride PostgreSQL integration', () => {
       expect(driver.totalDistance).toEqual(user.totalDistance);
       expect(user.pickup).toEqual(driver.pickup);
       expect(user.drop).not.toBeNull();
-      expect(driver.drop).toMatchObject({
-        latitude: expect.any(Number),
-        longitude: expect.any(Number),
-        address: null,
-      });
+      if (sector === 'logistics') expect(driver.drop).toEqual({ address: null });
+      else
+        expect(driver.drop).toMatchObject({
+          latitude: expect.any(Number),
+          longitude: expect.any(Number),
+          address: null,
+        });
       expect(driver.rideType).toBe(sector);
       expect(user.driverLocation).not.toBeNull();
       expect(user.routeStatus).toBe('not_requested');

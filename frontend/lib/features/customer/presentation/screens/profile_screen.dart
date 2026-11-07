@@ -315,12 +315,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           color: Color(0xFFA7F3D0),
                         ),
                         SizedBox(width: 5),
-                        Text(
-                          'Verified Customer Account',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Color(0xFFA7F3D0),
-                            fontWeight: FontWeight.w600,
+                        Flexible(
+                          child: Text(
+                            'Verified Customer Account',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFFA7F3D0),
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ],
@@ -508,19 +510,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Row(
-                  children: [
-                    Icon(Icons.badge_outlined, size: 20, color: darkGreen),
-                    SizedBox(width: 8),
-                    Text(
-                      'Account Details',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: textBlack,
+                const Expanded(
+                  child: Row(
+                    children: [
+                      Icon(Icons.badge_outlined, size: 20, color: darkGreen),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Account Details',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: textBlack,
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 TextButton.icon(
                   onPressed: () {

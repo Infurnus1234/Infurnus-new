@@ -37,6 +37,17 @@ export function requestedBookingHours(input: {
     throw new AppError('FARE_DURATION_INVALID', 'Select a valid booking duration', 422);
   if (new Set(values).size > 1)
     throw new AppError('FARE_DURATION_CONFLICT', 'Booking duration fields must agree', 422);
+  if (input.sector === 'premium' && values.length === 0)
+    throw new AppError('FARE_DURATION_REQUIRED', 'Select a Premium booking duration', 422);
+  if (
+    input.sector === 'premium' &&
+    (!Number.isSafeInteger(values[0]) || values[0]! < 1 || values[0]! > 24)
+  )
+    throw new AppError(
+      'FARE_DURATION_INVALID',
+      'Select a whole-hour Premium duration from 1 to 24 hours',
+      422,
+    );
   if (input.sector === 'rental' && !Number.isSafeInteger(values[0]))
     throw new AppError('FARE_DURATION_REQUIRED', 'Select a whole-hour rental duration', 422);
   return values[0];

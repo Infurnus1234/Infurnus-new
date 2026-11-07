@@ -1,6 +1,8 @@
 export type PaymentStatus = 'INITIATED' | 'AUTHORIZED' | 'CAPTURED' | 'REFUNDED' | 'FAILED';
 
 export interface Payment {
+  refundedAmount?: number;
+  refundPending?: boolean;
   paymentStage?: 'upfront' | 'final' | null;
   customerClaimedAt?: Date | null;
   cashConfirmedBy?: string | null;

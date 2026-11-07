@@ -365,12 +365,14 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       const fraction = await estimate(type, { bookingHours: 1.2 });
       expect(fraction.status).toBe(422);
       expect(fraction.body.error.code).toBe('FARE_DURATION_INVALID');
-      for (const hours of [13, 24, 48]) {
+      for (const hours of Array.from({ length: 12 }, (_, i) => i + 13)) {
         const extended = await estimate(type, { bookingHours: hours });
         expect(extended.status, extended.text).toBe(200);
         expect(extended.body.data.bookingFare.baseAmount).toBe(schedule['12_plus']! * 100);
         expect(extended.body.data.bookingFare.vehicleConfiguration.bookedHours).toBe(hours);
       }
+      expect((await estimate(type, { bookingHours: 25 })).status).toBe(422);
+      expect((await estimate(type, { bookingHours: 48 })).status).toBe(422);
       for (const policy of [
         { missingDurationPolicy: 'legacy_base' },
         { extendedDurationPolicy: null },

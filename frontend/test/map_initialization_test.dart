@@ -11,7 +11,7 @@ import 'recording_maps.dart';
 
 class ImmediateGps extends LocationService {
   @override
-  Future<Position?> getCurrentPosition() async => Position(
+  Future<Position?> getCurrentPosition({bool retry = false}) async => Position(
     latitude: 25.5941,
     longitude: 85.1376,
     timestamp: DateTime.now(),

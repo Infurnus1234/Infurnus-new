@@ -1,3 +1,4 @@
+import 'package:infurnus/core/utils/currency_formatter.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/models/fare_estimate_model.dart';
@@ -9,7 +10,7 @@ class FareRangeDetails extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    String amount(double value) => '₹${value.toStringAsFixed(2)}';
+    String amount(double value) => '₹${value.rupeeText}';
     final min = estimate.minimum;
     final max = estimate.maximum;
     String range(double low, double? high) =>

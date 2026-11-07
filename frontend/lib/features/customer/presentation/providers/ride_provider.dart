@@ -589,7 +589,7 @@ class RideNotifier extends StateNotifier<RideState> {
       try {
         final pos = await ref
             .read(locationServiceProvider)
-            .getCurrentPosition();
+            .getCurrentPosition(retry: true);
         if (!mounted || generation != _pickupSelectionGeneration) return false;
         if (pos == null) {
           throw const LocationUnavailableException(
@@ -649,7 +649,7 @@ class RideNotifier extends StateNotifier<RideState> {
       try {
         final pos = await ref
             .read(locationServiceProvider)
-            .getCurrentPosition();
+            .getCurrentPosition(retry: true);
         if (!mounted || generation != _destinationSelectionGeneration) {
           return false;
         }
@@ -819,8 +819,8 @@ class RideNotifier extends StateNotifier<RideState> {
       clearFareData: true,
       isEstimatingFare: false,
       clearError: true,
-      rentalDetails: state.selectedSector == 'premium' && tier == 'thar'
-          ? (state.rentalDetails ?? {'hours': 6})
+      rentalDetails: state.selectedSector == 'premium'
+          ? (state.rentalDetails ?? {'hours': tier == 'thar' ? 6 : 1})
           : state.rentalDetails,
     );
     estimateRouteFare();
@@ -1328,12 +1328,16 @@ class RideNotifier extends StateNotifier<RideState> {
             ? UpiPaymentApp.paytm
             : UpiPaymentApp.any;
 
+        final finalized = double.tryParse(initiateResult['amount']?.toString() ?? '');
+        if (finalized == null || !finalized.isFinite || finalized <= 0) {
+          throw Exception('Server did not return a finalized payment amount');
+        }
         final upiService = ref.read(upiPaymentServiceProvider);
         final upiResult = await upiService.pay(
           // TODO: Replace with your merchant UPI VPA (e.g. infurnus@ybl)
           merchantVpa: 'infurnus@ybl',
           merchantName: 'INFURNUS',
-          amount: amount,
+          amount: finalized,
           transactionId: paymentId,
           app: upiApp,
         );

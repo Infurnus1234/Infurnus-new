@@ -51,6 +51,36 @@ export function createAdminOperationsRouter(repository: AdminOperationsRepositor
       next(error);
     }
   });
+  router.get('/booking-reference/:bookingId', async (req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    try {
+      if (
+        req.auth!.role !== 'super_admin' &&
+        !['rides.read', 'users.sensitive', 'drivers.sensitive'].every((key) =>
+          res.locals.adminPermissions?.includes(key),
+        )
+      ) {
+        res
+          .status(403)
+          .json({ success: false, error: { message: 'Booking coordination permission required' } });
+        return;
+      }
+      const id = z
+        .string()
+        .regex(/^(11|22|33|44)[0-9]{5}$/)
+        .parse(req.params.bookingId);
+      const data = await repository.bookingReference(id);
+      if (!data) {
+        res
+          .status(404)
+          .json({ success: false, error: { message: 'No current booking allocation found' } });
+        return;
+      }
+      res.json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  });
   router.get('/summary', async (req, res, next) => {
     try {
       const query = z

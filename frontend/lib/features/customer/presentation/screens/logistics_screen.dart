@@ -1,4 +1,5 @@
-import '../../domain/utils/logistics_catalog.dart';
+import '../providers/booking_catalog_provider.dart';
+import '../widgets/vehicle_presentation_catalog.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -26,11 +27,13 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
     final isUnavailable = fareEstimate?.isUnavailable ?? false;
     final hasBookingAmount = fareEstimate?.bookingAmount != null;
 
+    final vehicles = customerVehiclePresentation(
+      'logistics',
+      ref.watch(bookingCatalogProvider('logistics')).value ?? [],
+    );
     final filtered = _selectedFilter == 'All'
-        ? logisticsVehicles
-        : logisticsVehicles
-              .where((v) => v['filter'] == _selectedFilter)
-              .toList();
+        ? vehicles
+        : vehicles.where((v) => v['filter'] == _selectedFilter).toList();
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,

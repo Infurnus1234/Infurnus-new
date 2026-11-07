@@ -1,3 +1,4 @@
+import 'package:infurnus/core/utils/currency_formatter.dart';
 import '../../domain/utils/logistics_catalog.dart';
 
 import 'package:flutter/material.dart';
@@ -226,10 +227,14 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Top header: Sector badge + Date + Status pill
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
-                    Row(
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
                         Container(
                           padding: const EdgeInsets.symmetric(
@@ -394,47 +399,49 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
                         ],
                       ),
                     ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        if (!isCancelled && ride.displayFare > 0)
-                          Text(
-                            '₹${ride.displayFare.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w900,
-                              color: textBlack,
-                            ),
-                          )
-                        else if (isCancelled)
-                          const Text(
-                            'Cancelled',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: serviceRed,
-                            ),
-                          ),
-                        const SizedBox(height: 2),
-                        const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
+                    Flexible(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          if (!isCancelled && ride.displayFare > 0)
                             Text(
-                              'View Details',
+                              '₹${ride.displayFare.rupeeText}',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                                color: textBlack,
+                              ),
+                            )
+                          else if (isCancelled)
+                            const Text(
+                              'Cancelled',
                               style: TextStyle(
-                                fontSize: 11,
-                                color: brandGreen,
+                                fontSize: 12,
                                 fontWeight: FontWeight.bold,
+                                color: serviceRed,
                               ),
                             ),
-                            Icon(
-                              Icons.chevron_right_rounded,
-                              size: 14,
-                              color: brandGreen,
-                            ),
-                          ],
-                        ),
-                      ],
+                          const SizedBox(height: 2),
+                          const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Flexible(child: Text(
+                                'View Details',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: brandGreen,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              )),
+                              Icon(
+                                Icons.chevron_right_rounded,
+                                size: 14,
+                                color: brandGreen,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -703,22 +710,29 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Ride Details',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: textBlack,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Ride Details',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: textBlack,
+                            ),
                           ),
-                        ),
-                        Text(
-                          'ID: ${ride.id.substring(0, 8).toUpperCase()}',
-                          style: const TextStyle(fontSize: 12, color: textGray),
-                        ),
-                      ],
+                          Text(
+                            ride.bookingId == null
+                                ? 'Booking ID unavailable'
+                                : 'Booking ID: ${ride.bookingId}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: textGray,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                     _buildStatusChip(ride.status),
                   ],
@@ -819,9 +833,9 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
                   return Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(fareLabel, style: const TextStyle(color: textGray)),
-                      Text(
-                        '₹${ride.displayFare.toStringAsFixed(2)}',
+                      Expanded(child: Text(fareLabel, style: const TextStyle(color: textGray))),
+                      Flexible(child: Text(
+                        '₹${ride.displayFare.rupeeText}',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
@@ -830,7 +844,7 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
                               ? TextDecoration.lineThrough
                               : null,
                         ),
-                      ),
+                      )),
                     ],
                   );
                 }(),
@@ -839,14 +853,14 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
+                      const Expanded(child: Text(
                         'Total Distance',
                         style: TextStyle(color: textGray),
-                      ),
-                      Text(
+                      )),
+                      Flexible(child: Text(
                         '${((ride.actualDistanceMeters ?? 0) / 1000.0).toStringAsFixed(2)} km',
                         style: const TextStyle(color: textBlack),
-                      ),
+                      )),
                     ],
                   ),
                 ],

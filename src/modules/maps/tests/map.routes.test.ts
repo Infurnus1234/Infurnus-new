@@ -133,6 +133,32 @@ describe('authenticated map API contracts', () => {
 });
 
 describe('service-area API contract', () => {
+  it.each([undefined, 1000, 25000])(
+    'Premium discovery uses its fixed pickup radius (hint %s)',
+    async (radius) => {
+      const { server, count } = app();
+      const response = await request(server)
+        .get('/maps/nearby-driver-count')
+        .query({
+          latitude: 25.5941,
+          longitude: 85.1376,
+          sector: 'premium',
+          vehicleCategory: 'thar',
+          ...(radius === undefined ? {} : { radiusMeters: radius }),
+        })
+        .set('Authorization', 'Bearer user');
+      expect(response.status).toBe(200);
+      expect(response.body.data).toEqual({ count: 3, radiusMeters: 25000 });
+      expect(count).toHaveBeenCalledWith(
+        25.5941,
+        85.1376,
+        25000,
+        expect.any(Date),
+        'premium',
+        'thar',
+      );
+    },
+  );
   it('returns the coming-soon envelope without routing or availability work', async () => {
     const area: ServiceAreaGate = {
       configured: true,

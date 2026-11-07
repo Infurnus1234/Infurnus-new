@@ -35,11 +35,22 @@ const categories: { sector: CreateRideInput['sector']; code: string }[] = JSON.p
   readFileSync(new URL('./configured-category-inventory.json', import.meta.url), 'utf8'),
 );
 const durationHours = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 24];
+const premiumDurationHours = Array.from({ length: 24 }, (_, index) => index + 1);
 const scenarios = [
   ...categories.flatMap(({ sector, code }) => [
-    { sector, code, hours: undefined as number | undefined, tripType: 'round_trip', hourly: false },
+    ...(sector === 'premium'
+      ? []
+      : [
+          {
+            sector,
+            code,
+            hours: undefined as number | undefined,
+            tripType: 'round_trip',
+            hourly: false,
+          },
+        ]),
     ...(['premium', 'passenger'].includes(sector)
-      ? durationHours.flatMap((hours) =>
+      ? (sector === 'premium' ? premiumDurationHours : durationHours).flatMap((hours) =>
           (sector === 'premium' ? ['one_way', 'round_trip'] : ['round_trip']).flatMap((tripType) =>
             (sector === 'premium' ? [false, true] : [true]).map((hourly) => ({
               sector,
@@ -74,8 +85,11 @@ const rides = new PostgresRideRepository(pool, syntheticDispatchAreas);
 const matching = new MatchingService(drivers, undefined, area, {
   resolve: async () => syntheticDispatchCity,
 });
+let routeDistanceMeters = 1000;
 const estimator = new FareEstimateService(
-  { calculateRoute: async () => ({ distanceMeters: 1000, durationSeconds: 300 }) } as never,
+  {
+    calculateRoute: async () => ({ distanceMeters: routeDistanceMeters, durationSeconds: 300 }),
+  } as never,
   new FareCalculatorService(),
   undefined,
   new PostgresVehicleRepository(pool),
@@ -162,6 +176,8 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
     it.each(scenarios)(
       '$sector/$code hours=$hours trip=$tripType hourly=$hourly: rejects unavailable supply, persists exact identity, dispatches once, accepts, completes and pays',
       async ({ sector, code, hours, tripType, hourly }) => {
+        routeDistanceMeters =
+          sector === 'premium' ? [50000, 100000, 300000][(hours! - 1) % 3]! : 1000;
         const inventorySector = sector === 'rental' ? 'passenger' : sector;
         restore = (
           await pool.query('SELECT * FROM vehicle_types WHERE sector=$1 AND code=$2', [

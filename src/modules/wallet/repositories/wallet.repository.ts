@@ -58,7 +58,7 @@ export class PostgresWalletRepository {
     return BigInt(result.rows[0].balance_paise);
   }
 
-  async createTopUpOrder(userId: string, amountPaise: number, idempotencyKey: string) {
+  async createTopUpOrder(userId: string, amountPaise: number, idempotencyKey: string, legacyRequestedPaise?: number) {
     const result = await this.pool.query<{ orderId: string; amountPaise: string }>(
       `INSERT INTO wallet_topup_orders(order_id,user_id,amount_paise,idempotency_key)
        VALUES ('wallet_' || gen_random_uuid()::text,$1,$2,$3)
@@ -67,7 +67,7 @@ export class PostgresWalletRepository {
       [userId, amountPaise, idempotencyKey],
     );
     const order = result.rows[0]!;
-    if (Number(order.amountPaise) !== amountPaise)
+    if (![amountPaise, legacyRequestedPaise].includes(Number(order.amountPaise)))
       throw new AppError('IDEMPOTENCY_CONFLICT', 'Top-up amount changed for the same request', 409);
     return order;
   }

@@ -120,7 +120,7 @@ describe('validated booking-demand pricing', () => {
         baseAmount: rates.baseFare,
         distanceAmount: 2 * rates.distanceRatePerKm,
         timeAmount: 0,
-        grossAmount: rates.baseFare + 2 * rates.distanceRatePerKm,
+        grossAmount: Math.round((rates.baseFare + 2 * rates.distanceRatePerKm) / 100) * 100,
         pricingVersion: 'vehicle-type:test-type:v7',
       });
       expect(r.bookingFare?.baseAmount).toBeGreaterThanOrEqual(pricing.baseFare!.minimum);
@@ -128,7 +128,7 @@ describe('validated booking-demand pricing', () => {
         expect(r.bookingFare!.baseAmount).toBeLessThanOrEqual(pricing.baseFare!.maximum!);
     }
   });
-  it('Bike is 25 / 30.50 / 36 INR for one-way 1 km at low/mid/high demand', () => {
+  it('Bike final payable is 25 / 31 / 36 INR for one-way 1 km at low/mid/high demand', () => {
     expect(
       [0, 5000, 10000].map((score) => {
         const r = calc.calculateEstimate(input, vehicle(), undefined, {
@@ -137,7 +137,7 @@ describe('validated booking-demand pricing', () => {
         });
         return 'bookingFare' in r ? r.bookingFare?.grossAmount : undefined;
       }),
-    ).toEqual([2500, 3050, 3600]);
+    ).toEqual([2500, 3100, 3600]);
   });
   it('rejects inactive and cross-sector configurations', () => {
     expect(() => calc.calculateEstimate(input, { ...vehicle(), active: false })).toThrow();

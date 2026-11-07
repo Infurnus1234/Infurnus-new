@@ -5,6 +5,10 @@ export const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
 
+    INFURNUS_CALLING_NUMBER: z
+      .string()
+      .regex(/^\+[1-9]\d{7,14}$/)
+      .default('+919153787859'),
     PORT: z.coerce.number().int().positive().default(3000),
     // Local USB testing can bind loopback without changing deployed defaults.
     SERVER_HOST: z.string().trim().min(1).default('0.0.0.0'),

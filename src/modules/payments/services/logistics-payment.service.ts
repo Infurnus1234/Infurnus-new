@@ -1,3 +1,4 @@
+import { rupeesToPaise, sameMoney } from '../../../common/utils/whole-rupee.js';
 import type { Pool, PoolClient } from 'pg';
 import { AppError } from '../../../common/errors/app-error.js';
 import type { PaymentRepository } from '../repositories/payment.repository.js';
@@ -44,7 +45,7 @@ export class LogisticsPaymentService {
     const payments = await this.payments.findByRideId(rideId);
     const confirmed = payments
       .filter((p) => p.status === 'CAPTURED')
-      .reduce((sum, p) => sum + Math.round(Number(p.amount) * 100), 0);
+      .reduce((sum, p) => sum + rupeesToPaise(p.amount), 0);
     const total = Number(ride.total_paise),
       upfront = Number(ride.upfront_paise);
     return {
@@ -168,7 +169,7 @@ export class LogisticsPaymentService {
       if (
         order.providerOrderId !== 'order_' + stored.id ||
         order.orderCurrency !== stored.currency ||
-        Math.round(order.orderAmount * 100) !== Math.round(Number(stored.amount) * 100)
+        !sameMoney(order.orderAmount, stored.amount)
       )
         throw new AppError(
           'PAYMENT_ORDER_MISMATCH',

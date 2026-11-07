@@ -9,6 +9,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../core/services/map_service.dart';
 import 'vehicle_motion.dart';
 import '../../core/services/location_service.dart';
+import '../../core/services/location_access.dart';
 import '../../features/customer/data/models/route_model.dart';
 import '../../features/customer/presentation/providers/ride_provider.dart';
 
@@ -68,15 +69,34 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap>
   late MapService _mapService;
   LatLng? _currentLocation;
   StreamSubscription? _locationSubscription;
+  StreamSubscription<LocationAccessIssue?>? _accessSubscription;
   String? _locationError;
   bool _manualCamera = false;
   bool _locating = false;
   bool _locationSettingsRequired = false;
+  bool _gpsSettingsRequired = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _accessSubscription = locationAccess.changes.listen((issue) {
+      if (!mounted) return;
+      if (issue == null) {
+        unawaited(_fetchInitialLocation());
+        return;
+      }
+      unawaited(_locationSubscription?.cancel());
+      _locationSubscription = null;
+      setState(() {
+        _currentLocation = null;
+        _locationError = issue.message;
+        _locationSettingsRequired =
+            issue == LocationAccessIssue.permissionBlocked;
+        _gpsSettingsRequired =
+            issue == LocationAccessIssue.resolutionUnavailable;
+      });
+    });
     _mapService = ref.read(mapServiceProvider(this));
     _motion = VehicleMotion(this);
     _arrow = cachedNavigationArrow;
@@ -97,18 +117,22 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap>
     _fetchInitialLocation();
   }
 
-  Future<void> _fetchInitialLocation({bool recenter = false}) async {
+  Future<void> _fetchInitialLocation({
+    bool recenter = false,
+    bool retry = false,
+  }) async {
     if (_locating) return;
     _locating = true;
     try {
       final position = await ref
           .read(locationServiceProvider)
-          .getCurrentPosition();
+          .getCurrentPosition(retry: retry);
       if (position != null && mounted) {
         setState(() {
           _currentLocation = LatLng(position.latitude, position.longitude);
           _locationError = null;
           _locationSettingsRequired = false;
+          _gpsSettingsRequired = false;
         });
         if (recenter ||
             (widget.pickup == null &&
@@ -150,6 +174,9 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap>
           _locationError = error.toString();
           _locationSettingsRequired =
               error is LocationUnavailableException && error.settingsRequired;
+          _gpsSettingsRequired =
+              error is LocationUnavailableException &&
+              error.locationSettingsRequired;
         });
       }
     } finally {
@@ -159,12 +186,13 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _fetchInitialLocation();
+    if (state == AppLifecycleState.resumed) unawaited(_fetchInitialLocation());
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _accessSubscription?.cancel();
     _locationSubscription?.cancel();
     _freshnessTimer?.cancel();
     _motion.dispose();
@@ -312,12 +340,18 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap>
                           await ref
                               .read(locationServiceProvider)
                               .openAppSettings();
+                        } else if (_gpsSettingsRequired) {
+                          await ref
+                              .read(locationServiceProvider)
+                              .openLocationSettings();
                         } else {
-                          await _fetchInitialLocation();
+                          await _fetchInitialLocation(retry: true);
                         }
                       },
                       child: Text(
-                        _locationSettingsRequired ? 'Settings' : 'Retry',
+                        _locationSettingsRequired || _gpsSettingsRequired
+                            ? 'Settings'
+                            : 'Retry',
                       ),
                     ),
                   ],
@@ -331,7 +365,7 @@ class _InfurnusMapState extends ConsumerState<InfurnusMap>
           child: IconButton.filled(
             tooltip: 'Show current location',
             icon: const Icon(Icons.my_location),
-            onPressed: () => _fetchInitialLocation(recenter: true),
+            onPressed: () => _fetchInitialLocation(recenter: true, retry: true),
           ),
         ),
         Positioned(

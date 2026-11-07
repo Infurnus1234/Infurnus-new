@@ -39,7 +39,7 @@ class PendingGps extends LocationService {
   final fix = Completer<Position?>();
   int reads = 0;
   @override
-  Future<Position?> getCurrentPosition() {
+  Future<Position?> getCurrentPosition({bool retry = false}) {
     reads++;
     return fix.future;
   }

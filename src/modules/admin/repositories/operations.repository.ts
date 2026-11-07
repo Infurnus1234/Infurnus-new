@@ -36,9 +36,9 @@ export const operationSources = {
   },
   rides: {
     table: 'rides',
-    columns: `id, customer_id, assigned_driver_id, assigned_vehicle_id, sector, vehicle_category, status, pickup_address, destination_address, fare_estimate, final_fare, actual_distance_meters, cancellation_reason, created_at, updated_at, completed_at, cancelled_at, ST_Y(pickup_location::geometry) AS pickup_latitude, ST_X(pickup_location::geometry) AS pickup_longitude, route_metadata->'bookingFareSnapshot'->>'pricingVersion' AS pricing_version`,
+    columns: `id, booking_id, customer_id, assigned_driver_id, assigned_vehicle_id, sector, vehicle_category, status, pickup_address, destination_address, fare_estimate, final_fare, actual_distance_meters, cancellation_reason, created_at, updated_at, completed_at, cancelled_at, ST_Y(pickup_location::geometry) AS pickup_latitude, ST_X(pickup_location::geometry) AS pickup_longitude, route_metadata->'bookingFareSnapshot'->>'pricingVersion' AS pricing_version`,
     status: 'status',
-    search: 'id::text',
+    search: "concat_ws(' ',booking_id,id::text)",
     statuses: [
       'requested',
       'searching',
@@ -174,6 +174,26 @@ export class AdminOperationsRepository {
   constructor(private readonly pool: Pool) {}
   authorize(userId: string, role: string) {
     return new PostgresProviderOperationsRepository(this.pool).authorize(userId, role);
+  }
+  async bookingReference(bookingId: string) {
+    // Expiry is checked at read time; cleanup timing cannot return a stale allocation.
+    const result = await this.pool.query(
+      `SELECT r.id AS "rideId", a.booking_id AS "bookingId",
+      r.sector, r.created_at AS "createdAt", r.status, r.pickup_address AS "pickupAddress",
+      r.destination_address AS "destinationAddress", r.vehicle_category AS "vehicleCategory",
+      r.route_metadata->'rentalDetails'->'hours' AS "bookingHours",
+      COALESCE(r.final_fare,r.fare_estimate) AS amount,
+      (SELECT status::text FROM payments WHERE ride_id=r.id ORDER BY created_at DESC LIMIT 1) AS "paymentStatus",
+      jsonb_build_object('id',cu.id,'name',concat_ws(' ',cu.first_name,cu.last_name),'phone',cu.phone) AS customer,
+      CASE WHEN du.id IS NOT NULL THEN jsonb_build_object('id',du.id,'name',concat_ws(' ',du.first_name,du.last_name),'phone',du.phone) END AS driver,
+      CASE WHEN v.id IS NOT NULL THEN jsonb_build_object('id',v.id,'make',v.make,'model',v.model,'plateNumber',v.plate_number) END AS vehicle
+      FROM booking_id_allocations a JOIN rides r ON r.id=a.ride_id
+      JOIN users cu ON cu.id=r.customer_id LEFT JOIN driver_profiles dp ON dp.id=r.assigned_driver_id
+      LEFT JOIN users du ON du.id=dp.user_id LEFT JOIN vehicles v ON v.id=r.assigned_vehicle_id
+      WHERE a.booking_id=$1 AND a.released_at IS NULL AND (a.expires_at IS NULL OR a.expires_at>clock_timestamp())`,
+      [bookingId],
+    );
+    return result.rows[0] ?? null;
   }
   manageCoupon(actorId: string, input: unknown, id?: string) {
     return new PostgresCouponRepository(this.pool).manageByAdmin(

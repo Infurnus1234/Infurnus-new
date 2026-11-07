@@ -61,7 +61,7 @@ describe('Phase 4 Step 5: Service Vehicle Trip-Based Refactoring', () => {
               baseAmount: 12345,
               distanceAmount: 0,
               timeAmount: 0,
-              grossAmount: 12345,
+              grossAmount: 12300,
               pricingVersion: 'vehicle-type:7d7c2be0-21bd-4a75-907a-8b558079ef17:v3',
               vehicleConfiguration: {
                 pricingModel: 'service_fixed',
@@ -346,7 +346,7 @@ describe('Phase 4 Step 5: Service Vehicle Trip-Based Refactoring', () => {
       expect(result.distanceAmount).toBe(37500);
       expect(result.timeAmount).toBe(4000);
       expect(result.waitingAmount).toBe(1000);
-      expect(result.grossAmount).toBe(48750);
+      expect(result.grossAmount).toBe(48800);
       expect(result.taxAmount).toBeUndefined();
     });
 
@@ -366,7 +366,7 @@ describe('Phase 4 Step 5: Service Vehicle Trip-Based Refactoring', () => {
       expect(result.weightAmount).toBe(12500);
       expect(result.loadingAmount).toBe(15000);
       expect(result.taxAmount).toBe(6350);
-      expect(result.grossAmount).toBe(133350);
+      expect(result.grossAmount).toBe(133400);
     });
   });
 });

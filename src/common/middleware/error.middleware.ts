@@ -8,6 +8,18 @@ import { StorageValidationError } from '../../infrastructure/storage/validation.
 import { MulterError } from 'multer';
 
 export function errorMiddleware(err: unknown, _req: Request, res: Response, _next: NextFunction) {
+  if (err && typeof err === 'object' && 'code' in err && err.code === 'P2001') {
+    res
+      .status(503)
+      .json({
+        success: false,
+        error: {
+          code: 'BOOKING_ID_UNAVAILABLE',
+          message: 'Booking ID allocation is temporarily unavailable. Please retry.',
+        },
+      });
+    return;
+  }
   if (
     err &&
     typeof err === 'object' &&

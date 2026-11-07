@@ -1,3 +1,5 @@
+import { privateBookingPayload } from './booking-contact.js';
+import { env } from '../../../config/env.js';
 import {
   rideInformation,
   driverDestinationAllowed,
@@ -15,6 +17,7 @@ export type DriverSafeRide = Omit<
   | 'pin'
   | 'destination'
   | 'destinationAddress'
+  | 'destinationDistrictLookup'
 > & {
   destination: Ride['destination'] | null;
   destinationAddress: string | null;
@@ -31,14 +34,47 @@ export function sanitizeRideForDriver(ride: Ride): DriverSafeRide {
     pin: _pin,
     destination,
     destinationAddress,
+    destinationDistrictLookup: _districtLookup,
     ...driverSafe
   } = ride;
   const reveal = driverDestinationAllowed(ride);
+  if (ride.sector === 'logistics' && !reveal) {
+    // Fail closed for legacy projections as well as the typed repository model.
+    for (const field of [
+      'destinationLatitude',
+      'destinationLongitude',
+      'destinationPlaceId',
+      'destinationLocation',
+      'destinationReference',
+      'drop',
+      'dropLocation',
+      'dropLatitude',
+      'dropLongitude',
+      'dropAddress',
+      'route',
+      'routeMetadata',
+      'route_metadata',
+      'navigation',
+      'bookingFareSnapshot',
+    ])
+      delete (driverSafe as Record<string, unknown>)[field];
+  }
   return {
-    ...driverSafe,
+    ...privateBookingPayload(driverSafe),
+    callingNumber: env.INFURNUS_CALLING_NUMBER,
     serverTime: new Date().toISOString(),
     destination: reveal || driverDestinationMarkerAllowed(ride) ? destination : null,
-    destinationAddress: reveal ? destinationAddress : null,
+    destinationAddress: reveal
+      ? destinationAddress
+      : ride.sector === 'logistics'
+        ? (ride.destinationDistrict ?? null)
+        : null,
+    ...(ride.sector === 'logistics'
+      ? {
+          destinationDistrict: ride.destinationDistrict ?? null,
+          destinationVisibility: reveal ? 'full' : 'district_only',
+        }
+      : {}),
     goods: reveal ? (ride.goods ?? null) : null,
     serviceDetails: reveal ? (ride.serviceDetails ?? null) : null,
     rentalDetails:

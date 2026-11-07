@@ -1,3 +1,6 @@
+import '../providers/booking_catalog_provider.dart';
+import '../widgets/vehicle_presentation_catalog.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,33 +9,6 @@ import '../providers/ride_provider.dart';
 
 class SpecialtyEmergencyScreen extends ConsumerStatefulWidget {
   const SpecialtyEmergencyScreen({super.key});
-
-  static const List<Map<String, dynamic>> vehicles = [
-    {
-      'title': 'Ambulance',
-      'category': 'ambulance',
-      'filter': 'Emergency',
-      'subtitle': 'Patient + Medical Triage • Trip-Based',
-      'image': 'assets/images/ambulance_clean.jpg',
-      'fallbackIcon': Icons.medical_services_rounded,
-    },
-    {
-      'title': 'Towing Van',
-      'category': 'towing',
-      'filter': 'Emergency',
-      'subtitle': 'Breakdown Assistance • Trip-Based',
-      'image': 'assets/images/flatbed_towing_truck.png',
-      'fallbackIcon': Icons.car_repair_rounded,
-    },
-    {
-      'title': 'JCB',
-      'category': 'jcb',
-      'filter': 'Construction',
-      'subtitle': 'Excavation Assistance • Trip-Based',
-      'image': 'assets/images/jcb_excavator.jpg',
-      'fallbackIcon': Icons.construction_rounded,
-    },
-  ];
 
   @override
   ConsumerState<SpecialtyEmergencyScreen> createState() =>
@@ -47,11 +23,22 @@ class _SpecialtyEmergencyScreenState
 
   @override
   Widget build(BuildContext context) {
+    final vehicles =
+        customerVehiclePresentation(
+              'service',
+              ref.watch(bookingCatalogProvider('service')).value ?? [],
+            )
+            .map(
+              (item) => <String, dynamic>{
+                ...item,
+                'title': item['name']!,
+                'fallbackIcon': Icons.directions_car_rounded,
+              },
+            )
+            .toList();
     final filtered = _selectedFilter == 'All'
-        ? SpecialtyEmergencyScreen.vehicles
-        : SpecialtyEmergencyScreen.vehicles
-              .where((v) => v['filter'] == _selectedFilter)
-              .toList();
+        ? vehicles
+        : vehicles.where((v) => v['filter'] == _selectedFilter).toList();
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,

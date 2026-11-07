@@ -489,7 +489,9 @@ export function createApp(
 
     const driverController = driverRepository
       ? new DriverController(
-          new DriverService(driverRepository, undefined, rideRepository),
+          new DriverService(driverRepository, undefined, rideRepository, undefined, (ride) =>
+            rideService.prepareDriverRide(ride),
+          ),
           rideService,
           driverDocumentStorageService,
         )

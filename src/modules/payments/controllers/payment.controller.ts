@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto';
+import { AppError } from '../../../common/errors/app-error.js';
+import { wholeRupees, logisticsSplit, rupeesToPaise, sameMoney } from '../../../common/utils/whole-rupee.js';
 import { rideEvents } from '../../rides/events/ride.events.js';
 import type { LogisticsPaymentService } from '../services/logistics-payment.service.js';
 import { z } from 'zod';
@@ -5,7 +8,7 @@ import type { NextFunction, Request, Response } from 'express';
 import type { PaymentRepository } from '../repositories/payment.repository.js';
 import type { RideRepository } from '../../rides/repositories/ride.repository.js';
 import type { RentalRepository } from '../../rentals/repositories/rental.repository.js';
-import type { PaymentProvider } from '../providers/payment.provider.js';
+import type { PaymentProvider, RefundResult } from '../providers/payment.provider.js';
 import type { Payment } from '../types/payment.js';
 import {
   capturePaymentSchema,
@@ -63,6 +66,11 @@ export class PaymentController {
         return;
       }
 
+      if (input.currency && input.currency !== 'INR') {
+        res.status(400).json({ success: false, message: 'Booking payments require INR' });
+        return;
+      }
+
       let amountToCharge: number;
 
       if (input.rideId) {
@@ -105,10 +113,9 @@ export class PaymentController {
         const existingPayments = await this.paymentRepository.findByRideId(input.rideId);
         if (ride.sector === 'logistics') {
           // Logistics upfront (40%) and post-delivery (60%) payment flow
-          const totalFare =
-            Math.round(Number(ride.finalFare ?? ride.fareEstimate ?? 0) * 100) / 100;
-          const upfrontAmount = Math.round(totalFare * 0.4 * 100) / 100;
-          const remainingAmount = Math.round((totalFare - upfrontAmount) * 100) / 100;
+          const split = logisticsSplit(wholeRupees(ride.finalFare ?? ride.fareEstimate ?? 0) * 100);
+          const upfrontAmount = split.upfrontPaise / 100;
+          const remainingAmount = split.finalPaise / 100;
 
           if (ride.status !== 'completed') {
             // Upfront payment phase (40%)
@@ -209,6 +216,8 @@ export class PaymentController {
                     customerId: userId,
                     orderNote: `INFURNUS Ride ${input.rideId}`,
                   });
+                  if (order.providerOrderId !== `order_${activePayment.id}` || order.orderCurrency !== activePayment.currency || !sameMoney(order.orderAmount, activePayment.amount))
+                    throw new AppError('PAYMENT_ORDER_MISMATCH', 'Gateway order does not match the stored payment', 502);
                   await this.paymentRepository.updateProviderOrder?.(
                     activePayment.id,
                     order.providerOrderId,
@@ -254,7 +263,7 @@ export class PaymentController {
             const actualFuelCost = Number(ride.actualFuelCost ?? 0);
             const subtotal = hourlyBase + actualFuelCost;
             const taxAmount = Math.round(subtotal * 0.05 * 100) / 100;
-            const reconciledFare = Math.round((subtotal + taxAmount) * 100) / 100;
+            const reconciledFare = subtotal + taxAmount;
 
             amountToCharge = Number(ride.finalFare ?? reconciledFare);
           } else {
@@ -302,6 +311,11 @@ export class PaymentController {
         return;
       }
 
+      amountToCharge = wholeRupees(amountToCharge);
+      if (amountToCharge <= 0) {
+        res.status(400).json({ success: false, message: 'Rounded payment amount must be positive' });
+        return;
+      }
       const payment = await this.paymentRepository.initiate({
         userId,
         rideId: input.rideId,
@@ -330,6 +344,8 @@ export class PaymentController {
                 : 'INFURNUS Order',
           });
 
+          if (orderResult.providerOrderId !== `order_${payment.id}` || orderResult.orderCurrency !== payment.currency || !sameMoney(orderResult.orderAmount, payment.amount))
+            throw new AppError('PAYMENT_ORDER_MISMATCH', 'Gateway order does not match the stored payment', 502);
           paymentSessionId = orderResult.paymentSessionId ?? null;
           providerOrderId = orderResult.providerOrderId;
 
@@ -496,7 +512,7 @@ export class PaymentController {
           if (
             statusResult.orderAmount !== undefined &&
             !isNaN(statusResult.orderAmount) &&
-            Math.abs(Number(statusResult.orderAmount) - Number(payment.amount)) > 0.01
+            !sameMoney(statusResult.orderAmount, payment.amount)
           ) {
             res.status(400).json({
               success: false,
@@ -542,8 +558,7 @@ export class PaymentController {
           }
           if (
             payment.paymentStage &&
-            Math.round(Number(statusResult.orderAmount) * 100) !==
-              Math.round(Number(payment.amount) * 100)
+            !sameMoney(statusResult.orderAmount, payment.amount)
           ) {
             res.status(400).json({ success: false, message: 'Payment amount mismatch' });
             return;
@@ -737,7 +752,7 @@ export class PaymentController {
           !cfPaymentId ||
           event.data?.payment?.payment_currency !== payment.currency ||
           event.data?.order?.order_currency !== payment.currency ||
-          Math.round(webhookAmount * 100) !== Math.round(Number(payment.amount) * 100))
+          !sameMoney(webhookAmount, payment.amount))
       ) {
         res.status(400).json({
           success: false,
@@ -769,7 +784,7 @@ export class PaymentController {
         // 3. Amount reconciliation check
         if (
           !Number.isFinite(webhookAmount) ||
-          Math.abs(webhookAmount - payment.amount) > 0.01 ||
+          !sameMoney(webhookAmount, payment.amount) ||
           (event.data?.payment?.payment_currency !== undefined &&
             event.data.payment.payment_currency !== payment.currency) ||
           (event.data?.order?.order_currency !== undefined &&
@@ -887,8 +902,13 @@ export class PaymentController {
         return;
       }
 
-      // Validate amount
-      if (input.amount > payment.amount) {
+      // Finalize the new refund once. Full refunds of a historical fractional charge
+      // return its exact original amount rather than inventing a rounding difference.
+      const alreadyRefunded = Number(payment.refundedAmount ?? 0);
+      const remainingPaise = rupeesToPaise(payment.amount) - rupeesToPaise(alreadyRefunded);
+      const refundAmount = rupeesToPaise(input.amount) === remainingPaise
+        ? remainingPaise / 100 : wholeRupees(input.amount);
+      if (refundAmount <= 0 || rupeesToPaise(refundAmount) > remainingPaise) {
         res.status(400).json({
           success: false,
           message: `Refund amount (${input.amount}) cannot exceed payment amount (${payment.amount})`,
@@ -896,40 +916,44 @@ export class PaymentController {
         return;
       }
 
-      // Call gateway if provider is cashfree
-      if (payment.provider === 'cashfree' && this.paymentProvider && payment.providerOrderId) {
-        if (this.paymentProvider.refundPayment) {
-          try {
-            await this.paymentProvider.refundPayment({
-              providerOrderId: payment.providerOrderId,
-              refundAmount: input.amount,
-              refundId: `ref_${payment.id}_${Date.now()}`,
-              ...(input.reason ? { note: input.reason } : {}),
-            });
-          } catch (gatewayErr: unknown) {
-            const message =
-              gatewayErr instanceof Error ? gatewayErr.message : 'Gateway refund failed';
-            res.status(502).json({
-              success: false,
-              message,
-            });
-            return;
-          }
-        }
-      }
-
-      // Update database
       if (!this.paymentRepository.refund) {
         res.status(500).json({ success: false, message: 'Refund repository not supported' });
         return;
       }
-
-      const refunded = await this.paymentRepository.refund(paymentId, input.amount, input.reason);
-
+      let submitGateway: (() => Promise<RefundResult>) | undefined;
+      if (payment.provider === 'cashfree') {
+        const provider = this.paymentProvider;
+        const orderId = payment.providerOrderId;
+        if (!provider?.refundPayment || !orderId) {
+          res.status(503).json({ success: false, message: 'Cashfree refund is unavailable' });
+          return;
+        }
+        submitGateway = () => {
+          return provider.refundPayment!({
+            providerOrderId: orderId,
+            refundAmount,
+            refundId: `ref_${createHash('sha256').update(`${payment.id}:${alreadyRefunded}:${refundAmount}`).digest('hex').slice(0,32)}`,
+            ...(input.reason ? { note: input.reason } : {}),
+          });
+        };
+      }
+      let refunded;
+      try {
+        refunded = await this.paymentRepository.refund(paymentId, refundAmount, input.reason, alreadyRefunded, submitGateway);
+      } catch (error) {
+        if (error instanceof AppError) throw error;
+        if (!submitGateway) throw error;
+        res.status(502).json({ success: false, message: error instanceof Error ? error.message : 'Gateway refund failed' });
+        return;
+      }
+      if (!refunded) {
+        res.status(409).json({ success: false, message: 'Refund balance changed; refresh the payment before retrying' });
+        return;
+      }
       res.status(200).json({
         success: true,
         data: refunded,
-        message: 'Payment refunded successfully',
+        message: refunded.refundPending ? 'Refund submitted; gateway confirmation pending' : 'Payment refunded successfully',
       });
     } catch (error) {
       next(error);

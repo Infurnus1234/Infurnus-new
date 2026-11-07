@@ -1,3 +1,5 @@
+import { wholeRupees, wholeRupeeShare, rupeesToPaise } from '../../../common/utils/whole-rupee.js';
+import { LogisticsDestinationResolver } from './logistics-destination.js';
 import { randomUUID } from 'node:crypto';
 import type { MatchingService } from './matching.service.js';
 import { dispatchPolicy } from './dispatch-policy.js';
@@ -49,7 +51,13 @@ export class RideService {
     private readonly area: ServiceAreaGate = serviceArea,
     private readonly maps?: CommonMapService,
     private readonly matching?: Pick<MatchingService, 'findDispatchDrivers'>,
-  ) {}
+  ) {
+    this.logisticsDestinations = new LogisticsDestinationResolver(repository, maps);
+  }
+  private readonly logisticsDestinations: LogisticsDestinationResolver;
+  async prepareDriverRide(ride: Ride): Promise<Ride> {
+    return this.logisticsDestinations.prepare(ride);
+  }
 
   async serviceAvailability(customerId: string, input: FareEstimateInput) {
     if (input.sector !== 'service')
@@ -213,7 +221,9 @@ export class RideService {
       ...input,
       ...(input.sector === 'rental'
         ? { rentalDetails: { hours: requestedBookingHours(input) } }
-        : {}),
+        : input.sector === 'premium'
+          ? { rentalDetails: { ...input.rentalDetails, hours: requestedBookingHours(input) } }
+          : {}),
       fareEstimate: bookingFare.grossAmount / 100,
       bookingDistanceMeters: bookingFare.distanceMeters,
       bookingFareSnapshot: bookingFare,
@@ -233,7 +243,8 @@ export class RideService {
     if (!this.driverRepository || !this.repository.findActiveForDriver)
       throw new AppError('RIDE_MAP_UNAVAILABLE', 'Ride map is unavailable', 503);
     const profile = await this.driverRepository.findProfileIdByUserId(userId);
-    return profile ? this.repository.findActiveForDriver(profile) : null;
+    const ride = profile ? await this.repository.findActiveForDriver(profile) : null;
+    return ride ? this.prepareDriverRide(ride) : null;
   }
   async updateUserLocation(userId: string, id: string, input: unknown) {
     const pending = this.userLocationPending.get(userId) ?? 0;
@@ -284,10 +295,14 @@ export class RideService {
     const snapshot = await this.repository.getRideMapSnapshot?.(id, userId, view);
     if (!snapshot) throw new AppError('RIDE_NOT_FOUND', 'Ride not found', 404);
     let { ride } = snapshot;
+    if (view === 'driver') await this.prepareDriverRide(ride);
     await this.area.assertSupported([ride.pickup, ride.destination]);
     const active = activeMapStatuses.includes(ride.status) && !!ride.assignedDriverId;
     let driverLocation = active ? freshRideLocation(snapshot.driverLocation) : null;
-    let userLocation = active ? freshRideLocation(snapshot.userLocation) : null;
+    const hideUserLocation =
+      view === 'driver' && ride.sector === 'logistics' && !driverDestinationAllowed(ride);
+    let userLocation =
+      active && !hideUserLocation ? freshRideLocation(snapshot.userLocation) : null;
     const segment = active
       ? ride.status === 'in_progress' && driverDestinationAllowed(ride)
         ? 'destination'
@@ -364,7 +379,7 @@ export class RideService {
       );
     ride = current.ride;
     driverLocation = active ? freshRideLocation(current.driverLocation) : null;
-    userLocation = active ? freshRideLocation(current.userLocation) : null;
+    userLocation = active && !hideUserLocation ? freshRideLocation(current.userLocation) : null;
     const currentNavigation =
       this.maps?.navigationStorageAllowed === false
         ? this.maps.navigation.transientMetadata(id)
@@ -585,7 +600,7 @@ export class RideService {
 
         const taxAmount = Math.round(subtotal * 0.05 * 100) / 100;
 
-        const finalFare = Number(ride.finalFare ?? Math.round((subtotal + taxAmount) * 100) / 100);
+        const finalFare = wholeRupees(ride.finalFare ?? (subtotal + taxAmount));
 
         ride.billing = {
           currency: 'INR',
@@ -611,15 +626,16 @@ export class RideService {
       const completedFare = Number(
         ride.billing?.finalFare ?? ride.finalFare ?? ride.fareEstimate ?? 0,
       );
-      const commissionAmount = Math.round(completedFare * 0.1 * 100) / 100;
-      const driverEarningAmount = Math.round((completedFare - commissionAmount) * 100) / 100;
+      const commissionAmount = ride.commissionAmount != null && ride.commissionAmount !== 0
+        ? wholeRupees(ride.commissionAmount)
+        : wholeRupeeShare(rupeesToPaise(completedFare), 1, 10) / 100;
+      const driverEarningAmount = (rupeesToPaise(completedFare) - rupeesToPaise(commissionAmount)) / 100;
 
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
       if (isUuid) {
         await client.query(
           `UPDATE rides
-           SET commission_amount = CASE WHEN commission_amount IS NULL OR commission_amount = 0 THEN $2 ELSE commission_amount END,
-               driver_earning_amount = CASE WHEN driver_earning_amount IS NULL OR driver_earning_amount = 0 THEN $3 ELSE driver_earning_amount END
+           SET commission_amount = $2, driver_earning_amount = $3
            WHERE id = $1`,
           [id, commissionAmount, driverEarningAmount],
         );
@@ -727,6 +743,7 @@ export class RideService {
   private async hydrateDriverPhoto(
     ride: Awaited<ReturnType<RideRepository['findById']>>,
   ): Promise<NonNullable<typeof ride>> {
+    if (ride) await this.prepareDriverRide(ride);
     if (
       !ride ||
       !ride.driverDetails ||
@@ -748,7 +765,7 @@ export class RideService {
   private async hydrateDriverPhotos(
     rides: Awaited<ReturnType<RideRepository['listForCustomer']>>,
   ): Promise<typeof rides> {
-    if (!this.driverDocumentStorageService || rides.length === 0) {
+    if (rides.length === 0) {
       return rides;
     }
 

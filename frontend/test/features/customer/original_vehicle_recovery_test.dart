@@ -1,3 +1,5 @@
+import 'configured_catalog_fixture.dart';
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -20,8 +22,7 @@ import 'package:infurnus/features/customer/presentation/screens/logistics_screen
 import 'package:infurnus/features/customer/presentation/screens/concierge_fleet_screen.dart';
 import 'package:infurnus/features/customer/presentation/screens/rentals_screen.dart';
 
-import 'vehicle_fare_ranges_test.dart'
-    show RecordingRepository, ConnectedSocket, range;
+import 'vehicle_fare_ranges_test.dart' show ConnectedSocket, range;
 import 'location_independent_booking_test.dart' show mapFixture;
 import 'service_booking_test.dart' show serviceQuote;
 
@@ -66,7 +67,9 @@ void main() {
         final socket = ConnectedSocket();
         final container = ProviderContainer(
           overrides: [
-            rideRepositoryProvider.overrideWithValue(RecordingRepository()),
+            rideRepositoryProvider.overrideWithValue(
+              ConfiguredCatalogRepository(),
+            ),
             socketServiceProvider.overrideWithValue(socket),
             dioProvider.overrideWithValue(mapFixture()),
           ],
@@ -128,7 +131,7 @@ void main() {
       testWidgets(
         '$label ${vehicle['code']} retains its original code through selection and fare/booking payloads',
         (tester) async {
-          final repository = RecordingRepository()
+          final repository = ConfiguredCatalogRepository()
             ..estimate = FareEstimateModel.fromJson(
               sector == 'service' ? serviceQuote() : range(quote: true),
             );
@@ -200,7 +203,13 @@ void main() {
     (tester) async {
       final socket = ConnectedSocket();
       final container = ProviderContainer(
-        overrides: [socketServiceProvider.overrideWithValue(socket)],
+        overrides: [
+          socketServiceProvider.overrideWithValue(socket),
+          rideRepositoryProvider.overrideWithValue(
+            ConfiguredCatalogRepository(),
+          ),
+          dioProvider.overrideWithValue(mapFixture()),
+        ],
       );
       await tester.pumpWidget(
         UncontrolledProviderScope(
@@ -212,19 +221,16 @@ void main() {
       await tester.tap(find.text('Emergency'));
       await tester.pumpAndSettle();
       expect(find.text('Ambulance'), findsOneWidget);
-      expect(find.text('Towing Van'), findsOneWidget);
+      expect(find.text('Towing Van'), findsNothing);
+      expect(find.text('Crane'), findsNothing);
       expect(find.text('JCB'), findsNothing);
       await tester.tap(find.text('Construction'));
       await tester.pumpAndSettle();
       expect(find.text('JCB'), findsOneWidget);
+      expect(find.text('Crane'), findsOneWidget);
       expect(find.text('Ambulance'), findsNothing);
       expect(find.text('Towing Van'), findsNothing);
-      for (final name in [
-        'Support',
-        'JCB / Excavator',
-        'Crane',
-        'Roadside Assist',
-      ]) {
+      for (final name in ['Support', 'JCB / Excavator', 'Roadside Assist']) {
         expect(find.text(name), findsNothing);
       }
       await tester.pumpWidget(const SizedBox.shrink());

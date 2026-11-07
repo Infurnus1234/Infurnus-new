@@ -1,89 +1,64 @@
-import 'package:infurnus/features/customer/domain/utils/passenger_catalog.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:infurnus/features/customer/data/models/fleet_vehicle_model.dart';
-import 'package:infurnus/features/customer/domain/utils/vehicle_visibility.dart';
 import 'package:infurnus/features/customer/presentation/widgets/vehicle_presentation_catalog.dart';
 
-void main() {
-  test('Passenger catalog shows exactly four vehicles with existing codes', () {
-    expect(
-      customerVehiclePresentation(
-        'passenger',
-        [],
-      ).map((v) => (v['name'], v['category'])),
-      [
-        ('Hatchback', 'hatchback'),
-        ('Sedan', 'sedan'),
-        ('Innova Crysta', 'innova'),
-        ('Minicab', 'mini'),
-      ],
-    );
-    for (final code in [
-      'suv',
-      'winger',
-      'traveller',
-      'mini_commercial',
-      'mini_cab',
-    ]) {
-      expect(isCustomerVehicleVisible('passenger', code), isFalse);
-    }
-  });
+FleetVehicleModel vehicle(
+  String sector,
+  String code, {
+  String? name,
+  bool active = true,
+  bool visible = true,
+}) => FleetVehicleModel(
+  id: '$sector:$code',
+  make: '',
+  model: '',
+  name: name ?? code,
+  sector: sector,
+  category: code,
+  fuelRatePerKm: 0,
+  loadCapacityKg: 0,
+  active: active,
+  catalogVisible: visible,
+);
 
-  test('Service selection accepts only the three authorized codes', () {
-    for (final code in ['ambulance', 'towing', 'jcb']) {
-      expect(isCustomerVehicleVisible('service', code), isTrue);
-    }
-    for (final code in ['crane', 'roadside_assist', 'unknown_service']) {
-      expect(isCustomerVehicleVisible('service', code), isFalse);
-    }
-  });
-  test('Logistics allows only the four catalog codes', () {
-    for (final code in [
-      'three_wheeler',
-      'e_rickshaw',
-      'electric_tuk_tuk',
-      'mini_truck',
-      'cargo_407',
-    ]) {
-      expect(isCustomerVehicleVisible('logistics', code), isFalse);
-    }
-    for (final code in ['piaggio_ape', 'tata_magic', 'cargo_207', 'tata_407']) {
-      expect(isCustomerVehicleVisible('logistics', code), isTrue);
-    }
-    expect(isCustomerVehicleVisible('premium', 'jcb'), isTrue);
-  });
-  test('Historical presentation preserves exact codes/images and ignores API extras', () {
-    FleetVehicleModel vehicle(String code) => FleetVehicleModel(
-      id: code,
-      make: '',
-      model: code,
-      sector: 'logistics',
-      category: code,
-      fuelRatePerKm: 0,
-      loadCapacityKg: 0,
-    );
+void main() {
+  test(
+    'an empty server catalog never falls back to bundled vehicle options',
+    () {
+      for (final sector in ['rental', 'logistics', 'premium', 'service']) {
+        expect(customerVehiclePresentation(sector, []), isEmpty);
+      }
+    },
+  );
+  test('backend ordering and edited names win while existing codes and images are preserved', () {
     final items = customerVehiclePresentation('logistics', [
-      vehicle('three_wheeler'),
-      vehicle('mini_truck'),
-      vehicle('tata_407'),
+      vehicle('logistics', 'tata_407', name: 'Admin edited 407'),
+      vehicle('logistics', 'cargo_207', name: 'Tata 207'),
     ]);
-    expect(items.map((v) => v['category']), [
-      'piaggio_ape',
-      'tata_magic',
-      'cargo_207',
-      'tata_407',
-    ]);
-    expect(items.map((v) => v['name']), [
-      'Piaggio Ape',
-      'Tata Magic',
-      'Tata 207',
-      'Tata 407',
-    ]);
-    expect(items[2]['image'], 'assets/images/cargo_207_heavy.png');
-    expect(passengerVehicles.take(3).map((v) => v['image']), [
-      'assets/images/hatchback_clean.jpg',
-      'assets/images/sedan_clean.jpg',
-      'assets/images/innova_crysta_clean.jpg',
-    ]);
+    expect(items.map((v) => v['category']), ['tata_407', 'cargo_207']);
+    expect(items.map((v) => v['name']), ['Admin edited 407', 'Tata 207']);
+    expect(items[0]['image'], 'assets/images/cargo_407.jpg');
+    expect(items[1]['image'], 'assets/images/cargo_207_heavy.png');
+  });
+  test('published unpriced records remain visible while hidden, duplicate and wrong-sector records are excluded', () {
+    for (final sector in ['rental', 'logistics', 'premium', 'service']) {
+      final items = customerVehiclePresentation(sector, [
+        vehicle(sector, 'active'),
+        vehicle(sector, 'active'),
+        vehicle(sector, 'inactive', active: false),
+        vehicle(sector, 'hidden', visible: false),
+        vehicle('wrong-sector', 'wrong'),
+      ]);
+      expect(items.map((v) => v['category']), ['active', 'inactive']);
+    }
+  });
+  test('new Admin codes appear in every category without any application whitelist', () {
+    for (final sector in ['rental', 'logistics', 'premium', 'service']) {
+      final items = customerVehiclePresentation(sector, [
+        vehicle(sector, 'new_admin_type', name: 'New Admin vehicle'),
+      ]);
+      expect(items.single['category'], 'new_admin_type');
+      expect(items.single['name'], 'New Admin vehicle');
+    }
   });
 }

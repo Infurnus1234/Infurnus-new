@@ -42,7 +42,7 @@ class CatalogRepository extends RecordingRepository {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
-  test('Rental can browse bundled vehicles when the old catalog rejects the sector', () async {
+  test('unsupported catalog responses surface an error instead of inventing bundled options', () async {
     final dio = Dio()
       ..interceptors.add(
         InterceptorsWrapper(
@@ -58,12 +58,55 @@ void main() {
         ),
       );
     final source = RideRemoteDataSourceImpl(dio);
-    expect(await source.getFleet(sector: 'rental'), isEmpty);
+    await expectLater(
+      source.getFleet(sector: 'rental'),
+      throwsA(isA<DioException>()),
+    );
     await expectLater(
       source.getFleet(sector: 'premium'),
       throwsA(isA<DioException>()),
     );
   });
+  test(
+    'catalog pagination retains Admin additions beyond the first 100 rows',
+    () async {
+      final offsets = <int>[];
+      final dio = Dio()
+        ..interceptors.add(
+          InterceptorsWrapper(
+            onRequest: (request, handler) {
+              final offset = request.queryParameters['offset'] as int? ?? 0;
+              offsets.add(offset);
+              handler.resolve(
+                Response(
+                  requestOptions: request,
+                  statusCode: 200,
+                  data: {
+                    'data': List.generate(
+                      offset == 0 ? 100 : 1,
+                      (index) => {
+                        'id': 'configured-${offset + index}',
+                        'name': 'Admin vehicle ${offset + index}',
+                        'code': 'admin_${offset + index}',
+                        'sector': 'logistics',
+                        'active': true,
+                        'catalogVisible': true,
+                      },
+                    ),
+                  },
+                ),
+              );
+            },
+          ),
+        );
+      final types = await RideRemoteDataSourceImpl(dio)
+          .getFleet(sector: 'logistics');
+      expect(offsets, [0, 100]);
+      expect(types, hasLength(101));
+      expect(types.last.category, 'admin_100');
+      expect(types.last.displayName, 'Admin vehicle 100');
+    },
+  );
   for (final entry in [
     ('passenger', 'innova', 'Innova Crysta'),
     ('passenger', 'mini', 'Minicab'),

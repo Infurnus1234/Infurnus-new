@@ -117,21 +117,22 @@ class RideRemoteDataSourceImpl implements RideRemoteDataSource {
     final bookingSector = sector == 'rentals'
         ? 'rental'
         : sector ?? 'passenger';
-    final Response<dynamic> response;
-    try {
-      response = await _dio.get(
+    final list = <dynamic>[];
+    var offset = 0;
+    for (;;) {
+      final response = await _dio.get(
         '/vehicles/catalog',
-        queryParameters: {'sector': bookingSector, 'limit': 100},
+        queryParameters: {
+          'sector': bookingSector,
+          'limit': 100,
+          if (offset > 0) 'offset': offset,
+        },
       );
-    } on DioException catch (error) {
-      // Older APIs reject this query. Rental's bundled display catalog still
-      // works; the fare and booking endpoints remain authoritative.
-      if (bookingSector == 'rental' && error.response?.statusCode == 400) {
-        return [];
-      }
-      rethrow;
+      final page = response.data['data'] as List;
+      list.addAll(page);
+      if (page.length < 100) break;
+      offset += page.length;
     }
-    final List list = response.data['data'] as List;
     return list
         .map((e) {
           final value = Map<String, dynamic>.from(e as Map);

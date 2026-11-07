@@ -1,3 +1,4 @@
+import { operatingLocationSchema } from '../../maps/vehicle-operating-location.js';
 import { z } from 'zod';
 
 const uuid = z.string().uuid();
@@ -66,6 +67,7 @@ export const createVehicleSchema = z
     sector: vehicleSector.default('passenger'),
 
     category: vehicleCategory.default('sedan'),
+    operatingLocation: operatingLocationSchema.optional(),
     operatingCityId: z
       .string()
       .regex(/^[a-z][a-z0-9_-]{0,99}$/)
@@ -114,6 +116,7 @@ export const updateVehicleSchema = z
     sector: vehicleSector.optional(),
 
     category: vehicleCategory.optional(),
+    operatingLocation: operatingLocationSchema.optional(),
     operatingCityId: z
       .string()
       .regex(/^[a-z][a-z0-9_-]{0,99}$/)
@@ -237,6 +240,8 @@ export const createVehicleTypeSchema = z
     logisticsSlabs: logisticsSlabs.nullable().optional(),
     currency: z.literal('INR').default('INR'),
     active: z.boolean().default(false),
+    catalogVisible: z.boolean().optional(),
+    registrationActive: z.boolean().optional(),
   })
   .strict();
 export const updateVehicleTypeSchema = z
@@ -245,6 +250,8 @@ export const updateVehicleTypeSchema = z
     baseFare: exactFare.nullable().optional(),
     perKmRate: exactFare.nullable().optional(),
     active: z.boolean().optional(),
+    catalogVisible: z.boolean().optional(),
+    registrationActive: z.boolean().optional(),
     pricingReference: vehiclePricingReferenceSchema.nullable().optional(),
     serviceFixedFare: exactFare.nullable().optional(),
     serviceRadiusMeters: z.number().int().min(1).max(200000).optional(),

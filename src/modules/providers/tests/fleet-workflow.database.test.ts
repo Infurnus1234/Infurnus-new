@@ -40,7 +40,7 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
           model: 'Goods',
           plateNumber: randomUUID().slice(0, 20),
           sector: 'logistics',
-          category: 'mini_truck',
+          category: 'tata_407',
         }),
       );
       expect(code).toMatch(/^\d{6}$/);

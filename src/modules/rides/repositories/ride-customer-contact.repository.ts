@@ -21,7 +21,7 @@ export class PostgresRideCustomerContactRepository implements RideCustomerContac
     // A completed/cancelled/unassigned ride never yields contact information.
     const result = await this.database.query<RideCustomerContactRow>(
       `SELECT r.id AS "rideId", c.id AS "customerId", c.first_name AS "firstName",
-              c.last_name AS "lastName", c.phone
+              c.last_name AS "lastName", NULL::text AS phone
        FROM rides r
        JOIN driver_profiles d ON d.id = r.assigned_driver_id AND d.user_id = $2
        JOIN users driver_account ON driver_account.id = d.user_id

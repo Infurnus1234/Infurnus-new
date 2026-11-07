@@ -42,9 +42,11 @@ describe('INFURNUS Fare Module', () => {
         distanceAmount: 12000,
         timeAmount: 3000,
         grossAmount: 15500,
+        roundingAdjustmentPaise: 0,
+        monetaryPolicy: 'whole_rupee_half_up_v1',
         commissionRate: 0.1,
-        commissionAmount: 50,
-        driverEarnings: 15450,
+        commissionAmount: 100,
+        driverEarnings: 15400,
         currency: 'INR',
         pricingVersion: 'test-v1',
       });
@@ -79,7 +81,7 @@ describe('INFURNUS Fare Module', () => {
       });
 
       expect(result.distanceAmount).toBe(2);
-      expect(result.grossAmount).toBe(502);
+      expect(result.grossAmount).toBe(500);
     });
 
     it('rounds fractional time fare to the nearest paise', () => {
@@ -89,7 +91,7 @@ describe('INFURNUS Fare Module', () => {
       });
 
       expect(result.timeAmount).toBe(3);
-      expect(result.grossAmount).toBe(503);
+      expect(result.grossAmount).toBe(500);
     });
 
     it('rejects negative distance', () => {
@@ -235,6 +237,8 @@ describe('INFURNUS Fare Module', () => {
         distanceAmount: 12000,
         timeAmount: 3000,
         grossAmount: 15500,
+        roundingAdjustmentPaise: 0,
+        monetaryPolicy: 'whole_rupee_half_up_v1',
         currency: 'INR',
         pricingVersion: 'v1',
       });
@@ -305,9 +309,11 @@ describe('INFURNUS Fare Module', () => {
         distanceAmount: 12000,
         timeAmount: 3000,
         grossAmount: 15500,
+        roundingAdjustmentPaise: 0,
+        monetaryPolicy: 'whole_rupee_half_up_v1',
         commissionRate: 0.1,
-        commissionAmount: 50,
-        driverEarnings: 15450,
+        commissionAmount: 100,
+        driverEarnings: 15400,
         currency: 'INR',
         pricingVersion: 'test-v1',
         routeSource: 'google_maps_road',

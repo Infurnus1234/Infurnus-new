@@ -34,6 +34,7 @@ export function createProviderOperationsRouter(repository: PostgresProviderOpera
   router.use(createProviderAccountRouter(pool));
   router.get('/vehicle-catalog', async (_req, res, next) => {
     try {
+      res.setHeader('Cache-Control', 'no-store');
       res.json({
         success: true,
         data: await new PostgresFleetRepository(pool).catalog(_req.auth!.userId),

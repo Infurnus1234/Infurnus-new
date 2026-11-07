@@ -14,6 +14,9 @@ class WalletRepositoryImpl implements WalletRepository {
   WalletRepositoryImpl(this._remoteDataSource);
 
   @override
+  Future<double> quotePayment(double amount) => _remoteDataSource.quotePayment(amount);
+
+  @override
   Future<WalletModel> getWallet() async {
     try {
       return await _remoteDataSource.getWallet();

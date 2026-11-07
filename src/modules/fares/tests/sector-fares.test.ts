@@ -34,7 +34,7 @@ describe('INFURNUS 4-Sector Fare Calculations', () => {
       expect(result.distanceAmount).toBe(37500);
       expect(result.timeAmount).toBe(4000);
       expect(result.waitingAmount).toBe(1000);
-      expect(result.grossAmount).toBe(48750);
+      expect(result.grossAmount).toBe(48800);
     });
 
     it('scales fare for Auto (0.7x) and SUV (1.6x)', () => {
@@ -98,7 +98,7 @@ describe('INFURNUS 4-Sector Fare Calculations', () => {
       expect(result.weightAmount).toBe(12500);
       expect(result.loadingAmount).toBe(15000);
       expect(result.taxAmount).toBe(6350);
-      expect(result.grossAmount).toBe(133350);
+      expect(result.grossAmount).toBe(133400);
     });
   });
 

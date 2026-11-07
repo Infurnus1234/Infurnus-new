@@ -175,6 +175,27 @@ describe('PostgresWalletRepository', () => {
     expect((await repo.getHistory(testUserId, { type: 'debit' })).totalCount).toBe(1);
   });
 
+  it('credits whole-rupee partial and final refunds once, preserving the original charge', async () => {
+    await repo.topUp(testUserId,100000,'CASHFREE','fixture','refund_seed');
+    const payments=new PostgresPaymentRepository(pool);
+    const ride=(await pool.query<{id:string}>(`INSERT INTO rides(customer_id,pickup_location,destination_location)
+      VALUES($1,ST_SetSRID(ST_MakePoint(85.1,25.6),4326),ST_SetSRID(ST_MakePoint(85.2,25.7),4326)) RETURNING id`,[testUserId])).rows[0]!;
+    const payment=await payments.initiate({rideId:ride.id,userId:testUserId,amount:350,currency:'INR',provider:'wallet'});
+    await payments.captureWallet(payment.id,testUserId,350);
+    const partials=await Promise.all([payments.refund(payment.id,150,'partial',0),payments.refund(payment.id,150,'replay',0)]);
+    expect(partials.filter(Boolean)).toHaveLength(1);
+    expect(partials.find(Boolean)?.status).toBe('CAPTURED');
+    expect((await repo.getWallet(testUserId)).balancePaise).toBe(80000);
+    expect(await payments.refund(payment.id,201,'exceeds balance',150)).toBeNull();
+    const final=await payments.refund(payment.id,200,'remaining',150);
+    expect(final?.status).toBe('REFUNDED');
+    expect(Number(final?.amount)).toBe(350);
+    expect(Number(final?.refundedAmount)).toBe(350);
+    expect((await repo.getWallet(testUserId)).balancePaise).toBe(100000);
+    const ledger=await pool.query('SELECT amount,status FROM payment_refunds WHERE payment_id=$1 ORDER BY amount',[payment.id]);
+    expect(ledger.rows.map(row=>[Number(row.amount),row.status])).toEqual([[150,'SUCCESS'],[200,'SUCCESS']]);
+  });
+
   it('resolves valid and invalid recipient identifiers properly', async () => {
     const validUpi = await repo.resolveRecipient('upi', 'merchant@okaxis');
     expect(validUpi.isVerified).toBe(true);

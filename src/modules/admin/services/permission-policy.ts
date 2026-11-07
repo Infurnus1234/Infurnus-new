@@ -87,6 +87,8 @@ export function requiredPermissions(
   if (path === '/admin/logistics/payments')
     return method === 'GET' ? ['logistics.read', 'payments.read'] : null;
   if (path === '/admin/dashboard') return method === 'GET' ? ['dashboard.read'] : null;
+  if (/^\/admin\/operations\/booking-reference\/[0-9]{7}$/.test(path))
+    return method === 'GET' ? ['rides.read', 'users.sensitive', 'drivers.sensitive'] : null;
   if (path === '/admin/operations/summary') return method === 'GET' ? ['reports.read'] : null;
   const operation = path.match(/^\/admin\/operations\/([^/]+)(?:\/[^/]+\/(status|active))?$/);
   if (operation) {

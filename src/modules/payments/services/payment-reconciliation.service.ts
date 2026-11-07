@@ -1,3 +1,4 @@
+import { sameMoney } from '../../../common/utils/whole-rupee.js';
 import type { Pool } from 'pg';
 import type { PaymentRepository } from '../repositories/payment.repository.js';
 import type { PaymentProvider } from '../providers/payment.provider.js';
@@ -38,12 +39,11 @@ export class PaymentReconciliationService {
         const providerStatus = await this.paymentProvider.getPaymentStatus(payment.providerOrderId);
 
         if (
-          payment.payment_stage &&
+          providerStatus.orderStatus === 'PAID' &&
           (providerStatus.providerOrderId !== payment.providerOrderId ||
             providerStatus.orderCurrency !== payment.currency ||
-            Math.round(Number(providerStatus.orderAmount) * 100) !==
-              Math.round(Number(payment.amount) * 100) ||
-            !providerStatus.providerPaymentId)
+            !sameMoney(providerStatus.orderAmount, payment.amount) ||
+            (payment.payment_stage && !providerStatus.providerPaymentId))
         )
           continue;
         if (providerStatus.orderStatus === 'PAID') {

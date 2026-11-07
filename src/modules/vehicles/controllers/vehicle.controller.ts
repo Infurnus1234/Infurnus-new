@@ -17,6 +17,7 @@ export class VehicleController {
 
   catalog = async (request: Request, response: Response, next: NextFunction) => {
     try {
+      response.setHeader('Cache-Control', 'no-store');
       const query = z
         .object({
           sector: z.enum(['passenger', 'premium', 'logistics', 'service', 'rental']),

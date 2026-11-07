@@ -1,7 +1,7 @@
-import '../../domain/utils/logistics_catalog.dart';
 import '../widgets/vehicle_presentation_catalog.dart';
 
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -17,12 +17,9 @@ import '../../../../shared/widgets/infurnus_skeleton.dart';
 import '../../data/models/ride_model.dart' as model;
 import '../providers/ride_provider.dart';
 import '../providers/booking_catalog_provider.dart';
-import '../../../../shared/widgets/vehicle_visual_image.dart';
 import '../providers/ride_use_case_providers.dart';
 import '../../data/models/fleet_vehicle_model.dart';
 import '../widgets/vehicle_category_visual.dart';
-import 'specialty_emergency_screen.dart';
-import 'concierge_fleet_screen.dart';
 import '../../../auth/presentation/providers/user_provider.dart';
 
 final serviceCatalogProvider =
@@ -181,6 +178,14 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
           color: buttonBlack,
           backgroundColor: surfaceWhite,
           onRefresh: () async {
+            for (final sector in [
+              'rental',
+              'logistics',
+              'premium',
+              'service',
+            ]) {
+              ref.invalidate(bookingCatalogProvider(sector));
+            }
             setState(() => _isLoadingHistory = true);
             await ref.read(rideProvider.notifier).fetchRideHistory();
             if (mounted) {
@@ -279,51 +284,55 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'NAMASTE',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 2.0,
-                color: textSecondary,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Row(
-              children: [
-                const Text(
-                  'INFURNUS',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.5,
-                    color: textBlack,
-                  ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'NAMASTE',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 2.0,
+                  color: textSecondary,
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  '👋 ${user?.firstName ?? "User"}',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: textSecondary,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 2),
-            const Text(
-              'Move. Haul. Ride.',
-              style: TextStyle(
-                fontSize: 12,
-                color: textSecondary,
-                fontWeight: FontWeight.w500,
               ),
-            ),
-          ],
+              const SizedBox(height: 2),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  const Text(
+                    'INFURNUS',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.5,
+                      color: textBlack,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '👋 ${user?.firstName ?? "User"}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              const Text(
+                'Move. Haul. Ride.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: textSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
         ),
         Row(
           children: [
@@ -627,11 +636,13 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            'Explore fleet',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 12,
+                          Flexible(
+                            child: Text(
+                              'Explore fleet',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 12,
+                              ),
                             ),
                           ),
                           SizedBox(width: 4),
@@ -738,76 +749,83 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
       },
     ];
 
-    return GridView.builder(
-      physics: const NeverScrollableScrollPhysics(),
-      shrinkWrap: true,
-      itemCount: services.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        childAspectRatio: 2.1,
-      ),
-      itemBuilder: (context, index) {
-        final item = services[index];
-        final category = item['category'] as VehicleCategoryType;
-        return _PressableScaleCard(
-          onTap: item['action'] as VoidCallback,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-            decoration: BoxDecoration(
-              color: surfaceWhite,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: cardBorder),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                VehicleCategoryVisual(
-                  category: category,
-                  size: 38,
-                  borderRadius: 10,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        item['title'] as String,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: textBlack,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        item['subtitle'] as String,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: textSecondary,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+    return LayoutBuilder(
+      builder: (context, constraints) => GridView.builder(
+        physics: const NeverScrollableScrollPhysics(),
+        shrinkWrap: true,
+        itemCount: services.length,
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          mainAxisExtent: math.max(
+            (constraints.maxWidth - 12) / 2 / 2.1,
+            MediaQuery.textScalerOf(context).scale(14) * 1.7 +
+                MediaQuery.textScalerOf(context).scale(11) * 1.7 +
+                22,
           ),
-        );
-      },
+        ),
+        itemBuilder: (context, index) {
+          final item = services[index];
+          final category = item['category'] as VehicleCategoryType;
+          return _PressableScaleCard(
+            onTap: item['action'] as VoidCallback,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+              decoration: BoxDecoration(
+                color: surfaceWhite,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: cardBorder),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  VehicleCategoryVisual(
+                    category: category,
+                    size: 38,
+                    borderRadius: 10,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          item['title'] as String,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: textBlack,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          item['subtitle'] as String,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: textSecondary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -825,7 +843,10 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         _buildSectionHeader(
           title: title,
           subtitle: subtitle,
-          onSeeAll: () => context.push(route),
+          onSeeAll: () {
+            ref.invalidate(bookingCatalogProvider(sector));
+            context.push(route);
+          },
         ),
         const SizedBox(height: 12),
         catalog.when(
@@ -845,7 +866,13 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                     rate: 'Route estimate',
                     eta: 'Check availability',
                     icon: Icons.directions_car_rounded,
-                    category: VehicleCategoryType.rides,
+                    category: sector == 'service'
+                        ? VehicleCategoryType.emergency
+                        : sector == 'premium'
+                        ? VehicleCategoryType.premium
+                        : sector == 'logistics'
+                        ? VehicleCategoryType.logistics
+                        : VehicleCategoryType.rides,
                     assetImagePath: vehicle['image'],
                   ),
                 )
@@ -865,40 +892,20 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         '/rentals',
       );
 
-  Widget _buildLogisticsSection(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      _buildSectionHeader(
-        title: 'Logistics',
-        subtitle: 'Moving goods made easy',
-        onSeeAll: () => context.push('/logistics'),
-      ),
-      const SizedBox(height: 12),
-      _buildHorizontalFleet(
+  Widget _buildLogisticsSection(BuildContext context) =>
+      _buildConfiguredFleetSection(
+        context,
         'logistics',
-        logisticsVehicles
-            .map(
-              (vehicle) => _VehicleCategoryItem(
-                code: vehicle['category']!,
-                title: vehicle['name']!,
-                capacity: vehicle['capacity']!,
-                rate: 'Route estimate',
-                eta: 'Check availability',
-                icon: Icons.local_shipping_rounded,
-                category: VehicleCategoryType.logistics,
-                assetImagePath: vehicle['image'],
-              ),
-            )
-            .toList(),
-      ),
-    ],
-  );
+        'Logistics',
+        'Moving goods made easy',
+        '/logistics',
+      );
 
   Widget _buildHorizontalFleet(
     String sector,
     List<_VehicleCategoryItem> items,
   ) => SizedBox(
-    height: 130,
+    height: 130 + (MediaQuery.textScalerOf(context).scale(12) - 12) * 4,
     child: ListView.separated(
       key: ValueKey('vehicle-row:$sector'),
       scrollDirection: Axis.horizontal,
@@ -918,71 +925,23 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     ),
   );
 
-  Widget _buildServiceFleetSection(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      _buildSectionHeader(
-        title: 'Service Vehicles',
-        subtitle: 'Ready when you need help',
-        onSeeAll: () => context.push('/specialty-emergency'),
-      ),
-      const SizedBox(height: 12),
-      _buildHorizontalFleet(
+  Widget _buildServiceFleetSection(BuildContext context) =>
+      _buildConfiguredFleetSection(
+        context,
         'service',
-        SpecialtyEmergencyScreen.vehicles
-            .map(
-              (item) => _VehicleCategoryItem(
-                code: item['category'] as String,
-                title: item['title'] as String,
-                capacity: item['subtitle'] as String,
-                rate: 'Server fare',
-                eta: 'Check availability',
-                icon: item['fallbackIcon'] as IconData,
-                category: VehicleCategoryType.emergency,
-                assetImagePath: item['image'] as String?,
-              ),
-            )
-            .toList(),
-      ),
-    ],
-  );
+        'Service Vehicles',
+        'Ready when you need help',
+        '/specialty-emergency',
+      );
 
-  Widget _buildConciergeFleetSection(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      _buildSectionHeader(
-        title: 'Premium',
-        subtitle: 'Experience the extraordinary',
-        onSeeAll: () => context.push('/concierge-fleet'),
-      ),
-      const SizedBox(height: 12),
-      _buildHorizontalFleet(
+  Widget _buildConciergeFleetSection(BuildContext context) =>
+      _buildConfiguredFleetSection(
+        context,
         'premium',
-        ConciergeFleetScreen.vehicles
-            .map(
-              (item) => _VehicleCategoryItem(
-                code: item['category']!,
-                title: item['title']!,
-                capacity: item['subtitle']!,
-                rate: item['service']!,
-                eta: 'Check availability',
-                icon: VehicleVisualImage.getFallbackIcon(
-                  item['title'],
-                  item['category'],
-                ),
-                category: VehicleCategoryType.premium,
-                assetImagePath:
-                    premiumVehicleImages[item['category']] ??
-                    VehicleVisualImage.getAssetPath(
-                      item['title'],
-                      item['category'],
-                    ),
-              ),
-            )
-            .toList(),
-      ),
-    ],
-  );
+        'Premium',
+        'Experience the extraordinary',
+        '/concierge-fleet',
+      );
 
   Widget _buildSectionHeader({
     required String title,
@@ -992,23 +951,25 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
-                color: textBlack,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  color: textBlack,
+                ),
               ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              subtitle,
-              style: const TextStyle(fontSize: 12, color: textSecondary),
-            ),
-          ],
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: const TextStyle(fontSize: 12, color: textSecondary),
+              ),
+            ],
+          ),
         ),
         GestureDetector(
           onTap: onSeeAll,
@@ -1032,7 +993,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
     return _PressableScaleCard(
       onTap: onTap,
       child: Container(
-        width: 110,
+        width: 110 * MediaQuery.textScalerOf(context).scale(12) / 12,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
         decoration: BoxDecoration(
           color: surfaceWhite,
@@ -1136,7 +1097,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                 children: [
                   Row(
                     children: [
-                      Container(
+                      Flexible(child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
                           vertical: 2,
@@ -1153,13 +1114,15 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                             fontWeight: FontWeight.w900,
                           ),
                         ),
-                      ),
+                      )),
                       const SizedBox(width: 8),
-                      Text(
-                        _formatStatus(currentRide.status),
-                        style: const TextStyle(
-                          color: textSecondary,
-                          fontSize: 12,
+                      Flexible(
+                        child: Text(
+                          _formatStatus(currentRide.status),
+                          style: const TextStyle(
+                            color: textSecondary,
+                            fontSize: 12,
+                          ),
                         ),
                       ),
                     ],
@@ -1196,12 +1159,14 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              'Recent Activity',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: textBlack,
+            const Expanded(
+              child: Text(
+                'Recent Activity',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: textBlack,
+                ),
               ),
             ),
             if (rideState.history.isNotEmpty)
@@ -1307,7 +1272,9 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 3),
-                      Row(
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
                         children: [
                           Container(
                             padding: const EdgeInsets.symmetric(

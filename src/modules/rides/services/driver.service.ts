@@ -1,3 +1,4 @@
+import { DriverTodaySummaryRepository } from '../repositories/driver-today-summary.repository.js';
 import { storageService } from '../../../infrastructure/storage/index.js';
 import { MatchingService } from './matching.service.js';
 import { rideEvents } from '../events/ride.events.js';
@@ -25,7 +26,14 @@ export class DriverService {
     private readonly clock: () => Date = () => new Date(),
     private readonly rideRepository?: RideRepository,
     private readonly contactRepository: RideCustomerContactRepository = new PostgresRideCustomerContactRepository(),
+    private readonly prepareDriverRide?: (
+      ride: import('../types/ride.js').Ride,
+    ) => Promise<import('../types/ride.js').Ride>,
   ) {}
+
+  async todaySummary(userId: string) {
+    return new DriverTodaySummaryRepository().get(await this.profileForUser(userId), this.clock());
+  }
 
   async getCustomerContact(driverUserId: string, rideId: string) {
     let row;
@@ -47,12 +55,13 @@ export class DriverService {
         404,
       );
     }
-    const phone = row.phone?.trim().replace(/[\s().-]/g, '') ?? '';
+
     return {
       rideId: row.rideId,
       name: [row.firstName, row.lastName].filter(Boolean).join(' ').trim() || 'Customer',
       // Preserve legacy national numbers; adding '+' would change their dialling meaning.
-      phone: /^\+?[1-9]\d{7,14}$/.test(phone) ? phone : null,
+      phone: null,
+      callingNumber: env.INFURNUS_CALLING_NUMBER,
     };
   }
 
@@ -80,6 +89,7 @@ export class DriverService {
     const completedRides = rides.filter((r) => r.status === 'completed');
 
     if (isDriverRole) {
+      if (this.prepareDriverRide) await Promise.all(rides.map((r) => this.prepareDriverRide!(r)));
       return {
         totalTrips: completedRides.length,
         rides: rides.map(sanitizeRideForDriver),

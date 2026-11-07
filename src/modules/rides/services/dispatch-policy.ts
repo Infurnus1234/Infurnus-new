@@ -11,9 +11,9 @@ export function dispatchPolicy(sector = 'passenger', category = ''): DispatchPol
   if (sector === 'premium')
     return {
       kind: 'premium',
-      radiiMeters: [],
+      radiiMeters: [25000],
       responseMs: 3600000,
-      cityWide: true,
+      cityWide: false,
       rankByDistance: false,
     };
   if (sector === 'logistics')

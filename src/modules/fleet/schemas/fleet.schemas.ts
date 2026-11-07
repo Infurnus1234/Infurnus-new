@@ -1,3 +1,4 @@
+import { operatingLocationSchema } from '../../maps/vehicle-operating-location.js';
 import { z } from 'zod';
 
 export const fleetListQuerySchema = z
@@ -33,6 +34,7 @@ export const createFleetVehicleSchema = z
     permitDetails: z.string().trim().max(500).optional(),
     ownershipType: z.enum(['OWNED', 'LEASED', 'FINANCED', 'OTHER']).optional(),
     ownerNotes: z.string().trim().max(1000).optional(),
+    operatingLocation: operatingLocationSchema.optional(),
     operatingCityId: z
       .string()
       .trim()
@@ -62,6 +64,7 @@ export const updateFleetVehicleSchema = z
     permitDetails: z.string().trim().max(500).optional(),
     ownershipType: z.enum(['OWNED', 'LEASED', 'FINANCED', 'OTHER']).optional(),
     ownerNotes: z.string().trim().max(1000).optional(),
+    operatingLocation: operatingLocationSchema.optional(),
     operatingCityId: z
       .string()
       .trim()

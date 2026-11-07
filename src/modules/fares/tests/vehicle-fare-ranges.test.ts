@@ -59,10 +59,10 @@ describe('Vehicle fare ranges', () => {
       expect(result.estimatedFare.maximum?.distanceAmount).toBe(highRate * 20);
       const taxFactor = sector === 'logistics' ? 1.05 : 1;
       expect(result.estimatedFare.minimum.grossAmount).toBe(
-        Math.round((lowBase + lowRate * 20 + 2000) * taxFactor),
+        Math.round(Math.round((lowBase + lowRate * 20 + 2000) * taxFactor) / 100) * 100,
       );
       expect(result.estimatedFare.maximum?.grossAmount).toBe(
-        Math.round((highBase + highRate * 20 + 2000) * taxFactor),
+        Math.round(Math.round((highBase + highRate * 20 + 2000) * taxFactor) / 100) * 100,
       );
       expect(result.bookable).toBe(false);
       expect(result).not.toHaveProperty('grossAmount');
@@ -130,7 +130,7 @@ describe('Vehicle fare ranges', () => {
           waitingAmount: 400,
           weightAmount: 5000,
           loadingAmount: 15000,
-          grossAmount: 85995,
+          grossAmount: 86000,
         },
       },
     });

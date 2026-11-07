@@ -1,3 +1,4 @@
+import 'package:infurnus/core/utils/currency_formatter.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -93,7 +94,7 @@ class DriverRideNotifier extends StateNotifier<DriverRideState> {
                   id: newRide.id.hashCode,
                   title: 'New Ride Request Available!',
                   body:
-                      'Fare: ₹${(newRide.fareEstimate ?? 0.0).toStringAsFixed(2)} • Pickup: ${newRide.pickupAddress ?? ''}',
+                      'Fare: ₹${(newRide.fareEstimate ?? 0.0).rupeeText} • Pickup: ${newRide.pickupAddress ?? ''}',
                   payload: jsonEncode({'rideId': newRide.id}),
                   isRideRequest: true,
                 );

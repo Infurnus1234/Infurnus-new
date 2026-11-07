@@ -1,3 +1,4 @@
+import { customerBookingPayload } from '../utils/booking-contact.js';
 import type { NextFunction, Request, Response } from 'express';
 import {
   createRideSchema,
@@ -30,7 +31,7 @@ export class RideController {
         req.auth!.userId,
         createRideSchema.parse(req.body),
       );
-      res.status(201).json({ success: true, data: ride, message: 'Ride created' });
+      res.status(201).json({ success: true, data: customerBookingPayload(ride), message: 'Ride created' });
     } catch (error) {
       next(error);
     }
@@ -42,7 +43,7 @@ export class RideController {
         req.auth!.userId,
         listRidesSchema.parse(req.query),
       );
-      res.json({ success: true, data: rides, message: 'Rides retrieved' });
+      res.json({ success: true, data: rides.map(customerBookingPayload), message: 'Rides retrieved' });
     } catch (error) {
       next(error);
     }
@@ -52,7 +53,7 @@ export class RideController {
     try {
       const { id } = rideIdSchema.parse(req.params);
       const ride = await this.service.getRide(req.auth!.userId, id);
-      res.json({ success: true, data: ride, message: 'Ride retrieved' });
+      res.json({ success: true, data: customerBookingPayload(ride), message: 'Ride retrieved' });
     } catch (error) {
       next(error);
     }
@@ -90,7 +91,7 @@ export class RideController {
         id,
         cancelRideSchema.parse(req.body),
       );
-      res.json({ success: true, data: ride, message: 'Ride cancelled' });
+      res.json({ success: true, data: customerBookingPayload(ride), message: 'Ride cancelled' });
     } catch (error) {
       next(error);
     }

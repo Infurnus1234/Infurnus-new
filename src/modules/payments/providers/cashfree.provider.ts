@@ -57,7 +57,7 @@ export class CashfreePaymentProvider implements PaymentProvider {
 
       const requestBody = {
         order_id: params.orderId,
-        order_amount: Math.round(params.amount * 100) / 100,
+        order_amount: params.amount,
         order_currency: params.currency || 'INR',
         customer_details: {
           customer_id: params.customerId,

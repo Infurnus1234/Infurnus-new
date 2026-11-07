@@ -18,7 +18,7 @@ Uri? assignedRideContactUri(model.RideModel? ride, {bool serviceOnly = false}) {
       ].contains(ride.status)) {
     return null;
   }
-  final raw = ride.driverDetails?.phone?.trim();
+  final raw = ride.callingNumber?.trim();
   if (raw == null || raw.isEmpty || !RegExp(r'^\+?[0-9 ()-]+$').hasMatch(raw)) {
     return null;
   }

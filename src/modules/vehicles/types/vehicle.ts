@@ -1,3 +1,4 @@
+import type { OperatingLocation } from '../../maps/vehicle-operating-location.js';
 export interface Vehicle {
   id: string;
 
@@ -17,6 +18,7 @@ export interface Vehicle {
   model: string;
   color: string | null;
   plateNumber: string;
+  operatingLocation?: OperatingLocation | null | undefined;
   operatingCityId?: string | null | undefined;
 
   /**
@@ -72,6 +74,7 @@ export interface CreateVehicleData {
   model: string;
   color?: string | null | undefined;
   plateNumber: string;
+  operatingLocation?: OperatingLocation | null | undefined;
   operatingCityId?: string | null | undefined;
 
   sector?: string | undefined;
@@ -96,6 +99,7 @@ export interface UpdateVehicleData {
   model?: string | undefined;
   color?: string | null | undefined;
   plateNumber?: string | undefined;
+  operatingLocation?: OperatingLocation | null | undefined;
   operatingCityId?: string | undefined;
 
   sector?: string | undefined;
@@ -117,6 +121,8 @@ export interface UpdateVehicleData {
 
 /** Admin catalog rates use integer paise internally; category is the code on rides/inventory. */
 export interface VehicleType {
+  catalogVisible?: boolean;
+  registrationActive?: boolean;
   serviceFixedFare?: number | null;
   serviceRadiusMeters?: number;
   logisticsSlabs?: import('../services/logistics-pricing.js').LogisticsSlabs | null;

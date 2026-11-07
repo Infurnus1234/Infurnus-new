@@ -10,6 +10,7 @@ export function createWalletRouter(controller: WalletController): Router {
   router.get('/history', requireAuth, controller.getHistory);
   router.post('/topup/initiate', requireAuth, controller.initiateTopUp);
   router.post('/topup/verify', requireAuth, controller.verifyTopUp);
+  router.post('/pay/quote', requireAuth, controller.quotePayment);
   router.post('/pay', requireAuth, controller.pay);
   router.post('/resolve-recipient', requireAuth, controller.resolveRecipient);
 

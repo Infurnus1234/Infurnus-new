@@ -1,3 +1,4 @@
+import { districtFromGoogle } from '../../maps/administrative-district.js';
 import { decodePolyline, validateCoordinates } from '../../maps/geometry.js';
 
 import { AppError } from '../../../common/errors/app-error.js';
@@ -5,6 +6,7 @@ import { AppError } from '../../../common/errors/app-error.js';
 import { env } from '../../../config/env.js';
 
 import type {
+  AdministrativeDistrict,
   Coordinates,
   MapRequestOptions,
   ReverseGeocodeResult,
@@ -35,6 +37,7 @@ interface GoogleResponse {
   }>;
 
   results?: Array<{
+    address_components?: Array<{ long_name: string; short_name: string; types: string[] }>;
     place_id?: string;
     formatted_address?: string;
     geometry?: {
@@ -225,6 +228,24 @@ export class GoogleMapsProvider implements MapProvider {
           ]
         : [],
     );
+  }
+
+  async resolveDistrict(
+    point: Coordinates,
+    options: MapRequestOptions = {},
+  ): Promise<AdministrativeDistrict | null> {
+    validateCoordinates(point);
+    const response = await this.request<GoogleResponse>(
+      'https://maps.googleapis.com/maps/api/geocode/json',
+      {
+        latlng: `${point.latitude},${point.longitude}`,
+        result_type: 'administrative_area_level_3|administrative_area_level_2',
+        language: 'en',
+        key: this.apiKey,
+      },
+      options,
+    );
+    return districtFromGoogle(response?.results);
   }
 
   async reverseGeocode(

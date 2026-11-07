@@ -1,3 +1,5 @@
+import 'configured_catalog_fixture.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -14,17 +16,18 @@ import 'package:infurnus/features/customer/presentation/screens/customer_home_sc
 import 'package:infurnus/features/customer/presentation/widgets/ride_contact_action.dart';
 import 'package:infurnus/shared/widgets/vehicle_visual_image.dart';
 
-import 'vehicle_fare_ranges_test.dart'
-    show RecordingRepository, ConnectedSocket;
+import 'vehicle_fare_ranges_test.dart' show ConnectedSocket;
 import 'location_independent_booking_test.dart' show mapFixture;
 
 model.RideModel ride({
-  String? phone = '+919876543210',
+  String? phone = '+919153787859',
   model.RideStatus status = model.RideStatus.driverAssigned,
   String sector = 'service',
   bool assigned = true,
 }) => model.RideModel(
   id: 'ride',
+  bookingId: '2200382',
+  callingNumber: phone,
   customerId: 'customer',
   assignedDriverId: assigned ? 'driver' : null,
   pickup: model.RideLocation(latitude: 25.6, longitude: 85.1),
@@ -44,7 +47,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
   test('only an active assigned ride can supply its contact number', () {
-    expect(assignedRideContactUri(ride())?.toString(), 'tel:+919876543210');
+    expect(assignedRideContactUri(ride())?.toString(), 'tel:+919153787859');
     for (final status in [
       model.RideStatus.completed,
       model.RideStatus.cancelled,
@@ -122,7 +125,9 @@ void main() {
       final socket = ConnectedSocket();
       final container = ProviderContainer(
         overrides: [
-          rideRepositoryProvider.overrideWithValue(RecordingRepository()),
+          rideRepositoryProvider.overrideWithValue(
+            ConfiguredCatalogRepository(),
+          ),
           socketServiceProvider.overrideWithValue(socket),
           dioProvider.overrideWithValue(mapFixture()),
           bookingCatalogProvider('passenger').overrideWith((ref) async => []),
@@ -192,7 +197,7 @@ void main() {
       await tester.tap(seeAll);
       await tester.pumpAndSettle();
       expect(find.text('Specialty & Emergency'), findsOneWidget);
-      for (final name in ['Ambulance', 'Towing Van', 'JCB']) {
+      for (final name in ['Ambulance', 'Crane', 'JCB']) {
         expect(find.text(name), findsOneWidget);
       }
       await tester.pumpWidget(const SizedBox.shrink());
