@@ -530,10 +530,10 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
       const profileRes = await pool.query<{ id: string }>(
         `INSERT INTO driver_profiles
              (user_id, license_number, license_expiry,
-              verification_status, availability_status)
+              verification_status, availability_status, online_preference)
            VALUES
              ($1, $2, CURRENT_DATE + 365,
-              'approved', 'available')
+              'approved', 'available', TRUE)
            RETURNING id`,
         [driverUserId, `LIC-${suffix}`],
       );
