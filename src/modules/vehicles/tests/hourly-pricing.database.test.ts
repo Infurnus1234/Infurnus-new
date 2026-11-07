@@ -196,7 +196,11 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       expect(listed.status).toBe(200);
       expect(listed.body.data.every((v: VehicleType) => v.sector === 'premium')).toBe(true);
       const changed = await estimate(result.body.data, { bookingHours: 2 });
-      expect(changed.body.data.bookingFare.grossAmount).toBe(50029 + 26740);
+      expect(changed.body.data.bookingFare).toMatchObject({
+        baseAmount: 50029,
+        grossAmount: 76800,
+        roundingAdjustmentPaise: 31,
+      });
       const same = await estimate(result.body.data, { bookingHours: 5 });
       expect(same.body.data.bookingFare.baseAmount).toBe(schedule['5']! * 100);
     });

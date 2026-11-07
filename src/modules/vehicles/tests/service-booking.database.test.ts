@@ -217,7 +217,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       expect(available.body.data).toMatchObject({
         available: true,
         bookable: true,
-        bookingFare: { grossAmount: 12345 },
+        bookingFare: { baseAmount: 12345, grossAmount: 12300, roundingAdjustmentPaise: -45 },
       });
       expect(JSON.stringify(available.body)).not.toContain(profileId);
       await place(25000.01);
@@ -228,7 +228,11 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
             .auth(token, { type: 'bearer' })
             .send(quote)
         ).body.data,
-      ).toMatchObject({ available: false, bookable: false, bookingFare: { grossAmount: 12345 } });
+      ).toMatchObject({
+        available: false,
+        bookable: false,
+        bookingFare: { baseAmount: 12345, grossAmount: 12300, roundingAdjustmentPaise: -45 },
+      });
       const changed = await request(app)
         .patch('/admin/vehicle-types/' + type.id)
         .auth(token, { type: 'bearer' })
@@ -255,7 +259,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
         recordId: ride.id,
       });
       expect(records.items).toContainEqual(
-        expect.objectContaining({ id: ride.id, sector: 'service', fare_estimate: 123.45 }),
+        expect.objectContaining({ id: ride.id, sector: 'service', fare_estimate: 123 }),
       );
     });
     it.each([0, 24999.99, 25000])(
@@ -355,9 +359,11 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           [ride.id],
         )
       ).rows[0];
-      expect(Number(row.fare_estimate)).toBe(123.45);
+      expect(Number(row.fare_estimate)).toBe(123);
       expect(row.fare).toMatchObject({
-        grossAmount: 12345,
+        baseAmount: 12345,
+        grossAmount: 12300,
+        roundingAdjustmentPaise: -45,
         distanceAmount: 0,
         timeAmount: 0,
         vehicleConfiguration: { version: 1, pricingModel: 'service_fixed' },
@@ -431,7 +437,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           ride.id,
         ])
       ).rows[0];
-      expect(Number(row.final_fare)).toBe(123.45);
+      expect(Number(row.final_fare)).toBe(123);
       expect(row.assigned_driver_id).toBe(profileId);
       expect(row.status).toBe('completed');
     });

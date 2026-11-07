@@ -177,7 +177,8 @@ describe('Phase 4 Step 6: Logistics Cargo Delivery Enhancements', () => {
       expect(result.weightAmount).toBe(12500);
       expect(result.loadingAmount).toBe(15000);
       expect(result.taxAmount).toBe(6350);
-      expect(result.grossAmount).toBe(133350);
+      expect(result.grossAmount).toBe(133400);
+      expect(result.roundingAdjustmentPaise).toBe(50);
     });
 
     it('does not apply weight surcharge if weight is within free threshold (<= 20kg)', () => {
@@ -329,7 +330,8 @@ describe('Phase 4 Step 6: Logistics Cargo Delivery Enhancements', () => {
       expect(result.distanceAmount).toBe(37500);
       expect(result.timeAmount).toBe(4000);
       expect(result.waitingAmount).toBe(400); // 2 min billable @ ₹2/min = 400 paise
-      expect(result.grossAmount).toBe(48150);
+      expect(result.grossAmount).toBe(48200);
+      expect(result.roundingAdjustmentPaise).toBe(50);
       expect(result.weightAmount).toBeUndefined();
       expect(result.loadingAmount).toBeUndefined();
     });

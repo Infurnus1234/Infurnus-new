@@ -124,7 +124,10 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
 
       expect(normalizedSql).toContain('* 1.05');
 
-      expect(normalizedSql).toContain('ELSE COALESCE(r.final_fare, r.fare_estimate)');
+      expect(normalizedSql).toContain(
+        "WHEN r.sector='logistics' THEN COALESCE(r.final_fare,r.fare_estimate)",
+      );
+      expect(normalizedSql).toContain('ELSE ROUND(COALESCE(r.final_fare,r.fare_estimate),0)');
 
       expect(result?.finalFare).toBe(5145);
       expect(result?.actualFuelCost).toBe(900);
