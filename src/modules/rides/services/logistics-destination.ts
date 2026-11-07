@@ -18,7 +18,12 @@ export class LogisticsDestinationResolver {
     private readonly now = Date.now,
   ) {}
   async prepare(ride: Ride): Promise<Ride> {
-    if (ride.sector !== 'logistics' || ride.pinVerified === true || ['completed','cancelled'].includes(ride.status)) return ride;
+    if (
+      ride.sector !== 'logistics' ||
+      ride.pinVerified === true ||
+      ['completed', 'cancelled'].includes(ride.status)
+    )
+      return ride;
     const prior = ride.destinationDistrictLookup;
     const same =
       prior &&

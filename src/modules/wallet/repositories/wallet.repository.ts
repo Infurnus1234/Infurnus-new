@@ -58,7 +58,12 @@ export class PostgresWalletRepository {
     return BigInt(result.rows[0].balance_paise);
   }
 
-  async createTopUpOrder(userId: string, amountPaise: number, idempotencyKey: string, legacyRequestedPaise?: number) {
+  async createTopUpOrder(
+    userId: string,
+    amountPaise: number,
+    idempotencyKey: string,
+    legacyRequestedPaise?: number,
+  ) {
     const result = await this.pool.query<{ orderId: string; amountPaise: string }>(
       `INSERT INTO wallet_topup_orders(order_id,user_id,amount_paise,idempotency_key)
        VALUES ('wallet_' || gen_random_uuid()::text,$1,$2,$3)

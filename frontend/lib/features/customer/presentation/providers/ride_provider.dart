@@ -1328,7 +1328,9 @@ class RideNotifier extends StateNotifier<RideState> {
             ? UpiPaymentApp.paytm
             : UpiPaymentApp.any;
 
-        final finalized = double.tryParse(initiateResult['amount']?.toString() ?? '');
+        final finalized = double.tryParse(
+          initiateResult['amount']?.toString() ?? '',
+        );
         if (finalized == null || !finalized.isFinite || finalized <= 0) {
           throw Exception('Server did not return a finalized payment amount');
         }

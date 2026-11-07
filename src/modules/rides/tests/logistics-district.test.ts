@@ -197,7 +197,9 @@ describe('Logistics district serialization and lookup', () => {
     const r = ride();
     delete r.destinationDistrict;
     const before = JSON.stringify(r.destination);
-    const saveDestinationDistrict = vi.fn<NonNullable<RideRepository['saveDestinationDistrict']>>(async () => true),
+    const saveDestinationDistrict = vi.fn<NonNullable<RideRepository['saveDestinationDistrict']>>(
+        async () => true,
+      ),
       resolveDistrict = vi.fn(async () => district);
     await new LogisticsDestinationResolver(
       { saveDestinationDistrict } as unknown as RideRepository,

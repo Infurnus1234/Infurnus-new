@@ -1097,24 +1097,26 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                 children: [
                   Row(
                     children: [
-                      Flexible(child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: successGreen,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text(
-                          'ACTIVE TRIP',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900,
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: successGreen,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            'ACTIVE TRIP',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
                         ),
-                      )),
+                      ),
                       const SizedBox(width: 8),
                       Flexible(
                         child: Text(

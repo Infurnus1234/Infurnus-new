@@ -1,6 +1,11 @@
 import { createHash } from 'node:crypto';
 import { AppError } from '../../../common/errors/app-error.js';
-import { wholeRupees, logisticsSplit, rupeesToPaise, sameMoney } from '../../../common/utils/whole-rupee.js';
+import {
+  wholeRupees,
+  logisticsSplit,
+  rupeesToPaise,
+  sameMoney,
+} from '../../../common/utils/whole-rupee.js';
 import { rideEvents } from '../../rides/events/ride.events.js';
 import type { LogisticsPaymentService } from '../services/logistics-payment.service.js';
 import { z } from 'zod';
@@ -216,8 +221,16 @@ export class PaymentController {
                     customerId: userId,
                     orderNote: `INFURNUS Ride ${input.rideId}`,
                   });
-                  if (order.providerOrderId !== `order_${activePayment.id}` || order.orderCurrency !== activePayment.currency || !sameMoney(order.orderAmount, activePayment.amount))
-                    throw new AppError('PAYMENT_ORDER_MISMATCH', 'Gateway order does not match the stored payment', 502);
+                  if (
+                    order.providerOrderId !== `order_${activePayment.id}` ||
+                    order.orderCurrency !== activePayment.currency ||
+                    !sameMoney(order.orderAmount, activePayment.amount)
+                  )
+                    throw new AppError(
+                      'PAYMENT_ORDER_MISMATCH',
+                      'Gateway order does not match the stored payment',
+                      502,
+                    );
                   await this.paymentRepository.updateProviderOrder?.(
                     activePayment.id,
                     order.providerOrderId,
@@ -313,7 +326,9 @@ export class PaymentController {
 
       amountToCharge = wholeRupees(amountToCharge);
       if (amountToCharge <= 0) {
-        res.status(400).json({ success: false, message: 'Rounded payment amount must be positive' });
+        res
+          .status(400)
+          .json({ success: false, message: 'Rounded payment amount must be positive' });
         return;
       }
       const payment = await this.paymentRepository.initiate({
@@ -344,8 +359,16 @@ export class PaymentController {
                 : 'INFURNUS Order',
           });
 
-          if (orderResult.providerOrderId !== `order_${payment.id}` || orderResult.orderCurrency !== payment.currency || !sameMoney(orderResult.orderAmount, payment.amount))
-            throw new AppError('PAYMENT_ORDER_MISMATCH', 'Gateway order does not match the stored payment', 502);
+          if (
+            orderResult.providerOrderId !== `order_${payment.id}` ||
+            orderResult.orderCurrency !== payment.currency ||
+            !sameMoney(orderResult.orderAmount, payment.amount)
+          )
+            throw new AppError(
+              'PAYMENT_ORDER_MISMATCH',
+              'Gateway order does not match the stored payment',
+              502,
+            );
           paymentSessionId = orderResult.paymentSessionId ?? null;
           providerOrderId = orderResult.providerOrderId;
 
@@ -556,10 +579,7 @@ export class PaymentController {
             });
             return;
           }
-          if (
-            payment.paymentStage &&
-            !sameMoney(statusResult.orderAmount, payment.amount)
-          ) {
+          if (payment.paymentStage && !sameMoney(statusResult.orderAmount, payment.amount)) {
             res.status(400).json({ success: false, message: 'Payment amount mismatch' });
             return;
           }
@@ -906,8 +926,10 @@ export class PaymentController {
       // return its exact original amount rather than inventing a rounding difference.
       const alreadyRefunded = Number(payment.refundedAmount ?? 0);
       const remainingPaise = rupeesToPaise(payment.amount) - rupeesToPaise(alreadyRefunded);
-      const refundAmount = rupeesToPaise(input.amount) === remainingPaise
-        ? remainingPaise / 100 : wholeRupees(input.amount);
+      const refundAmount =
+        rupeesToPaise(input.amount) === remainingPaise
+          ? remainingPaise / 100
+          : wholeRupees(input.amount);
       if (refundAmount <= 0 || rupeesToPaise(refundAmount) > remainingPaise) {
         res.status(400).json({
           success: false,
@@ -932,28 +954,46 @@ export class PaymentController {
           return provider.refundPayment!({
             providerOrderId: orderId,
             refundAmount,
-            refundId: `ref_${createHash('sha256').update(`${payment.id}:${alreadyRefunded}:${refundAmount}`).digest('hex').slice(0,32)}`,
+            refundId: `ref_${createHash('sha256').update(`${payment.id}:${alreadyRefunded}:${refundAmount}`).digest('hex').slice(0, 32)}`,
             ...(input.reason ? { note: input.reason } : {}),
           });
         };
       }
       let refunded;
       try {
-        refunded = await this.paymentRepository.refund(paymentId, refundAmount, input.reason, alreadyRefunded, submitGateway);
+        refunded = await this.paymentRepository.refund(
+          paymentId,
+          refundAmount,
+          input.reason,
+          alreadyRefunded,
+          submitGateway,
+        );
       } catch (error) {
         if (error instanceof AppError) throw error;
         if (!submitGateway) throw error;
-        res.status(502).json({ success: false, message: error instanceof Error ? error.message : 'Gateway refund failed' });
+        res
+          .status(502)
+          .json({
+            success: false,
+            message: error instanceof Error ? error.message : 'Gateway refund failed',
+          });
         return;
       }
       if (!refunded) {
-        res.status(409).json({ success: false, message: 'Refund balance changed; refresh the payment before retrying' });
+        res
+          .status(409)
+          .json({
+            success: false,
+            message: 'Refund balance changed; refresh the payment before retrying',
+          });
         return;
       }
       res.status(200).json({
         success: true,
         data: refunded,
-        message: refunded.refundPending ? 'Refund submitted; gateway confirmation pending' : 'Payment refunded successfully',
+        message: refunded.refundPending
+          ? 'Refund submitted; gateway confirmation pending'
+          : 'Payment refunded successfully',
       });
     } catch (error) {
       next(error);

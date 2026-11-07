@@ -15,7 +15,13 @@ export interface PaymentRepository {
   updateProviderOrder?(paymentId: string, providerOrderId: string): Promise<Payment | null>;
   findByProviderOrderId?(providerOrderId: string): Promise<Payment | null>;
   markFailed?(paymentId: string, failureReason?: string): Promise<Payment | null>;
-  refund?(paymentId: string, refundAmount: number, reason?: string, expectedRefundedAmount?: number, submitGateway?: () => Promise<RefundResult>): Promise<Payment | null>;
+  refund?(
+    paymentId: string,
+    refundAmount: number,
+    reason?: string,
+    expectedRefundedAmount?: number,
+    submitGateway?: () => Promise<RefundResult>,
+  ): Promise<Payment | null>;
 }
 
 const paymentProjection = `
@@ -35,50 +41,59 @@ export class PostgresPaymentRepository implements PaymentRepository {
   async initiate(data: InitiatePaymentData): Promise<Payment> {
     const client = await this.pool.connect();
     try {
-    await client.query('BEGIN');
-    const finalized = data.amount;
-    if (!Number.isSafeInteger(finalized) || finalized <= 0) throw new AppError('PAYMENT_AMOUNT_INVALID', 'Rounded payment must be positive', 400);
-    if (data.rideId) {
-      await client.query('SELECT id FROM rides WHERE id=$1 FOR UPDATE', [data.rideId]);
-      // Only a previously uncharged booking may be finalized. Existing transactions
-      // and immutable staged Logistics contracts are never rewritten.
-      await client.query(`UPDATE rides SET fare_estimate=CASE WHEN status='completed' THEN fare_estimate ELSE $2 END,
+      await client.query('BEGIN');
+      const finalized = data.amount;
+      if (!Number.isSafeInteger(finalized) || finalized <= 0)
+        throw new AppError('PAYMENT_AMOUNT_INVALID', 'Rounded payment must be positive', 400);
+      if (data.rideId) {
+        await client.query('SELECT id FROM rides WHERE id=$1 FOR UPDATE', [data.rideId]);
+        // Only a previously uncharged booking may be finalized. Existing transactions
+        // and immutable staged Logistics contracts are never rewritten.
+        await client.query(
+          `UPDATE rides SET fare_estimate=CASE WHEN status='completed' THEN fare_estimate ELSE $2 END,
         final_fare=CASE WHEN status='completed' THEN $2 ELSE final_fare END
         WHERE id=$1 AND sector IS DISTINCT FROM 'logistics'
-          AND NOT EXISTS(SELECT 1 FROM payments WHERE ride_id=$1)`, [data.rideId, finalized]);
-    }
-    if (data.rentalId) {
-      await client.query('SELECT id FROM rentals WHERE id=$1 FOR UPDATE', [data.rentalId]);
-      await client.query('UPDATE rentals SET total_amount=$2 WHERE id=$1 AND NOT EXISTS(SELECT 1 FROM payments WHERE rental_id=$1)', [data.rentalId, finalized]);
-    }
-    const result = await client.query<Payment>(
-      `INSERT INTO payments (
+          AND NOT EXISTS(SELECT 1 FROM payments WHERE ride_id=$1)`,
+          [data.rideId, finalized],
+        );
+      }
+      if (data.rentalId) {
+        await client.query('SELECT id FROM rentals WHERE id=$1 FOR UPDATE', [data.rentalId]);
+        await client.query(
+          'UPDATE rentals SET total_amount=$2 WHERE id=$1 AND NOT EXISTS(SELECT 1 FROM payments WHERE rental_id=$1)',
+          [data.rentalId, finalized],
+        );
+      }
+      const result = await client.query<Payment>(
+        `INSERT INTO payments (
          user_id, ride_id, rental_id, logistics_order_id,
          amount, currency, provider, idempotency_key, provider_order_id, status
        )
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'INITIATED')
        RETURNING ${paymentProjection}`,
-      [
-        data.userId,
-        data.rideId ?? null,
-        data.rentalId ?? null,
-        data.logisticsOrderId ?? null,
-        finalized,
-        data.currency ?? 'INR',
-        data.provider ?? 'wallet',
-        data.idempotencyKey ?? null,
-        data.providerOrderId ?? null,
-      ],
-    );
+        [
+          data.userId,
+          data.rideId ?? null,
+          data.rentalId ?? null,
+          data.logisticsOrderId ?? null,
+          finalized,
+          data.currency ?? 'INR',
+          data.provider ?? 'wallet',
+          data.idempotencyKey ?? null,
+          data.providerOrderId ?? null,
+        ],
+      );
 
-    const payment = result.rows[0];
-    if (!payment) throw new Error('Failed to initiate payment');
-    await client.query('COMMIT');
-    return payment;
+      const payment = result.rows[0];
+      if (!payment) throw new Error('Failed to initiate payment');
+      await client.query('COMMIT');
+      return payment;
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
-    } finally { client.release(); }
+    } finally {
+      client.release();
+    }
   }
 
   async updateProviderOrder(paymentId: string, providerOrderId: string): Promise<Payment | null> {
@@ -297,52 +312,106 @@ export class PostgresPaymentRepository implements PaymentRepository {
     return result.rows[0] ?? null;
   }
 
-  async refund(paymentId: string, refundAmount: number, reason?: string, expectedRefundedAmount = 0, submitGateway?: () => Promise<RefundResult>): Promise<Payment | null> {
+  async refund(
+    paymentId: string,
+    refundAmount: number,
+    reason?: string,
+    expectedRefundedAmount = 0,
+    submitGateway?: () => Promise<RefundResult>,
+  ): Promise<Payment | null> {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
       // Serialize refund validation, gateway submission and local balance update.
-      const locked = await client.query<Payment>(`SELECT ${paymentProjection} FROM payments
-        WHERE id=$1 AND status='CAPTURED' FOR UPDATE`, [paymentId]);
+      const locked = await client.query<Payment>(
+        `SELECT ${paymentProjection} FROM payments
+        WHERE id=$1 AND status='CAPTURED' FOR UPDATE`,
+        [paymentId],
+      );
       const payment = locked.rows[0];
       // Read the ledger after acquiring the lock so concurrent inserts are visible.
       const ledger = await client.query<{ committed: string }>(
         `SELECT COALESCE(SUM(amount),0) AS committed FROM payment_refunds
-         WHERE payment_id=$1 AND status IN ('PENDING','SUCCESS')`, [paymentId]);
-      if (!payment || Number(ledger.rows[0]?.committed ?? 0) !== expectedRefundedAmount || refundAmount <= 0 ||
-          rupeesToPaise(refundAmount) + rupeesToPaise(expectedRefundedAmount) > rupeesToPaise(payment.amount)) {
-        await client.query('ROLLBACK'); return null;
+         WHERE payment_id=$1 AND status IN ('PENDING','SUCCESS')`,
+        [paymentId],
+      );
+      if (
+        !payment ||
+        Number(ledger.rows[0]?.committed ?? 0) !== expectedRefundedAmount ||
+        refundAmount <= 0 ||
+        rupeesToPaise(refundAmount) + rupeesToPaise(expectedRefundedAmount) >
+          rupeesToPaise(payment.amount)
+      ) {
+        await client.query('ROLLBACK');
+        return null;
       }
       const gateway = await submitGateway?.();
       const refundStatus = gateway?.status.toUpperCase() ?? 'SUCCESS';
       if (!['SUCCESS', 'PENDING', 'ONHOLD'].includes(refundStatus))
-        throw new AppError('GATEWAY_REFUND_FAILED','Gateway rejected the refund',502);
+        throw new AppError('GATEWAY_REFUND_FAILED', 'Gateway rejected the refund', 502);
       const confirmed = refundStatus === 'SUCCESS';
-      await client.query(`INSERT INTO payment_refunds(payment_id,provider_refund_id,amount,currency,reason,status,processed_at)
+      await client.query(
+        `INSERT INTO payment_refunds(payment_id,provider_refund_id,amount,currency,reason,status,processed_at)
         VALUES($1,$2,$3,$4,$5,$6,CASE WHEN $6::varchar='SUCCESS' THEN NOW() END)`,
-        [paymentId,gateway?.refundId??null,refundAmount,payment.currency,reason??null,confirmed?'SUCCESS':'PENDING']);
+        [
+          paymentId,
+          gateway?.refundId ?? null,
+          refundAmount,
+          payment.currency,
+          reason ?? null,
+          confirmed ? 'SUCCESS' : 'PENDING',
+        ],
+      );
       if (payment.provider === 'wallet') {
-        const debit = await client.query(`SELECT 1 FROM user_wallet_entries WHERE user_id=$1 AND entry_type='DEBIT_PAYMENT'
-          AND reference=$2 AND amount_paise=$3`,[payment.userId,`payment:${paymentId}`,-rupeesToPaise(payment.amount)]);
-        if (!debit.rowCount) throw new AppError('REFUND_ORIGINAL_DEBIT_NOT_FOUND','Original wallet debit was not found',409);
-        const wallet = await client.query<{balance_paise:string}>(
-          'SELECT balance_paise FROM user_wallets WHERE user_id=$1 AND is_active=TRUE FOR UPDATE', [payment.userId]);
-        if (!wallet.rows[0]) throw new AppError('WALLET_INACTIVE','Wallet is unavailable',409);
+        const debit = await client.query(
+          `SELECT 1 FROM user_wallet_entries WHERE user_id=$1 AND entry_type='DEBIT_PAYMENT'
+          AND reference=$2 AND amount_paise=$3`,
+          [payment.userId, `payment:${paymentId}`, -rupeesToPaise(payment.amount)],
+        );
+        if (!debit.rowCount)
+          throw new AppError(
+            'REFUND_ORIGINAL_DEBIT_NOT_FOUND',
+            'Original wallet debit was not found',
+            409,
+          );
+        const wallet = await client.query<{ balance_paise: string }>(
+          'SELECT balance_paise FROM user_wallets WHERE user_id=$1 AND is_active=TRUE FOR UPDATE',
+          [payment.userId],
+        );
+        if (!wallet.rows[0]) throw new AppError('WALLET_INACTIVE', 'Wallet is unavailable', 409);
         const paise = rupeesToPaise(refundAmount);
-        const balance = (BigInt(wallet.rows[0].balance_paise)+BigInt(paise)).toString();
-        await client.query('UPDATE user_wallets SET balance_paise=$2,updated_at=NOW() WHERE user_id=$1',[payment.userId,balance]);
-        await client.query(`INSERT INTO user_wallet_entries(user_id,amount_paise,balance_after_paise,entry_type,reference,idempotency_key)
-          VALUES($1,$2,$3,'REFUND',$4,$5)`,[payment.userId,paise,balance,`payment:${paymentId}`,`wallet_refund:${paymentId}:${rupeesToPaise(expectedRefundedAmount)}`]);
+        const balance = (BigInt(wallet.rows[0].balance_paise) + BigInt(paise)).toString();
+        await client.query(
+          'UPDATE user_wallets SET balance_paise=$2,updated_at=NOW() WHERE user_id=$1',
+          [payment.userId, balance],
+        );
+        await client.query(
+          `INSERT INTO user_wallet_entries(user_id,amount_paise,balance_after_paise,entry_type,reference,idempotency_key)
+          VALUES($1,$2,$3,'REFUND',$4,$5)`,
+          [
+            payment.userId,
+            paise,
+            balance,
+            `payment:${paymentId}`,
+            `wallet_refund:${paymentId}:${rupeesToPaise(expectedRefundedAmount)}`,
+          ],
+        );
       }
       const result = await client.query<Payment>(
         `WITH totals AS (SELECT COALESCE(SUM(amount),0) AS confirmed FROM payment_refunds WHERE payment_id=$1 AND status='SUCCESS')
          UPDATE payments SET status=CASE WHEN totals.confirmed=payments.amount THEN 'REFUNDED'::payment_status ELSE status END,
           refunded_at=CASE WHEN totals.confirmed=payments.amount THEN NOW() ELSE refunded_at END,
           failure_reason=COALESCE($2,failure_reason),updated_at=NOW()
-         FROM totals WHERE id=$1 RETURNING ${paymentProjection}`, [paymentId,reason??null]);
+         FROM totals WHERE id=$1 RETURNING ${paymentProjection}`,
+        [paymentId, reason ?? null],
+      );
       await client.query('COMMIT');
       return result.rows[0] ? { ...result.rows[0], refundPending: !confirmed } : null;
-    } catch(error) { await client.query('ROLLBACK'); throw error; }
-    finally { client.release(); }
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 }

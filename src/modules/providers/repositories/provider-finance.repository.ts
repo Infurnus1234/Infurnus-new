@@ -201,7 +201,8 @@ export class PostgresProviderFinanceRepository {
           throw new AppError('IDEMPOTENCY_CONFLICT', 'Different payout amount for this key', 409);
         return previous.rows[0];
       }
-      if (!amountPaise) throw new AppError('INVALID_PAYOUT', 'Rounded payout must be positive', 400);
+      if (!amountPaise)
+        throw new AppError('INVALID_PAYOUT', 'Rounded payout must be positive', 400);
       if (balance < BigInt(amountPaise))
         throw new AppError('INSUFFICIENT_BALANCE', 'Insufficient wallet balance', 409);
       const payout = await client.query<{ id: string; amount_paise: string; status: string }>(

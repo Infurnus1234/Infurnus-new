@@ -136,8 +136,13 @@ describe('Logistics 40% Upfront Payment Confirmation Flow', () => {
 
     mockProvider = {
       providerName: 'cashfree',
-      createOrder: vi.fn(async ({orderId,amount,currency}) => ({
-        providerOrderId: orderId, paymentSessionId: 'sess_123', orderAmount: amount, orderCurrency: currency, orderStatus:'ACTIVE', entity:'order',
+      createOrder: vi.fn(async ({ orderId, amount, currency }) => ({
+        providerOrderId: orderId,
+        paymentSessionId: 'sess_123',
+        orderAmount: amount,
+        orderCurrency: currency,
+        orderStatus: 'ACTIVE',
+        entity: 'order',
       })),
       getPaymentStatus: vi.fn().mockResolvedValue({
         orderStatus: 'PAID',
@@ -159,8 +164,19 @@ describe('Logistics 40% Upfront Payment Confirmation Flow', () => {
 
   describe('STEP 2: Backend Authoritative Fare & Rounding Rules', () => {
     it('reconciles whole-rupee upfront and remaining amounts without rounding drift', () => {
-      for (const [raw, total, advance, remaining] of [[850,850,340,510],[105.55,106,42,64],[333.33,333,133,200],[99.99,100,40,60],[2003,2003,801,1202]] as const) {
-        expect(logisticsSplit(rupeesToPaise(raw))).toEqual({totalPaise:total*100,upfrontPaise:advance*100,finalPaise:remaining*100,currency:'INR'});
+      for (const [raw, total, advance, remaining] of [
+        [850, 850, 340, 510],
+        [105.55, 106, 42, 64],
+        [333.33, 333, 133, 200],
+        [99.99, 100, 40, 60],
+        [2003, 2003, 801, 1202],
+      ] as const) {
+        expect(logisticsSplit(rupeesToPaise(raw))).toEqual({
+          totalPaise: total * 100,
+          upfrontPaise: advance * 100,
+          finalPaise: remaining * 100,
+          currency: 'INR',
+        });
       }
     });
 

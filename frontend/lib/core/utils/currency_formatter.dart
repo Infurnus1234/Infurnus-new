@@ -22,7 +22,11 @@ class CurrencyFormatter {
       return showSymbol ? '₹0' : '0';
     }
     if (amount != amount.truncateToDouble()) {
-      return NumberFormat.currency(locale: 'en_IN', symbol: showSymbol ? '₹' : '', decimalDigits: 2).format(amount).trim();
+      return NumberFormat.currency(
+        locale: 'en_IN',
+        symbol: showSymbol ? '₹' : '',
+        decimalDigits: 2,
+      ).format(amount).trim();
     }
     final formatted = showSymbol
         ? _inrFormatter.format(amount)

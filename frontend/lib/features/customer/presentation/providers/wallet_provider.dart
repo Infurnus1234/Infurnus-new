@@ -154,7 +154,8 @@ class WalletNotifier extends StateNotifier<WalletState> {
 
   double? _lastTopUpAmount;
   double? get lastTopUpAmount => _lastTopUpAmount;
-  Future<double> quotePayment(double amount) => _repository.quotePayment(amount);
+  Future<double> quotePayment(double amount) =>
+      _repository.quotePayment(amount);
 
   /// Top-up flow with double-submit protection, idempotency, and server verification.
   Future<bool> topUp({

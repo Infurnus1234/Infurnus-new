@@ -31,7 +31,9 @@ export class RideController {
         req.auth!.userId,
         createRideSchema.parse(req.body),
       );
-      res.status(201).json({ success: true, data: customerBookingPayload(ride), message: 'Ride created' });
+      res
+        .status(201)
+        .json({ success: true, data: customerBookingPayload(ride), message: 'Ride created' });
     } catch (error) {
       next(error);
     }
@@ -43,7 +45,11 @@ export class RideController {
         req.auth!.userId,
         listRidesSchema.parse(req.query),
       );
-      res.json({ success: true, data: rides.map(customerBookingPayload), message: 'Rides retrieved' });
+      res.json({
+        success: true,
+        data: rides.map(customerBookingPayload),
+        message: 'Rides retrieved',
+      });
     } catch (error) {
       next(error);
     }

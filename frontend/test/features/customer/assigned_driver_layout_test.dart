@@ -4,14 +4,37 @@ import 'package:infurnus/features/customer/data/models/ride_model.dart';
 import 'package:infurnus/features/customer/presentation/widgets/assigned_driver_summary.dart';
 
 void main() {
-  testWidgets('broken remote profile image uses a stable circular fallback', (tester) async {
-    final ride = RideModel(id:'ride',customerId:'customer',pickup:RideLocation(latitude:25,longitude:85),destination:RideLocation(latitude:26,longitude:85),status:RideStatus.driverAssigned,driverDetails:DriverDetails(id:'driver',name:'Audit Driver',photoUrl:'https://example.invalid/broken-profile.png'),createdAt:DateTime(2026),updatedAt:DateTime(2026));
-    await tester.pumpWidget(MaterialApp(home:Scaffold(body:AssignedDriverSummary(ride:ride,onCall:(){}))));
-    await tester.runAsync(() async { await Future<void>.delayed(const Duration(milliseconds:50)); });
+  testWidgets('broken remote profile image uses a stable circular fallback', (
+    tester,
+  ) async {
+    final ride = RideModel(
+      id: 'ride',
+      customerId: 'customer',
+      pickup: RideLocation(latitude: 25, longitude: 85),
+      destination: RideLocation(latitude: 26, longitude: 85),
+      status: RideStatus.driverAssigned,
+      driverDetails: DriverDetails(
+        id: 'driver',
+        name: 'Audit Driver',
+        photoUrl: 'https://example.invalid/broken-profile.png',
+      ),
+      createdAt: DateTime(2026),
+      updatedAt: DateTime(2026),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AssignedDriverSummary(ride: ride, onCall: () {}),
+        ),
+      ),
+    );
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    });
     await tester.pumpAndSettle();
-    expect(tester.takeException(),isNull);
-    expect(tester.getSize(find.byType(ClipOval)),const Size(52,52));
-    expect(find.byIcon(Icons.person_rounded),findsOneWidget);
+    expect(tester.takeException(), isNull);
+    expect(tester.getSize(find.byType(ClipOval)), const Size(52, 52));
+    expect(find.byIcon(Icons.person_rounded), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
   const name = 'A very long driver name Niranjan Bhardwaj Kumar Singh';

@@ -1,4 +1,5 @@
 import 'package:infurnus/core/utils/currency_formatter.dart';
+
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -385,7 +386,9 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
   Future<void> _detectCurrentLocation() async {
     final generation = ++_pickupSelectionGeneration;
     try {
-      final pos = await ref.read(locationServiceProvider).getCurrentPosition(retry: true);
+      final pos = await ref
+          .read(locationServiceProvider)
+          .getCurrentPosition(retry: true);
       if (pos != null && mounted && generation == _pickupSelectionGeneration) {
         ref
             .read(rideProvider.notifier)
@@ -2709,11 +2712,15 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
     final fare = ride?.finalFare ?? ride?.fareEstimate ?? state.fare ?? 0.0;
     final plan = ride?.logisticsPayment;
     final isLogistics = ride?.isLogistics == true;
-    final balancePaise = (plan?['outstandingPaise'] ?? plan?['finalPaise']) as num?;
+    final balancePaise =
+        (plan?['outstandingPaise'] ?? plan?['finalPaise']) as num?;
     final payable = isLogistics
-        ? (balancePaise != null ? balancePaise / 100 : (plan?['remainingAmount'] as num?)?.toDouble())
+        ? (balancePaise != null
+              ? balancePaise / 100
+              : (plan?['remainingAmount'] as num?)?.toDouble())
         : fare;
-    final isPaid = state.paymentStatus == 'paid' || (isLogistics && payable == 0);
+    final isPaid =
+        state.paymentStatus == 'paid' || (isLogistics && payable == 0);
     final isPremium = ride?.sector == 'premium';
 
     return Column(
@@ -2907,27 +2914,33 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
 
                 const SizedBox(height: 14),
                 InfurnusButton(
-                  text: payable == null ? 'Final balance unavailable' : 'Pay ₹${payable.rupeeText}',
+                  text: payable == null
+                      ? 'Final balance unavailable'
+                      : 'Pay ₹${payable.rupeeText}',
                   isLoading: _isProcessingPayment,
-                  onPressed: payable == null || payable <= 0 ? null : () async {
-                    setState(() => _isProcessingPayment = true);
-                    final success = await ref
-                        .read(rideProvider.notifier)
-                        .initiateTripPayment(
-                          amount: payable,
-                          paymentMethod: _selectedPaymentMethod,
-                        );
-                    if (mounted) {
-                      setState(() => _isProcessingPayment = false);
-                      if (success) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Payment processed successfully!'),
-                          ),
-                        );
-                      }
-                    }
-                  },
+                  onPressed: payable == null || payable <= 0
+                      ? null
+                      : () async {
+                          setState(() => _isProcessingPayment = true);
+                          final success = await ref
+                              .read(rideProvider.notifier)
+                              .initiateTripPayment(
+                                amount: payable,
+                                paymentMethod: _selectedPaymentMethod,
+                              );
+                          if (mounted) {
+                            setState(() => _isProcessingPayment = false);
+                            if (success) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Payment processed successfully!',
+                                  ),
+                                ),
+                              );
+                            }
+                          }
+                        },
                 ),
               ],
             ],
@@ -3360,7 +3373,9 @@ class _LogisticsUpfrontCardState extends ConsumerState<_LogisticsUpfrontCard> {
   Widget build(BuildContext context) {
     final ride = widget.ride;
     final planTotalPaise = ride.logisticsPayment?['totalPaise'] as num?;
-    final totalFare = planTotalPaise == null ? ride.displayFare : planTotalPaise / 100;
+    final totalFare = planTotalPaise == null
+        ? ride.displayFare
+        : planTotalPaise / 100;
     final upfrontAmt = ride.upfrontAmount;
     final status = ride.upfrontPaymentStatus;
 

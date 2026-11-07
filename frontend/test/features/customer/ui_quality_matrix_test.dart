@@ -121,7 +121,14 @@ void main() {
           status: modelStatus,
           sector: isLogisticsBooking ? 'logistics' : 'rental',
           fareEstimate: isLogisticsBooking ? 2003 : 2400,
-          logisticsPayment: isLogisticsBooking ? {'totalPaise': 200300,'upfrontPaise': 80100,'finalPaise': 120200,'outstandingPaise': 120200} : null,
+          logisticsPayment: isLogisticsBooking
+              ? {
+                  'totalPaise': 200300,
+                  'upfrontPaise': 80100,
+                  'finalPaise': 120200,
+                  'outstandingPaise': 120200,
+                }
+              : null,
           driverDetails: model.DriverDetails(
             id: 'driver',
             name: 'Niranjan Bhardwaj Kumar Singh Long Driver Name',

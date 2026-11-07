@@ -409,10 +409,7 @@ void main() {
     expect(estimate.pricingDescription, contains('₹5.00–₹8.00/km'));
   });
   test('preserves open upper bound', () {
-    expect(
-      FareEstimateModel.fromJson(range(open: true)).displayFare,
-      '₹20+',
-    );
+    expect(FareEstimateModel.fromJson(range(open: true)).displayFare, '₹20+');
   });
   test('uses explicit booking quote rather than either range bound', () {
     final estimate = FareEstimateModel.fromJson(range(quote: true));

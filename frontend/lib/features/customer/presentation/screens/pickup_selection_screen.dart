@@ -99,7 +99,9 @@ class _PickupSelectionScreenState extends ConsumerState<PickupSelectionScreen> {
     setState(() => _isDetectingLocation = true);
 
     try {
-      final pos = await ref.read(locationServiceProvider).getCurrentPosition(retry: true);
+      final pos = await ref
+          .read(locationServiceProvider)
+          .getCurrentPosition(retry: true);
       if (!mounted || generation != _selectionGeneration) return;
       if (pos != null) {
         final coords = LatLng(pos.latitude, pos.longitude);

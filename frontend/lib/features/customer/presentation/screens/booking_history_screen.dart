@@ -1,4 +1,5 @@
 import 'package:infurnus/core/utils/currency_formatter.dart';
+
 import '../../domain/utils/logistics_catalog.dart';
 
 import 'package:flutter/material.dart';
@@ -425,14 +426,16 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
                           const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Flexible(child: Text(
-                                'View Details',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: brandGreen,
-                                  fontWeight: FontWeight.bold,
+                              Flexible(
+                                child: Text(
+                                  'View Details',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: brandGreen,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
-                              )),
+                              ),
                               Icon(
                                 Icons.chevron_right_rounded,
                                 size: 14,
@@ -833,18 +836,25 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
                   return Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Expanded(child: Text(fareLabel, style: const TextStyle(color: textGray))),
-                      Flexible(child: Text(
-                        '₹${ride.displayFare.rupeeText}',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          color: isCancelled ? textGray : textBlack,
-                          decoration: isCancelled
-                              ? TextDecoration.lineThrough
-                              : null,
+                      Expanded(
+                        child: Text(
+                          fareLabel,
+                          style: const TextStyle(color: textGray),
                         ),
-                      )),
+                      ),
+                      Flexible(
+                        child: Text(
+                          '₹${ride.displayFare.rupeeText}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: isCancelled ? textGray : textBlack,
+                            decoration: isCancelled
+                                ? TextDecoration.lineThrough
+                                : null,
+                          ),
+                        ),
+                      ),
                     ],
                   );
                 }(),
@@ -853,14 +863,18 @@ class _BookingHistoryScreenState extends ConsumerState<BookingHistoryScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Expanded(child: Text(
-                        'Total Distance',
-                        style: TextStyle(color: textGray),
-                      )),
-                      Flexible(child: Text(
-                        '${((ride.actualDistanceMeters ?? 0) / 1000.0).toStringAsFixed(2)} km',
-                        style: const TextStyle(color: textBlack),
-                      )),
+                      const Expanded(
+                        child: Text(
+                          'Total Distance',
+                          style: TextStyle(color: textGray),
+                        ),
+                      ),
+                      Flexible(
+                        child: Text(
+                          '${((ride.actualDistanceMeters ?? 0) / 1000.0).toStringAsFixed(2)} km',
+                          style: const TextStyle(color: textBlack),
+                        ),
+                      ),
                     ],
                   ),
                 ],

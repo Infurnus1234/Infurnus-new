@@ -201,15 +201,29 @@ describe('Payment Refund Lifecycle & Authorization', () => {
     });
 
     it('rounds a new partial refund before submitting the exact same value to gateway and ledger', async () => {
-      const req=mockAdminRequest({amount:249.5}); const res=mockResponse();
-      await controller.refund(req,res,vi.fn());
-      expect(mockProvider.refundPayment).toHaveBeenCalledWith(expect.objectContaining({refundAmount:250}));
-      expect(mockRepo.refund).toHaveBeenCalledWith(mockCapturedPayment.id,250,undefined,0,expect.any(Function));
+      const req = mockAdminRequest({ amount: 249.5 });
+      const res = mockResponse();
+      await controller.refund(req, res, vi.fn());
+      expect(mockProvider.refundPayment).toHaveBeenCalledWith(
+        expect.objectContaining({ refundAmount: 250 }),
+      );
+      expect(mockRepo.refund).toHaveBeenCalledWith(
+        mockCapturedPayment.id,
+        250,
+        undefined,
+        0,
+        expect.any(Function),
+      );
     });
     it('preserves the exact amount of a full refund of a historical fractional charge', async () => {
-      vi.mocked(mockRepo.findById).mockResolvedValueOnce({...mockCapturedPayment,amount:499.51});
-      await controller.refund(mockAdminRequest({amount:499.51}),mockResponse(),vi.fn());
-      expect(mockProvider.refundPayment).toHaveBeenCalledWith(expect.objectContaining({refundAmount:499.51}));
+      vi.mocked(mockRepo.findById).mockResolvedValueOnce({
+        ...mockCapturedPayment,
+        amount: 499.51,
+      });
+      await controller.refund(mockAdminRequest({ amount: 499.51 }), mockResponse(), vi.fn());
+      expect(mockProvider.refundPayment).toHaveBeenCalledWith(
+        expect.objectContaining({ refundAmount: 499.51 }),
+      );
     });
 
     it('returns 502 if Cashfree refund fails', async () => {

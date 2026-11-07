@@ -600,7 +600,7 @@ export class RideService {
 
         const taxAmount = Math.round(subtotal * 0.05 * 100) / 100;
 
-        const finalFare = wholeRupees(ride.finalFare ?? (subtotal + taxAmount));
+        const finalFare = wholeRupees(ride.finalFare ?? subtotal + taxAmount);
 
         ride.billing = {
           currency: 'INR',
@@ -626,10 +626,12 @@ export class RideService {
       const completedFare = Number(
         ride.billing?.finalFare ?? ride.finalFare ?? ride.fareEstimate ?? 0,
       );
-      const commissionAmount = ride.commissionAmount != null && ride.commissionAmount !== 0
-        ? wholeRupees(ride.commissionAmount)
-        : wholeRupeeShare(rupeesToPaise(completedFare), 1, 10) / 100;
-      const driverEarningAmount = (rupeesToPaise(completedFare) - rupeesToPaise(commissionAmount)) / 100;
+      const commissionAmount =
+        ride.commissionAmount != null && ride.commissionAmount !== 0
+          ? wholeRupees(ride.commissionAmount)
+          : wholeRupeeShare(rupeesToPaise(completedFare), 1, 10) / 100;
+      const driverEarningAmount =
+        (rupeesToPaise(completedFare) - rupeesToPaise(commissionAmount)) / 100;
 
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
       if (isUuid) {

@@ -1,4 +1,8 @@
-import { wholeRupeePaise, wholeRupeeShare, logisticsSplit } from '../../../common/utils/whole-rupee.js';
+import {
+  wholeRupeePaise,
+  wholeRupeeShare,
+  logisticsSplit,
+} from '../../../common/utils/whole-rupee.js';
 import { bookingInventorySector } from '../../vehicles/services/rental-inventory.js';
 import { serviceConfiguration } from '../../vehicles/services/service-pricing.js';
 import { logisticsSlab } from '../../vehicles/services/logistics-pricing.js';

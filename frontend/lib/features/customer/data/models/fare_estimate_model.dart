@@ -1,4 +1,5 @@
 import 'package:infurnus/core/utils/currency_formatter.dart';
+
 class FareEstimateModel {
   final String estimateType;
   final bool bookable;

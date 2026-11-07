@@ -264,12 +264,15 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
         if (!('bookingFare' in f)) throw Error('Missing fare');
         const rate = meters < 15000 ? slabs.below_15 : slabs.from_15;
         expect(f.bookingFare?.grossAmount).toBe(
-          Math.round((Math.round(rate.baseFare * 100) + Math.round((meters * rate.perKmRate * 100) / 1000)) / 100) * 100,
+          Math.round(
+            (Math.round(rate.baseFare * 100) + Math.round((meters * rate.perKmRate * 100) / 1000)) /
+              100,
+          ) * 100,
         );
         expect(f.bookingFare?.billableDistanceMeters).toBe(meters);
         expect(f.bookingFare?.distanceMultiplier).toBe(1);
         expect(f.bookingFare?.logisticsPayment?.upfrontPaise).toBe(
-          Math.round(f.bookingFare!.grossAmount * 0.4 / 100) * 100,
+          Math.round((f.bookingFare!.grossAmount * 0.4) / 100) * 100,
         );
       }
     });
@@ -492,7 +495,11 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
         .auth(adminToken, { type: 'bearer' });
       expect(admin.status, admin.text).toBe(200);
       expect(admin.body.data.items.length).toBeGreaterThan(0);
-      expect(admin.body.data.items.some((r: any) => r.payments.some((p: any) => p.cashConfirmedBy === driver))).toBe(true);
+      expect(
+        admin.body.data.items.some((r: any) =>
+          r.payments.some((p: any) => p.cashConfirmedBy === driver),
+        ),
+      ).toBe(true);
       expect(
         admin.body.data.items.every(
           (r: any) =>

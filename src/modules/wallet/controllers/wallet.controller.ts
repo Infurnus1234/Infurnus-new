@@ -115,7 +115,12 @@ export class WalletController {
         customerId: userId,
         orderNote: 'INFURNUS Wallet Top-Up',
       });
-      if (order.providerOrderId !== orderId || !order.paymentSessionId || order.orderCurrency !== 'INR' || !sameMoney(order.orderAmount, amountPaise / 100))
+      if (
+        order.providerOrderId !== orderId ||
+        !order.paymentSessionId ||
+        order.orderCurrency !== 'INR' ||
+        !sameMoney(order.orderAmount, amountPaise / 100)
+      )
         throw new AppError(
           'PAYMENT_PROVIDER_UNAVAILABLE',
           'Wallet checkout session unavailable',
@@ -188,11 +193,17 @@ export class WalletController {
 
   quotePayment = (req: Request, res: Response, next: NextFunction): void => {
     try {
-      const input = z.object({ amount: z.number().positive().max(99999999) }).strict().parse(req.body);
+      const input = z
+        .object({ amount: z.number().positive().max(99999999) })
+        .strict()
+        .parse(req.body);
       const amount = wholeRupees(input.amount);
-      if (!amount) throw new AppError('INVALID_AMOUNT', 'Rounded payment amount must be positive', 400);
+      if (!amount)
+        throw new AppError('INVALID_AMOUNT', 'Rounded payment amount must be positive', 400);
       res.json({ success: true, data: { amount, currency: 'INR' } });
-    } catch (error) { next(error); }
+    } catch (error) {
+      next(error);
+    }
   };
 
   pay = async (req: Request, res: Response, next: NextFunction): Promise<void> => {

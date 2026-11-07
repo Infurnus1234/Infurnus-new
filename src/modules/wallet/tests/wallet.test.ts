@@ -17,7 +17,7 @@ describe('PostgresWalletRepository', () => {
       [testUserId],
     );
     await pool.query('DELETE FROM payments WHERE user_id = $1', [testUserId]);
-    await pool.query('DELETE FROM rides WHERE customer_id = $1',[testUserId]);
+    await pool.query('DELETE FROM rides WHERE customer_id = $1', [testUserId]);
     await pool.query(
       `INSERT INTO users(id,first_name,last_name,phone,role,status) VALUES ($1,'Wallet','Recipient','+919999988887','customer','active') ON CONFLICT(id) DO NOTHING`,
       [recipientId],
@@ -32,7 +32,7 @@ describe('PostgresWalletRepository', () => {
     await pool.query('DELETE FROM user_wallets WHERE user_id=$1', [recipientId]);
     await pool.query('DELETE FROM users WHERE id=$1', [recipientId]);
     await pool.query('DELETE FROM payments WHERE user_id = $1', [testUserId]);
-    await pool.query('DELETE FROM rides WHERE customer_id = $1',[testUserId]);
+    await pool.query('DELETE FROM rides WHERE customer_id = $1', [testUserId]);
     await pool.query('DELETE FROM user_wallet_entries WHERE user_id = $1', [testUserId]);
     await pool.query('DELETE FROM user_wallets WHERE user_id = $1', [testUserId]);
     await pool.query('DELETE FROM users WHERE id = $1', [testUserId]);
@@ -158,9 +158,14 @@ describe('PostgresWalletRepository', () => {
   it('captures concurrent wallet retries once against the customer balance', async () => {
     await repo.topUp(testUserId, 100000, 'CASHFREE', 'verified_fixture', 'capture_seed');
     const payments = new PostgresPaymentRepository(pool);
-    const ride=(await pool.query<{id:string}>(`INSERT INTO rides(customer_id,pickup_location,destination_location) VALUES ($1,ST_SetSRID(ST_MakePoint(85.1,25.6),4326),ST_SetSRID(ST_MakePoint(85.2,25.7),4326)) RETURNING id`,[testUserId])).rows[0]!;
+    const ride = (
+      await pool.query<{ id: string }>(
+        `INSERT INTO rides(customer_id,pickup_location,destination_location) VALUES ($1,ST_SetSRID(ST_MakePoint(85.1,25.6),4326),ST_SetSRID(ST_MakePoint(85.2,25.7),4326)) RETURNING id`,
+        [testUserId],
+      )
+    ).rows[0]!;
     const payment = await payments.initiate({
-      rideId:ride.id,
+      rideId: ride.id,
       userId: testUserId,
       amount: 350,
       currency: 'INR',
@@ -176,24 +181,44 @@ describe('PostgresWalletRepository', () => {
   });
 
   it('credits whole-rupee partial and final refunds once, preserving the original charge', async () => {
-    await repo.topUp(testUserId,100000,'CASHFREE','fixture','refund_seed');
-    const payments=new PostgresPaymentRepository(pool);
-    const ride=(await pool.query<{id:string}>(`INSERT INTO rides(customer_id,pickup_location,destination_location)
-      VALUES($1,ST_SetSRID(ST_MakePoint(85.1,25.6),4326),ST_SetSRID(ST_MakePoint(85.2,25.7),4326)) RETURNING id`,[testUserId])).rows[0]!;
-    const payment=await payments.initiate({rideId:ride.id,userId:testUserId,amount:350,currency:'INR',provider:'wallet'});
-    await payments.captureWallet(payment.id,testUserId,350);
-    const partials=await Promise.all([payments.refund(payment.id,150,'partial',0),payments.refund(payment.id,150,'replay',0)]);
+    await repo.topUp(testUserId, 100000, 'CASHFREE', 'fixture', 'refund_seed');
+    const payments = new PostgresPaymentRepository(pool);
+    const ride = (
+      await pool.query<{ id: string }>(
+        `INSERT INTO rides(customer_id,pickup_location,destination_location)
+      VALUES($1,ST_SetSRID(ST_MakePoint(85.1,25.6),4326),ST_SetSRID(ST_MakePoint(85.2,25.7),4326)) RETURNING id`,
+        [testUserId],
+      )
+    ).rows[0]!;
+    const payment = await payments.initiate({
+      rideId: ride.id,
+      userId: testUserId,
+      amount: 350,
+      currency: 'INR',
+      provider: 'wallet',
+    });
+    await payments.captureWallet(payment.id, testUserId, 350);
+    const partials = await Promise.all([
+      payments.refund(payment.id, 150, 'partial', 0),
+      payments.refund(payment.id, 150, 'replay', 0),
+    ]);
     expect(partials.filter(Boolean)).toHaveLength(1);
     expect(partials.find(Boolean)?.status).toBe('CAPTURED');
     expect((await repo.getWallet(testUserId)).balancePaise).toBe(80000);
-    expect(await payments.refund(payment.id,201,'exceeds balance',150)).toBeNull();
-    const final=await payments.refund(payment.id,200,'remaining',150);
+    expect(await payments.refund(payment.id, 201, 'exceeds balance', 150)).toBeNull();
+    const final = await payments.refund(payment.id, 200, 'remaining', 150);
     expect(final?.status).toBe('REFUNDED');
     expect(Number(final?.amount)).toBe(350);
     expect(Number(final?.refundedAmount)).toBe(350);
     expect((await repo.getWallet(testUserId)).balancePaise).toBe(100000);
-    const ledger=await pool.query('SELECT amount,status FROM payment_refunds WHERE payment_id=$1 ORDER BY amount',[payment.id]);
-    expect(ledger.rows.map(row=>[Number(row.amount),row.status])).toEqual([[150,'SUCCESS'],[200,'SUCCESS']]);
+    const ledger = await pool.query(
+      'SELECT amount,status FROM payment_refunds WHERE payment_id=$1 ORDER BY amount',
+      [payment.id],
+    );
+    expect(ledger.rows.map((row) => [Number(row.amount), row.status])).toEqual([
+      [150, 'SUCCESS'],
+      [200, 'SUCCESS'],
+    ]);
   });
 
   it('resolves valid and invalid recipient identifiers properly', async () => {

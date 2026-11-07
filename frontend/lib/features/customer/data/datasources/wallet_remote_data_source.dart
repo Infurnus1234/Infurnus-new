@@ -45,7 +45,10 @@ class WalletRemoteDataSourceImpl implements WalletRemoteDataSource {
 
   @override
   Future<double> quotePayment(double amount) async {
-    final response = await _dio.post('/wallet/pay/quote', data: {'amount': amount});
+    final response = await _dio.post(
+      '/wallet/pay/quote',
+      data: {'amount': amount},
+    );
     return (response.data['data']['amount'] as num).toDouble();
   }
 

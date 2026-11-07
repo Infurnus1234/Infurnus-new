@@ -161,7 +161,13 @@ class _ScanAndPaySheetState extends ConsumerState<ScanAndPaySheet> {
       amount = await ref.read(walletProvider.notifier).quotePayment(requested);
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Unable to confirm the payable amount. Please retry.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Unable to confirm the payable amount. Please retry.',
+            ),
+          ),
+        );
       }
       return;
     } finally {
