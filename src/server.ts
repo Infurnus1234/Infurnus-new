@@ -295,6 +295,12 @@ async function startServer() {
 
   await loadDeletedSubjects(pool);
   const io = createSocketServer(server, {
+    canPushRideOffer: async (userId) => {
+      if (!notifications) return false;
+      const { PostgresDeviceTokenRepository } =
+        await import('./modules/notifications/device-tokens/repositories/device-token.repository.js');
+      return (await new PostgresDeviceTokenRepository().findActiveByUserId(userId)).length > 0;
+    },
     ...(env.REDIS_URL
       ? {
           notifyRideOffer: async (

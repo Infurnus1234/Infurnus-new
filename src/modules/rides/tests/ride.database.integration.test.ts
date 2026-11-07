@@ -71,7 +71,7 @@ async function createFixture(rideCount = 1): Promise<Fixture> {
   );
   await pool.query(
     `UPDATE driver_profiles
-     SET active_vehicle_id=$3, availability_status = 'available',
+     SET active_vehicle_id=$3, availability_status = 'available', online_preference = true,
          last_location = ST_SetSRID(ST_MakePoint(77.5946, 12.9716), 4326)::geography,
          last_location_at = $2
      WHERE id = $1`,
@@ -206,6 +206,34 @@ describeDatabase('ride PostgreSQL integration', () => {
     });
   });
 
+  it('keeps the online preference across disconnect and restores dispatch after a fresh fix', async () => {
+    const driver = new DriverService(driverRepository);
+    const id = fixture.driverProfileId;
+    await driver.markDisconnected(fixture.driverUserId);
+    expect(await driver.getProfile(fixture.driverUserId)).toMatchObject({
+      onlinePreference: true,
+      availabilityStatus: 'stale',
+    });
+    expect(await repository.pendingDispatch(fixture.rideIds[0]!)).toBeNull();
+    expect(
+      await driverRepository.updateLocation(id, {
+        latitude: 12.9716,
+        longitude: 77.5946,
+        recordedAt: new Date(),
+      }),
+    ).toBe(true);
+    expect(await driver.getProfile(fixture.driverUserId)).toMatchObject({
+      onlinePreference: true,
+      availabilityStatus: 'available',
+    });
+    await driver.updateAvailability(fixture.driverUserId, { status: 'unavailable' });
+    expect(await driver.getProfile(fixture.driverUserId)).toMatchObject({
+      onlinePreference: false,
+      availabilityStatus: 'unavailable',
+    });
+    expect(await repository.offerDispatch(fixture.rideIds[0]!, id, 60000)).toBe(false);
+  });
+
   it('a socket disconnect preserves availability and assignment throughout an active ride', async () => {
     const id = fixture.rideIds[0]!;
     await service.acceptRide(fixture.driverProfileId, id);
@@ -234,6 +262,16 @@ describeDatabase('ride PostgreSQL integration', () => {
         expect(ride?.assignedDriverId).toBe(fixture.driverProfileId);
       }
     }
+    const driver = new DriverService(driverRepository);
+    await driver.updateAvailability(fixture.driverUserId, { status: 'unavailable' });
+    expect(await driver.getProfile(fixture.driverUserId)).toMatchObject({
+      onlinePreference: false,
+      availabilityStatus: 'busy',
+    });
+    expect(await repository.findById(id)).toMatchObject({
+      status: 'in_progress',
+      assignedDriverId: fixture.driverProfileId,
+    });
   });
 
   it('exposes customer contact only after actual acceptance and revokes it on cancellation/reassignment', async () => {

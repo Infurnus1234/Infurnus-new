@@ -101,21 +101,13 @@ describe('DriverService', () => {
     });
   });
 
-  it('rejects a busy driver going unavailable', async () => {
-    const service = new DriverService(
-      repository({
-        getAvailability: vi.fn().mockResolvedValue('busy'),
-      }),
-      () => now,
-    );
-
-    await expect(
-      service.updateAvailability(userId, {
-        status: 'unavailable',
-      }),
-    ).rejects.toMatchObject({
-      code: 'DRIVER_AVAILABILITY_CONFLICT',
+  it('allows a busy driver to save an offline preference', async () => {
+    const repo = repository({
+      getAvailability: vi.fn().mockResolvedValue('busy'),
     });
+    const service = new DriverService(repo, () => now);
+    await service.updateAvailability(userId, { status: 'unavailable' });
+    expect(repo.updateAvailability).toHaveBeenCalledWith(profileId, 'unavailable');
   });
 
   it('accepts a current location update', async () => {

@@ -39,6 +39,7 @@ export interface DriverProfile {
   verifiedAt?: Date | null;
   rejectionReason?: string | null;
   availabilityStatus?: DriverAvailabilityStatus | null;
+  onlinePreference?: boolean;
   dob?: string | null;
   gender?: string | null;
   address?: string | null;

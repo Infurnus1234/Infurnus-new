@@ -144,10 +144,11 @@ export class DriverService {
 
     const current = await this.repository.getAvailability(profileId);
     if (!current) throw new AppError('DRIVER_PROFILE_NOT_FOUND', 'Driver profile not found', 404);
-    if (current === input.status) return;
-    if (current === 'busy' && input.status === 'unavailable') {
-      throw new AppError('DRIVER_AVAILABILITY_CONFLICT', 'Busy drivers cannot go unavailable', 409);
-    }
+    if (
+      current === input.status &&
+      (profile.onlinePreference ?? current === 'available') === (input.status === 'available')
+    )
+      return;
     if (!(await this.repository.updateAvailability(profileId, input.status))) {
       throw new AppError('DRIVER_AVAILABILITY_CONFLICT', 'Availability update was rejected', 409);
     }

@@ -36,6 +36,7 @@ export interface RideSocketDependencies {
   dispatchResponseTimeoutMs?: number;
   authorizeAccount?: (userId: string, role: string) => Promise<void>;
   notifyRideOffer?: (userId: string, ride: Ride, expiresAt: Date) => Promise<void>;
+  canPushRideOffer?: (userId: string) => Promise<boolean>;
   notifyRideUpdate?: (ride: Ride, type: NotificationType) => Promise<void>;
 }
 
@@ -188,8 +189,20 @@ export function createSocketServer(
           rideDependencies.rideRepository,
           rideDependencies.matchingService,
           async (candidate, ride, expiresAt) => {
+            const room = driverUserRoom(candidate.userId);
+            if (rideDependencies.canPushRideOffer && (await io.in(room).allSockets()).size === 0) {
+              if (
+                !rideDependencies.notifyRideOffer ||
+                !(await rideDependencies.canPushRideOffer(candidate.userId))
+              ) {
+                // The dispatch coordinator releases this offer and tries another driver.
+                throw new Error('No connected driver or registered push destination');
+              }
+              await rideDependencies.notifyRideOffer(candidate.userId, ride, expiresAt);
+              return;
+            }
             ride = (await rideDependencies.rideService.prepareDriverRide?.(ride)) ?? ride;
-            io.to(driverUserRoom(candidate.userId)).emit('ride:incoming', {
+            io.to(room).emit('ride:incoming', {
               ride: sanitizeRideForDriver({ ...ride, dispatchExpiresAt: expiresAt }),
               expiresAt: expiresAt.toISOString(),
             });

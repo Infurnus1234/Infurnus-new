@@ -148,6 +148,7 @@ const driverProjection = `
   verified_by AS "verifiedBy",verified_at AS "verifiedAt",
   rejection_reason AS "rejectionReason",
   availability_status AS "availabilityStatus",
+  online_preference AS "onlinePreference",
   dob::text AS "dob",
   gender,
   address,
@@ -343,7 +344,12 @@ export class PostgresDriverRepository implements DriverRepository {
   async updateAvailability(profileId: string, status: DriverAvailabilityStatus): Promise<boolean> {
     const result = await this.pool.query(
       `UPDATE driver_profiles
-       SET availability_status = $2::driver_availability_status
+       SET online_preference = ($2::text = 'available'),
+           availability_status = CASE
+             WHEN $2::text = 'unavailable' AND availability_status = 'busy'
+               THEN availability_status
+             ELSE $2::driver_availability_status
+           END
        WHERE id = $1
          AND user_id IS NOT NULL
          AND EXISTS(SELECT 1 FROM users u WHERE u.id=user_id AND u.status='active' AND u.deleted_at IS NULL AND u.role IN ('driver','driver_fleet_owner'))
@@ -351,7 +357,9 @@ export class PostgresDriverRepository implements DriverRepository {
            SELECT 1 FROM driver_profiles dp JOIN users u ON u.id=dp.user_id
            JOIN vehicles v ON v.id=dp.active_vehicle_id
            WHERE dp.id=driver_profiles.id AND ${driverOperationalEligibilitySql()}))
-         AND NOT EXISTS (SELECT 1 FROM rides WHERE assigned_driver_id=driver_profiles.id AND status NOT IN ('completed','cancelled'))
+         AND ($2::text = 'unavailable' OR NOT EXISTS (
+           SELECT 1 FROM rides WHERE assigned_driver_id=driver_profiles.id AND status NOT IN ('completed','cancelled')
+         ))
        RETURNING id`,
       [profileId, status],
     );
@@ -379,10 +387,11 @@ export class PostgresDriverRepository implements DriverRepository {
 
     const result = await executor.query(
       `UPDATE driver_profiles
-       SET availability_status = CASE WHEN availability_status='busy' AND last_location_at>=NOW()-(${env.DRIVER_LOCATION_STALE_SECONDS}*INTERVAL '1 second')
+       SET availability_status = CASE WHEN availability_status='busy' AND online_preference AND last_location_at>=NOW()-(${env.DRIVER_LOCATION_STALE_SECONDS}*INTERVAL '1 second')
              AND EXISTS(SELECT 1 FROM driver_profiles dp JOIN users u ON u.id=dp.user_id JOIN vehicles v ON v.id=dp.active_vehicle_id
                WHERE dp.id=driver_profiles.id AND ${driverOperationalEligibilitySql()})
              THEN 'available'::driver_availability_status
+             WHEN availability_status='busy' AND online_preference THEN 'stale'::driver_availability_status
              WHEN availability_status='busy' THEN 'unavailable'::driver_availability_status ELSE availability_status END
        WHERE id = $1
          AND availability_status IN ('busy','stale')
@@ -450,7 +459,7 @@ export class PostgresDriverRepository implements DriverRepository {
            location_heading = $6,
            location_accuracy = $7,
            availability_status = CASE
-             WHEN availability_status = 'stale'
+             WHEN online_preference AND availability_status IN ('stale', 'unavailable')
                   AND EXISTS(SELECT 1 FROM driver_profiles dp JOIN users u ON u.id=dp.user_id JOIN vehicles v ON v.id=dp.active_vehicle_id
                     WHERE dp.id=driver_profiles.id AND ${driverOperationalEligibilitySql()})
                   AND NOT EXISTS (
