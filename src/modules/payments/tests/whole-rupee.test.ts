@@ -127,17 +127,15 @@ describe('authoritative whole-rupee boundaries', () => {
         updateProviderOrder: vi.fn(),
       } as unknown as PaymentRepository;
       const rides = {
-        findById: vi
-          .fn()
-          .mockResolvedValue({
-            id,
-            customerId: 'customer',
-            status: sector === 'logistics' ? 'driver_assigned' : 'completed',
-            sector,
-            bookingPricingVersion: 'vehicle-type:test:v1',
-            fareEstimate: 2003.3,
-            finalFare: 2003.3,
-          }),
+        findById: vi.fn().mockResolvedValue({
+          id,
+          customerId: 'customer',
+          status: sector === 'logistics' ? 'driver_assigned' : 'completed',
+          sector,
+          bookingPricingVersion: 'vehicle-type:test:v1',
+          fareEstimate: 2003.3,
+          finalFare: 2003.3,
+        }),
       } as unknown as RideRepository;
       const createOrder = vi.fn(async (data) => ({
         providerOrderId: data.orderId,

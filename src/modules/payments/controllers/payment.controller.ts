@@ -971,21 +971,17 @@ export class PaymentController {
       } catch (error) {
         if (error instanceof AppError) throw error;
         if (!submitGateway) throw error;
-        res
-          .status(502)
-          .json({
-            success: false,
-            message: error instanceof Error ? error.message : 'Gateway refund failed',
-          });
+        res.status(502).json({
+          success: false,
+          message: error instanceof Error ? error.message : 'Gateway refund failed',
+        });
         return;
       }
       if (!refunded) {
-        res
-          .status(409)
-          .json({
-            success: false,
-            message: 'Refund balance changed; refresh the payment before retrying',
-          });
+        res.status(409).json({
+          success: false,
+          message: 'Refund balance changed; refresh the payment before retrying',
+        });
         return;
       }
       res.status(200).json({
