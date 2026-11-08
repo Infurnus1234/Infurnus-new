@@ -211,10 +211,21 @@ jobs:
           if (-not ($properties -match '^distributionUrl=.*/gradle-8[.]14-bin[.]zip$')) { return }
           $archive = Join-Path $env:RUNNER_TEMP 'gradle-8.14-bin.zip'
           $checksum = '61ad310d3c7d3e5da131b76bbf22b5a4c0786e9d892dae8c1658d4b484de3caa'
-          # Use the official release asset API when the browser download route is unavailable.
-          $url = 'https://api.github.com/repos/gradle/gradle-distributions/releases/assets/249401401?download=1'
-          curl.exe --fail --silent --show-error --location --retry 2 --max-time 150 --header 'Accept: application/octet-stream' --output $archive $url
-          if ($LASTEXITCODE -ne 0) { throw 'Gradle download failed.' }
+          # The same published checksum is required regardless of download source.
+          $urls = @(
+            "https://api.github.com/repos/gradle/gradle-distributions/releases/assets/249401401?download=1&run=$env:GITHUB_RUN_ID"
+            'https://repo.huaweicloud.com/gradle/gradle-8.14-bin.zip?source=infurnus-ci'
+          )
+          $downloaded = $false
+          foreach ($url in $urls) {
+            Write-Host "Downloading Gradle from $(([Uri]$url).Host)"
+            curl.exe --fail --silent --show-error --location --retry 1 --max-time 120 --header 'Accept: application/octet-stream' --output $archive $url
+            if ($LASTEXITCODE -eq 0) {
+              $downloaded = $true
+              break
+            }
+          }
+          if (-not $downloaded) { throw 'Gradle download failed at every configured source.' }
           if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne $checksum) {
             throw 'Gradle distribution checksum mismatch.'
           }
