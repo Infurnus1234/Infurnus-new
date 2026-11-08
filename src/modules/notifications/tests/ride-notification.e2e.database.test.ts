@@ -69,8 +69,9 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       app.use('/auth', createAuthRouter(createAuthController(provider)));
       app.use('/notifications/devices', createDeviceTokenRouter());
       const category = 'notify_' + randomUUID().replaceAll('-', '');
+      // This fixture needs an active tariff, but must not enter the shared selection catalog.
       await pool.query(
-        "INSERT INTO vehicle_types(name,code,sector,base_fare_paise,per_km_rate_paise,active) VALUES('TEST_SAMPLE Notification',$1,'passenger',1800,600,TRUE)",
+        "INSERT INTO vehicle_types(name,code,sector,base_fare_paise,per_km_rate_paise,active,catalog_visible) VALUES('TEST_SAMPLE Notification',$1,'passenger',1800,600,TRUE,FALSE)",
         [category],
       );
       const routes: MapProvider = {
