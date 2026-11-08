@@ -203,6 +203,25 @@ jobs:
         env:
           ANDROID_GOOGLE_SERVICES_JSON: ${{ secrets.CUSTOMER_ANDROID_GOOGLE_SERVICES_JSON }}
         run: node scripts/configure-ci-firebase.mjs frontend
+      - name: Fetch verified Gradle distribution
+        shell: pwsh
+        run: |
+          $wrapper = 'android/gradle/wrapper/gradle-wrapper.properties'
+          $properties = Get-Content -LiteralPath $wrapper
+          if (-not ($properties -match '^distributionUrl=.*/gradle-8[.]14-bin[.]zip$')) { return }
+          $archive = Join-Path $env:RUNNER_TEMP 'gradle-8.14-bin.zip'
+          $checksum = '61ad310d3c7d3e5da131b76bbf22b5a4c0786e9d892dae8c1658d4b484de3caa'
+          # Use the official release asset API when the browser download route is unavailable.
+          $url = 'https://api.github.com/repos/gradle/gradle-distributions/releases/assets/249401401?download=1'
+          curl.exe --fail --silent --show-error --location --retry 2 --max-time 150 --header 'Accept: application/octet-stream' --output $archive $url
+          if ($LASTEXITCODE -ne 0) { throw 'Gradle download failed.' }
+          if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne $checksum) {
+            throw 'Gradle distribution checksum mismatch.'
+          }
+          $localUrl = ([Uri]$archive).AbsoluteUri
+          $properties -replace '^distributionUrl=.*$', "distributionUrl=$localUrl" |
+            Set-Content -LiteralPath $wrapper -Encoding ascii
+          Add-Content -LiteralPath $wrapper -Value "distributionSha256Sum=$checksum" -Encoding ascii
       - name: Android test build
         env:
           INFURNUS_TEST_RELEASE_SIGNING: 'true'
