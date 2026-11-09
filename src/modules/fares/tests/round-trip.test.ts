@@ -12,6 +12,9 @@ const vehicle = (sector: VehicleType['sector'], rate: number): VehicleType => ({
   sector,
   baseFare: sector === 'service' ? null : 25,
   ...(sector === 'service' ? { serviceFixedFare: 25 } : {}),
+  ...(sector === 'premium'
+    ? { fixedHourlyPricing: { hourlyRate: 25, fuelRate: rate, fuelUnit: 'per_km' as const } }
+    : {}),
   perKmRate: sector === 'service' ? null : rate,
   currency: 'INR',
   active: true,
@@ -27,6 +30,7 @@ describe('Backend one-way route / round-trip billing contract', () => {
         distanceMeters: 10000,
         durationSeconds: 600,
         sector,
+        ...(sector === 'premium' ? { bookingHours: 1 } : {}),
         vehicleCategory: 'configured_test',
       };
       const first = calculator.calculateEstimate(input, vehicle(sector, 5));
@@ -38,7 +42,8 @@ describe('Backend one-way route / round-trip billing contract', () => {
       if (!('bookingFare' in first)) throw Error('Missing booking fare');
       expect(first.bookingFare).toMatchObject({
         baseAmount: 2500,
-        distanceAmount: sector === 'service' ? 0 : 10000,
+        distanceAmount: sector === 'passenger' ? 10000 : 0,
+        ...(sector === 'premium' ? { fuelAmount: 10000 } : {}),
         grossAmount: sector === 'service' ? 2500 : 12500,
         distanceMultiplier: sector === 'service' ? 1 : 2,
       });
@@ -79,7 +84,7 @@ describe('Backend one-way route / round-trip billing contract', () => {
     },
   );
   it.each(['passenger', 'service', 'premium'] as const)(
-    'supports dynamic %s reference rates without activating a fixed price',
+    'enforces the configured %s reference-rate policy',
     (sector) => {
       const configured = {
         ...vehicle(sector, 5),
@@ -91,6 +96,22 @@ describe('Backend one-way route / round-trip billing contract', () => {
           perKmRate: { minimum: 500, maximum: 800 },
         },
       };
+      if (sector === 'premium') {
+        const { fixedHourlyPricing: _fixed, ...legacy } = configured;
+        expect(() =>
+          calculator.calculateEstimate(
+            {
+              distanceMeters: 10000,
+              durationSeconds: 0,
+              sector,
+              vehicleCategory: 'configured_test',
+              bookingHours: 1,
+            },
+            legacy,
+          ),
+        ).toThrow(expect.objectContaining({ code: 'FARE_CONFIGURATION_MISSING' }));
+        return;
+      }
       if (sector === 'service') {
         expect(() =>
           calculator.calculateEstimate(

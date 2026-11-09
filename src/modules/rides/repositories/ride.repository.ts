@@ -7,9 +7,12 @@ import type { LiveLocationCache } from './live-location.cache.js';
 import { selectDemandRates } from '../../fares/services/demand-pricing.js';
 import type { VehiclePricing } from '../../fares/types/fare.js';
 import {
+  fixedHourlyFare,
+  fixedHourlyPricingFromRow,
   hourlyBaseFare,
   hourlyPricingFromRow,
   requestedBookingHours,
+  usesFixedHourlyFare,
 } from '../../vehicles/services/hourly-pricing.js';
 import { AppError } from '../../../common/errors/app-error.js';
 import type { FareCalculationResult } from '../../fares/types/fare.js';
@@ -532,10 +535,10 @@ export class PostgresRideRepository implements RideRepository {
           [code, inventorySector],
         );
         const row = locked.rows[0];
-        if (input.sector === 'rental' && (!config || !row?.hourly_base_fares_paise))
+        if (usesFixedHourlyFare(input.sector) && row?.fixed_hourly_rate_paise == null)
           throw new AppError(
             'FARE_CONFIGURATION_MISSING',
-            'An approved rental schedule is required',
+            'A configured hourly rate is required',
             422,
           );
         if (!config) {
@@ -561,19 +564,29 @@ export class PostgresRideRepository implements RideRepository {
           (row.code === 'ftl' && !row.logistics_slabs)
         )
           throw new AppError('FARE_CONFIGURATION_MISSING', VEHICLE_UNAVAILABLE_MESSAGE, 422);
-        const hourly = hourlyBaseFare(
-          {
-            sector: row.sector,
-            baseFare: row.base_fare_paise === null ? null : Number(row.base_fare_paise) / 100,
-            ...hourlyPricingFromRow(row),
-          },
-          requestedBookingHours(input),
-        );
+        const fixed = usesFixedHourlyFare(input.sector)
+          ? fixedHourlyFare(fixedHourlyPricingFromRow(row), {
+              ...input,
+              distanceMeters: snapshot.distanceMeters,
+              tripType: input.rentalDetails?.tripType,
+            })
+          : undefined;
+        const hourly = fixed
+          ? null
+          : hourlyBaseFare(
+              {
+                sector: row.sector,
+                baseFare: row.base_fare_paise === null ? null : Number(row.base_fare_paise) / 100,
+                ...hourlyPricingFromRow(row),
+              },
+              requestedBookingHours(input),
+            );
         const reference = row.pricing_reference as VehiclePricing | null;
         const slab = row.logistics_slabs
           ? logisticsSlab(row.logistics_slabs, snapshot.distanceMeters)
           : null;
         const rates =
+          (fixed ? { baseFare: fixed.baseFare, distanceRatePerKm: 0 } : null) ??
           (row.sector === 'service'
             ? {
                 baseFare:
@@ -592,14 +605,17 @@ export class PostgresRideRepository implements RideRepository {
                   row.per_km_rate_paise === null ? NaN : Number(row.per_km_rate_paise),
               });
         if (
+          (fixed &&
+            (config.pricingModel !== 'fixed_hourly' || fixed.fuelAmount !== snapshot.fuelAmount)) ||
           (row.sector === 'service' &&
             (config.pricingModel !== 'service_fixed' ||
               Number(row.service_radius_meters) !== config.serviceRadiusMeters)) ||
           slab?.key !== config.logisticsSlab ||
-          Number(row.version) !== config.version ||
+          Number(input.sector === 'rental' ? row.rental_pricing_version : row.version) !==
+            config.version ||
           rates.baseFare !== config.baseFarePaise ||
           hourly?.durationBucket !== config.durationBucket ||
-          hourly?.bookedHours !== config.bookedHours ||
+          (fixed?.bookedHours ?? hourly?.bookedHours) !== config.bookedHours ||
           rates.distanceRatePerKm !== config.perKmRatePaise
         )
           throw new AppError(

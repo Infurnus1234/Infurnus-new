@@ -30,6 +30,7 @@ import { HOURLY_FARE_BUCKETS } from '../services/hourly-pricing.js';
 import type { VehicleType } from '../types/vehicle.js';
 
 const schedule = Object.fromEntries(HOURLY_FARE_BUCKETS.map((key, i) => [key, 101 + i * 37]));
+const fixedHourlyPricing = { hourlyRate: 500, fuelRate: 200, fuelUnit: 'per_booking' };
 const pickup = { latitude: 25.6, longitude: 85.1 },
   destination = { latitude: 26.12, longitude: 85.4 };
 describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
@@ -80,10 +81,9 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           name: 'Hourly Test Vehicle',
           code: 'hourly_' + randomUUID().replaceAll('-', '').slice(0, 12),
           sector,
-          baseFare: 73,
-          perKmRate: 12,
-          hourlyBaseFares: schedule,
-          extendedDurationPolicy: 'booked_duration',
+          ...(sector === 'premium'
+            ? { baseFare: null, perKmRate: null, fixedHourlyPricing }
+            : { baseFare: 73, perKmRate: 12, hourlyBaseFares: schedule }),
           active: true,
           ...change,
         });
@@ -141,45 +141,42 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       await pool.query('DELETE FROM user_history WHERE user_id=ANY($1::uuid[])', [users]);
       // Keep ordinary administrative audit/identity relationships in this disposable database.
     });
-    it.each(['passenger', 'premium'] as const)(
-      'persists every independent %s duration and existing fare envelope',
-      async (sector) => {
-        const type = await create(sector);
-        expect(type.hourlyBaseFares).toEqual(schedule);
-        for (const key of HOURLY_FARE_BUCKETS) {
-          const hours = key === '12_plus' ? 13 : Number(key);
-          const res = await estimate(type, { bookingHours: hours });
-          expect(res.status, res.text).toBe(200);
-          expect(res.body.data).toMatchObject({
-            estimateType: 'range',
-            currency: 'INR',
-            bookable: true,
-            distanceMultiplier: 2,
-            oneWayDistanceMeters: 10000,
-            billableDistanceMeters: 20000,
-            bookingFare: {
-              baseAmount: schedule[key]! * 100,
-              distanceAmount: 24000,
-              grossAmount: schedule[key]! * 100 + 24000,
-              vehicleConfiguration: {
-                id: type.id,
-                code: type.code,
-                durationBucket: key,
-                bookedHours: hours,
-              },
+    it.each(['passenger'] as const)('preserves independent %s duration pricing', async (sector) => {
+      const type = await create(sector);
+      expect(type.hourlyBaseFares).toEqual(schedule);
+      for (const key of HOURLY_FARE_BUCKETS) {
+        const hours = key === '12_plus' ? 13 : Number(key);
+        const res = await estimate(type, { bookingHours: hours });
+        expect(res.status, res.text).toBe(200);
+        expect(res.body.data).toMatchObject({
+          estimateType: 'range',
+          currency: 'INR',
+          bookable: true,
+          distanceMultiplier: 2,
+          oneWayDistanceMeters: 10000,
+          billableDistanceMeters: 20000,
+          bookingFare: {
+            baseAmount: schedule[key]! * 100,
+            distanceAmount: 24000,
+            grossAmount: schedule[key]! * 100 + 24000,
+            vehicleConfiguration: {
+              id: type.id,
+              code: type.code,
+              durationBucket: key,
+              bookedHours: hours,
             },
-          });
-        }
-        const old = await estimate(type);
-        expect(old.status).toBe(422);
-        expect(old.body.error.code).toBe('FARE_DURATION_REQUIRED');
-        const customerCatalog = await request(app)
-          .get('/vehicles/catalog?sector=' + sector)
-          .auth(customerToken, { type: 'bearer' });
-        expect(customerCatalog.status).toBe(200);
-        expect(customerCatalog.body.data.some((v: VehicleType) => v.id === type.id)).toBe(true);
-      },
-    );
+          },
+        });
+      }
+      const old = await estimate(type);
+      expect(old.status).toBe(422);
+      expect(old.body.error.code).toBe('FARE_DURATION_REQUIRED');
+      const customerCatalog = await request(app)
+        .get('/vehicles/catalog?sector=' + sector)
+        .auth(customerToken, { type: 'bearer' });
+      expect(customerCatalog.status).toBe(200);
+      expect(customerCatalog.body.data.some((v: VehicleType) => v.id === type.id)).toBe(true);
+    });
     it('filters category before pagination and never changes another duration or vehicle', async () => {
       const a = await create(),
         b = await create('premium');
@@ -189,7 +186,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
         .send({ expectedVersion: a.version, hourlyBaseFares: { '2': 500.29 }, perKmRate: 13.37 });
       expect(result.status, result.text).toBe(200);
       expect(result.body.data.hourlyBaseFares).toEqual({ ...schedule, '2': 500.29 });
-      expect((await vehicles.getType(b.id))?.hourlyBaseFares).toEqual(schedule);
+      expect((await vehicles.getType(b.id))?.fixedHourlyPricing).toEqual(fixedHourlyPricing);
       const listed = await request(app)
         .get('/admin/vehicle-types?sector=premium&limit=1')
         .auth(adminToken, { type: 'bearer' });
@@ -205,16 +202,16 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       expect(same.body.data.bookingFare.baseAmount).toBe(schedule['5']! * 100);
     });
     it('supports premium one-way and round-trip using the same selected duration', async () => {
-      const type = await create('premium');
+      const type = await create('premium', {
+        fixedHourlyPricing: { ...fixedHourlyPricing, fuelUnit: 'per_km', fuelRate: 12 },
+      });
       for (const [tripType, multiplier] of [
         ['one_way', 1],
         ['round_trip', 2],
       ] as const) {
         const res = await estimate(type, { rentalDetails: { hours: 6, tripType } });
         expect(res.status, res.text).toBe(200);
-        expect(res.body.data.bookingFare.grossAmount).toBe(
-          schedule['6']! * 100 + 12000 * multiplier,
-        );
+        expect(res.body.data.bookingFare.grossAmount).toBe(300000 + 12000 * multiplier);
       }
     });
     it('rejects conflicting Premium durations and ignores stale Premium options on Ride requests', async () => {
@@ -274,10 +271,13 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           [booked.body.data.id],
         )
       ).rows[0].snapshot;
-      expect(saved.vehicleConfiguration).toMatchObject({ durationBucket: '6', bookedHours: 6 });
+      expect(saved.vehicleConfiguration).toMatchObject({
+        pricingModel: 'fixed_hourly',
+        bookedHours: 6,
+      });
       await vehicles.updateType(adminId, type.id, {
         expectedVersion: type.version,
-        hourlyBaseFares: { '6': 999 },
+        fixedHourlyPricing: { ...fixedHourlyPricing, hourlyRate: 999, fuelUnit: 'per_booking' },
         active: false,
       });
       const current = await rides.findById(booked.body.data.id);
@@ -302,6 +302,83 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
         .send({ reason: 'TEST_ONLY dependency protection verification' });
       expect(deleted.status).toBe(409);
       expect((await vehicles.getType(type.id))?.active).toBe(false);
+    });
+    it('persists and updates a Rental tariff separately from Premium and passenger ride pricing', async () => {
+      const rental = await create();
+      const premium = await create('premium', { code: rental.code });
+      const quote = (bookingHours: number) => estimate(rental, { sector: 'rental', bookingHours });
+      expect((await quote(3)).body.error.code).toBe('FARE_CONFIGURATION_MISSING');
+      const passengerQuote = await estimate(rental, { bookingHours: 3 });
+      const patch = (rentalPricingVersion: number, pricing: Record<string, unknown>) =>
+        request(app)
+          .patch('/admin/vehicle-types/' + rental.id)
+          .auth(adminToken, { type: 'bearer' })
+          .send({
+            expectedVersion: rental.version,
+            expectedRentalPricingVersion: rentalPricingVersion,
+            fixedHourlyPricing: pricing,
+          });
+      const rentalPrice = { hourlyRate: 430.25, fuelRate: 25, fuelUnit: 'per_hour' };
+      const saved = await patch(rental.rentalPricingVersion!, rentalPrice);
+      expect(saved.status, saved.text).toBe(200);
+      expect((await vehicles.getType(rental.id))?.fixedHourlyPricing).toEqual(rentalPrice);
+      const quoteBeforeUpdate = await quote(13);
+      expect(quoteBeforeUpdate.status, quoteBeforeUpdate.text).toBe(200);
+      expect(quoteBeforeUpdate.body.data.bookingFare).toMatchObject({
+        baseAmount: 559325,
+        fuelAmount: 32500,
+        grossAmount: 591800,
+      });
+      const catalogue = await request(app)
+        .get('/vehicles/catalog?sector=rental&limit=100')
+        .auth(customerToken, { type: 'bearer' });
+      const category = catalogue.body.data.find((item: VehicleType) => item.id === rental.id);
+      expect(category).toMatchObject({ sector: 'rental', pricingStatus: 'available' });
+      expect(category).not.toHaveProperty('fixedHourlyPricing');
+      expect(
+        (await patch(saved.body.data.rentalPricingVersion, { ...rentalPrice, fuelRate: -1 }))
+          .status,
+      ).toBe(400);
+      const changed = await patch(saved.body.data.rentalPricingVersion, {
+        ...rentalPrice,
+        fuelRate: 0,
+      });
+      expect(changed.status, changed.text).toBe(200);
+      expect((await patch(saved.body.data.rentalPricingVersion, rentalPrice)).status).toBe(409);
+      const estimateAfter = await quote(13);
+      expect(estimateAfter.body.data.bookingFare).toMatchObject({
+        fuelAmount: 0,
+        grossAmount: 559300,
+      });
+      const createRide = (fare: typeof quoteBeforeUpdate) =>
+        request(app)
+          .post('/rides')
+          .auth(customerToken, { type: 'bearer' })
+          .send({
+            sector: 'rental',
+            vehicleCategory: rental.code,
+            pickup,
+            destination,
+            bookingHours: 13,
+            pricingQuote: {
+              vehicleTypeId: rental.id,
+              pricingVersion: fare.body.data.pricingVersion,
+              amountPaise: fare.body.data.bookingFare.grossAmount,
+            },
+          });
+      expect((await createRide(quoteBeforeUpdate)).status).toBe(409);
+      const booked = await createRide(estimateAfter);
+      expect(booked.status, booked.text).toBe(201);
+      expect(Number(booked.body.data.fareEstimate)).toBe(5593);
+      expect((await estimate(premium, { bookingHours: 3 })).body.data.bookingFare.grossAmount).toBe(
+        170000,
+      );
+      expect((await estimate(rental, { bookingHours: 3 })).body.data.bookingFare.baseAmount).toBe(
+        schedule['3']! * 100,
+      );
+      expect((await estimate(rental, { bookingHours: 3 })).body.data.pricingVersion).toBe(
+        passengerQuote.body.data.pricingVersion,
+      );
     });
     it('rejects stale concurrent edits and allows deletion only without dependencies', async () => {
       const type = await create();
@@ -358,11 +435,8 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       ).toBe(422);
       expect(JSON.parse(JSON.stringify(await vehicles.getType(logistics!.id)))).toEqual(logistics);
     });
-    it('requires whole-hour durations and applies the extended base once to any booked duration', async () => {
-      const type = await create('premium', {
-        missingDurationPolicy: 'require_duration',
-        extendedDurationPolicy: 'booked_duration',
-      });
+    it('requires whole-hour Premium durations and prices the full extended duration', async () => {
+      const type = await create('premium');
       const missing = await estimate(type);
       expect(missing.status).toBe(422);
       expect(missing.body.error.code).toBe('FARE_DURATION_REQUIRED');
@@ -372,11 +446,14 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       for (const hours of Array.from({ length: 12 }, (_, i) => i + 13)) {
         const extended = await estimate(type, { bookingHours: hours });
         expect(extended.status, extended.text).toBe(200);
-        expect(extended.body.data.bookingFare.baseAmount).toBe(schedule['12_plus']! * 100);
+        expect(extended.body.data.bookingFare.baseAmount).toBe(50000 * hours);
         expect(extended.body.data.bookingFare.vehicleConfiguration.bookedHours).toBe(hours);
       }
       expect((await estimate(type, { bookingHours: 25 })).status).toBe(422);
       expect((await estimate(type, { bookingHours: 48 })).status).toBe(422);
+    });
+    it('preserves the approved duration policy for ordinary passenger schedules', async () => {
+      const type = await create();
       for (const policy of [
         { missingDurationPolicy: 'legacy_base' },
         { extendedDurationPolicy: null },

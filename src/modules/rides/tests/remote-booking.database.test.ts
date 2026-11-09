@@ -48,6 +48,9 @@ const columns = [
   'per_km_rate_paise',
   'pricing_reference',
   'hourly_base_fares_paise',
+  'fixed_hourly_rate_paise',
+  'hourly_fuel_rate_paise',
+  'hourly_fuel_unit',
   'logistics_slabs',
   'service_fixed_fare_paise',
 ];
@@ -74,6 +77,12 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           [code, sector],
         );
         if (!previous) added.push(result.rows[0].id);
+        if (sector === 'premium') {
+          await pool.query(
+            "UPDATE vehicle_types SET fixed_hourly_rate_paise=10000,hourly_fuel_rate_paise=0,hourly_fuel_unit='per_booking' WHERE id=$1",
+            [result.rows[0].id],
+          );
+        }
         if (sector === 'logistics') {
           await pool.query(
             'UPDATE vehicle_types SET base_fare_paise=NULL,per_km_rate_paise=NULL,logistics_slabs=$2::jsonb WHERE id=$1',

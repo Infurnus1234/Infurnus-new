@@ -1,4 +1,5 @@
 import { bookingInventorySector } from '../../vehicles/services/rental-inventory.js';
+import { usesFixedHourlyFare } from '../../vehicles/services/hourly-pricing.js';
 import { serviceArea } from '../../maps/service-area.js';
 import { demandProvenance } from './demand-pricing.js';
 import { VEHICLE_PRICING_ALIASES } from '../config/fare.config.js';
@@ -205,7 +206,7 @@ export class FareEstimateService {
     const configured =
       mode === 'vehicle_range' ? await this.resolveConfiguration(input) : undefined;
     let demand;
-    if (configured?.pricingReference?.demandPricing) {
+    if (!usesFixedHourlyFare(input.sector) && configured?.pricingReference?.demandPricing) {
       const settings = configured.pricingReference.demandPricing;
       let sample = null;
       try {

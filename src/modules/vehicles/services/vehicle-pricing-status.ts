@@ -6,6 +6,8 @@ import { HOURLY_FARE_BUCKETS } from './hourly-pricing.js';
 /** Eligibility for the existing base/distance and saved-demand models. Inventory,
  * service area and dispatch eligibility are still enforced by their own gates. */
 export function vehiclePricingStatus(type: VehicleType) {
+  if (type.sector === 'premium')
+    return !type.fixedHourlyPricing ? 'needs_pricing' : type.active ? 'available' : 'inactive';
   if (type.sector === 'service') {
     try {
       serviceConfiguration({ ...type, active: true });

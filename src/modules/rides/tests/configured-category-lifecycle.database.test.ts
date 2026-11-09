@@ -51,14 +51,16 @@ const scenarios = [
         ]),
     ...(['premium', 'passenger'].includes(sector)
       ? (sector === 'premium' ? premiumDurationHours : durationHours).flatMap((hours) =>
-          (sector === 'premium' ? ['one_way', 'round_trip'] : ['round_trip']).flatMap((tripType) =>
-            (sector === 'premium' ? [false, true] : [true]).map((hourly) => ({
-              sector,
-              code,
-              hours,
-              tripType,
-              hourly,
-            })),
+          (sector === 'premium' ? ['one_way', 'round_trip'] : ['round_trip']).flatMap(
+            (tripType) => [
+              {
+                sector,
+                code,
+                hours,
+                tripType,
+                hourly: true,
+              },
+            ],
           ),
         )
       : []),
@@ -149,6 +151,9 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           'pricing_reference',
           'logistics_slabs',
           'hourly_base_fares_paise',
+          'fixed_hourly_rate_paise',
+          'hourly_fuel_rate_paise',
+          'hourly_fuel_unit',
           'version',
           'extended_duration_policy',
           'hourly_missing_duration_policy',
@@ -208,7 +213,13 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
             sector === 'service' ? 10000 : null,
           ],
         );
-        if (hourly)
+        const fixed = sector === 'premium' || sector === 'rental';
+        if (fixed)
+          await pool.query(
+            "UPDATE vehicle_types SET fixed_hourly_rate_paise=10000,hourly_fuel_rate_paise=2000,hourly_fuel_unit='per_hour' WHERE sector=$1 AND code=$2",
+            [inventorySector, code],
+          );
+        else if (hourly)
           await pool.query(
             "UPDATE vehicle_types SET hourly_base_fares_paise=$3::jsonb,hourly_missing_duration_policy='require_duration',extended_duration_policy='booked_duration' WHERE sector=$1 AND code=$2",
             [inventorySector, code, JSON.stringify(hourlySchedule)],
@@ -350,12 +361,15 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           ).rows[0];
           expect(snapshot.snapshot.vehicleConfiguration).toMatchObject({
             bookedHours: hours,
-            durationBucket: hours! > 12 ? '12_plus' : String(hours),
+            ...(fixed
+              ? { pricingModel: 'fixed_hourly' }
+              : { durationBucket: hours! > 12 ? '12_plus' : String(hours) }),
             code,
           });
           expect(snapshot.snapshot.baseAmount).toBe(
-            hourlySchedule[hours! > 12 ? '12_plus' : String(hours)],
+            fixed ? 10000 * hours! : hourlySchedule[hours! > 12 ? '12_plus' : String(hours)],
           );
+          if (fixed) expect(snapshot.snapshot.grossAmount).toBe(12000 * hours!);
           if (sector === 'premium')
             expect(snapshot.rental_details).toMatchObject({ hours, tripType });
           if (sector === 'rental') expect(snapshot.rental_details).toEqual({ hours });

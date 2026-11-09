@@ -64,13 +64,9 @@ describe('authoritative whole-rupee boundaries', () => {
         currency: 'INR',
         createdAt: new Date(0),
         updatedAt: new Date(0),
-        ...(sector === 'rental'
+        ...(sector === 'rental' || sector === 'premium'
           ? {
-              hourlyBaseFares: Object.fromEntries(
-                ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '12_plus'].map(
-                  (key) => [key, 1000.5],
-                ),
-              ),
+              fixedHourlyPricing: { hourlyRate: 1000.2, fuelRate: 0.3, fuelUnit: 'per_booking' },
             }
           : {}),
         ...(sector === 'service'

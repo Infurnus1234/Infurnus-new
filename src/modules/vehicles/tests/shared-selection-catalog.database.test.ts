@@ -456,6 +456,10 @@ describe.skipIf(process.env.PROVIDER_DB_TESTS !== 'true')(
         await change({ active: true });
         await assertCatalog(true);
         if (sector === 'rental') {
+          await change({
+            expectedRentalPricingVersion: type.rentalPricingVersion,
+            fixedHourlyPricing: { hourlyRate: 50, fuelRate: 40, fuelUnit: 'per_booking' },
+          });
           const quote = new FareCalculatorService().calculateEstimate(
             {
               sector: 'rental',
@@ -471,7 +475,12 @@ describe.skipIf(process.env.PROVIDER_DB_TESTS !== 'true')(
             bookable: true,
             bookingFare: {
               grossAmount: 14000,
-              vehicleConfiguration: { id: type.id, code, durationBucket: '2' },
+              vehicleConfiguration: {
+                id: type.id,
+                code,
+                bookedHours: 2,
+                pricingModel: 'fixed_hourly',
+              },
             },
           });
         }

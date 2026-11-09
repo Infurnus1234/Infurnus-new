@@ -119,8 +119,16 @@ export interface UpdateVehicleData {
   permitDetails?: string | null | undefined;
 }
 
+export interface FixedHourlyPricing {
+  hourlyRate: number;
+  fuelRate: number;
+  fuelUnit: 'per_booking' | 'per_hour' | 'per_km';
+}
+
 /** Admin catalog rates use integer paise internally; category is the code on rides/inventory. */
 export interface VehicleType {
+  fixedHourlyPricing?: FixedHourlyPricing;
+  rentalPricingVersion?: number;
   catalogVisible?: boolean;
   registrationActive?: boolean;
   serviceFixedFare?: number | null;
@@ -153,7 +161,7 @@ export interface VehicleFareSnapshot {
   baseFarePaise: number;
   perKmRatePaise: number;
   serviceRadiusMeters?: number;
-  pricingModel?: 'service_fixed';
+  pricingModel?: 'service_fixed' | 'fixed_hourly';
   logisticsSlab?: 'below_15' | 'from_15';
   durationBucket?: import('../services/hourly-pricing.js').HourlyFareBucket;
   bookedHours?: number;

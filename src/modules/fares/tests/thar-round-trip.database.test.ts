@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { requireDisposableAdministrativeDatabase } from '../../admin/tests/administrative-test-database.js';
 import type { Request, Response } from 'express';
 import { pool } from '../../../infrastructure/database/postgres.js';
 import { PostgresVehicleRepository } from '../../vehicles/repositories/vehicle.repository.js';
@@ -20,15 +21,25 @@ const routes: MapProvider = {
 };
 
 describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
-  'Saved Thar round-trip tariff and payment consistency',
+  'Saved Thar hourly tariff and payment consistency',
   () => {
+    beforeAll(async () => {
+      requireDisposableAdministrativeDatabase();
+      await pool.query(`UPDATE vehicle_types SET fixed_hourly_rate_paise=50000,
+        hourly_fuel_rate_paise=4500,hourly_fuel_unit='per_km' WHERE sector='premium' AND code='thar'`);
+    });
+    afterAll(async () => {
+      requireDisposableAdministrativeDatabase();
+      await pool.query(`UPDATE vehicle_types SET fixed_hourly_rate_paise=NULL,
+        hourly_fuel_rate_paise=NULL,hourly_fuel_unit=NULL WHERE sector='premium' AND code='thar'`);
+    });
     it.each([
-      [5, 'round_trip', 9500, 2],
-      [6, 'round_trip', 9500, 2],
-      [7, 'round_trip', 9500, 2],
-      [6, 'one_way', 5000, 1],
+      [5, 'round_trip', 11500, 2],
+      [6, 'round_trip', 12000, 2],
+      [7, 'round_trip', 12500, 2],
+      [6, 'one_way', 7500, 1],
     ] as const)(
-      'books %s hours %s without inventing time, fuel or tax charges',
+      'books %s hours %s and charges configured fuel once',
       async (hours, tripType, expectedFare, multiplier) => {
         const vehicles = new PostgresVehicleRepository(pool);
         const configured = await vehicles.findTypeByCode('thar', 'premium');
@@ -67,13 +78,13 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           oneWayDistanceMeters: 100000,
           billableDistanceMeters: 100000 * multiplier,
           distanceMultiplier: multiplier,
-          baseAmount: 50000,
-          distanceAmount: 450000 * multiplier,
+          baseAmount: 50000 * hours,
+          distanceAmount: 0,
+          fuelAmount: 450000 * multiplier,
           grossAmount: expectedFare * 100,
           timeAmount: 0,
         });
         expect(snapshot.taxAmount).toBeUndefined();
-        expect(snapshot.fuelAmount).toBeUndefined();
         let expectedOrder = '';
         const provider: PaymentProvider = {
           providerName: 'cashfree',

@@ -2,7 +2,8 @@ import {
   validateOperatingLocation,
   requirePremiumOperatingLocation,
 } from '../../maps/vehicle-operating-location.js';
-import { hourlyPricingFromRow } from '../services/hourly-pricing.js';
+import { fixedHourlyPricingFromRow, hourlyPricingFromRow } from '../services/hourly-pricing.js';
+import { rupeesToPaise } from '../../../common/utils/whole-rupee.js';
 import { vehiclePricingReferenceSchema } from '../schemas/vehicle.schemas.js';
 import { vehiclePricingStatus } from '../services/vehicle-pricing-status.js';
 import { AppError } from '../../../common/errors/app-error.js';
@@ -185,6 +186,7 @@ export class PostgresVehicleRepository implements VehicleRepository {
       await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,648032))', [identity]);
       let old: VehicleType | null = null;
       let result;
+      const pricing = input.fixedHourlyPricing;
       if (id) {
         const previous = await client.query('SELECT * FROM vehicle_types WHERE id=$1 FOR UPDATE', [
           id,
@@ -193,6 +195,28 @@ export class PostgresVehicleRepository implements VehicleRepository {
           throw new AppError('VEHICLE_TYPE_NOT_FOUND', 'Vehicle type not found', 404);
         old = mapType(previous.rows[0]);
         const update = input as UpdateVehicleTypeInput;
+        const rentalPricingUpdate = old.sector === 'passenger' && pricing !== undefined;
+        if (rentalPricingUpdate) {
+          if (
+            Object.keys(update).some(
+              (key) =>
+                !['expectedVersion', 'expectedRentalPricingVersion', 'fixedHourlyPricing'].includes(
+                  key,
+                ),
+            )
+          )
+            throw new AppError(
+              'VEHICLE_TYPE_INVALID',
+              'Save Rental rates separately from the shared vehicle catalog',
+              422,
+            );
+          if (old.rentalPricingVersion !== update.expectedRentalPricingVersion)
+            throw new AppError(
+              'VEHICLE_TYPE_VERSION_CONFLICT',
+              'Rental pricing changed; reload before updating.',
+              409,
+            );
+        }
         if (old.version !== update.expectedVersion)
           throw new AppError(
             'VEHICLE_TYPE_VERSION_CONFLICT',
@@ -216,7 +240,7 @@ export class PostgresVehicleRepository implements VehicleRepository {
             reference = { ...reference, demandPricing: old.pricingReference.demandPricing };
         }
         result = await client.query(
-          'UPDATE vehicle_types SET name=$2,base_fare_paise=$3,per_km_rate_paise=$4,active=$5,pricing_reference=$6::jsonb,hourly_base_fares_paise=$7::jsonb,hourly_missing_duration_policy=$8,extended_duration_policy=$9,logistics_slabs=$10::jsonb,service_fixed_fare_paise=$11,service_radius_meters=$12,catalog_visible=$13,registration_active=$14,version=version+1 WHERE id=$1 RETURNING *',
+          'UPDATE vehicle_types SET name=$2,base_fare_paise=$3,per_km_rate_paise=$4,active=$5,pricing_reference=$6::jsonb,hourly_base_fares_paise=$7::jsonb,hourly_missing_duration_policy=$8,extended_duration_policy=$9,logistics_slabs=$10::jsonb,service_fixed_fare_paise=$11,service_radius_meters=$12,catalog_visible=$13,registration_active=$14,fixed_hourly_rate_paise=COALESCE($15,fixed_hourly_rate_paise),hourly_fuel_rate_paise=COALESCE($16,hourly_fuel_rate_paise),hourly_fuel_unit=COALESCE($17,hourly_fuel_unit),version=version+CASE WHEN $18 THEN 0 ELSE 1 END,rental_pricing_version=rental_pricing_version+CASE WHEN $18 THEN 1 ELSE 0 END WHERE id=$1 RETURNING *',
           [
             id,
             update.name ?? old.name,
@@ -233,11 +257,13 @@ export class PostgresVehicleRepository implements VehicleRepository {
             update.active ?? old.active,
             reference ? JSON.stringify(reference) : null,
             hourlyJson(
-              update.hourlyBaseFares === undefined
-                ? old.hourlyBaseFares
-                : update.hourlyBaseFares === null
-                  ? null
-                  : { ...old.hourlyBaseFares, ...update.hourlyBaseFares },
+              old.sector === 'premium' && pricing
+                ? null
+                : update.hourlyBaseFares === undefined
+                  ? old.hourlyBaseFares
+                  : update.hourlyBaseFares === null
+                    ? null
+                    : { ...old.hourlyBaseFares, ...update.hourlyBaseFares },
             ),
             update.missingDurationPolicy ??
               (update.hourlyBaseFares != null ? 'require_duration' : old.missingDurationPolicy) ??
@@ -264,12 +290,16 @@ export class PostgresVehicleRepository implements VehicleRepository {
             update.serviceRadiusMeters ?? old.serviceRadiusMeters ?? 25000,
             update.catalogVisible ?? old.catalogVisible ?? true,
             update.registrationActive ?? old.registrationActive ?? false,
+            pricing ? rupeesToPaise(pricing.hourlyRate) : null,
+            pricing ? rupeesToPaise(pricing.fuelRate) : null,
+            pricing?.fuelUnit ?? null,
+            rentalPricingUpdate,
           ],
         );
       } else {
         const create = input as CreateVehicleTypeInput;
         result = await client.query(
-          'INSERT INTO vehicle_types(name,code,sector,base_fare_paise,per_km_rate_paise,currency,active,pricing_reference,hourly_base_fares_paise,hourly_missing_duration_policy,extended_duration_policy,logistics_slabs,service_fixed_fare_paise,service_radius_meters,catalog_visible,registration_active) VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11,$12::jsonb,$13,$14,$15,$16) RETURNING *',
+          'INSERT INTO vehicle_types(name,code,sector,base_fare_paise,per_km_rate_paise,currency,active,pricing_reference,hourly_base_fares_paise,hourly_missing_duration_policy,extended_duration_policy,logistics_slabs,service_fixed_fare_paise,service_radius_meters,catalog_visible,registration_active,fixed_hourly_rate_paise,hourly_fuel_rate_paise,hourly_fuel_unit) VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11,$12::jsonb,$13,$14,$15,$16,$17,$18,$19) RETURNING *',
           [
             create.name,
             create.code,
@@ -291,6 +321,9 @@ export class PostgresVehicleRepository implements VehicleRepository {
             create.serviceRadiusMeters ?? 25000,
             create.catalogVisible ?? true,
             create.registrationActive ?? false,
+            pricing ? rupeesToPaise(pricing.hourlyRate) : null,
+            pricing ? rupeesToPaise(pricing.fuelRate) : null,
+            pricing?.fuelUnit ?? null,
           ],
         );
       }
@@ -326,6 +359,13 @@ export class PostgresVehicleRepository implements VehicleRepository {
       }
       if (
         vehicle.sector !== 'service' &&
+        !(
+          vehicle.sector === 'premium' &&
+          vehicle.fixedHourlyPricing &&
+          vehicle.baseFare === null &&
+          vehicle.perKmRate === null &&
+          !vehicle.pricingReference
+        ) &&
         !vehicle.logisticsSlabs &&
         (vehicle.baseFare === null || vehicle.perKmRate === null) &&
         (!vehicle.pricingReference || vehicle.baseFare !== null || vehicle.perKmRate !== null) &&
@@ -650,7 +690,12 @@ function hourlyJson(fares: VehicleType['hourlyBaseFares']): string | null {
 }
 
 function mapType(row: Record<string, unknown>): VehicleType {
+  const fixedHourlyPricing = fixedHourlyPricingFromRow(row);
   const type: VehicleType = {
+    ...(fixedHourlyPricing ? { fixedHourlyPricing } : {}),
+    ...(row.sector === 'passenger'
+      ? { rentalPricingVersion: Number(row.rental_pricing_version ?? 0) }
+      : {}),
     id: String(row.id),
     name: String(row.name),
     code: String(row.code),

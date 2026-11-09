@@ -474,6 +474,9 @@ live(
           ...payload,
           sector,
           active: true,
+          ...(sector === 'premium'
+            ? { fixedHourlyPricing: { hourlyRate: 90, fuelRate: 40, fuelUnit: 'per_booking' } }
+            : {}),
           ...(sector === 'service'
             ? { baseFare: null, perKmRate: null, serviceFixedFare: 400 }
             : {}),
@@ -548,7 +551,12 @@ live(
               }
             : sector === 'service'
               ? { serviceFixedFare: 500, expectedVersion: 1 }
-              : { baseFare: 120, expectedVersion: 1 },
+              : sector === 'premium'
+                ? {
+                    fixedHourlyPricing: { hourlyRate: 120, fuelRate: 40, fuelUnit: 'per_booking' },
+                    expectedVersion: 1,
+                  }
+                : { baseFare: 120, expectedVersion: 1 },
         );
         const complete = await service.completeRide(ride.id, profileId);
         expect(complete.finalFare).toBe(400);
@@ -687,7 +695,13 @@ live(
       });
       if (!('grossAmount' in previous) || previous.grossAmount === undefined)
         throw new Error('Expected existing premium tariff');
-      const type = await create({ ...payload, code: 'fortuner', sector: 'premium', active: true });
+      const type = await create({
+        ...payload,
+        code: 'fortuner',
+        sector: 'premium',
+        active: true,
+        fixedHourlyPricing: { hourlyRate: 100, fuelRate: 0, fuelUnit: 'per_booking' },
+      });
       await expect(
         rides.create(customerId, {
           ...input,

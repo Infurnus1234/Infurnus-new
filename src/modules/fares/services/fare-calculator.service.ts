@@ -6,7 +6,11 @@ import {
 import { bookingInventorySector } from '../../vehicles/services/rental-inventory.js';
 import { serviceConfiguration } from '../../vehicles/services/service-pricing.js';
 import { logisticsSlab } from '../../vehicles/services/logistics-pricing.js';
-import { hourlyBaseFare } from '../../vehicles/services/hourly-pricing.js';
+import {
+  fixedHourlyFare,
+  hourlyBaseFare,
+  usesFixedHourlyFare,
+} from '../../vehicles/services/hourly-pricing.js';
 import { demandProvenance, selectDemandRates } from './demand-pricing.js';
 import type { DemandPricingProvenance } from '../types/fare.js';
 import type { VehicleType } from '../../vehicles/types/vehicle.js';
@@ -86,10 +90,10 @@ export class FareCalculatorService {
     demand?: DemandPricingProvenance,
   ): FareEstimateResult {
     const inventorySector = bookingInventorySector(input.sector);
-    if (input.sector === 'rental' && !configured?.hourlyBaseFares) {
+    if (input.sector === 'rental' && !configured) {
       throw new AppError(
         'FARE_CONFIGURATION_MISSING',
-        'Rental requires an approved hourly schedule for this vehicle',
+        'Rental requires a configured hourly rate for this vehicle',
         422,
       );
     }
@@ -101,6 +105,9 @@ export class FareCalculatorService {
         configured.code !== canonicalVehicleCode(inventorySector ?? '', input.vehicleCategory ?? '')
       )
         throw new AppError('FARE_CONFIGURATION_MISSING', VEHICLE_UNAVAILABLE_MESSAGE, 422);
+      const fixed = usesFixedHourlyFare(input.sector)
+        ? fixedHourlyFare(configured.fixedHourlyPricing, input)
+        : undefined;
       if (configured.sector === 'service') {
         const { farePaise, radiusMeters } = serviceConfiguration(configured);
         const bookingFare = this.calculateResolved(
@@ -187,7 +194,7 @@ export class FareCalculatorService {
           message: 'Fare uses this Logistics vehicle’s saved distance slab.',
         };
       }
-      if (configured.baseFare === null || configured.perKmRate === null) {
+      if (!fixed && (configured.baseFare === null || configured.perKmRate === null)) {
         if (!configured.pricingReference)
           throw new AppError('FARE_CONFIGURATION_MISSING', VEHICLE_UNAVAILABLE_MESSAGE, 422);
         if (configured.pricingReference.demandPricing) {
@@ -256,12 +263,10 @@ export class FareCalculatorService {
         result.pricingVersion = 'vehicle-type:' + configured.id + ':v' + configured.version;
         return result;
       }
-      const hourly = hourlyBaseFare(
-        configured,
-        input.bookingHours ?? (input.sector === 'premium' ? input.rentalHours : undefined),
-      );
-      const baseFare = hourly?.amountPaise ?? Math.round(configured.baseFare * 100),
-        distanceRatePerKm = Math.round(configured.perKmRate * 100);
+      const hourly = fixed ? null : hourlyBaseFare(configured, input.bookingHours);
+      const baseFare =
+        fixed?.baseFare ?? hourly?.amountPaise ?? Math.round(configured.baseFare! * 100);
+      const distanceRatePerKm = fixed ? 0 : Math.round(configured.perKmRate! * 100);
       if (
         !Number.isSafeInteger(baseFare) ||
         baseFare < 0 ||
@@ -270,17 +275,26 @@ export class FareCalculatorService {
       )
         throw new AppError('FARE_PRICING_INVALID', 'Invalid configured rates', 503);
       const pricingVersion = 'vehicle-type:' + configured.id + ':v' + configured.version;
-      // Use the existing monetary calculation and rounding, with no additional charges
-      // in the admin base + distance model. Legacy range/sector components stay intact.
-      const bookingFare = this.calculateResolved(input, { baseFare, distanceRatePerKm }, true);
-      bookingFare.pricingVersion = pricingVersion;
+      const version =
+        input.sector === 'rental' ? (configured.rentalPricingVersion ?? 0) : configured.version;
+      const quoteVersion =
+        input.sector === 'rental' ? `vehicle-type:${configured.id}:r${version}` : pricingVersion;
+      // Use the existing monetary calculation and rounding for both pricing models.
+      const bookingFare = this.calculateResolved(
+        input,
+        { baseFare, distanceRatePerKm, fuelAmount: fixed?.fuelAmount },
+        true,
+        fixed?.distanceMultiplier,
+      );
+      bookingFare.pricingVersion = quoteVersion;
       bookingFare.vehicleConfiguration = {
         id: configured.id,
         code: configured.code,
         sector: configured.sector,
-        version: configured.version,
+        version,
         baseFarePaise: baseFare,
         perKmRatePaise: distanceRatePerKm,
+        ...(fixed ? { pricingModel: 'fixed_hourly' as const, bookedHours: fixed.bookedHours } : {}),
         ...(hourly?.durationBucket
           ? { durationBucket: hourly.durationBucket, bookedHours: hourly.bookedHours! }
           : {}),
@@ -300,7 +314,7 @@ export class FareCalculatorService {
         vehicleCategory: input.vehicleCategory!,
         pricing,
         currency: 'INR',
-        pricingVersion,
+        pricingVersion: quoteVersion,
         oneWayDistanceMeters: input.distanceMeters,
         billableDistanceMeters:
           input.distanceMeters *
@@ -435,7 +449,7 @@ export class FareCalculatorService {
 
   private calculateResolved(
     input: FareCalculationInput,
-    vehicleRates?: { baseFare: number; distanceRatePerKm: number },
+    vehicleRates?: { baseFare: number; distanceRatePerKm: number; fuelAmount?: number | undefined },
     exactConfiguration = false,
     configuredDistanceMultiplier?: 1 | 2,
   ): FareCalculationResult {
@@ -461,7 +475,7 @@ export class FareCalculatorService {
     let waitingAmount: number | undefined;
     let weightAmount: number | undefined;
     let loadingAmount: number | undefined;
-    let fuelAmount: number | undefined;
+    let fuelAmount = vehicleRates?.fuelAmount;
     let taxAmount: number | undefined;
 
     // Sector-specific adjustments

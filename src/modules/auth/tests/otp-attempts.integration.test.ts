@@ -109,9 +109,10 @@ describe('provider-independent OTP attempt budgets and passwordless identities',
       const duplicate = await request(app).post('/auth/signup').send(payload).expect(201);
       expect(duplicate.body.data.signupId).toBe(oldId);
       expect(send).toHaveBeenCalledTimes(1);
+      // The service and database check expiry with different clocks.
       await pool.query(
-        "UPDATE pending_signups SET otp_provider_expires_at=NOW()-INTERVAL '1 second' WHERE id=$1",
-        [oldId],
+        "UPDATE pending_signups SET otp_provider_expires_at=LEAST(NOW(),$2::timestamptz)-INTERVAL '1 minute' WHERE id=$1",
+        [oldId, new Date()],
       );
       const retry = await request(app).post('/auth/signup').send(payload).expect(201);
       const newId = retry.body.data.signupId;

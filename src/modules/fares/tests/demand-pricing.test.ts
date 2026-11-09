@@ -157,17 +157,20 @@ describe('validated booking-demand pricing', () => {
     ).rejects.toMatchObject({ code: 'FARE_CONFIGURATION_MISSING' });
     expect(maps.calculateRoute).not.toHaveBeenCalled();
     // Hypothetical explicitly approved tariff exists only in this isolated unit fixture.
-    const approved = vehicle('premium', 'scorpio_n', {
-      displayName: 'Scorpio N',
-      baseFare: { minimum: 10000, maximum: 10000 },
-      perKmRate: { minimum: 2000, maximum: 2000 },
-    });
+    const approved: VehicleType = {
+      ...vehicle('premium', 'scorpio_n', {
+        displayName: 'Scorpio N',
+        baseFare: { minimum: 10000, maximum: 10000 },
+        perKmRate: { minimum: 2000, maximum: 2000 },
+      }),
+      fixedHourlyPricing: { hourlyRate: 100, fuelRate: 20, fuelUnit: 'per_booking' },
+    };
     expect(
       calc.calculateEstimate(
-        { ...input, sector: 'premium', vehicleCategory: 'scorpio_n' },
+        { ...input, sector: 'premium', vehicleCategory: 'scorpio_n', bookingHours: 2 },
         approved,
       ),
-    ).toMatchObject({ bookable: true });
+    ).toMatchObject({ bookable: true, bookingFare: { grossAmount: 22000 } });
   });
   it('does not fall back to legacy service/premium or undeclared aliases with a repository', async () => {
     for (const [sector, code] of [

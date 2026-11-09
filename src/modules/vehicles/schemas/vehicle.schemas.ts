@@ -183,6 +183,14 @@ export const hourlyBaseFaresSchema = z.partialRecord(
   exactFare,
 );
 const hourlyFields = {
+  fixedHourlyPricing: z
+    .object({
+      hourlyRate: exactFare,
+      fuelRate: exactFare,
+      fuelUnit: z.enum(['per_booking', 'per_hour', 'per_km']),
+    })
+    .strict()
+    .optional(),
   hourlyBaseFares: hourlyBaseFaresSchema.nullable().optional(),
   missingDurationPolicy: z.enum(['legacy_base', 'require_duration']).optional(),
   extendedDurationPolicy: z.literal('booked_duration').nullable().optional(),
@@ -258,10 +266,12 @@ export const updateVehicleTypeSchema = z
     ...hourlyFields,
     logisticsSlabs: logisticsSlabs.nullable().optional(),
     expectedVersion: z.number().int().positive(),
+    expectedRentalPricingVersion: z.number().int().nonnegative().optional(),
   })
   .strict()
   .refine(
-    (v) => Object.keys(v).some((k) => k !== 'expectedVersion'),
+    (v) =>
+      Object.keys(v).some((k) => k !== 'expectedVersion' && k !== 'expectedRentalPricingVersion'),
     'At least one change is required',
   );
 export const vehicleTypeStatusSchema = z

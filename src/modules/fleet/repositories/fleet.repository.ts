@@ -85,7 +85,10 @@ export class PostgresFleetRepository implements FleetRepository {
       sectors: ['passenger', 'logistics', 'premium', 'service'],
       types: pages
         .flat()
-        .map((type) => ({ ...type, sector: type.sector === 'rental' ? 'passenger' : type.sector })),
+        .map(({ fixedHourlyPricing: _pricing, rentalPricingVersion: _rentalVersion, ...type }) => ({
+          ...type,
+          sector: type.sector === 'rental' ? 'passenger' : type.sector,
+        })),
       operatingCities: premiumCityAreas.cities.map(({ id, name }) => ({ id, name })),
     };
   }

@@ -80,7 +80,19 @@ export class VehicleService {
     );
     return types
       .filter((type) => type.catalogVisible !== false)
-      .map((type) => (sector === 'rental' ? { ...type, sector: 'rental' as const } : type));
+      .map(({ fixedHourlyPricing, rentalPricingVersion: _rentalVersion, ...type }) =>
+        sector === 'rental'
+          ? {
+              ...type,
+              sector: 'rental' as const,
+              pricingStatus: !fixedHourlyPricing
+                ? ('needs_pricing' as const)
+                : type.active
+                  ? ('available' as const)
+                  : ('inactive' as const),
+            }
+          : type,
+      );
   }
 
   async listFleet(query: VehicleFleetQuery) {

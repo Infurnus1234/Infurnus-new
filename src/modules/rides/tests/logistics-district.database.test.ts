@@ -71,7 +71,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           driver = randomUUID(),
           category = 'district_' + randomUUID().replaceAll('-', '');
         await pool.query(
-          "INSERT INTO vehicle_types(name,code,sector,base_fare_paise,per_km_rate_paise,logistics_slabs,active) VALUES('TEST ONLY Logistics District',$1,'logistics',NULL,NULL,$2::jsonb,TRUE)",
+          "INSERT INTO vehicle_types(name,code,sector,base_fare_paise,per_km_rate_paise,logistics_slabs,active,catalog_visible) VALUES('TEST ONLY Logistics District',$1,'logistics',NULL,NULL,$2::jsonb,TRUE,FALSE)",
           [
             category,
             JSON.stringify({
