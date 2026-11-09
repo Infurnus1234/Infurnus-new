@@ -82,7 +82,7 @@ const hourlySchedule = Object.fromEntries(
   ]),
 );
 const area = syntheticDispatchAreas.cities[0]!.area;
-const drivers = new PostgresDriverRepository(pool);
+const drivers = new PostgresDriverRepository(pool, syntheticDispatchAreas);
 const rides = new PostgresRideRepository(pool, syntheticDispatchAreas);
 const matching = new MatchingService(drivers, undefined, area, {
   resolve: async () => syntheticDispatchCity,
@@ -253,6 +253,11 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           "UPDATE driver_profiles SET active_vehicle_id=$2,availability_status='unavailable',last_location=ST_SetSRID(ST_MakePoint(77.5,13),4326)::geography,last_location_at=NOW() WHERE id=$1",
           [profile, vehicle],
         );
+        if (sector === 'service')
+          await pool.query(
+            'UPDATE driver_profiles SET online_preference=TRUE,location_accuracy=8 WHERE id=$1',
+            [profile],
+          );
         const input: CreateRideInput = {
           sector,
           vehicleCategory: code,

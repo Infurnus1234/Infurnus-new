@@ -5,19 +5,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:infurnus/core/services/location_service.dart';
 import 'package:infurnus/features/customer/presentation/screens/specialty_emergency_screen.dart';
 import 'package:infurnus/core/network/dio_client.dart';
 import 'package:infurnus/core/services/socket_service.dart';
 import 'package:infurnus/features/customer/data/models/ride_model.dart'
     as model;
 import 'package:infurnus/features/customer/presentation/providers/booking_catalog_provider.dart';
+import 'package:infurnus/features/customer/presentation/providers/ride_provider.dart';
 import 'package:infurnus/features/customer/presentation/providers/ride_repository_provider.dart';
 import 'package:infurnus/features/customer/presentation/screens/customer_home_screen.dart';
+import 'package:infurnus/features/customer/presentation/screens/ride_booking_screen.dart';
 import 'package:infurnus/features/customer/presentation/widgets/ride_contact_action.dart';
 import 'package:infurnus/shared/widgets/vehicle_visual_image.dart';
 
 import 'vehicle_fare_ranges_test.dart' show ConnectedSocket;
 import 'location_independent_booking_test.dart' show mapFixture;
+import 'passenger_vehicle_exclusion_test.dart' show NoLocation;
 
 model.RideModel ride({
   String? phone = '+919153787859',
@@ -46,6 +50,47 @@ model.RideModel ride({
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+  testWidgets(
+    'Service booking uses the normal destination step before a fare',
+    (tester) async {
+      tester.view.physicalSize = const Size(1000, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final socket = ConnectedSocket();
+      final container = ProviderContainer(
+        overrides: [
+          rideRepositoryProvider.overrideWithValue(
+            ConfiguredCatalogRepository(),
+          ),
+          socketServiceProvider.overrideWithValue(socket),
+          locationServiceProvider.overrideWithValue(NoLocation()),
+          dioProvider.overrideWithValue(mapFixture()),
+        ],
+      );
+      final notifier = container.read(rideProvider.notifier);
+      notifier.selectSector('service');
+      notifier.selectTier('ambulance');
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: RideBookingScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Call'), findsNothing);
+      final label = find.text('Select Destination to View Fares');
+      expect(label, findsOneWidget);
+      final button = find.ancestor(
+        of: label,
+        matching: find.byType(ElevatedButton),
+      );
+      expect(tester.widget<ElevatedButton>(button).onPressed, isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      container.dispose();
+      socket.dispose();
+    },
+  );
   test('only an active assigned ride can supply its contact number', () {
     expect(assignedRideContactUri(ride())?.toString(), 'tel:+919153787859');
     for (final status in [
@@ -56,10 +101,6 @@ void main() {
       expect(assignedRideContactUri(ride(status: status)), isNull);
     }
     expect(assignedRideContactUri(ride(assigned: false)), isNull);
-    expect(
-      assignedRideContactUri(ride(sector: 'premium'), serviceOnly: true),
-      isNull,
-    );
   });
   test('phone validation rejects missing and injected contact data', () {
     for (final phone in [

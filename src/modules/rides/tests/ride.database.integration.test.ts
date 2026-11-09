@@ -34,7 +34,7 @@ import { RideService } from '../services/ride.service.js';
 const databaseEnabled = process.env.RIDE_DB_TESTS === 'true';
 const describeDatabase = databaseEnabled ? describe : describe.skip;
 const repository = new PostgresRideRepository(pool, syntheticDispatchAreas);
-const driverRepository = new PostgresDriverRepository(pool);
+const driverRepository = new PostgresDriverRepository(pool, syntheticDispatchAreas);
 const service = new RideService(repository, driverRepository);
 const serviceCatalog: ServiceFixtureSnapshots = new Map();
 
@@ -467,8 +467,13 @@ describeDatabase('ride PostgreSQL integration', () => {
     ['service', 'ambulance', 30000],
     ['premium', 'sedan', 3600000],
   ])('enforces the persisted %s/%s deadline', async (sector, category, milliseconds) => {
-    if (sector === 'service')
+    if (sector === 'service') {
       await configureServiceFixture(pool, category as string, serviceCatalog);
+      await pool.query(
+        'UPDATE driver_profiles SET online_preference=TRUE,location_accuracy=8 WHERE id=$1',
+        [fixture.driverProfileId],
+      );
+    }
     const id = fixture.rideIds[0]!;
     await pool.query('DELETE FROM ride_dispatch_attempts WHERE ride_id=$1', [id]);
     await pool.query(
@@ -534,7 +539,13 @@ describeDatabase('ride PostgreSQL integration', () => {
     };
   }
   async function prepareMap(sector = 'passenger', amount = 106, distance = 8500) {
-    if (sector === 'service') await configureServiceFixture(pool, 'ambulance', serviceCatalog);
+    if (sector === 'service') {
+      await configureServiceFixture(pool, 'ambulance', serviceCatalog);
+      await pool.query(
+        'UPDATE driver_profiles SET online_preference=TRUE,location_accuracy=8 WHERE id=$1',
+        [fixture.driverProfileId],
+      );
+    }
     const category =
       sector === 'logistics' ? 'mini_truck' : sector === 'service' ? 'ambulance' : 'sedan';
     await pool.query(

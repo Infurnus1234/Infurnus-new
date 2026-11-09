@@ -2052,31 +2052,6 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
       );
     }
 
-    if (state.selectedSector == 'service' &&
-        state.fareEstimate?.bookingAmount == null) {
-      return SizedBox(
-        width: double.infinity,
-        height: 52,
-        child: ElevatedButton.icon(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFDC2626),
-            foregroundColor: Colors.white,
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(26),
-            ),
-          ),
-          icon: const Icon(Icons.phone_rounded, size: 20),
-          label: const Text(
-            'Call',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-          ),
-          onPressed: () =>
-              callAssignedRideContact(context, ref, serviceOnly: true),
-        ),
-      );
-    }
-
     final hasLocations =
         state.pickupCoords != null &&
         state.destinationCoords != null &&

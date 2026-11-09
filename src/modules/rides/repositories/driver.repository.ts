@@ -1,4 +1,5 @@
 import { serviceEligibilitySql } from './service-eligibility.js';
+import type { PremiumCityAreas } from '../../maps/premium-city-areas.js';
 import type { LiveLocationCache } from './live-location.cache.js';
 import { cityCoverageSql } from '../../maps/city-radius.js';
 import { driverEligibilitySql, driverOperationalEligibilitySql } from './driver-eligibility.js';
@@ -264,7 +265,10 @@ export async function saveDriverProfile(
 export class PostgresDriverRepository implements DriverRepository {
   trackingCache?: LiveLocationCache;
   private readonly hydratedTracking = new Set<string>();
-  constructor(private readonly pool: Pool) {}
+  constructor(
+    private readonly pool: Pool,
+    private readonly serviceCities?: Pick<PremiumCityAreas, 'cities'>,
+  ) {}
 
   async findProfileIdByUserId(userId: string): Promise<string | null> {
     const result = await this.pool.query<{ id: string }>(
@@ -686,7 +690,12 @@ export class PostgresDriverRepository implements DriverRepository {
 
     conditions.unshift(driverEligibilitySql('$4', undefined, customerExpression));
     if (sector === 'service')
-      conditions.push(serviceEligibilitySql('ST_SetSRID(ST_MakePoint($1,$2),4326)::geography'));
+      conditions.push(
+        serviceEligibilitySql(
+          'ST_SetSRID(ST_MakePoint($1,$2),4326)::geography',
+          this.serviceCities,
+        ),
+      );
 
     if (sector) {
       values.push(sector);
@@ -702,7 +711,7 @@ export class PostgresDriverRepository implements DriverRepository {
       sector === 'premium'
         ? '25000'
         : sector === 'service'
-          ? `(SELECT service_radius_meters::float8 FROM vehicle_types WHERE sector='service' AND code=$${values.length} AND active AND service_fixed_fare_paise IS NOT NULL)`
+          ? `(SELECT LEAST(service_radius_meters,25000)::float8 FROM vehicle_types WHERE sector='service' AND code=$${values.length} AND active AND service_fixed_fare_paise IS NOT NULL)`
           : '$3';
 
     const fallbackVehicleConditions = [

@@ -6,9 +6,8 @@ import '../../data/models/ride_model.dart' as model;
 import '../providers/ride_provider.dart';
 import '../providers/ride_repository_provider.dart';
 
-Uri? assignedRideContactUri(model.RideModel? ride, {bool serviceOnly = false}) {
+Uri? assignedRideContactUri(model.RideModel? ride) {
   if (ride == null ||
-      (serviceOnly && ride.sector != 'service') ||
       ride.assignedDriverId == null ||
       !const [
         model.RideStatus.driverAssigned,
@@ -29,10 +28,9 @@ Uri? assignedRideContactUri(model.RideModel? ride, {bool serviceOnly = false}) {
 
 Future<bool> launchAssignedRideContact(
   model.RideModel ride, {
-  bool serviceOnly = false,
   Future<bool> Function(Uri)? launcher,
 }) async {
-  final uri = assignedRideContactUri(ride, serviceOnly: serviceOnly);
+  final uri = assignedRideContactUri(ride);
   if (uri == null) return false;
   // Opens the system dialer; the customer decides whether to place the call.
   return (launcher ??
@@ -41,9 +39,8 @@ Future<bool> launchAssignedRideContact(
 
 Future<void> callAssignedRideContact(
   BuildContext context,
-  WidgetRef ref, {
-  bool serviceOnly = false,
-}) async {
+  WidgetRef ref,
+) async {
   void message(String text) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
@@ -51,7 +48,7 @@ Future<void> callAssignedRideContact(
   }
 
   final current = ref.read(rideProvider).currentRide;
-  if (current == null || (serviceOnly && current.sector != 'service')) {
+  if (current == null) {
     message(
       'A provider must be assigned to an active booking before you can call.',
     );
@@ -69,13 +66,13 @@ Future<void> callAssignedRideContact(
         ].contains(active?.status)) {
       return;
     }
-    if (assignedRideContactUri(fresh, serviceOnly: serviceOnly) == null) {
+    if (assignedRideContactUri(fresh) == null) {
       message(
         'The assigned provider’s contact number is unavailable for this booking.',
       );
       return;
     }
-    if (!await launchAssignedRideContact(fresh, serviceOnly: serviceOnly)) {
+    if (!await launchAssignedRideContact(fresh)) {
       message('Unable to open the phone dialer on this device.');
     }
   } catch (_) {

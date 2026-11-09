@@ -91,7 +91,7 @@ export class RideService {
       available: candidates.length > 0,
       message: candidates.length
         ? 'Fixed fare. An eligible service vehicle is currently available near your pickup.'
-        : 'No eligible service vehicle is available within this service’s configured radius of your pickup. Try again later.',
+        : 'No eligible service vehicle is available nearby in your pickup city. Try again later.',
     };
   }
 
@@ -212,7 +212,7 @@ export class RideService {
         throw new AppError(
           'NO_ELIGIBLE_DRIVERS',
           input.sector === 'service'
-            ? 'No eligible service vehicle is available within this service’s configured radius of your pickup. Please try again later.'
+            ? 'No eligible service vehicle is available nearby in your pickup city. Please try again later.'
             : 'No eligible drivers are available for this vehicle near your pickup. Please try again later.',
           409,
         );

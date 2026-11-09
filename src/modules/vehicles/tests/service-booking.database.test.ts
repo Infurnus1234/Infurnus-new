@@ -35,7 +35,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
     const vehicles = new PostgresVehicleRepository(pool),
       rides = new PostgresRideRepository(pool),
       drivers = new PostgresDriverRepository(pool);
-    const pickup = { latitude: 25.6, longitude: 85.13 };
+    const pickup = { latitude: 25.59, longitude: 85.1 };
     const area = { configured: true, required: true, assertSupported: async () => {} };
     const matcher = new MatchingService(drivers, undefined, area);
     const estimator = new FareEstimateService(
@@ -96,7 +96,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       );
       profileId = (
         await pool.query(
-          "INSERT INTO driver_profiles(user_id,license_number,license_expiry,verification_status,availability_status,last_location,last_location_at) VALUES($1,$2,'2030-12-31','approved','available',ST_SetSRID(ST_MakePoint(85.13,25.60),4326)::geography,NOW()) RETURNING id",
+          "INSERT INTO driver_profiles(user_id,license_number,license_expiry,verification_status,availability_status,last_location,last_location_at,location_accuracy,online_preference) VALUES($1,$2,'2030-12-31','approved','available',ST_SetSRID(ST_MakePoint(85.13,25.60),4326)::geography,NOW(),8,TRUE) RETURNING id",
           [driverId, randomUUID()],
         )
       ).rows[0].id;
@@ -133,12 +133,12 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
         [profileId, pickup.longitude, pickup.latitude, distance, age],
       );
     }
-    const candidates = () =>
+    const candidates = (point = pickup) =>
       matcher.findDispatchDrivers(
         {
           id: randomUUID(),
           customerId,
-          pickup,
+          pickup: point,
           sector: 'service',
           vehicleCategory: type.code,
         } as Ride,
@@ -293,8 +293,8 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       );
       expect(await candidates()).toEqual([]);
     });
-    it('applies Admin radius updates immediately without a frontend rebuild', async () => {
-      await place(30000);
+    it('keeps narrower configured radii and caps larger values at 25 km without changing the fare', async () => {
+      await place(25001);
       expect(await candidates()).toEqual([]);
       type = await vehicles.updateType(
         adminId,
@@ -304,6 +304,8 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           serviceRadiusMeters: 35000,
         }),
       );
+      expect(await candidates()).toEqual([]);
+      await place(12000);
       expect((await candidates()).map((d) => d.driverProfileId)).toContain(profileId);
       type = await vehicles.updateType(
         adminId,
@@ -314,6 +316,49 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
         }),
       );
       expect(await candidates()).toEqual([]);
+      expect(type.serviceFixedFare).toBe(123.45);
+    });
+    it('switches cities from valid GPS and blocks even nearby cross-city pickups', async () => {
+      const cities = (
+        await pool.query(`
+          WITH locations AS (
+            SELECT ST_SetSRID(ST_MakePoint(85.1,25.6),4326)::geography AS patna,
+                   ST_SetSRID(ST_MakePoint(85.4,26.12),4326)::geography AS muzaffarpur
+          ), points AS (
+            SELECT ST_Project(patna,24000,ST_Azimuth(patna,muzaffarpur)) AS a,
+                   ST_Project(muzaffarpur,24000,ST_Azimuth(muzaffarpur,patna)) AS b
+            FROM locations
+          )
+          SELECT ST_Y(a::geometry) AS "patnaLat",ST_X(a::geometry) AS "patnaLon",
+                 ST_Y(b::geometry) AS "muzzLat",ST_X(b::geometry) AS "muzzLon",
+                 ST_Distance(a,b) AS distance FROM points`)
+      ).rows[0];
+      const patna = { latitude: cities.patnaLat, longitude: cities.patnaLon };
+      const muzaffarpur = { latitude: cities.muzzLat, longitude: cities.muzzLon };
+      expect(cities.distance).toBeLessThan(25000);
+      const locate = (point: typeof pickup, accuracy: number | null) =>
+        pool.query(
+          'UPDATE driver_profiles SET last_location=ST_SetSRID(ST_MakePoint($2,$3),4326)::geography,last_location_at=NOW(),location_accuracy=$4 WHERE id=$1',
+          [profileId, point.longitude, point.latitude, accuracy],
+        );
+      await locate(patna, 8);
+      expect((await candidates(patna)).map((driver) => driver.driverProfileId)).toContain(
+        profileId,
+      );
+      expect(await candidates(muzaffarpur)).toEqual([]);
+      const ride = await service.createRide(customerId, { ...input(), pickup: patna });
+      expect(await rides.offerDispatch(ride.id, profileId, 30000)).toBe(true);
+      await locate(muzaffarpur, 8);
+      expect(await rides.accept(ride.id, profileId)).toBeNull();
+      expect(await rides.pendingDispatch(ride.id)).toBeNull();
+      expect(await candidates(patna)).toEqual([]);
+      expect((await candidates(muzaffarpur)).map((driver) => driver.driverProfileId)).toContain(
+        profileId,
+      );
+      await locate(muzaffarpur, null);
+      expect(await candidates(muzaffarpur)).toEqual([]);
+      await locate(muzaffarpur, 201);
+      expect(await candidates(muzaffarpur)).toEqual([]);
     });
     it('fails disabled and unconfigured services closed and rejects unauthorized changes', async () => {
       await expect(

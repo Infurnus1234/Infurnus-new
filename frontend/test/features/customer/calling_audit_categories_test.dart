@@ -46,12 +46,6 @@ void main() {
           isTrue,
         );
         expect(launched.toString(), 'tel:+919153787859');
-        if (entry.key == 'service') {
-          expect(
-            assignedRideContactUri(ride, serviceOnly: true)?.path,
-            '+919153787859',
-          );
-        }
         expect(assignedRideContactUri(booking(callingNumber: null)), isNull);
       },
     );

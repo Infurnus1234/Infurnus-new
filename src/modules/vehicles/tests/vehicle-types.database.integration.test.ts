@@ -87,7 +87,7 @@ live(
   () => {
     const vehicles = new PostgresVehicleRepository(pool),
       rides = new PostgresRideRepository(pool, syntheticDispatchAreas),
-      drivers = new PostgresDriverRepository(pool);
+      drivers = new PostgresDriverRepository(pool, syntheticDispatchAreas);
     const admin = new AdminService(new PostgresAdminRepository(pool), vehicles);
     const estimator = new FareEstimateService(
       routes,
@@ -510,6 +510,11 @@ live(
           "UPDATE vehicles SET verification_status='approved',is_active=TRUE WHERE id=$1",
           [vehicleId],
         );
+        if (sector === 'service')
+          await pool.query(
+            'UPDATE driver_profiles SET online_preference=TRUE,location_accuracy=8 WHERE id=$1',
+            [profileId],
+          );
         const ride = await service.createRide(customerId, {
           ...booking,
           sector,

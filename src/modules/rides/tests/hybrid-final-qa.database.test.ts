@@ -37,7 +37,7 @@ if (process.env.RIDE_DB_TESTS === 'true') requireDisposableAdministrativeDatabas
 
 const evidence = process.env.DISPATCH_QA_EVIDENCE_DIR;
 const repo = new PostgresRideRepository(pool, syntheticDispatchAreas),
-  drivers = new PostgresDriverRepository(pool),
+  drivers = new PostgresDriverRepository(pool, syntheticDispatchAreas),
   service = new RideService(repo, drivers);
 const users: string[] = [],
   profiles: string[] = [],
@@ -98,6 +98,11 @@ async function driver(sector = 'passenger', category = 'sedan', distance = 100) 
     "UPDATE driver_profiles SET active_vehicle_id=$2,availability_status='available',last_location=ST_Project(ST_SetSRID(ST_MakePoint(77.5,13),4326)::geography,$3::float8,pi()/2),last_location_at=clock_timestamp() WHERE id=$1",
     [profileId, vehicleId, distance],
   );
+  if (sector === 'service')
+    await pool.query(
+      'UPDATE driver_profiles SET online_preference=TRUE,location_accuracy=8 WHERE id=$1',
+      [profileId],
+    );
   return { userId, profileId, vehicleId };
 }
 async function ride(customerId: string, sector = 'passenger', category = 'sedan') {

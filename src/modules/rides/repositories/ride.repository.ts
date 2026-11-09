@@ -463,7 +463,7 @@ export class PostgresRideRepository implements RideRepository {
   trackingCache?: LiveLocationCache;
   constructor(
     private readonly pool: Pool,
-    _cities?: Pick<PremiumCityAreas, 'cities'>,
+    private readonly serviceCities?: Pick<PremiumCityAreas, 'cities'>,
   ) {}
 
   async saveDestinationDistrict(
@@ -900,7 +900,7 @@ export class PostgresRideRepository implements RideRepository {
              JOIN vehicles v ON v.driver_profile_id=dp.id
              WHERE dp.id=$2 AND ${driverEligibilitySql("NOW() - ($3::int * INTERVAL '1 second')", 'r.id', 'r.customer_id')}
                AND (CASE WHEN r.sector='premium' THEN ST_DWithin(dp.last_location,r.pickup_location,25000.000001)
-                 WHEN r.sector='service' THEN ${serviceEligibilitySql()}
+                 WHEN r.sector='service' THEN ${serviceEligibilitySql(undefined, this.serviceCities)}
                  ELSE ST_DWithin(dp.last_location,r.pickup_location,(CASE WHEN r.sector IN ('passenger','rental') THEN 10000 WHEN r.sector='logistics' OR (r.sector='service' AND r.vehicle_category IN ('towing','towing_van')) THEN 20000 ELSE $4 END)+0.000001) END)
                AND v.sector=(CASE WHEN r.sector='rental' THEN 'passenger' ELSE r.sector END) AND v.category=r.vehicle_category
            )
@@ -984,7 +984,7 @@ export class PostgresRideRepository implements RideRepository {
                AND ${driverEligibilitySql("NOW() - ($4::int * INTERVAL '1 second')", undefined, 'r.customer_id')}
                AND v.sector=(CASE WHEN r.sector='rental' THEN 'passenger' ELSE r.sector END) AND v.category=r.vehicle_category
                AND (CASE WHEN r.sector='premium' THEN ST_DWithin(dp.last_location,r.pickup_location,25000.000001)
-                 WHEN r.sector='service' THEN ${serviceEligibilitySql()}
+                 WHEN r.sector='service' THEN ${serviceEligibilitySql(undefined, this.serviceCities)}
                  ELSE ST_DWithin(dp.last_location,r.pickup_location,(CASE WHEN r.sector IN ('passenger','rental') THEN 10000 WHEN r.sector='logistics' OR (r.sector='service' AND r.vehicle_category IN ('towing','towing_van')) THEN 20000 ELSE $5 END)+0.000001) END)
            )
          RETURNING dispatch_attempt AS attempt`,
@@ -1379,7 +1379,7 @@ export class PostgresRideRepository implements RideRepository {
         WHERE dp.id=r.dispatch_driver_id
         AND ${driverEligibilitySql("NOW()-($2::int*INTERVAL '1 second')", 'r.id', 'r.customer_id')}
         AND v.sector=(CASE WHEN r.sector='rental' THEN 'passenger' ELSE r.sector END) AND v.category=r.vehicle_category
-        AND (r.sector<>'service' OR ${serviceEligibilitySql()})
+        AND (r.sector<>'service' OR ${serviceEligibilitySql(undefined, this.serviceCities)})
         AND (r.sector<>'premium' OR ST_DWithin(dp.last_location,r.pickup_location,25000.000001))) AS eligible
        FROM rides r WHERE r.id=$1 AND r.status='searching' AND r.assigned_driver_id IS NULL
        AND r.dispatch_driver_id IS NOT NULL AND r.dispatch_expires_at>NOW()`,
