@@ -79,15 +79,13 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')('dynamic Bihar Premium city
     await pool.query('DELETE FROM users WHERE id=ANY($1::uuid[])', [[actor, driverUser, customer]]);
     if (pricing)
       await pool.query(
-        'UPDATE vehicle_types SET active=$2,base_fare_paise=$3,per_km_rate_paise=$4,hourly_base_fares_paise=$5::jsonb WHERE id=$1',
+        'UPDATE vehicle_types SET active=$2,fixed_hourly_rate_paise=$3,hourly_fuel_rate_paise=$4,hourly_fuel_unit=$5 WHERE id=$1',
         [
           pricing.id,
           pricing.active,
-          pricing.base_fare_paise,
-          pricing.per_km_rate_paise,
-          pricing.hourly_base_fares_paise == null
-            ? null
-            : JSON.stringify(pricing.hourly_base_fares_paise),
+          pricing.fixed_hourly_rate_paise,
+          pricing.hourly_fuel_rate_paise,
+          pricing.hourly_fuel_unit,
         ],
       );
     await pool.end();
@@ -156,7 +154,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')('dynamic Bihar Premium city
       await pool.query(`SELECT * FROM vehicle_types WHERE sector='premium' AND code='thar'`)
     ).rows[0];
     await pool.query(
-      `UPDATE vehicle_types SET active=TRUE,base_fare_paise=10000,per_km_rate_paise=1000,hourly_base_fares_paise=NULL WHERE sector='premium' AND code='thar'`,
+      "UPDATE vehicle_types SET active=TRUE,fixed_hourly_rate_paise=10000,hourly_fuel_rate_paise=0,hourly_fuel_unit='per_booking' WHERE sector='premium' AND code='thar'",
     );
     await pool.query(
       `UPDATE vehicles SET driver_profile_id=$2,verification_status='approved',is_active=TRUE WHERE id=$1`,
@@ -209,6 +207,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')('dynamic Bihar Premium city
       sector: 'premium',
       vehicleCategory: 'thar',
       status: 'searching',
+      fareEstimate: 100,
     });
     const candidates = await matching.findDispatchDrivers(booked, null);
     expect(candidates.some((c) => c.driverProfileId === profile)).toBe(true);
