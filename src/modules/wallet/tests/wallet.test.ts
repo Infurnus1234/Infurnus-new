@@ -37,7 +37,7 @@ describe('PostgresWalletRepository', () => {
   it('credits top-up amount accurately in integer paise and returns history', async () => {
     const topup1 = await repo.topUp(
       testUserId,
-      50000, // â‚¹500.00
+      50000, // ₹500.00
       'UPI',
       'ref_topup_1',
       'idem_topup_1',
@@ -85,7 +85,7 @@ describe('PostgresWalletRepository', () => {
     await expect(
       repo.pay(
         testUserId,
-        25000, // â‚¹250.00
+        25000, // ₹250.00
         { type: 'merchant', id: 'STORE123' },
         'idem_pay_fail',
       ),
@@ -98,10 +98,10 @@ describe('PostgresWalletRepository', () => {
   });
 
   it('completes debit payment, updates ledger, and prevents double debit replay', async () => {
-    // Add â‚¹1,000
+    // Add ₹1,000
     await repo.topUp(testUserId, 100000, 'UPI', 'ref_add_1000', 'idem_add_1000');
 
-    // Pay â‚¹350
+    // Pay ₹350
     const payResult = await repo.pay(
       testUserId,
       35000,

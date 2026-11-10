@@ -361,7 +361,7 @@ export class FareCalculatorService {
         baseAmount = 60000;
         distanceAmount = this.roundMoney((billableDistanceMeters * 3000) / 1000, 'distanceAmount');
       } else if (input.vehicleCategory === 'jcb') {
-        // JCB trip-based pricing: Flat mobilization/base charge (120,000 paise / â‚¹1,200) + distance charge (4,000 paise/km / â‚¹40/km)
+        // JCB trip-based pricing: Flat mobilization/base charge (120,000 paise / ₹1,200) + distance charge (4,000 paise/km / ₹40/km)
         baseAmount = 120000;
         distanceAmount = this.roundMoney((billableDistanceMeters * 4000) / 1000, 'distanceAmount');
       } else {

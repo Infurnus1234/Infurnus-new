@@ -591,7 +591,7 @@ export function createApp(
 
   app.use('/notifications/devices', createDeviceTokenRouter());
   app.use('/notifications/inbox', createNotificationInboxRouter());
-  // Admin-only test push â€” verifies custom sound on real devices.
+  // Admin-only test push — verifies custom sound on real devices.
   // Protected by requireAuth + requireRoles('admin','super_admin') inside the router.
   app.use('/notifications/test-push', createTestPushRouter());
 
