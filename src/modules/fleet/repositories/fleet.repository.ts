@@ -348,7 +348,10 @@ export class PostgresFleetRepository implements FleetRepository {
     try {
       await client.query('BEGIN');
       const isAllowed = ALLOWED_VEHICLE_TYPES.some(
-        (t) => t.code === input.category && (t.sector === input.sector || (input.sector === 'rental' && ['passenger', 'premium'].includes(t.sector)))
+        (t) =>
+          t.code === input.category &&
+          (t.sector === input.sector ||
+            (input.sector === 'rental' && ['passenger', 'premium'].includes(t.sector))),
       );
       if (!isAllowed)
         throw new AppError(
@@ -516,7 +519,10 @@ export class PostgresFleetRepository implements FleetRepository {
         const sector = input.sector ?? current.sector,
           category = input.category ?? current.category;
         const isAllowed = ALLOWED_VEHICLE_TYPES.some(
-          (t) => t.code === category && (t.sector === sector || (sector === 'rental' && ['passenger', 'premium'].includes(t.sector)))
+          (t) =>
+            t.code === category &&
+            (t.sector === sector ||
+              (sector === 'rental' && ['passenger', 'premium'].includes(t.sector))),
         );
         if (!isAllowed)
           throw new AppError(
