@@ -443,11 +443,11 @@ class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen> {
             ),
           ),
           const SizedBox(width: 12),
-          Expanded(
+          const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Email Driver Support',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
@@ -455,10 +455,10 @@ class _SupportTicketsScreenState extends ConsumerState<SupportTicketsScreen> {
                     color: Color(0xFF111827),
                   ),
                 ),
-                const SizedBox(height: 2),
+                SizedBox(height: 2),
                 SelectableText(
                   supportEmail,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: AppColors.primaryGreen,
                     fontWeight: FontWeight.w600,
                     fontSize: 12,

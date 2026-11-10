@@ -44,7 +44,37 @@ class WalletRemoteDataSourceImpl implements WalletRemoteDataSource {
 
   @override
   Future<WalletModel> getWallet() async {
-    final response = await _dio.get('/wallet');
+    final response = await _dio.get(
+      '/wallet',
+      options: Options(
+        validateStatus: (status) =>
+            status != null &&
+            ((status >= 200 && status < 300) || status == 409),
+      ),
+    );
+
+    if (response.statusCode == 409) {
+      final body = response.data;
+      if (body is Map<String, dynamic> &&
+          body['data'] is Map<String, dynamic>) {
+        return WalletModel.fromJson(body['data'] as Map<String, dynamic>);
+      }
+      // If 409 indicates the wallet already exists or was initialized concurrently, retry fetch once
+      final retryRes = await _dio.get('/wallet');
+      if (retryRes.data is Map<String, dynamic> &&
+          retryRes.data['data'] is Map<String, dynamic>) {
+        return WalletModel.fromJson(
+          retryRes.data['data'] as Map<String, dynamic>,
+        );
+      }
+      throw DioException(
+        requestOptions: response.requestOptions,
+        response: response,
+        type: DioExceptionType.badResponse,
+        error: 'Wallet conflict occurred',
+      );
+    }
+
     final data = response.data['data'] as Map<String, dynamic>;
     return WalletModel.fromJson(data);
   }

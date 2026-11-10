@@ -16,6 +16,7 @@ class WalletState {
   final bool isTopUpProcessing;
   final bool isPaymentProcessing;
   final String? errorMessage;
+  final bool hasWalletError;
   final bool isOffline;
   final bool isUnauthenticated;
 
@@ -32,6 +33,7 @@ class WalletState {
     this.isTopUpProcessing = false,
     this.isPaymentProcessing = false,
     this.errorMessage,
+    this.hasWalletError = false,
     this.isOffline = false,
     this.isUnauthenticated = false,
     this.lastPaymentRef,
@@ -48,6 +50,7 @@ class WalletState {
     bool? isPaymentProcessing,
     String? errorMessage,
     bool clearError = false,
+    bool? hasWalletError,
     bool? isOffline,
     bool? isUnauthenticated,
     String? lastPaymentRef,
@@ -63,6 +66,7 @@ class WalletState {
       isTopUpProcessing: isTopUpProcessing ?? this.isTopUpProcessing,
       isPaymentProcessing: isPaymentProcessing ?? this.isPaymentProcessing,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+      hasWalletError: hasWalletError ?? this.hasWalletError,
       isOffline: isOffline ?? this.isOffline,
       isUnauthenticated: isUnauthenticated ?? this.isUnauthenticated,
       lastPaymentRef: clearLastPaymentRef
@@ -78,11 +82,15 @@ class WalletNotifier extends StateNotifier<WalletState> {
   WalletNotifier(this._repository) : super(const WalletState());
 
   Future<void> loadData() async {
-    state = state.copyWith(isLoading: true, clearError: true);
-    await Future.wait([
-      fetchWallet(showLoading: false),
-      fetchHistory(filter: state.filter, showLoading: false),
-    ]);
+    state = state.copyWith(
+      isLoading: true,
+      clearError: true,
+      hasWalletError: false,
+    );
+    await fetchWallet(showLoading: false);
+    if (state.wallet != null && !state.hasWalletError) {
+      await fetchHistory(filter: state.filter, showLoading: false);
+    }
     if (mounted) {
       state = state.copyWith(isLoading: false);
     }
@@ -90,7 +98,11 @@ class WalletNotifier extends StateNotifier<WalletState> {
 
   Future<void> fetchWallet({bool showLoading = true}) async {
     if (showLoading) {
-      state = state.copyWith(isLoading: true, clearError: true);
+      state = state.copyWith(
+        isLoading: true,
+        clearError: true,
+        hasWalletError: false,
+      );
     }
 
     try {
@@ -100,16 +112,32 @@ class WalletNotifier extends StateNotifier<WalletState> {
         wallet: wallet,
         isLoading: false,
         clearError: true,
+        hasWalletError: false,
         isOffline: false,
         isUnauthenticated: false,
       );
     } catch (e) {
       if (!mounted) return;
       final isOffline = e is NetworkFailure;
+      final rawMsg = e
+          .toString()
+          .replaceFirst('ServerFailure: ', '')
+          .replaceFirst('NetworkFailure: ', '')
+          .replaceFirst('Exception: ', '');
+      final cleanMsg =
+          (rawMsg.contains('validateStatus') ||
+              rawMsg.contains('RequestOptions') ||
+              rawMsg.contains('DioException'))
+          ? "Couldn't load wallet. Please try again."
+          : rawMsg;
       state = state.copyWith(
+        wallet: null,
         isLoading: false,
+        hasWalletError: true,
         isOffline: isOffline,
-        errorMessage: e.toString().replaceFirst('ServerFailure: ', ''),
+        errorMessage: cleanMsg.isNotEmpty
+            ? cleanMsg
+            : "Couldn't load wallet. Please try again.",
       );
     }
   }
@@ -117,7 +145,7 @@ class WalletNotifier extends StateNotifier<WalletState> {
   Future<void> fetchHistory({String? filter, bool showLoading = true}) async {
     final activeFilter = filter ?? state.filter;
     if (showLoading) {
-      state = state.copyWith(isHistoryLoading: true, clearError: true);
+      state = state.copyWith(isHistoryLoading: true);
     }
 
     try {
@@ -131,16 +159,26 @@ class WalletNotifier extends StateNotifier<WalletState> {
         totalCount: result.totalCount,
         filter: activeFilter,
         isHistoryLoading: false,
-        clearError: true,
+        errorMessage: state.hasWalletError ? state.errorMessage : null,
         isOffline: false,
       );
     } catch (e) {
       if (!mounted) return;
       final isOffline = e is NetworkFailure;
+      final rawMsg = e
+          .toString()
+          .replaceFirst('ServerFailure: ', '')
+          .replaceFirst('NetworkFailure: ', '');
+      final cleanMsg =
+          (rawMsg.contains('validateStatus') ||
+              rawMsg.contains('RequestOptions') ||
+              rawMsg.contains('DioException'))
+          ? "Couldn't load transaction history. Please try again."
+          : rawMsg;
       state = state.copyWith(
         isHistoryLoading: false,
         isOffline: isOffline,
-        errorMessage: e.toString().replaceFirst('ServerFailure: ', ''),
+        errorMessage: state.errorMessage ?? cleanMsg,
       );
     }
   }
