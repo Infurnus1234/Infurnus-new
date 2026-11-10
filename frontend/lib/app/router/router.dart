@@ -18,6 +18,7 @@ import '../../features/customer/presentation/screens/passenger_rides_screen.dart
 import '../../features/customer/presentation/screens/specialty_emergency_screen.dart';
 import '../../features/customer/presentation/screens/customer_home_screen.dart';
 import '../../features/customer/presentation/screens/profile_screen.dart';
+import '../../features/customer/presentation/screens/notification_preferences_screen.dart';
 import '../../features/customer/presentation/screens/pickup_selection_screen.dart';
 import '../../features/customer/presentation/screens/ride_booking_screen.dart';
 import '../../features/customer/presentation/screens/wallet_screen.dart';
@@ -167,6 +168,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/profile',
         builder: (context, state) => const ProfileScreen(),
+      ),
+      GoRoute(
+        path: '/notification-preferences',
+        builder: (context, state) => const NotificationPreferencesScreen(),
+      ),
+      GoRoute(
+        path: '/notifications',
+        builder: (context, state) => const NotificationPreferencesScreen(),
       ),
       GoRoute(
         path: '/ride-booking',

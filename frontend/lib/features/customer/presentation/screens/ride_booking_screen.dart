@@ -2285,30 +2285,35 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
     if (cat.contains('ambulance') || name.contains('ambulance')) {
       return 'assets/images/ambulance_van.png';
     }
-    if (cat.contains('mini truck') ||
+    if (cat.contains('407') || name.contains('407')) {
+      return 'assets/images/tata_407_beige.png';
+    }
+    if (cat.contains('magic') ||
+        name.contains('magic') ||
+        cat.contains('mini truck') ||
         name.contains('mini truck') ||
         cat.contains('mini_truck') ||
         name.contains('mini_truck')) {
-      return 'assets/images/mini_truck.jpg';
+      return 'assets/images/tata_magic_cream.png';
+    }
+    if (cat.contains('207') || name.contains('207')) {
+      return 'assets/images/cargo_207_heavy.png';
     }
     if (cat.contains('ape') ||
         name.contains('ape') ||
-        cat.contains('commercial') ||
-        name.contains('commercial')) {
-      return 'assets/images/mini_commercial.jpg';
+        cat.contains('3-wheeler') ||
+        name.contains('3-wheeler') ||
+        cat.contains('three_wheeler') ||
+        name.contains('three_wheeler')) {
+      return 'assets/images/piaggio_ape_yellow.png';
     }
-    if (cat.contains('magic') || name.contains('magic')) {
-      return 'assets/images/tata_magic_cream.png';
-    }
-    if ((cat.contains('207') || name.contains('207')) &&
-        (cat.contains('heavy') || name.contains('heavy'))) {
-      return 'assets/images/cargo_207_heavy.png';
-    }
-    if (cat.contains('207') || name.contains('207')) {
-      return 'assets/images/cargo_207_normal.png';
-    }
-    if (cat.contains('407') || name.contains('407')) {
-      return 'assets/images/cargo_407.jpg';
+    if (cat.contains('hatchback') ||
+        name.contains('hatchback') ||
+        cat.contains('mini cab') ||
+        name.contains('mini cab') ||
+        cat.contains('mini_cab') ||
+        name.contains('mini_cab')) {
+      return 'assets/images/hatchback_clean.jpg';
     }
     return 'assets/images/sedan.jpg';
   }

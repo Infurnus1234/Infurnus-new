@@ -484,6 +484,34 @@ export class FareCalculatorService {
       if (input.hasLoadingAssistance) {
         loadingAmount = 15000;
       }
+    } else if (!exactConfiguration && input.sector === 'service') {
+      if (input.vehicleCategory === 'ambulance') {
+        baseAmount = 50000;
+        distanceAmount = this.roundMoney((billableDistanceMeters * 2500) / 1000, 'distanceAmount');
+      } else if (
+        input.vehicleCategory === 'towing' ||
+        input.vehicleCategory === 'towing_van' ||
+        input.vehicleCategory === 'recovery' ||
+        input.vehicleCategory === 'recovery_vehicle'
+      ) {
+        baseAmount = 60000;
+        distanceAmount = this.roundMoney((billableDistanceMeters * 3000) / 1000, 'distanceAmount');
+      } else if (
+        input.vehicleCategory === 'roadside_service' ||
+        input.vehicleCategory === 'roadside_service_vehicle' ||
+        input.vehicleCategory === 'roadside_recovery' ||
+        input.vehicleCategory === 'roadside'
+      ) {
+        baseAmount = 60000;
+        distanceAmount = this.roundMoney((billableDistanceMeters * 3000) / 1000, 'distanceAmount');
+      } else if (input.vehicleCategory === 'jcb') {
+        // JCB trip-based pricing: Flat mobilization/base charge (120,000 paise / ₹1,200) + distance charge (4,000 paise/km / ₹40/km)
+        baseAmount = 120000;
+        distanceAmount = this.roundMoney((billableDistanceMeters * 4000) / 1000, 'distanceAmount');
+      } else {
+        baseAmount = 60000;
+        distanceAmount = this.roundMoney((billableDistanceMeters * 3000) / 1000, 'distanceAmount');
+      }
     } else if (!exactConfiguration && input.sector === 'premium') {
       const hours = Math.max(1, input.rentalHours || 1);
       baseAmount = hours * 100000;

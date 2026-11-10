@@ -149,10 +149,51 @@ class WalletRepositoryImpl implements WalletRepository {
         e.type == DioExceptionType.receiveTimeout ||
         e.type == DioExceptionType.connectionError ||
         e.error is SocketException) {
-      return NetworkFailure();
+      return NetworkFailure('Please check your internet connection.');
     }
-    final message = e.response?.data?['message'] ?? e.message ?? 'Server error';
-    return ServerFailure(message.toString());
+
+    final statusCode = e.response?.statusCode;
+    final data = e.response?.data;
+    String? serverMsg;
+
+    if (data is Map) {
+      if (data['message'] != null && data['message'] is String) {
+        serverMsg = data['message'] as String;
+      } else if (data['error'] is Map && data['error']['message'] != null) {
+        serverMsg = data['error']['message'].toString();
+      } else if (data['error'] is String) {
+        serverMsg = data['error'] as String;
+      }
+    }
+
+    // Filter out technical exception strings (like Dio's default validateStatus text)
+    if (serverMsg != null &&
+        (serverMsg.contains('validateStatus') ||
+            serverMsg.contains('DioException') ||
+            serverMsg.contains('RequestOptions'))) {
+      serverMsg = null;
+    }
+
+    if (statusCode == 409) {
+      return ServerFailure(
+        serverMsg ?? 'Wallet conflict occurred. Please refresh to continue.',
+      );
+    }
+    if (statusCode == 401 || statusCode == 403) {
+      return ServerFailure('Session expired. Please log in again.');
+    }
+    if (statusCode == 404) {
+      return ServerFailure('Wallet not found. Please contact support.');
+    }
+    if (statusCode != null && statusCode >= 500) {
+      return ServerFailure(
+        'Unable to connect to wallet services. Please try again later.',
+      );
+    }
+
+    return ServerFailure(
+      serverMsg ?? "Couldn't load wallet. Please try again.",
+    );
   }
 }
 

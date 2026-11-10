@@ -86,7 +86,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
 
   Widget _buildBody(WalletState state) {
     // 1. Initial Loading State
-    if (state.isLoading && state.wallet == null) {
+    if (state.isLoading && state.wallet == null && !state.hasWalletError) {
       return const InfurnusLoader(message: 'Loading your wallet...');
     }
 
@@ -99,12 +99,23 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
       );
     }
 
-    // 3. Error State
-    if (state.errorMessage != null && state.wallet == null) {
-      return InfurnusErrorView(message: state.errorMessage!, onRetry: _refresh);
+    // 3. Error State (Keeps ERROR state distinct from genuine ZERO balance)
+    if (state.hasWalletError ||
+        (state.errorMessage != null && state.wallet == null)) {
+      return InfurnusErrorView(
+        message: state.errorMessage ?? "Couldn't load wallet",
+        onRetry: _refresh,
+      );
     }
 
-    final wallet = state.wallet ?? WalletModel.empty();
+    if (state.wallet == null) {
+      return InfurnusErrorView(
+        message: "Couldn't load wallet",
+        onRetry: _refresh,
+      );
+    }
+
+    final wallet = state.wallet!;
     final transactions = state.transactions;
     final totalCount = state.totalCount > 0
         ? state.totalCount

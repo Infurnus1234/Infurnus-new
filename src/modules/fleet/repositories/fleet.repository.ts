@@ -53,6 +53,24 @@ export interface FleetRepository {
   getEarnings(ownerId: string): Promise<FleetEarningsSummary>;
 }
 
+export interface AllowedVehicleType {
+  sector: string;
+  code: string;
+  name: string;
+}
+
+export const ALLOWED_VEHICLE_TYPES: AllowedVehicleType[] = [
+  { sector: 'passenger', code: 'mini', name: 'Mini Cab' },
+  { sector: 'passenger', code: 'sedan', name: 'Sedan' },
+  { sector: 'passenger', code: 'suv', name: 'SUV' },
+  { sector: 'logistics', code: 'cargo_207_heavy', name: '207 Heavy' },
+  { sector: 'logistics', code: 'three_wheeler', name: '3-Wheeler (Goods)' },
+  { sector: 'logistics', code: 'mini_truck', name: 'Mini Truck (Tata Ace)' },
+  { sector: 'logistics', code: 'tata_407', name: 'Tata 407' },
+  { sector: 'service', code: 'ambulance', name: 'Ambulance' },
+  { sector: 'premium', code: 'thar', name: 'Mahindra Thar' },
+];
+
 export class PostgresFleetRepository implements FleetRepository {
   constructor(private readonly pool: Pool) {}
 

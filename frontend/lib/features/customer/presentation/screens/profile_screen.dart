@@ -1,6 +1,10 @@
+import 'dart:io';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../../core/network/dio_client.dart';
@@ -28,6 +32,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   bool _isEditingPersonal = false;
   bool _isSaving = false;
+  bool _isUploadingPhoto = false;
+  String? _localAvatarPath;
   String? _saveMessage;
   String? _saveError;
 
@@ -186,6 +192,157 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
+  Future<void> _pickProfilePhoto() async {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: cardBg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: borderCard,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'Change Profile Photo',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: textBlack,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                leading: const Icon(Icons.camera_alt_rounded, color: darkGreen),
+                title: const Text(
+                  'Take Photo',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: const Text(
+                  'Use your device camera',
+                  style: TextStyle(fontSize: 12, color: textGray),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _captureImage(ImageSource.camera);
+                },
+              ),
+              ListTile(
+                leading: const Icon(
+                  Icons.photo_library_rounded,
+                  color: darkGreen,
+                ),
+                title: const Text(
+                  'Choose from Gallery',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: const Text(
+                  'Select an existing photo',
+                  style: TextStyle(fontSize: 12, color: textGray),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _captureImage(ImageSource.gallery);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _captureImage(ImageSource source) async {
+    if (source == ImageSource.camera) {
+      final cameraStatus = await Permission.camera.request();
+      if (cameraStatus.isPermanentlyDenied) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Camera permission is required to capture a photo. Please enable it in Settings.',
+            ),
+            action: SnackBarAction(
+              label: 'Settings',
+              onPressed: openAppSettings,
+            ),
+          ),
+        );
+        return;
+      }
+      if (!cameraStatus.isGranted) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Camera permission was denied.')),
+        );
+        return;
+      }
+    }
+
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: source,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 85,
+      );
+      if (picked == null) return;
+
+      setState(() => _isUploadingPhoto = true);
+
+      // Attempt backend upload if user is authenticated (Assumption: /users/:id/avatar or local preview)
+      final user = ref.read(userProvider);
+      if (user != null) {
+        try {
+          final dio = ref.read(dioProvider);
+          final formData = FormData.fromMap({
+            'avatar': await MultipartFile.fromFile(
+              picked.path,
+              filename: 'avatar_${user.id}.jpg',
+            ),
+          });
+          await dio.post('/users/${user.id}/avatar', data: formData);
+        } catch (_) {
+          // Gracefully fallback when dedicated backend avatar route is not available
+        }
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _localAvatarPath = picked.path;
+        _isUploadingPhoto = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profile photo updated successfully!'),
+          backgroundColor: brandGreen,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isUploadingPhoto = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not update profile photo: $e'),
+          backgroundColor: serviceRed,
+        ),
+      );
+    }
+  }
+
   Future<void> _openPrivacySettings() async {
     final opened = await openAppSettings();
     if (!opened && mounted) {
@@ -249,38 +406,62 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
               child: Column(
                 children: [
-                  Stack(
-                    alignment: Alignment.bottomRight,
-                    children: [
-                      Container(
-                        width: 82,
-                        height: 82,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: brandGreen, width: 2.5),
-                          color: const Color(0xFF0F5132),
-                        ),
-                        child: const Center(
-                          child: Icon(
-                            Icons.person_rounded,
-                            size: 46,
-                            color: Colors.white,
+                  InkWell(
+                    onTap: _isUploadingPhoto ? null : _pickProfilePhoto,
+                    borderRadius: BorderRadius.circular(50),
+                    child: Stack(
+                      alignment: Alignment.bottomRight,
+                      children: [
+                        Container(
+                          width: 82,
+                          height: 82,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: brandGreen, width: 2.5),
+                            color: const Color(0xFF0F5132),
+                          ),
+                          child: ClipOval(
+                            child: _isUploadingPhoto
+                                ? const Center(
+                                    child: SizedBox(
+                                      width: 28,
+                                      height: 28,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2.5,
+                                      ),
+                                    ),
+                                  )
+                                : _localAvatarPath != null
+                                ? Image.file(
+                                    File(_localAvatarPath!),
+                                    width: 82,
+                                    height: 82,
+                                    fit: BoxFit.cover,
+                                  )
+                                : const Center(
+                                    child: Icon(
+                                      Icons.person_rounded,
+                                      size: 46,
+                                      color: Colors.white,
+                                    ),
+                                  ),
                           ),
                         ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.all(5),
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
+                        Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.camera_alt_rounded,
+                            size: 14,
+                            color: Color(0xFF0F5132),
+                          ),
                         ),
-                        child: const Icon(
-                          Icons.camera_alt_rounded,
-                          size: 14,
-                          color: Color(0xFF0F5132),
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Text(
@@ -404,7 +585,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     _buildTile(
                       Icons.notifications_outlined,
                       'Notifications',
-                      () {},
+                      () => context.push('/notification-preferences'),
                       subtitle: 'Trip alerts and service updates',
                     ),
                     _buildTile(

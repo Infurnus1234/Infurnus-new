@@ -73,7 +73,7 @@ export function createTestPushRouter(): Router {
           androidChannelId,
           iOSSound: 'infurnus_alert.wav',
           message:
-            'Notification enqueued. Check the target device â€” you should hear infurnus_alert sound.',
+            'Notification enqueued. Check the target device – you should hear infurnus_alert sound.',
         },
       });
     } catch (error) {

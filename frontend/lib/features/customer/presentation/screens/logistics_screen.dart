@@ -20,6 +20,41 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
 
   final List<String> _filters = ['All', '3-Wheeler', 'Mini Truck', 'Truck'];
 
+  static final List<Map<String, String>> _fallbackVehicles = [
+    {
+      'name': 'Piaggio Ape',
+      'title': 'Piaggio Ape',
+      'category': 'piaggio_ape',
+      'filter': '3-Wheeler',
+      'subtitle': 'Up to 500 kg • City delivery',
+      'image': 'assets/images/piaggio_ape_yellow.png',
+    },
+    {
+      'name': 'Tata Magic',
+      'title': 'Tata Magic',
+      'category': 'tata_magic',
+      'filter': 'Mini Truck',
+      'subtitle': 'Up to 750 kg • Goods transport',
+      'image': 'assets/images/tata_magic_cream.png',
+    },
+    {
+      'name': 'Tata 207',
+      'title': 'Tata 207',
+      'category': 'cargo_207',
+      'filter': 'Truck',
+      'subtitle': 'Up to 1500 kg • Medium cargo',
+      'image': 'assets/images/cargo_207_heavy.png',
+    },
+    {
+      'name': 'Tata 407',
+      'title': 'Tata 407',
+      'category': 'cargo_407',
+      'filter': 'Truck',
+      'subtitle': 'Up to 2500 kg • Heavy cargo',
+      'image': 'assets/images/cargo_407.jpg',
+    },
+  ];
+
   @override
   Widget build(BuildContext context) {
     final rideState = ref.watch(rideProvider);
@@ -27,10 +62,34 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
     final isUnavailable = fareEstimate?.isUnavailable ?? false;
     final hasBookingAmount = fareEstimate?.bookingAmount != null;
 
-    final vehicles = customerVehiclePresentation(
+    final catalogVehicles = customerVehiclePresentation(
       'logistics',
       ref.watch(bookingCatalogProvider('logistics')).value ?? [],
     );
+    final vehicles = catalogVehicles.isNotEmpty
+        ? catalogVehicles
+        : _fallbackVehicles;
+
+    final selectedCategory = rideState.selectedTier;
+    final matchedVehicle = vehicles
+        .where((v) => v['category'] == selectedCategory)
+        .firstOrNull;
+    final unavailableVehicleName = matchedVehicle != null
+        ? (matchedVehicle['name'] ?? matchedVehicle['title'])
+        : (_selectedFilter != 'All'
+              ? _selectedFilter
+              : (selectedCategory.isNotEmpty
+                    ? selectedCategory
+                          .replaceAll('_', ' ')
+                          .split(' ')
+                          .map(
+                            (w) => w.isNotEmpty
+                                ? '${w[0].toUpperCase()}${w.substring(1)}'
+                                : '',
+                          )
+                          .join(' ')
+                    : null));
+
     final filtered = _selectedFilter == 'All'
         ? vehicles
         : vehicles.where((v) => v['filter'] == _selectedFilter).toList();
@@ -113,9 +172,44 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
               width: double.infinity,
               color: const Color(0xFFFEF3C7),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Text(
-                fareEstimate!.message!,
-                style: const TextStyle(color: Color(0xFF92400E), fontSize: 13),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.only(top: 2),
+                    child: Icon(
+                      Icons.info_outline_rounded,
+                      size: 18,
+                      color: Color(0xFF92400E),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (unavailableVehicleName != null) ...[
+                          Text(
+                            '$unavailableVehicleName Unavailable',
+                            style: const TextStyle(
+                              color: Color(0xFF92400E),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                        ],
+                        Text(
+                          fareEstimate!.message!,
+                          style: const TextStyle(
+                            color: Color(0xFF92400E),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
 
@@ -127,8 +221,24 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
               separatorBuilder: (_, __) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
                 final item = filtered[index];
+                final isThisVehicleUnavailable =
+                    isUnavailable &&
+                    (item['category'] == rideState.selectedTier ||
+                        (_selectedFilter != 'All' &&
+                            item['filter'] == _selectedFilter));
                 return GestureDetector(
                   onTap: () {
+                    if (isThisVehicleUnavailable) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            '${item['name'] ?? item['title']} is currently unavailable for booking.',
+                          ),
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                      return;
+                    }
                     ref.read(rideProvider.notifier).selectSector('logistics');
                     ref
                         .read(rideProvider.notifier)
@@ -189,13 +299,42 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                item['name']!,
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF111827),
-                                ),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      item['name'] ?? item['title'] ?? '',
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF111827),
+                                      ),
+                                    ),
+                                  ),
+                                  if (isThisVehicleUnavailable)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFFEF3C7),
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(
+                                          color: const Color(0xFFF59E0B),
+                                          width: 0.5,
+                                        ),
+                                      ),
+                                      child: const Text(
+                                        'Unavailable',
+                                        style: TextStyle(
+                                          color: Color(0xFF92400E),
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
                               const SizedBox(height: 4),
                               Text(

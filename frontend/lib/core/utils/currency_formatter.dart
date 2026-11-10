@@ -7,26 +7,19 @@ class CurrencyFormatter {
   static final NumberFormat _inrFormatter = NumberFormat.currency(
     locale: 'en_IN',
     symbol: '₹',
-    decimalDigits: 0,
+    decimalDigits: 2,
   );
 
   static final NumberFormat _inrNoSymbolFormatter = NumberFormat.currency(
     locale: 'en_IN',
     symbol: '',
-    decimalDigits: 0,
+    decimalDigits: 2,
   );
 
-  /// Formats a rupee amount with Indian numbering system: e.g. ₹1,23,456.78
+  /// Formats a rupee amount with Indian numbering system: e.g. ₹1,500.00
   static String format(num? amount, {bool showSymbol = true}) {
     if (amount == null || amount.isNaN) {
-      return showSymbol ? '₹0' : '0';
-    }
-    if (amount != amount.truncateToDouble()) {
-      return NumberFormat.currency(
-        locale: 'en_IN',
-        symbol: showSymbol ? '₹' : '',
-        decimalDigits: 2,
-      ).format(amount).trim();
+      return showSymbol ? '₹0.00' : '0.00';
     }
     final formatted = showSymbol
         ? _inrFormatter.format(amount)
@@ -36,7 +29,7 @@ class CurrencyFormatter {
 
   /// Formats an integer amount in paise: e.g. 50000 paise -> ₹500.00
   static String formatPaise(int? paise, {bool showSymbol = true}) {
-    if (paise == null) return showSymbol ? '₹0' : '0';
+    if (paise == null) return showSymbol ? '₹0.00' : '0.00';
     final rupees = paise / 100.0;
     return format(rupees, showSymbol: showSymbol);
   }
