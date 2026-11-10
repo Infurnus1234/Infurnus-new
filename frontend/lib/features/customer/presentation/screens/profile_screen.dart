@@ -402,7 +402,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     _buildTile(
                       Icons.notifications_outlined,
                       'Notifications',
-                      () {},
+                      () => context.push('/notification-preferences'),
                       subtitle: 'Trip alerts and service updates',
                     ),
                     _buildTile(
