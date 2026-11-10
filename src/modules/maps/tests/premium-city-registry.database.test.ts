@@ -13,8 +13,8 @@ import express from 'express';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { pool } from '../../../infrastructure/database/postgres.js';
-import { registerPremiumCity, loadPremiumCities } from '../premium-city-registry.js';
-import { premiumCityAreas } from '../premium-city-areas.js';
+import { registerServiceCity, loadServiceCities } from '../service-city-registry.js';
+import { serviceCityAreas } from '../service-city-areas.js';
 import { PostgresFleetRepository } from '../../fleet/repositories/fleet.repository.js';
 import { PostgresVehicleRepository } from '../../vehicles/repositories/vehicle.repository.js';
 import { VehicleController } from '../../vehicles/controllers/vehicle.controller.js';
@@ -71,7 +71,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')('dynamic Bihar Premium city
     await pool.query('UPDATE driver_profiles SET active_vehicle_id=NULL WHERE id=$1', [profile]);
     if (vehicleId) await pool.query('DELETE FROM vehicles WHERE id=$1', [vehicleId]);
     await pool.query('DELETE FROM premium_service_cities WHERE created_by=$1', [actor]);
-    await loadPremiumCities();
+    await loadServiceCities();
     await pool.query('DELETE FROM driver_profiles WHERE id=$1', [profile]);
     await pool.query('DELETE FROM provider_approval_requests WHERE requester_id=ANY($1::uuid[])', [
       [actor, driverUser, customer],
@@ -113,7 +113,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')('dynamic Bihar Premium city
       cities.push(city.id);
     }
     const catalog = await new PostgresFleetRepository(pool).catalog();
-    expect(catalog.operatingCities.filter((c) => cities.includes(c.id))).toHaveLength(3);
+    expect(catalog).not.toHaveProperty('operatingCities');
     const response = await request(app)
       .get('/vehicles/operating-cities')
       .set('Authorization', 'Bearer ' + customerToken);
@@ -144,8 +144,8 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')('dynamic Bihar Premium city
     expect((await new PostgresVehicleRepository(pool).findById(vehicle.id))?.operatingCityId).toBe(
       cities[2],
     );
-    await loadPremiumCities();
-    expect((await premiumCityAreas.resolve({ latitude: 24.78, longitude: 85.0 })).cityId).toBe(
+    await loadServiceCities();
+    expect((await serviceCityAreas.resolve({ latitude: 24.78, longitude: 85.0 })).cityId).toBe(
       cities[2],
     );
   });
@@ -154,7 +154,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')('dynamic Bihar Premium city
       await pool.query(`SELECT * FROM vehicle_types WHERE sector='premium' AND code='thar'`)
     ).rows[0];
     await pool.query(
-      "UPDATE vehicle_types SET active=TRUE,fixed_hourly_rate_paise=10000,hourly_fuel_rate_paise=0,hourly_fuel_unit='per_booking' WHERE sector='premium' AND code='thar'",
+      "UPDATE vehicle_types SET active=TRUE,fixed_hourly_rate_paise=10000,hourly_fuel_rate_paise=0,hourly_fuel_unit='per_km' WHERE sector='premium' AND code='thar'",
     );
     await pool.query(
       `UPDATE vehicles SET driver_profile_id=$2,verification_status='approved',is_active=TRUE WHERE id=$1`,
@@ -174,8 +174,8 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')('dynamic Bihar Premium city
       true,
     );
     const drivers = new PostgresDriverRepository(pool);
-    const rides = new PostgresRideRepository(pool, premiumCityAreas);
-    const matching = new MatchingService(drivers, undefined, bihar, premiumCityAreas);
+    const rides = new PostgresRideRepository(pool, serviceCityAreas);
+    const matching = new MatchingService(drivers, undefined, bihar);
     const estimate = new FareEstimateService(
       { calculateRoute: async () => ({ distanceMeters: 1000, durationSeconds: 300 }) } as never,
       new FareCalculatorService(),
@@ -215,13 +215,13 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')('dynamic Bihar Premium city
   });
 
   it('rejects outside-Bihar coordinates, duplicate cities and overlapping dispatch areas', async () => {
-    await expect(registerPremiumCity(input('outside', 28.61, 77.2), actor)).rejects.toMatchObject({
+    await expect(registerServiceCity(input('outside', 28.61, 77.2), actor)).rejects.toMatchObject({
       code: 'SERVICE_AREA_UNAVAILABLE',
     });
-    await expect(registerPremiumCity(input('a', 25.6, 85.1), actor)).rejects.toMatchObject({
+    await expect(registerServiceCity(input('a', 25.6, 85.1), actor)).rejects.toMatchObject({
       code: 'PREMIUM_CITY_EXISTS',
     });
-    await expect(registerPremiumCity(input('overlap', 24.79, 85.01), actor)).rejects.toMatchObject({
+    await expect(registerServiceCity(input('overlap', 24.79, 85.01), actor)).rejects.toMatchObject({
       code: 'PREMIUM_CITY_OVERLAP',
     });
   });

@@ -163,7 +163,7 @@ describe('validated booking-demand pricing', () => {
         baseFare: { minimum: 10000, maximum: 10000 },
         perKmRate: { minimum: 2000, maximum: 2000 },
       }),
-      fixedHourlyPricing: { hourlyRate: 100, fuelRate: 20, fuelUnit: 'per_booking' },
+      fixedHourlyPricing: { hourlyRate: 100, fuelRate: 10, fuelUnit: 'per_km' },
     };
     expect(
       calc.calculateEstimate(

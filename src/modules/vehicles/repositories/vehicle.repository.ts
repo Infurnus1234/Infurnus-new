@@ -1,7 +1,4 @@
-import {
-  validateOperatingLocation,
-  requirePremiumOperatingLocation,
-} from '../../maps/vehicle-operating-location.js';
+import { validateOperatingLocation } from '../../maps/vehicle-operating-location.js';
 import { fixedHourlyPricingFromRow, hourlyPricingFromRow } from '../services/hourly-pricing.js';
 import { rupeesToPaise } from '../../../common/utils/whole-rupee.js';
 import { vehiclePricingReferenceSchema } from '../schemas/vehicle.schemas.js';
@@ -328,6 +325,12 @@ export class PostgresVehicleRepository implements VehicleRepository {
         );
       }
       const vehicle = mapType(result.rows[0]);
+      if (vehicle.sector === 'premium' && pricing && pricing.fuelUnit !== 'per_km')
+        throw new AppError(
+          'VEHICLE_TYPE_INVALID',
+          'Premium fuel pricing must be per kilometre',
+          422,
+        );
       if (
         vehicle.sector === 'service' &&
         (vehicle.baseFare !== null ||
@@ -435,8 +438,8 @@ export class PostgresVehicleRepository implements VehicleRepository {
   }
 
   async create(data: CreateVehicleData): Promise<Vehicle> {
-    requirePremiumOperatingLocation(data.sector ?? 'passenger', data.operatingLocation);
-    if (data.operatingLocation) await validateOperatingLocation(data.operatingLocation);
+    if (data.sector !== 'premium' && data.operatingLocation)
+      await validateOperatingLocation(data.operatingLocation);
 
     const result = await this.pool.query<Vehicle>(
       `
@@ -543,20 +546,9 @@ export class PostgresVehicleRepository implements VehicleRepository {
   }
 
   async update(id: string, data: UpdateVehicleData): Promise<Vehicle | null> {
-    if (data.operatingLocation) await validateOperatingLocation(data.operatingLocation);
-    if (data.sector === 'premium' || data.operatingCityId !== undefined) {
-      const current = await this.findById(id);
-      if (
-        current &&
-        ((data.sector === 'premium' && current.sector !== 'premium') ||
-          (data.operatingCityId !== undefined &&
-            data.operatingCityId !== current.operatingCityId &&
-            !current.operatingLocation))
-      )
-        requirePremiumOperatingLocation(
-          data.sector ?? current.sector,
-          data.operatingLocation ?? current.operatingLocation,
-        );
+    if (data.operatingLocation) {
+      const sector = data.sector ?? (await this.findById(id))?.sector;
+      if (sector !== 'premium') await validateOperatingLocation(data.operatingLocation);
     }
 
     const columns: Record<keyof UpdateVehicleData, string> = {

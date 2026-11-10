@@ -29,7 +29,7 @@ const manifestSchema = z
       .max(200),
   })
   .strict();
-export class PremiumCityAreas {
+export class ServiceCityAreas {
   readonly cities: {
     id: string;
     name: string;
@@ -41,11 +41,11 @@ export class PremiumCityAreas {
     this.cities = [];
     if (!manifestFile) return;
     if (statSync(manifestFile).size > 2000000)
-      throw Error('Premium city manifest exceeds supported size');
+      throw Error('Service city manifest exceeds supported size');
     const manifest = manifestSchema.parse(JSON.parse(readFileSync(manifestFile, 'utf8')));
     const ids = new Set<string>();
     for (const city of manifest.cities) {
-      if (ids.has(city.id)) throw Error('Duplicate premium city identifier');
+      if (ids.has(city.id)) throw Error('Duplicate service city identifier');
       ids.add(city.id);
       if (city.referenceId) {
         const reference = cityReferences[city.referenceId];
@@ -64,9 +64,9 @@ export class PremiumCityAreas {
         basename(file).toLowerCase() === 'bihar.geojson' ||
         (env.MAP_SERVICE_AREA_BOUNDARY_FILE && file === resolve(env.MAP_SERVICE_AREA_BOUNDARY_FILE))
       )
-        throw Error('Statewide/general service boundary cannot be registered as a premium city');
+        throw Error('Statewide/general service boundary cannot be registered as a service city');
       if (statSync(file).size > 2000000)
-        throw Error('Premium city boundary exceeds supported size');
+        throw Error('Service city boundary exceeds supported size');
       this.cities.push({
         ...city,
         boundaryFile: file,
@@ -97,11 +97,12 @@ export class PremiumCityAreas {
       throw new AppError(
         'PREMIUM_CITY_NOT_CONFIGURED',
         matches.length
-          ? 'Premium city boundaries overlap; approved coverage must be resolved'
-          : 'No verified premium city boundary covers this pickup',
+          ? 'Service city boundaries overlap; approved coverage must be resolved'
+          : 'No verified service city boundary covers this pickup',
         503,
       );
     return { cityId: matches[0]!.id, boundaryGeoJson: matches[0]!.area.boundaryGeoJson! };
   }
 }
-export const premiumCityAreas = new PremiumCityAreas(env.PREMIUM_CITY_SERVICE_AREAS_FILE);
+// The existing manifest setting also supplies Service Vehicle dispatch geography.
+export const serviceCityAreas = new ServiceCityAreas(env.PREMIUM_CITY_SERVICE_AREAS_FILE);

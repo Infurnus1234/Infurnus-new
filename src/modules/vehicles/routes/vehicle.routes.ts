@@ -1,4 +1,4 @@
-import { loadPremiumCities, registerPremiumCity } from '../../maps/premium-city-registry.js';
+import { loadServiceCities, registerServiceCity } from '../../maps/service-city-registry.js';
 import { Router } from 'express';
 
 import { requireAuth } from '../../auth/middleware/auth.middleware.js';
@@ -14,7 +14,7 @@ export function createVehicleRouter(controller: VehicleController) {
 
   router.get('/operating-cities', async (_req, res, next) => {
     try {
-      res.json({ success: true, data: await loadPremiumCities() });
+      res.json({ success: true, data: await loadServiceCities() });
     } catch (error) {
       next(error);
     }
@@ -23,7 +23,7 @@ export function createVehicleRouter(controller: VehicleController) {
     try {
       res
         .status(201)
-        .json({ success: true, data: await registerPremiumCity(req.body, req.auth!.userId) });
+        .json({ success: true, data: await registerServiceCity(req.body, req.auth!.userId) });
     } catch (error) {
       next(error);
     }

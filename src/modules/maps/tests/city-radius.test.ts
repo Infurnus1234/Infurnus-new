@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { pool } from '../../../infrastructure/database/postgres.js';
 import { CityRadiusPolicy, cityReferences } from '../city-radius.js';
-import { PremiumCityAreas } from '../premium-city-areas.js';
+import { ServiceCityAreas } from '../service-city-areas.js';
 const folders: string[] = [];
 afterEach(() => {
   for (const folder of folders.splice(0)) rmSync(folder, { recursive: true, force: true });
@@ -33,7 +33,7 @@ describe('city reference identity validation', () => {
     { ...entry, radiusMeters: undefined },
     { ...entry, referencePoint: { latitude: 85.1, longitude: 25.6 } },
   ])('rejects missing, wrong, swapped or overridden reference metadata %#', (city) => {
-    expect(() => new PremiumCityAreas(manifest(city))).toThrow();
+    expect(() => new ServiceCityAreas(manifest(city))).toThrow();
   });
   it.each([NaN, Infinity, 91, -91])('rejects invalid latitude %s', (latitude) => {
     expect(
@@ -41,7 +41,7 @@ describe('city reference identity validation', () => {
     ).toThrow();
   });
   it('loads the sourced operational reference registry without a polygon', () => {
-    const areas = new PremiumCityAreas('config/service-area/premium-city-radius.json');
+    const areas = new ServiceCityAreas('config/service-area/premium-city-radius.json');
     expect(areas.cities.map((city) => city.id)).toEqual(['patna', 'muzaffarpur']);
     expect(cityReferences.patna!.source).toBe(
       'https://www.packolkata.gov.in/download/smrs/Patna.pdf',
@@ -68,7 +68,7 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('city radius real PostGIS'
     },
   );
   it('resolves each real city independently and blocks unsupported statewide locations', async () => {
-    const areas = new PremiumCityAreas('config/service-area/premium-city-radius.json');
+    const areas = new ServiceCityAreas('config/service-area/premium-city-radius.json');
     expect((await areas.resolve(cityReferences.patna!)).cityId).toBe('patna');
     expect((await areas.resolve(cityReferences.muzaffarpur!)).cityId).toBe('muzaffarpur');
     await expect(areas.resolve({ latitude: 26.65, longitude: 84.91 })).rejects.toMatchObject({

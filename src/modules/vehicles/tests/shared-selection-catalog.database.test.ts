@@ -26,7 +26,7 @@ import { FleetService } from '../../fleet/services/fleet.service.js';
 import { PostgresFleetRepository } from '../../fleet/repositories/fleet.repository.js';
 import { requireDisposableAdministrativeDatabase } from '../../admin/tests/administrative-test-database.js';
 import { actor } from '../../providers/tests/fleet-workflow-fixture.js';
-import { loadPremiumCities } from '../../maps/premium-city-registry.js';
+import { loadServiceCities } from '../../maps/service-city-registry.js';
 
 describe.skipIf(process.env.PROVIDER_DB_TESTS !== 'true')(
   'shared Admin/Customer/Fleet selection catalog',
@@ -77,7 +77,7 @@ describe.skipIf(process.env.PROVIDER_DB_TESTS !== 'true')(
       );
       if (cityId) {
         await pool.query('DELETE FROM premium_service_cities WHERE id=$1', [cityId]);
-        await loadPremiumCities();
+        await loadServiceCities();
       }
       await pool.query('DELETE FROM users WHERE id=ANY($1::uuid[])', [
         [adminId, ownerId, customerId],

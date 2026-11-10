@@ -8,8 +8,6 @@ import { requireDisposableAdministrativeDatabase } from '../../admin/tests/admin
 import { createSocketServer } from '../../../infrastructure/socket/socket.server.js';
 import { signAccessToken } from '../../auth/utils/jwt.js';
 import { ServiceAreaPolicy } from '../../maps/service-area.js';
-import { CityRadiusPolicy } from '../../maps/city-radius.js';
-import { PremiumCityAreas } from '../../maps/premium-city-areas.js';
 import { RouteRecalculationService } from '../services/route-recalculation.service.js';
 import { PostgresRideRepository } from '../repositories/ride.repository.js';
 import { PostgresDriverRepository } from '../repositories/driver.repository.js';
@@ -26,19 +24,21 @@ const points = {
   Muzaffarpur: { latitude: 26.1197, longitude: 85.391 },
   Gaya: { latitude: 24.7955, longitude: 84.9994 },
   Motihari: { latitude: 26.6469, longitude: 84.9089 },
+  Darbhanga: { latitude: 26.1542, longitude: 85.8918 },
   Delhi: { latitude: 28.6139, longitude: 77.209 },
   Jaipur: { latitude: 26.9124, longitude: 75.7873 },
 };
 const scenarios = [
   ['Patna', 'Muzaffarpur', 'Gaya'],
   ['Muzaffarpur', 'Patna', 'Gaya'],
-  ['Motihari', 'Gaya', 'Patna'],
+  ['Motihari', 'Motihari', 'Darbhanga'],
+  ['Muzaffarpur', 'Muzaffarpur', 'Gaya'],
   ['Delhi', 'Patna', 'Muzaffarpur'],
   ['Jaipur', 'Muzaffarpur', 'Patna'],
 ] as const;
 const categories = [
   { label: 'Normal Ride', sector: 'passenger', code: 'sedan' },
-  { label: 'Rental', sector: 'premium', code: 'thar' },
+  { label: 'Rental', sector: 'rental', code: 'mini' },
   { label: 'Logistics', sector: 'logistics', code: 'mini_truck' },
   { label: 'Premium', sector: 'premium', code: 'thar' },
 ] as const;
@@ -62,7 +62,8 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
   () => {
     beforeAll(async () => {
       requireDisposableAdministrativeDatabase();
-      for (const { sector, code } of categories.slice(0, 3)) {
+      for (const { sector: bookingSector, code } of categories) {
+        const sector = bookingSector === 'rental' ? 'passenger' : bookingSector;
         const previous = (
           await pool.query('SELECT * FROM vehicle_types WHERE sector=$1 AND code=$2', [
             sector,
@@ -77,9 +78,9 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           [code, sector],
         );
         if (!previous) added.push(result.rows[0].id);
-        if (sector === 'premium') {
+        if (bookingSector === 'premium' || bookingSector === 'rental') {
           await pool.query(
-            "UPDATE vehicle_types SET fixed_hourly_rate_paise=10000,hourly_fuel_rate_paise=0,hourly_fuel_unit='per_booking' WHERE id=$1",
+            "UPDATE vehicle_types SET fixed_hourly_rate_paise=10000,hourly_fuel_rate_paise=1000,hourly_fuel_unit='per_km' WHERE id=$1",
             [result.rows[0].id],
           );
         }
@@ -121,7 +122,6 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           const pickup = points[city],
             destination = points[drop],
             gps = points[physical];
-          const cityId = 'test-remote-' + randomUUID();
           const area = new ServiceAreaPolicy(
             JSON.parse(
               readFileSync(
@@ -131,17 +131,10 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
             ),
             true,
           );
-          const cities = new PremiumCityAreas();
-          cities.cities.push({
-            id: cityId,
-            name: 'TEST ONLY configured pickup city',
-            approvalReference: 'LOCAL TEST ONLY',
-            area: new CityRadiusPolicy(cityId, { ...pickup, source: 'LOCAL TEST ONLY' }),
-          });
-          const rides = new PostgresRideRepository(pool, cities),
+          const rides = new PostgresRideRepository(pool),
             drivers = new PostgresDriverRepository(pool);
           const maps = {
-            calculateRoute: async () => ({ distanceMeters: 2000, durationSeconds: 300 }),
+            calculateRoute: async () => ({ distanceMeters: 100_000, durationSeconds: 7_200 }),
           };
           const estimator = new FareEstimateService(
             maps as never,
@@ -149,7 +142,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
             undefined,
             new PostgresVehicleRepository(pool),
           );
-          const matching = new MatchingService(drivers, undefined, area, cities);
+          const matching = new MatchingService(drivers, undefined, area);
           const service = new RideService(
             rides,
             drivers,
@@ -200,15 +193,14 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
               [profile, user, 'TEST-' + profile, pickup.longitude, pickup.latitude],
             );
             await pool.query(
-              "INSERT INTO vehicles(id,owner_id,driver_profile_id,make,model,plate_number,sector,category,verification_status,is_active,operating_city_id) VALUES($1,$2,$3,'TEST','ONLY',$4,$5,$6,'approved',TRUE,$7)",
+              "INSERT INTO vehicles(id,owner_id,driver_profile_id,make,model,plate_number,sector,category,verification_status,is_active) VALUES($1,$2,$3,'TEST','ONLY',$4,$5,$6,'approved',TRUE)",
               [
                 vehicle,
                 user,
                 profile,
                 vehicle.slice(0, 20),
-                category.sector,
+                category.sector === 'rental' ? 'passenger' : category.sector,
                 category.code,
-                cityId,
               ],
             );
             await pool.query('UPDATE driver_profiles SET active_vehicle_id=$2 WHERE id=$1', [
@@ -235,6 +227,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
               },
             });
             rideId = ride.id;
+            if (category.sector === 'premium') expect(Number(ride.fareEstimate)).toBe(2200);
             expect((await incoming).ride.pickup).toEqual(pickup);
             expect(await ack(customerSocket, 'ride:join', ride.id)).toMatchObject({
               success: true,

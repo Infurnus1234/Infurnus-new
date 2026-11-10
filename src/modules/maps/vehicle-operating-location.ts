@@ -29,14 +29,3 @@ export async function validateOperatingLocation(location: OperatingLocation) {
     throw error;
   }
 }
-export function requirePremiumOperatingLocation(
-  sector: string,
-  location?: OperatingLocation | null,
-) {
-  if (sector === 'premium' && !location)
-    throw new AppError(
-      'OPERATING_LOCATION_REQUIRED',
-      'Select the vehicle operating location within Bihar.',
-      422,
-    );
-}

@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync, rmSync, appendFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { PremiumCityAreas } from '../premium-city-areas.js';
+import { ServiceCityAreas } from '../service-city-areas.js';
 const folders: string[] = [];
 function registry(overlap = false) {
   const folder = mkdtempSync(join(tmpdir(), 'premium-test-'));
@@ -45,7 +45,7 @@ describe('premium city manifest safeguards', () => {
   it('rejects whitespace-only approval references', () => {
     const { file, cities } = registry();
     writeFileSync(file, JSON.stringify({ cities: [{ ...cities[0], approvalReference: '   ' }] }));
-    expect(() => new PremiumCityAreas(file)).toThrow();
+    expect(() => new ServiceCityAreas(file)).toThrow();
   });
   it('rejects missing city boundary files', () => {
     const { file, cities } = registry();
@@ -53,32 +53,32 @@ describe('premium city manifest safeguards', () => {
       file,
       JSON.stringify({ cities: [{ ...cities[0], boundaryFile: 'missing.geojson' }] }),
     );
-    expect(() => new PremiumCityAreas(file)).toThrow();
+    expect(() => new ServiceCityAreas(file)).toThrow();
   });
   it('rejects malformed GeoJSON and nonpolygon geometry', () => {
     const { file, folder } = registry();
     writeFileSync(join(folder, 'a.geojson'), '{broken');
-    expect(() => new PremiumCityAreas(file)).toThrow();
+    expect(() => new ServiceCityAreas(file)).toThrow();
     writeFileSync(
       join(folder, 'a.geojson'),
       JSON.stringify({ type: 'Point', coordinates: [0, 0] }),
     );
-    expect(() => new PremiumCityAreas(file)).toThrow();
+    expect(() => new ServiceCityAreas(file)).toThrow();
   });
   it('blocks all premium pickups without an approved manifest', async () => {
     await expect(
-      new PremiumCityAreas().resolve({ latitude: 25.6, longitude: 85.1 }),
+      new ServiceCityAreas().resolve({ latitude: 25.6, longitude: 85.1 }),
     ).rejects.toMatchObject({ code: 'PREMIUM_CITY_NOT_CONFIGURED' });
   });
   it('requires explicit verification and approval metadata', () => {
     const { file, cities } = registry();
     writeFileSync(file, JSON.stringify({ cities: [{ ...cities[0], verified: false }] }));
-    expect(() => new PremiumCityAreas(file)).toThrow();
+    expect(() => new ServiceCityAreas(file)).toThrow();
   });
   it('rejects duplicate city IDs', () => {
     const { file, cities } = registry();
     writeFileSync(file, JSON.stringify({ cities: [cities[0], cities[0]] }));
-    expect(() => new PremiumCityAreas(file)).toThrow('Duplicate');
+    expect(() => new ServiceCityAreas(file)).toThrow('Duplicate');
   });
   it('does not accept the Bihar statewide file as city coverage', () => {
     const { file, cities } = registry();
@@ -86,7 +86,7 @@ describe('premium city manifest safeguards', () => {
       file,
       JSON.stringify({ cities: [{ ...cities[0], boundaryFile: 'bihar.geojson' }] }),
     );
-    expect(() => new PremiumCityAreas(file)).toThrow('Statewide');
+    expect(() => new ServiceCityAreas(file)).toThrow('Statewide');
   });
 });
 describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('premium city PostGIS validation', () => {
@@ -112,7 +112,7 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('premium city PostGIS vali
       });
     }
     writeFileSync(file, JSON.stringify({ cities }));
-    const areas = new PremiumCityAreas(file),
+    const areas = new ServiceCityAreas(file),
       samples = [];
     for (let i = 0; i < 6; i++) {
       const started = performance.now();
@@ -134,7 +134,7 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('premium city PostGIS vali
       );
   }, 20000);
   it('selects the corresponding city and blocks unsupported pickups', async () => {
-    const areas = new PremiumCityAreas(registry().file);
+    const areas = new ServiceCityAreas(registry().file);
     expect((await areas.resolve({ latitude: 0.5, longitude: 0.5 })).cityId).toBe('a');
     expect((await areas.resolve({ latitude: 0.5, longitude: 2.5 })).cityId).toBe('b');
     await expect(areas.resolve({ latitude: 0.5, longitude: 1.5 })).rejects.toMatchObject({
@@ -142,23 +142,23 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('premium city PostGIS vali
     });
   });
   it('treats a valid but uncovered pickup as unavailable only when requested by dispatch', async () => {
-    const areas = new PremiumCityAreas(registry().file);
+    const areas = new ServiceCityAreas(registry().file);
     await expect(areas.resolve({ latitude: 0.5, longitude: 1.5 }, true)).resolves.toBeUndefined();
     await expect(
-      new PremiumCityAreas().resolve({ latitude: 0.5, longitude: 1.5 }, true),
+      new ServiceCityAreas().resolve({ latitude: 0.5, longitude: 1.5 }, true),
     ).rejects.toMatchObject({ code: 'PREMIUM_CITY_NOT_CONFIGURED' });
     await expect(
-      new PremiumCityAreas(registry(true).file).resolve({ latitude: 0.5, longitude: 0.5 }, true),
+      new ServiceCityAreas(registry(true).file).resolve({ latitude: 0.5, longitude: 0.5 }, true),
     ).rejects.toMatchObject({ code: 'PREMIUM_CITY_NOT_CONFIGURED' });
   });
   it('includes city boundary edges', async () => {
     expect(
-      (await new PremiumCityAreas(registry().file).resolve({ latitude: 0, longitude: 0 })).cityId,
+      (await new ServiceCityAreas(registry().file).resolve({ latitude: 0, longitude: 0 })).cityId,
     ).toBe('a');
   });
   it('fails closed on ambiguous overlapping cities', async () => {
     await expect(
-      new PremiumCityAreas(registry(true).file).resolve({ latitude: 0.5, longitude: 0.5 }),
+      new ServiceCityAreas(registry(true).file).resolve({ latitude: 0.5, longitude: 0.5 }),
     ).rejects.toMatchObject({ code: 'PREMIUM_CITY_NOT_CONFIGURED' });
   });
   it('fails closed on an invalid polygon', async () => {
@@ -179,7 +179,7 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('premium city PostGIS vali
       }),
     );
     await expect(
-      new PremiumCityAreas(file).resolve({ latitude: 0.5, longitude: 0.5 }),
+      new ServiceCityAreas(file).resolve({ latitude: 0.5, longitude: 0.5 }),
     ).rejects.toMatchObject({ statusCode: 503 });
   });
 });

@@ -1,5 +1,5 @@
 import { serviceEligibilitySql } from './service-eligibility.js';
-import type { PremiumCityAreas } from '../../maps/premium-city-areas.js';
+import type { ServiceCityAreas } from '../../maps/service-city-areas.js';
 import type { LiveLocationCache } from './live-location.cache.js';
 import { cityCoverageSql } from '../../maps/city-radius.js';
 import { driverEligibilitySql, driverOperationalEligibilitySql } from './driver-eligibility.js';
@@ -267,7 +267,7 @@ export class PostgresDriverRepository implements DriverRepository {
   private readonly hydratedTracking = new Set<string>();
   constructor(
     private readonly pool: Pool,
-    private readonly serviceCities?: Pick<PremiumCityAreas, 'cities'>,
+    private readonly serviceCities?: Pick<ServiceCityAreas, 'cities'>,
   ) {}
 
   async findProfileIdByUserId(userId: string): Promise<string | null> {

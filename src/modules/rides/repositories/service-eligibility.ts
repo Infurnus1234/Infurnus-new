@@ -1,6 +1,6 @@
 import { serviceArea } from '../../maps/service-area.js';
 import { CityRadiusPolicy, cityCoverageSql, cityReferences } from '../../maps/city-radius.js';
-import { premiumCityAreas, type PremiumCityAreas } from '../../maps/premium-city-areas.js';
+import { serviceCityAreas, type ServiceCityAreas } from '../../maps/service-city-areas.js';
 
 const defaultBoundaries = Object.entries(cityReferences).map(
   ([id, reference]) => new CityRadiusPolicy(id, reference).boundaryGeoJson,
@@ -9,7 +9,7 @@ const defaultBoundaries = Object.entries(cityReferences).map(
 /** Fixed SQL aliases only. Shared by offer and atomic acceptance, never client input. */
 export function serviceEligibilitySql(
   pickup = 'r.pickup_location',
-  registry: Pick<PremiumCityAreas, 'cities'> = premiumCityAreas,
+  registry: Pick<ServiceCityAreas, 'cities'> = serviceCityAreas,
 ) {
   const boundary = serviceArea.boundaryGeoJson;
   const coverage = boundary
@@ -17,7 +17,6 @@ export function serviceEligibilitySql(
     : serviceArea.required
       ? 'FALSE'
       : 'TRUE';
-  // Reuse verified geography, not the Premium vehicle's registered operating city.
   const boundaries = registry.cities.length
     ? registry.cities.map(({ area }) => area.boundaryGeoJson).filter(Boolean)
     : defaultBoundaries;

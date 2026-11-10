@@ -46,11 +46,14 @@ export function fixedHourlyFare(
     ![pricing.hourlyRate, pricing.fuelRate].every(
       (rate) => rate <= 99_999_999.99 && /^\d+(?:\.\d{1,2})?$/.test(String(rate)),
     ) ||
-    !['per_booking', 'per_hour', 'per_km'].includes(pricing.fuelUnit)
+    !['per_booking', 'per_hour', 'per_km'].includes(pricing.fuelUnit) ||
+    (input.sector === 'premium' && pricing.fuelUnit !== 'per_km')
   ) {
     throw new AppError(
       'FARE_CONFIGURATION_MISSING',
-      'This vehicle needs a valid hourly rate and fuel charge before booking',
+      input.sector === 'premium'
+        ? 'This Premium vehicle needs a valid hourly rate and per-kilometre fuel rate before booking'
+        : 'This vehicle needs a valid hourly rate and fuel charge before booking',
       422,
     );
   }

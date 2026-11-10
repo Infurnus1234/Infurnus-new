@@ -84,9 +84,7 @@ const hourlySchedule = Object.fromEntries(
 const area = syntheticDispatchAreas.cities[0]!.area;
 const drivers = new PostgresDriverRepository(pool, syntheticDispatchAreas);
 const rides = new PostgresRideRepository(pool, syntheticDispatchAreas);
-const matching = new MatchingService(drivers, undefined, area, {
-  resolve: async () => syntheticDispatchCity,
-});
+const matching = new MatchingService(drivers, undefined, area);
 let routeDistanceMeters = 1000;
 const estimator = new FareEstimateService(
   {
@@ -220,7 +218,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
         const fixed = sector === 'premium' || sector === 'rental';
         if (fixed)
           await pool.query(
-            "UPDATE vehicle_types SET fixed_hourly_rate_paise=10000,hourly_fuel_rate_paise=2000,hourly_fuel_unit='per_hour' WHERE sector=$1 AND code=$2",
+            "UPDATE vehicle_types SET fixed_hourly_rate_paise=10000,hourly_fuel_rate_paise=2000,hourly_fuel_unit=CASE WHEN sector='premium' THEN 'per_km' ELSE 'per_hour' END WHERE sector=$1 AND code=$2",
             [inventorySector, code],
           );
         else if (hourly)
@@ -391,7 +389,12 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           expect(snapshot.snapshot.baseAmount).toBe(
             fixed ? 10000 * hours! : hourlySchedule[hours! > 12 ? '12_plus' : String(hours)],
           );
-          if (fixed) expect(snapshot.snapshot.grossAmount).toBe(12000 * hours!);
+          if (fixed)
+            expect(snapshot.snapshot.grossAmount).toBe(
+              sector === 'premium'
+                ? 10000 * hours! + (2 * routeDistanceMeters * 2000) / 1000
+                : 12000 * hours!,
+            );
           if (sector === 'premium')
             expect(snapshot.rental_details).toMatchObject({ hours, tripType });
           if (sector === 'rental') expect(snapshot.rental_details).toEqual({ hours });

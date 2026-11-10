@@ -1,4 +1,4 @@
-import { loadPremiumCities } from './modules/maps/premium-city-registry.js';
+import { loadServiceCities } from './modules/maps/service-city-registry.js';
 import { LiveLocationCache } from './modules/rides/repositories/live-location.cache.js';
 import { attachProviderTracking } from './modules/providers/services/provider-tracking.socket.js';
 import { loadDeletedSubjects } from './modules/auth/services/deleted-subjects.js';
@@ -64,7 +64,7 @@ async function startServer() {
   // ==========================================================
 
   await checkDatabaseConnection();
-  await loadPremiumCities();
+  await loadServiceCities();
 
   // Push delivery is optional for the API. Loading the worker eagerly requires
   // Redis and Firebase even when neither service is configured locally.

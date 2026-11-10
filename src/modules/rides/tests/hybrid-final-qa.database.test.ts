@@ -16,7 +16,7 @@ import { createServer } from 'node:http';
 import { io as connect, type Socket } from 'socket.io-client';
 import { createSocketServer } from '../../../infrastructure/socket/socket.server.js';
 import { driverUserRoom } from '../../../infrastructure/socket/socket.rooms.js';
-import { PremiumCityAreas } from '../../maps/premium-city-areas.js';
+import { ServiceCityAreas } from '../../maps/service-city-areas.js';
 import { signAccessToken } from '../../auth/utils/jwt.js';
 import { DriverService } from '../services/driver.service.js';
 import { Redis } from 'ioredis';
@@ -271,13 +271,7 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
       const c = await customer(),
         r = await ride(c, sector, category),
         notify = vi.fn();
-      const controller = new RideDispatchService(
-        repo,
-        new MatchingService(drivers, undefined, undefined, {
-          resolve: async () => syntheticDispatchCity,
-        }),
-        notify,
-      );
+      const controller = new RideDispatchService(repo, new MatchingService(drivers), notify);
       controllers.push(controller);
       await controller.dispatch(r);
       expect((await repo.findById(r.id))?.status).toBe('cancelled');
@@ -660,9 +654,7 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
       ).toBe(true);
       await expire(r.id);
       const notified: string[] = [],
-        matching = new MatchingService(drivers, undefined, undefined, {
-          resolve: async () => syntheticDispatchCity,
-        });
+        matching = new MatchingService(drivers);
       const controller = new RideDispatchService(repo, matching, async (candidate) => {
         notified.push(candidate.driverProfileId);
         await service.acceptRide(candidate.driverProfileId, r.id);
@@ -1044,7 +1036,7 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
   ] as const)(
     'INTERCITY: %s pickup matches nearby live GPS independently of saved vehicle city',
     async (pickupCity, pickupLon, pickupLat, destinationCity, destinationLon, destinationLat) => {
-      const areas = new PremiumCityAreas('config/service-area/premium-city-radius.json');
+      const areas = new ServiceCityAreas('config/service-area/premium-city-radius.json');
       const cityRepo = new PostgresRideRepository(pool, areas);
       const local = await driver('premium'),
         visiting = await driver('premium'),
@@ -1071,7 +1063,7 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
       );
       const actual = (await cityRepo.findById(r.id))!;
       const city = await areas.resolve(actual.pickup);
-      const matching = new MatchingService(drivers, undefined, undefined, areas);
+      const matching = new MatchingService(drivers, undefined);
       const ids = (await matching.findDispatchDrivers(actual, null)).map((d) => d.driverProfileId);
       expect(ids).toEqual(
         expect.arrayContaining([local.profileId, visiting.profileId, unknown.profileId]),
@@ -1098,7 +1090,7 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
     },
   );
   it('CITY-RADIUS-LIFECYCLE: matching, offer and acceptance enforce the same exact city radius', async () => {
-    const areas = new PremiumCityAreas('config/service-area/premium-city-radius.json');
+    const areas = new ServiceCityAreas('config/service-area/premium-city-radius.json');
     const radiusRepo = new PostgresRideRepository(pool, areas),
       d = await driver('premium'),
       r = await ride(await customer(), 'premium');
@@ -1114,12 +1106,7 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
         'UPDATE driver_profiles SET last_location=ST_Project(ST_SetSRID(ST_MakePoint(85.1,25.6),4326)::geography,$2::float8,0),last_location_at=$3 WHERE id=$1',
         [d.profileId, 25000 + delta, new Date(Date.now() - 1000)],
       );
-      const candidates = await new MatchingService(
-        drivers,
-        undefined,
-        undefined,
-        areas,
-      ).findDispatchDrivers(actual, null);
+      const candidates = await new MatchingService(drivers).findDispatchDrivers(actual, null);
       expect(candidates.some((candidate) => candidate.driverProfileId === d.profileId)).toBe(
         delta <= 0,
       );
@@ -1172,7 +1159,7 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
     });
   });
   it('CITY-RADIUS-PENDING: leaving city coverage releases the pending offer for the next eligible driver', async () => {
-    const areas = new PremiumCityAreas('config/service-area/premium-city-radius.json'),
+    const areas = new ServiceCityAreas('config/service-area/premium-city-radius.json'),
       radiusRepo = new PostgresRideRepository(pool, areas),
       r = await ride(await customer(), 'premium'),
       d = await driver('premium'),

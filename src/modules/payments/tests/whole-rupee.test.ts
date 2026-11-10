@@ -66,7 +66,11 @@ describe('authoritative whole-rupee boundaries', () => {
         updatedAt: new Date(0),
         ...(sector === 'rental' || sector === 'premium'
           ? {
-              fixedHourlyPricing: { hourlyRate: 1000.2, fuelRate: 0.3, fuelUnit: 'per_booking' },
+              fixedHourlyPricing: {
+                hourlyRate: 1000.2,
+                fuelRate: sector === 'premium' ? 0.02 : 0.3,
+                fuelUnit: sector === 'premium' ? 'per_km' : 'per_booking',
+              },
             }
           : {}),
         ...(sector === 'service'
@@ -103,7 +107,7 @@ describe('authoritative whole-rupee boundaries', () => {
       expect(result.grossAmount).toBe(100100);
       expect(result.driverEarnings! + result.commissionAmount!).toBe(result.grossAmount);
       expect(wholeRupeePaise(result.grossAmount)).toBe(result.grossAmount);
-      expect(result.roundingAdjustmentPaise).toBe(50);
+      expect(result.roundingAdjustmentPaise).toBe(sector === 'premium' ? 31 : 50);
       expect(configuration.perKmRate).toBe(sector === 'service' ? null : 0);
     },
   );

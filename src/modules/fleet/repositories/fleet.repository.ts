@@ -1,11 +1,7 @@
-import {
-  validateOperatingLocation,
-  requirePremiumOperatingLocation,
-} from '../../maps/vehicle-operating-location.js';
+import { validateOperatingLocation } from '../../maps/vehicle-operating-location.js';
 import type { VehicleType } from '../../vehicles/types/vehicle.js';
 import { PostgresVehicleRepository } from '../../vehicles/repositories/vehicle.repository.js';
 import { assignFirstOwnerVehicle } from '../../providers/repositories/default-owner-vehicle.js';
-import { premiumCityAreas } from '../../maps/premium-city-areas.js';
 import { paidRideRevenueSql } from './fleet-revenue.repository.js';
 import { env } from '../../../config/env.js';
 import { FleetRevenueRepository, type RevenueFilter } from './fleet-revenue.repository.js';
@@ -107,7 +103,6 @@ export class PostgresFleetRepository implements FleetRepository {
           ...type,
           sector: type.sector === 'rental' ? 'passenger' : type.sector,
         })),
-      operatingCities: premiumCityAreas.cities.map(({ id, name }) => ({ id, name })),
     };
   }
   async revenue(ownerId: string, filter: RevenueFilter = {}) {
@@ -384,8 +379,8 @@ export class PostgresFleetRepository implements FleetRepository {
   }
 
   async createVehicle(ownerId: string, input: CreateFleetVehicleInput): Promise<FleetVehicle> {
-    requirePremiumOperatingLocation(input.sector, input.operatingLocation);
-    if (input.operatingLocation) await validateOperatingLocation(input.operatingLocation);
+    if (input.sector !== 'premium' && input.operatingLocation)
+      await validateOperatingLocation(input.operatingLocation);
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
@@ -561,26 +556,6 @@ export class PostgresFleetRepository implements FleetRepository {
     vehicleId: string,
     input: UpdateFleetVehicleInput,
   ): Promise<FleetVehicle | null> {
-    if (input.operatingLocation) await validateOperatingLocation(input.operatingLocation);
-    if (input.sector === 'premium' || input.operatingCityId !== undefined) {
-      const current = (
-        await this.pool.query(
-          'SELECT sector,operating_city_id,operating_location FROM vehicles WHERE id=$1 AND owner_id=$2',
-          [vehicleId, ownerId],
-        )
-      ).rows[0];
-      if (
-        current &&
-        ((input.sector === 'premium' && current.sector !== 'premium') ||
-          (input.operatingCityId !== undefined &&
-            input.operatingCityId !== current.operating_city_id &&
-            !current.operating_location))
-      )
-        requirePremiumOperatingLocation(
-          input.sector ?? current.sector,
-          input.operatingLocation ?? current.operating_location,
-        );
-    }
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
@@ -612,7 +587,7 @@ export class PostgresFleetRepository implements FleetRepository {
         operatingLocation: 'operating_location',
       };
 
-      if (input.sector != null || input.category != null) {
+      if (input.sector != null || input.category != null || input.operatingLocation) {
         const current = (
           await client.query(
             'SELECT sector,category FROM vehicles WHERE id=$1 AND owner_id=$2 FOR UPDATE',
@@ -625,6 +600,8 @@ export class PostgresFleetRepository implements FleetRepository {
         }
         const sector = input.sector ?? current.sector,
           category = input.category ?? current.category;
+        if (sector !== 'premium' && input.operatingLocation)
+          await validateOperatingLocation(input.operatingLocation);
         if (
           (sector !== current.sector || category !== current.category) &&
           !(

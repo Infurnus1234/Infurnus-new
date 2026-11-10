@@ -1,6 +1,5 @@
 import { bookingInventorySector } from '../../vehicles/services/rental-inventory.js';
 import { serviceArea, type ServiceAreaGate } from '../../maps/service-area.js';
-import type { PremiumCityAreas } from '../../maps/premium-city-areas.js';
 import type { DriverRepository } from '../repositories/driver.repository.js';
 import type { Coordinates, MapProvider } from '../providers/map.provider.js';
 import type { DriverCandidate } from '../types/driver.js';
@@ -13,7 +12,6 @@ export class MatchingService {
     private readonly drivers: DriverRepository,
     private readonly maps?: MapProvider,
     private readonly area: ServiceAreaGate = serviceArea,
-    _premiumAreas?: Pick<PremiumCityAreas, 'resolve'>,
   ) {}
 
   async findBestDriver(

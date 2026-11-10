@@ -21,7 +21,14 @@ const vehicle: VehicleType = {
 const route = { distanceMeters: 12_345, durationSeconds: 600, vehicleCategory: vehicle.code };
 
 describe.each(['premium', 'rental'] as const)('%s fixed hourly fare', (sector) => {
-  const type = { ...vehicle, sector: sector === 'rental' ? ('passenger' as const) : sector };
+  const type: VehicleType = {
+    ...vehicle,
+    sector: sector === 'rental' ? 'passenger' : sector,
+    fixedHourlyPricing:
+      sector === 'premium'
+        ? { hourlyRate: 500, fuelRate: 8.1, fuelUnit: 'per_km' }
+        : vehicle.fixedHourlyPricing!,
+  };
   it.each([1, 2, 3, 4, 6, 12, 13, 24])('multiplies the saved rate by %i hours', (bookingHours) => {
     const fare = calculator.calculateEstimate(
       { ...route, sector, bookingHours, fuelRatePerKm: 9999 },
@@ -32,7 +39,7 @@ describe.each(['premium', 'rental'] as const)('%s fixed hourly fare', (sector) =
       vehicleCategory: type.code,
       bookingFare: {
         baseAmount: 50_000 * bookingHours,
-        fuelAmount: 20_000,
+        fuelAmount: sector === 'premium' ? 19_999 : 20_000,
         distanceAmount: 0,
         timeAmount: 0,
         grossAmount: 50_000 * bookingHours + 20_000,
@@ -45,15 +52,20 @@ describe.each(['premium', 'rental'] as const)('%s fixed hourly fare', (sector) =
     });
   });
 
-  it('charges fuel per hour and rounds the payable total once', () => {
-    const fare = calculator.calculateEstimate(
-      { ...route, sector, bookingHours: 3 },
-      {
-        ...type,
-        fixedHourlyPricing: { hourlyRate: 100.07, fuelRate: 0.1, fuelUnit: 'per_hour' },
-      },
-    );
-    expect(fare).toMatchObject({
+  it('allows per-hour fuel for Rental and requires per-kilometre fuel for Premium', () => {
+    const calculate = () =>
+      calculator.calculateEstimate(
+        { ...route, sector, bookingHours: 3 },
+        {
+          ...type,
+          fixedHourlyPricing: { hourlyRate: 100.07, fuelRate: 0.1, fuelUnit: 'per_hour' },
+        },
+      );
+    if (sector === 'premium') {
+      expect(calculate).toThrow(expect.objectContaining({ code: 'FARE_CONFIGURATION_MISSING' }));
+      return;
+    }
+    expect(calculate()).toMatchObject({
       bookingFare: { baseAmount: 30_021, fuelAmount: 30, grossAmount: 30_100 },
     });
   });
@@ -129,7 +141,7 @@ it('rejects a total that would overflow the stored fare after whole-rupee roundi
       { ...route, sector: 'premium', bookingHours: 1 },
       {
         ...vehicle,
-        fixedHourlyPricing: { hourlyRate: 99_999_999.99, fuelRate: 0, fuelUnit: 'per_booking' },
+        fixedHourlyPricing: { hourlyRate: 99_999_999.99, fuelRate: 0, fuelUnit: 'per_km' },
       },
     ),
   ).toThrow(expect.objectContaining({ code: 'FARE_AMOUNT_UNSUPPORTED' }));

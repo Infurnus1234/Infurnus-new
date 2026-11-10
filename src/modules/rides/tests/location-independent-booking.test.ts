@@ -46,12 +46,10 @@ describe('booking coordinates are independent of customer GPS', () => {
             distanceMeters: 300,
           },
         ]);
-        const resolve = vi.fn(async () => ({ cityId: 'configured-pickup-city' }));
         const matching = new MatchingService(
           { findNearbyEligible: nearby } as never,
           undefined,
           area,
-          { resolve } as never,
         );
         const create = vi.fn(async (_customer: string, input: Record<string, unknown>) => ({
           ...input,
@@ -85,7 +83,6 @@ describe('booking coordinates are independent of customer GPS', () => {
         });
         expect(create.mock.calls[0]?.[1]).toMatchObject({ pickup, destination, sector });
         expect(nearby.mock.calls[0]?.slice(0, 2)).toEqual([pickup.latitude, pickup.longitude]);
-        if (sector === 'premium') expect(resolve).not.toHaveBeenCalled();
         const snapshot = { ...ride, status: 'driver_assigned' } as Ride;
         const result = await service.updateUserLocation('customer', 'ride', {
           ...gps,

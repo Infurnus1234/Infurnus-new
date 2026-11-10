@@ -519,25 +519,6 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
     }
   }
 
-  String _getFuelNoticeText(RideState state) {
-    if (state.fareEstimate?.vehicleTypeId != null) {
-      return state.rentalDetails?['tripType'] == 'one_way'
-          ? 'One-way distance is included in this fare.'
-          : 'Round-trip distance is included in this fare.';
-    }
-    final rentalFuelRate = state.rentalDetails?['fuelRatePerKm'] as num?;
-    if (rentalFuelRate != null && rentalFuelRate > 0) {
-      return 'Actual distance fuel billed separately @ ₹${rentalFuelRate.toStringAsFixed(0)}/km';
-    }
-    final vehicle = _fleetVehicles
-        .where((v) => v.category == state.selectedTier)
-        .firstOrNull;
-    if (vehicle != null && vehicle.fuelRatePerKm > 0) {
-      return 'Actual distance fuel billed separately @ ₹${vehicle.fuelRatePerKm.toStringAsFixed(0)}/km';
-    }
-    return 'Actual distance fuel billed separately as per vehicle rate';
-  }
-
   void _showFareBreakdownSheet(RideState state) {
     final estimate = state.fareEstimate;
     final isService = state.selectedSector == 'service';
@@ -563,11 +544,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                   Text(
                     isService
                         ? 'Service Fare Breakdown'
-                        : (isPremium
-                              ? (estimate?.vehicleTypeId != null
-                                    ? 'Itemized Fare Breakdown'
-                                    : 'Premium Standby Estimate')
-                              : 'Itemized Fare Breakdown'),
+                        : 'Itemized Fare Breakdown',
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -604,21 +581,14 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                 ],
               ] else if (isPremium) ...[
                 _buildBreakdownRow(
-                  'Chauffeur Standby Package Base',
+                  'Hourly vehicle charge',
                   '₹${estimate.baseAmount.rupeeText}',
                 ),
                 const SizedBox(height: 8),
                 _buildBreakdownRow(
-                  'Standby Duration Charge (~${estimate.durationMinutes} mins)',
-                  '₹${estimate.timeAmount.rupeeText}',
+                  'Fuel charge',
+                  '₹${(estimate.fuelAmount ?? 0).rupeeText}',
                 ),
-                if ((estimate.taxAmount ?? 0) > 0) ...[
-                  const SizedBox(height: 8),
-                  _buildBreakdownRow(
-                    'Taxes & Regulatory Fees (5% GST)',
-                    '₹${estimate.taxAmount!.rupeeText}',
-                  ),
-                ],
               ] else if (isLogistics) ...[
                 _buildBreakdownRow(
                   'Base Logistics Charge',
@@ -684,9 +654,9 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    isPremium ? 'Total Booking Advance' : 'Total Fare',
-                    style: const TextStyle(
+                  const Text(
+                    'Total Fare',
+                    style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
                       color: textWhite,
@@ -1271,7 +1241,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                             ? (state.rentalDetails?['tripType'] == 'one_way'
                                   ? 'One-way booking'
                                   : 'Round-trip booking')
-                            : 'Chauffeur Standby Package',
+                            : 'Premium hourly booking',
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
@@ -1279,7 +1249,9 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                         ),
                       ),
                       Text(
-                        _getFuelNoticeText(state),
+                        state.fareEstimate?.vehicleTypeId != null
+                            ? 'Fuel is included in this fare.'
+                            : 'Select a route and duration to see the hourly and fuel charges.',
                         style: const TextStyle(fontSize: 11, color: textGray),
                       ),
                     ],

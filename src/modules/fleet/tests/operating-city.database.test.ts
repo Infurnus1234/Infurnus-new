@@ -80,18 +80,23 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
         expect((await vehicles.findById(result.body.data.id))?.operatingLocation).toEqual(location);
       },
     );
-    it('rejects missing coordinates and outside-Bihar points without weakening approvals', async () => {
-      for (const extra of [
-        { operatingCityId: 'motihari' },
-        { operatingLocation: { address: 'Delhi', latitude: 28.61, longitude: 77.21 } },
-      ]) {
-        const response = await request(app)
-          .post('/fleet/vehicles')
-          .auth(token, { type: 'bearer' })
-          .send({ ...input(), ...extra });
-        expect(response.status, response.text).toBe(422);
-      }
-      expect(await fleet.listVehicles(owner)).toHaveLength(0);
+    it('registers without any operating geography and keeps the vehicle pending approval', async () => {
+      const response = await request(app)
+        .post('/fleet/vehicles')
+        .auth(token, { type: 'bearer' })
+        .send(input());
+      expect(response.status, response.text).toBe(201);
+      expect(response.body.data).toMatchObject({
+        operatingCityId: null,
+        operatingLocation: null,
+        verificationStatus: 'pending',
+        isActive: false,
+      });
+      await fleet.updateVehicle(owner, response.body.data.id, { operatingCityId: 'unregistered' });
+      expect(await vehicles.findById(response.body.data.id)).toMatchObject({
+        operatingCityId: 'unregistered',
+        operatingLocation: null,
+      });
     });
     async function dispatchFixture(distance: number) {
       const f = await fixture();
@@ -103,8 +108,8 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       await drivers.claimAssignmentCode(f.code, f.driver, f.profile);
       const location = { address: 'Motihari operating point', latitude: 26.65, longitude: 84.9167 };
       await pool.query(
-        "UPDATE vehicles SET sector='premium',category='thar',operating_city_id=NULL,operating_location=$2::jsonb WHERE id=$1",
-        [f.vehicle.id, JSON.stringify(location)],
+        "UPDATE vehicles SET sector='premium',category='thar',operating_city_id=NULL,operating_location=NULL WHERE id=$1",
+        [f.vehicle.id],
       );
       await pool.query(
         "UPDATE vehicles SET verification_status='approved',verified_by=$2,verified_at=NOW(),is_active=TRUE WHERE id=$1",
@@ -130,7 +135,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       return { f, drivers, rides, ride, rideId, point, location };
     }
     it.each([0, 24999.99, 25000])(
-      'matches, offers and accepts at %s metres from Motihari operating coordinates',
+      'matches, offers and accepts at %s metres from the driver’s live Motihari location',
       async (distance) => {
         const f = await dispatchFixture(distance);
         const candidates = await new MatchingService(f.drivers).findDispatchDrivers(f.ride, null);
@@ -152,7 +157,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       expect(await f.rides.offerDispatch(f.rideId, f.f.profile, 60000)).toBe(true);
     }, 30_000);
     it.each([
-      ['pickup beyond coverage with driver at its operating point', 25000.01, 0],
+      ['pickup beyond proximity with driver at its live position', 25000.01, 0],
       ['driver beyond coverage with pickup inside coverage', 1000, 30000],
     ] as const)(
       'independently rejects %s',

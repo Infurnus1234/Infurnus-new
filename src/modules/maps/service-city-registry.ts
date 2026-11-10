@@ -1,19 +1,19 @@
 import { z } from 'zod';
 import { pool } from '../../infrastructure/database/postgres.js';
 import { AppError } from '../../common/errors/app-error.js';
-import { premiumCityAreas } from './premium-city-areas.js';
+import { serviceCityAreas } from './service-city-areas.js';
 import { CityRadiusPolicy } from './city-radius.js';
 import { ServiceAreaPolicy } from './service-area.js';
 import { readFileSync } from 'node:fs';
 
-// The approved Bihar polygon remains authoritative even in development/test.
+// Preserve the stored city coverage used by Service Vehicle dispatch.
 const bihar = new ServiceAreaPolicy(
   JSON.parse(
     readFileSync(new URL('../../../config/service-area/bihar.geojson', import.meta.url), 'utf8'),
   ),
   true,
 );
-export const premiumCityInput = z
+export const serviceCityInput = z
   .object({
     id: z
       .string()
@@ -28,8 +28,8 @@ export const premiumCityInput = z
     approvalReference: z.string().trim().min(1).max(500),
   })
   .strict();
-type City = z.infer<typeof premiumCityInput>;
-const legacyCities = [...premiumCityAreas.cities];
+type City = z.infer<typeof serviceCityInput>;
+const legacyCities = [...serviceCityAreas.cities];
 function cityArea(city: City) {
   return {
     id: city.id,
@@ -38,7 +38,7 @@ function cityArea(city: City) {
     area: new CityRadiusPolicy(city.id, city),
   };
 }
-async function readPremiumCities() {
+async function readServiceCities() {
   const rows = (
     await pool.query<City>(
       `SELECT id,name,latitude,longitude,source,approval_reference AS "approvalReference" FROM premium_service_cities ORDER BY name,id`,
@@ -51,17 +51,17 @@ async function readPremiumCities() {
     await bihar.assertSupported([row]);
     configured.push(cityArea(row));
   }
-  premiumCityAreas.cities.splice(0, premiumCityAreas.cities.length, ...configured);
+  serviceCityAreas.cities.splice(0, serviceCityAreas.cities.length, ...configured);
   return configured.map(({ id, name }) => ({ id, name }));
 }
 let refresh: Promise<unknown> = Promise.resolve();
-export function loadPremiumCities() {
-  const next = refresh.then(readPremiumCities, readPremiumCities);
+export function loadServiceCities() {
+  const next = refresh.then(readServiceCities, readServiceCities);
   refresh = next;
   return next;
 }
-export async function registerPremiumCity(input: unknown, actorId: string) {
-  const city = premiumCityInput.parse(input);
+export async function registerServiceCity(input: unknown, actorId: string) {
+  const city = serviceCityInput.parse(input);
   await bihar.assertSupported([city]);
   const client = await pool.connect();
   try {
@@ -116,6 +116,6 @@ export async function registerPremiumCity(input: unknown, actorId: string) {
   } finally {
     client.release();
   }
-  await loadPremiumCities();
+  await loadServiceCities();
   return { id: city.id, name: city.name };
 }

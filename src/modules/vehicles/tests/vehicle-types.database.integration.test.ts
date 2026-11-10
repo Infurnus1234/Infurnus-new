@@ -475,7 +475,7 @@ live(
           sector,
           active: true,
           ...(sector === 'premium'
-            ? { fixedHourlyPricing: { hourlyRate: 90, fuelRate: 40, fuelUnit: 'per_booking' } }
+            ? { fixedHourlyPricing: { hourlyRate: 90, fuelRate: 40, fuelUnit: 'per_km' } }
             : {}),
           ...(sector === 'service'
             ? { baseFare: null, perKmRate: null, serviceFixedFare: 400 }
@@ -522,7 +522,7 @@ live(
           goods: { weightKg: 100, hasLoadingAssistance: true },
           rentalDetails: { hours: 4, fuelRatePerKm: 999 },
         });
-        const expectedFare = sector === 'logistics' ? 700 : 400;
+        const expectedFare = sector === 'logistics' ? 700 : sector === 'premium' ? 1160 : 400;
         expect(ride.fareEstimate).toBe(expectedFare);
         expect(
           await rides.offerDispatch(
@@ -561,7 +561,7 @@ live(
               ? { serviceFixedFare: 500, expectedVersion: 1 }
               : sector === 'premium'
                 ? {
-                    fixedHourlyPricing: { hourlyRate: 120, fuelRate: 40, fuelUnit: 'per_booking' },
+                    fixedHourlyPricing: { hourlyRate: 120, fuelRate: 40, fuelUnit: 'per_km' },
                     expectedVersion: 1,
                   }
                 : { baseFare: 120, expectedVersion: 1 },
@@ -708,7 +708,7 @@ live(
         code: 'fortuner',
         sector: 'premium',
         active: true,
-        fixedHourlyPricing: { hourlyRate: 100, fuelRate: 0, fuelUnit: 'per_booking' },
+        fixedHourlyPricing: { hourlyRate: 100, fuelRate: 0, fuelUnit: 'per_km' },
       });
       await expect(
         rides.create(customerId, {

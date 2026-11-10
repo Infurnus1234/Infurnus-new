@@ -30,7 +30,7 @@ import { HOURLY_FARE_BUCKETS } from '../services/hourly-pricing.js';
 import type { VehicleType } from '../types/vehicle.js';
 
 const schedule = Object.fromEntries(HOURLY_FARE_BUCKETS.map((key, i) => [key, 101 + i * 37]));
-const fixedHourlyPricing = { hourlyRate: 500, fuelRate: 200, fuelUnit: 'per_booking' };
+const fixedHourlyPricing = { hourlyRate: 500, fuelRate: 10, fuelUnit: 'per_km' as const };
 const pickup = { latitude: 25.6, longitude: 85.1 },
   destination = { latitude: 26.12, longitude: 85.4 };
 describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
@@ -277,7 +277,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       });
       await vehicles.updateType(adminId, type.id, {
         expectedVersion: type.version,
-        fixedHourlyPricing: { ...fixedHourlyPricing, hourlyRate: 999, fuelUnit: 'per_booking' },
+        fixedHourlyPricing: { ...fixedHourlyPricing, hourlyRate: 999 },
         active: false,
       });
       const current = await rides.findById(booked.body.data.id);

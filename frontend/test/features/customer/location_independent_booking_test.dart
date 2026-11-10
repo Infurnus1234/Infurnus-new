@@ -18,7 +18,7 @@ import 'package:infurnus/features/customer/presentation/providers/ride_repositor
 import 'package:infurnus/features/customer/presentation/screens/pickup_selection_screen.dart';
 
 import 'vehicle_fare_ranges_test.dart'
-    show RecordingRepository, ConnectedSocket, range;
+    show RecordingRepository, ConnectedSocket, fixed, range;
 
 Dio mapFixture() => Dio()
   ..interceptors.add(
@@ -61,7 +61,13 @@ void main() {
   final scenarios = [
     ('Patna → Muzaffarpur', patna, muzaffarpur, gaya),
     ('Muzaffarpur → Patna', muzaffarpur, patna, gaya),
-    ('Motihari → Gaya', const LatLng(26.6469, 84.9089), gaya, patna),
+    (
+      'Motihari → Darbhanga',
+      delhi,
+      const LatLng(26.6469, 84.9089),
+      const LatLng(26.1542, 85.8918),
+    ),
+    ('Muzaffarpur → Gaya', delhi, muzaffarpur, gaya),
     ('Delhi → Patna', delhi, patna, muzaffarpur),
     (
       'Jaipur → Muzaffarpur',
@@ -76,8 +82,24 @@ void main() {
         '$sector: ${scenario.$1} sends selected endpoints, never GPS',
         () async {
           final gps = PendingGps();
+          final quote = range(quote: true);
+          if (sector == 'premium') {
+            quote['distanceMeters'] = 100000;
+            final premiumFare = {
+              ...fixed(260000),
+              'baseAmount': 60000,
+              'distanceAmount': 0,
+              'fuelAmount': 200000,
+              'distanceMeters': 100000,
+            };
+            quote['bookingFare'] = premiumFare;
+            quote['estimatedFare'] = {
+              'minimum': premiumFare,
+              'maximum': premiumFare,
+            };
+          }
           final repository = RecordingRepository()
-            ..estimate = FareEstimateModel.fromJson(range(quote: true));
+            ..estimate = FareEstimateModel.fromJson(quote);
           final socket = ConnectedSocket();
           final container = ProviderContainer(
             overrides: [
@@ -99,11 +121,29 @@ void main() {
             pickupCoords: scenario.$3,
             destCoords: scenario.$4,
             sector: sector,
-            vehicleCategory: sector == 'logistics' ? 'mini_truck' : 'sedan',
+            vehicleCategory: switch (sector) {
+              'logistics' => 'mini_truck',
+              'premium' => 'thar',
+              _ => 'sedan',
+            },
           );
+          if (sector == 'premium') {
+            notifier.setRentalDetails({'hours': 6, 'tripType': 'one_way'});
+          }
           await notifier.estimateRouteFare();
+          if (sector == 'premium') {
+            final fare = container.read(rideProvider).fareEstimate!;
+            expect(fare.distanceKm, 100);
+            expect(fare.displayFare, '₹2600');
+          }
           await notifier.requestRide();
           expect(repository.creates, 1);
+          if (sector == 'premium') {
+            expect(
+              repository.bookingPayload!['rentalDetails'],
+              containsPair('hours', 6),
+            );
+          }
           expect(repository.bookingPayload!['pickup'], {
             'latitude': scenario.$3.latitude,
             'longitude': scenario.$3.longitude,

@@ -12,8 +12,7 @@ describe('policy-aware dispatch matching', () => {
       required: true,
       assertSupported: vi.fn().mockResolvedValue(undefined),
     };
-    const resolve = vi.fn().mockResolvedValue(undefined);
-    const matcher = new MatchingService(repo, undefined, area, { resolve });
+    const matcher = new MatchingService(repo, undefined, area);
     const result = await matcher.findDispatchDrivers(
       {
         id: 'synthetic',
@@ -25,7 +24,6 @@ describe('policy-aware dispatch matching', () => {
       null,
     );
     expect(result).toHaveLength(2);
-    expect(resolve).not.toHaveBeenCalled();
     expect(vi.mocked(repo.findNearbyEligible).mock.calls[0]?.[2]).toBe(25000);
   });
 
@@ -47,8 +45,7 @@ describe('policy-aware dispatch matching', () => {
         required: true,
         assertSupported: vi.fn().mockResolvedValue(undefined),
       };
-      const resolve = vi.fn().mockResolvedValue({ cityId: 'PATNA', boundaryGeoJson: 'boundary' });
-      const matching = new MatchingService(repo, undefined, area, { resolve });
+      const matching = new MatchingService(repo, undefined, area);
       for (const customerLocation of [
         { latitude: 28.6139, longitude: 77.209 },
         { latitude: 19.076, longitude: 72.8777 },
@@ -87,7 +84,6 @@ describe('policy-aware dispatch matching', () => {
           expect.objectContaining({ rideId: 'remote-booking', customerId: 'customer' }),
         );
       }
-      if (sector === 'premium') expect(resolve).not.toHaveBeenCalled();
     },
   );
   const ride = {
@@ -144,14 +140,11 @@ describe('policy-aware dispatch matching', () => {
     }
   });
   it('uses current pickup radius without attaching a legacy city', async () => {
-    const repo = driverRepository(),
-      resolve = vi
-        .fn()
-        .mockResolvedValue({ cityId: 'TEST_CITY', boundaryGeoJson: 'test-geometry' });
-    const result = await new MatchingService(repo, undefined, undefined, {
-      resolve,
-    }).findDispatchDrivers({ ...ride, sector: 'premium', vehicleCategory: 'sedan' }, null);
-    expect(resolve).not.toHaveBeenCalled();
+    const repo = driverRepository();
+    const result = await new MatchingService(repo).findDispatchDrivers(
+      { ...ride, sector: 'premium', vehicleCategory: 'sedan' },
+      null,
+    );
     expect(result[0]).not.toHaveProperty('dispatchCityId');
     expect(repo.findNearbyEligible).toHaveBeenLastCalledWith(
       12,
@@ -169,15 +162,10 @@ describe('policy-aware dispatch matching', () => {
     );
   });
   it('uses live pickup radius when legacy city coverage is missing', async () => {
-    const repo = driverRepository(),
-      resolve = vi.fn().mockRejectedValue(new Error('city missing'));
+    const repo = driverRepository();
     await expect(
-      new MatchingService(repo, undefined, undefined, { resolve }).findDispatchDrivers(
-        { ...ride, sector: 'premium' },
-        null,
-      ),
+      new MatchingService(repo).findDispatchDrivers({ ...ride, sector: 'premium' }, null),
     ).resolves.toHaveLength(2);
-    expect(resolve).not.toHaveBeenCalled();
   });
 });
 

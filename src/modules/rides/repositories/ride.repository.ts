@@ -475,7 +475,7 @@ export class PostgresRideRepository implements RideRepository {
   trackingCache?: LiveLocationCache;
   constructor(
     private readonly pool: Pool,
-    private readonly serviceCities?: Pick<PremiumCityAreas, 'cities'>,
+    private readonly serviceCities?: Pick<ServiceCityAreas, 'cities'>,
   ) {}
 
   async saveDestinationDistrict(
@@ -1804,4 +1804,4 @@ export class PostgresRideRepository implements RideRepository {
     return result.rows.map((row) => mapRide(row, false));
   }
 }
-import type { PremiumCityAreas } from '../../maps/premium-city-areas.js';
+import type { ServiceCityAreas } from '../../maps/service-city-areas.js';
