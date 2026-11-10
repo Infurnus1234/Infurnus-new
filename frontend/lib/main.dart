@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/app.dart';
 import 'core/services/notification_service.dart';
-import 'core/permissions/permission_service.dart';
+import 'core/services/location_access.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,11 +21,5 @@ void main() async {
   runApp(
     UncontrolledProviderScope(container: container, child: const InfurnusApp()),
   );
-  WidgetsBinding.instance.addPostFrameCallback((_) async {
-    try {
-      await PermissionService().requestStartupLocation();
-    } catch (_) {
-      debugPrint('Startup location permission unavailable');
-    }
-  });
+  WidgetsBinding.instance.addPostFrameCallback((_) => locationAccess.start());
 }

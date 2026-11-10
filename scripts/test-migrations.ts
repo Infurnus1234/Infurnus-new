@@ -324,17 +324,30 @@ try {
     }
 
     const catalog = await testPool.query(
-      "SELECT to_regclass('public.vehicle_types') AS catalog, to_regclass('public.vehicle_types_sector_code_key') AS unique_code, to_regclass('public.vehicle_types_sector_active_idx') AS active_index, (SELECT count(*) FROM vehicle_types) AS seeded, (SELECT count(*) FROM vehicle_types WHERE NOT active OR base_fare_paise IS NOT NULL OR per_km_rate_paise IS NOT NULL OR pricing_reference IS NULL OR pricing_reference->'demandPricing' IS NULL OR (code = 'ftl' AND pricing_reference->>'routeBased' <> 'true')) AS unsafe_seeded",
+      `SELECT to_regclass('public.vehicle_types') AS catalog,
+       to_regclass('public.vehicle_types_sector_code_key') AS unique_code,
+       to_regclass('public.vehicle_types_sector_active_idx') AS active_index,
+       (SELECT count(*) FROM vehicle_types) AS seeded,
+       (SELECT count(*) FROM fleet_registration_vehicle_types r WHERE NOT EXISTS
+         (SELECT 1 FROM vehicle_types t WHERE t.sector=r.sector AND t.code=r.code)) AS missing_seeded,
+       (SELECT count(*) FROM vehicle_types WHERE active AND base_fare_paise IS NULL
+         AND per_km_rate_paise IS NULL AND pricing_reference IS NULL AND hourly_base_fares_paise IS NULL
+         AND logistics_slabs IS NULL AND service_fixed_fare_paise IS NULL) AS unsafe_seeded,
+       (SELECT count(*) FROM information_schema.columns WHERE table_schema='public'
+         AND table_name IN ('support_tickets','notifications','provider_approval_requests','driver_applications')
+         AND column_name='admin_deleted_at' AND data_type='timestamp with time zone') AS deletion_columns`,
     );
     if (
       !catalog.rows[0].catalog ||
       !catalog.rows[0].unique_code ||
       !catalog.rows[0].active_index ||
-      Number(catalog.rows[0].seeded) !== 10 ||
+      Number(catalog.rows[0].seeded) < 10 ||
+      Number(catalog.rows[0].missing_seeded) !== 0 ||
+      Number(catalog.rows[0].deletion_columns) !== 4 ||
       Number(catalog.rows[0].unsafe_seeded) !== 0
     )
       throw new Error(
-        'Vehicle pricing migration must create ten active chart demand references including route-based FTL',
+        'Final catalog must include every registered category, protect unconfigured pricing, and retain administrative deletion history',
       );
     const authSchema = await testPool.query(`SELECT
       EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='driver_profiles' AND column_name='emergency_contact_relationship') AS driver_contact,
@@ -378,7 +391,7 @@ try {
     }
     console.log('Driver schema, OTP attempts and real compliance function behavior verified');
     console.log(
-      'Vehicle type catalog constraints/indexes present; approved active demand ranges and route-based FTL',
+      'Final vehicle catalog, pricing configuration safety and retained administrative deletion columns verified',
     );
     console.log(`Clean migration verification passed for ${databaseName}`);
 

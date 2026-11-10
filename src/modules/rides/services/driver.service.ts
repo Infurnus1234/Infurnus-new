@@ -1,3 +1,4 @@
+import { DriverTodaySummaryRepository } from '../repositories/driver-today-summary.repository.js';
 import { storageService } from '../../../infrastructure/storage/index.js';
 import { MatchingService } from './matching.service.js';
 import { rideEvents } from '../events/ride.events.js';
@@ -25,7 +26,14 @@ export class DriverService {
     private readonly clock: () => Date = () => new Date(),
     private readonly rideRepository?: RideRepository,
     private readonly contactRepository: RideCustomerContactRepository = new PostgresRideCustomerContactRepository(),
+    private readonly prepareDriverRide?: (
+      ride: import('../types/ride.js').Ride,
+    ) => Promise<import('../types/ride.js').Ride>,
   ) {}
+
+  async todaySummary(userId: string) {
+    return new DriverTodaySummaryRepository().get(await this.profileForUser(userId), this.clock());
+  }
 
   async getCustomerContact(driverUserId: string, rideId: string) {
     let row;
@@ -47,12 +55,13 @@ export class DriverService {
         404,
       );
     }
-    const phone = row.phone?.trim().replace(/[\s().-]/g, '') ?? '';
+
     return {
       rideId: row.rideId,
       name: [row.firstName, row.lastName].filter(Boolean).join(' ').trim() || 'Customer',
       // Preserve legacy national numbers; adding '+' would change their dialling meaning.
-      phone: /^\+?[1-9]\d{7,14}$/.test(phone) ? phone : null,
+      phone: null,
+      callingNumber: env.INFURNUS_CALLING_NUMBER,
     };
   }
 
@@ -80,6 +89,7 @@ export class DriverService {
     const completedRides = rides.filter((r) => r.status === 'completed');
 
     if (isDriverRole) {
+      if (this.prepareDriverRide) await Promise.all(rides.map((r) => this.prepareDriverRide!(r)));
       return {
         totalTrips: completedRides.length,
         rides: rides.map(sanitizeRideForDriver),
@@ -134,10 +144,11 @@ export class DriverService {
 
     const current = await this.repository.getAvailability(profileId);
     if (!current) throw new AppError('DRIVER_PROFILE_NOT_FOUND', 'Driver profile not found', 404);
-    if (current === input.status) return;
-    if (current === 'busy' && input.status === 'unavailable') {
-      throw new AppError('DRIVER_AVAILABILITY_CONFLICT', 'Busy drivers cannot go unavailable', 409);
-    }
+    if (
+      current === input.status &&
+      (profile.onlinePreference ?? current === 'available') === (input.status === 'available')
+    )
+      return;
     if (!(await this.repository.updateAvailability(profileId, input.status))) {
       throw new AppError('DRIVER_AVAILABILITY_CONFLICT', 'Availability update was rejected', 409);
     }
@@ -158,7 +169,7 @@ export class DriverService {
       const now = this.clock();
       if (
         !Number.isFinite(input.timestamp.getTime()) ||
-        input.timestamp.getTime() > now.getTime()
+        input.timestamp.getTime() > now.getTime() + 2000
       ) {
         throw new AppError(
           'DRIVER_LOCATION_FUTURE',
@@ -168,11 +179,14 @@ export class DriverService {
       }
       if (now.getTime() - input.timestamp.getTime() > env.DRIVER_LOCATION_STALE_SECONDS * 1000)
         throw new AppError('DRIVER_LOCATION_STALE', 'Location timestamp is too old', 400);
+      // Phone and server wall clocks can differ slightly even with automatic time.
+      // Never persist a future fix: bound skew and normalize to receipt time.
+      const recordedAt = new Date(Math.min(input.timestamp.getTime(), now.getTime()));
       if (
         !(await this.repository.updateLocation(profileId, {
           latitude: input.latitude,
           longitude: input.longitude,
-          recordedAt: input.timestamp,
+          recordedAt,
           speed: input.speed,
           heading: input.heading,
           accuracy: input.accuracy,
@@ -184,7 +198,11 @@ export class DriverService {
           409,
         );
       }
-      rideEvents.emit('driver:location_updated', { profileId, userId, location: input });
+      rideEvents.emit('driver:location_updated', {
+        profileId,
+        userId,
+        location: { ...input, timestamp: recordedAt },
+      });
     } finally {
       const remaining = (this.locationUpdates.get(userId) ?? 1) - 1;
       if (remaining) this.locationUpdates.set(userId, remaining);

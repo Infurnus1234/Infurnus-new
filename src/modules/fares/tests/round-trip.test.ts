@@ -10,8 +10,12 @@ const vehicle = (sector: VehicleType['sector'], rate: number): VehicleType => ({
   code: 'configured_test',
   name: 'Local test',
   sector,
-  baseFare: 25,
-  perKmRate: rate,
+  baseFare: sector === 'service' ? null : 25,
+  ...(sector === 'service' ? { serviceFixedFare: 25 } : {}),
+  ...(sector === 'premium'
+    ? { fixedHourlyPricing: { hourlyRate: 25, fuelRate: rate, fuelUnit: 'per_km' as const } }
+    : {}),
+  perKmRate: sector === 'service' ? null : rate,
   currency: 'INR',
   active: true,
   version: 1,
@@ -19,13 +23,14 @@ const vehicle = (sector: VehicleType['sector'], rate: number): VehicleType => ({
   updatedAt: new Date(),
 });
 describe('Backend one-way route / round-trip billing contract', () => {
-  it.each(['passenger', 'logistics', 'service', 'premium'] as const)(
+  it.each(['passenger', 'service', 'premium'] as const)(
     'bills %s twice, preserves base, never mutates route input',
     (sector) => {
       const input = {
         distanceMeters: 10000,
         durationSeconds: 600,
         sector,
+        ...(sector === 'premium' ? { bookingHours: 1 } : {}),
         vehicleCategory: 'configured_test',
       };
       const first = calculator.calculateEstimate(input, vehicle(sector, 5));
@@ -33,13 +38,14 @@ describe('Backend one-way route / round-trip billing contract', () => {
       expect(first).toEqual(second);
       expect(input.distanceMeters).toBe(10000);
       expect(first.distanceMeters).toBe(10000);
-      expect(first.billableDistanceMeters).toBe(20000);
+      expect(first.billableDistanceMeters).toBe(sector === 'service' ? 0 : 20000);
       if (!('bookingFare' in first)) throw Error('Missing booking fare');
       expect(first.bookingFare).toMatchObject({
         baseAmount: 2500,
-        distanceAmount: 10000,
-        grossAmount: 12500,
-        distanceMultiplier: 2,
+        distanceAmount: sector === 'passenger' ? 10000 : 0,
+        ...(sector === 'premium' ? { fuelAmount: 10000 } : {}),
+        grossAmount: sector === 'service' ? 2500 : 12500,
+        distanceMultiplier: sector === 'service' ? 1 : 2,
       });
       expect(first.estimatedFare?.minimum).toEqual(first.bookingFare);
     },
@@ -77,8 +83,8 @@ describe('Backend one-way route / round-trip billing contract', () => {
       ).toThrow();
     },
   );
-  it.each(['passenger', 'logistics', 'service', 'premium'] as const)(
-    'supports dynamic %s reference rates without activating a fixed price',
+  it.each(['passenger', 'service', 'premium'] as const)(
+    'enforces the configured %s reference-rate policy',
     (sector) => {
       const configured = {
         ...vehicle(sector, 5),
@@ -90,6 +96,36 @@ describe('Backend one-way route / round-trip billing contract', () => {
           perKmRate: { minimum: 500, maximum: 800 },
         },
       };
+      if (sector === 'premium') {
+        const { fixedHourlyPricing: _fixed, ...legacy } = configured;
+        expect(() =>
+          calculator.calculateEstimate(
+            {
+              distanceMeters: 10000,
+              durationSeconds: 0,
+              sector,
+              vehicleCategory: 'configured_test',
+              bookingHours: 1,
+            },
+            legacy,
+          ),
+        ).toThrow(expect.objectContaining({ code: 'FARE_CONFIGURATION_MISSING' }));
+        return;
+      }
+      if (sector === 'service') {
+        expect(() =>
+          calculator.calculateEstimate(
+            {
+              distanceMeters: 10000,
+              durationSeconds: 0,
+              sector,
+              vehicleCategory: 'configured_test',
+            },
+            configured,
+          ),
+        ).toThrow(/disabled or its fixed fare/);
+        return;
+      }
       const result = calculator.calculateEstimate(
         { distanceMeters: 10000, durationSeconds: 0, sector, vehicleCategory: 'configured_test' },
         configured,
@@ -116,7 +152,7 @@ describe('Backend one-way route / round-trip billing contract', () => {
         routeBased: true,
       },
     };
-    expect(
+    expect(() =>
       calculator.calculateEstimate(
         {
           distanceMeters: 10000,
@@ -126,12 +162,7 @@ describe('Backend one-way route / round-trip billing contract', () => {
         },
         configured,
       ),
-    ).toMatchObject({
-      estimateType: 'quote_required',
-      bookable: false,
-      distanceMeters: 10000,
-      billableDistanceMeters: 20000,
-    });
+    ).toThrow(/Configure both Logistics distance slabs/);
   });
   it('routes once per estimate and reloads updated persisted pricing', async () => {
     let configured = vehicle('passenger', 5);

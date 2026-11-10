@@ -1,3 +1,4 @@
+import { calculateServiceFixture } from '../../fares/tests/service-fixed.fixture.js';
 import { describe, expect, it, vi } from 'vitest';
 import { FareCalculatorService } from '../../fares/services/fare-calculator.service.js';
 import { PostgresDriverRepository } from '../repositories/driver.repository.js';
@@ -176,7 +177,8 @@ describe('Phase 4 Step 6: Logistics Cargo Delivery Enhancements', () => {
       expect(result.weightAmount).toBe(12500);
       expect(result.loadingAmount).toBe(15000);
       expect(result.taxAmount).toBe(6350);
-      expect(result.grossAmount).toBe(133350);
+      expect(result.grossAmount).toBe(133400);
+      expect(result.roundingAdjustmentPaise).toBe(50);
     });
 
     it('does not apply weight surcharge if weight is within free threshold (<= 20kg)', () => {
@@ -328,13 +330,14 @@ describe('Phase 4 Step 6: Logistics Cargo Delivery Enhancements', () => {
       expect(result.distanceAmount).toBe(37500);
       expect(result.timeAmount).toBe(4000);
       expect(result.waitingAmount).toBe(400); // 2 min billable @ ₹2/min = 400 paise
-      expect(result.grossAmount).toBe(48150);
+      expect(result.grossAmount).toBe(48200);
+      expect(result.roundingAdjustmentPaise).toBe(50);
       expect(result.weightAmount).toBeUndefined();
       expect(result.loadingAmount).toBeUndefined();
     });
 
-    it('preserves service vehicle trip-based fare (JCB mobilization + distance)', () => {
-      const result = calculator.calculate({
+    it('preserves service vehicle configured fixed fare (JCB)', () => {
+      const result = calculateServiceFixture(calculator, {
         distanceMeters: 10000,
         durationSeconds: 1800,
         sector: 'service',
@@ -342,8 +345,8 @@ describe('Phase 4 Step 6: Logistics Cargo Delivery Enhancements', () => {
       });
 
       expect(result.baseAmount).toBe(120000);
-      expect(result.distanceAmount).toBe(80000);
-      expect(result.grossAmount).toBe(216300);
+      expect(result.distanceAmount).toBe(0);
+      expect(result.grossAmount).toBe(120000);
     });
 
     it('preserves premium vehicle hourly package + fuel rate', () => {

@@ -152,7 +152,8 @@ jobs:
         run: npm run build
 
   frontend:
-    runs-on: ubuntu-latest
+    # Match the Windows host used for the approved exact-pixel visual baselines.
+    runs-on: windows-latest
     defaults:
       run:
         working-directory: frontend
@@ -161,12 +162,20 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
+      - name: Setup Java for Android
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
       - name: Setup Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           flutter-version: '3.47.4'
           channel: stable
           cache: true
+      - name: Select Android Java toolchain
+        shell: bash
+        run: flutter config --jdk-dir="$JAVA_HOME"
       - name: Resolve locked dependencies
         run: flutter pub get --enforce-lockfile
       - name: Format changed Dart files
@@ -194,6 +203,36 @@ jobs:
         env:
           ANDROID_GOOGLE_SERVICES_JSON: ${{ secrets.CUSTOMER_ANDROID_GOOGLE_SERVICES_JSON }}
         run: node scripts/configure-ci-firebase.mjs frontend
+      - name: Fetch verified Gradle distribution
+        shell: pwsh
+        run: |
+          $wrapper = 'android/gradle/wrapper/gradle-wrapper.properties'
+          $properties = Get-Content -LiteralPath $wrapper
+          if (-not ($properties -match '^distributionUrl=.*/gradle-8[.]14-bin[.]zip$')) { return }
+          $archive = Join-Path $env:RUNNER_TEMP 'gradle-8.14-bin.zip'
+          $checksum = '61ad310d3c7d3e5da131b76bbf22b5a4c0786e9d892dae8c1658d4b484de3caa'
+          # The same published checksum is required regardless of download source.
+          $urls = @(
+            "https://api.github.com/repos/gradle/gradle-distributions/releases/assets/249401401?download=1&run=$env:GITHUB_RUN_ID"
+            'https://repo.huaweicloud.com/gradle/gradle-8.14-bin.zip?source=infurnus-ci'
+          )
+          $downloaded = $false
+          foreach ($url in $urls) {
+            Write-Host "Downloading Gradle from $(([Uri]$url).Host)"
+            curl.exe --fail --silent --show-error --location --retry 1 --max-time 120 --header 'Accept: application/octet-stream' --output $archive $url
+            if ($LASTEXITCODE -eq 0) {
+              $downloaded = $true
+              break
+            }
+          }
+          if (-not $downloaded) { throw 'Gradle download failed at every configured source.' }
+          if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne $checksum) {
+            throw 'Gradle distribution checksum mismatch.'
+          }
+          $localUrl = ([Uri]$archive).AbsoluteUri
+          $properties -replace '^distributionUrl=.*$', "distributionUrl=$localUrl" |
+            Set-Content -LiteralPath $wrapper -Encoding ascii
+          Add-Content -LiteralPath $wrapper -Value "distributionSha256Sum=$checksum" -Encoding ascii
       - name: Android test build
         env:
           INFURNUS_TEST_RELEASE_SIGNING: 'true'

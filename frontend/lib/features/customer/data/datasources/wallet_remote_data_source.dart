@@ -5,6 +5,7 @@ import '../../../../core/network/dio_client.dart';
 import '../models/wallet_model.dart';
 
 abstract class WalletRemoteDataSource {
+  Future<double> quotePayment(double amount);
   Future<WalletModel> getWallet();
   Future<Map<String, dynamic>> getHistory({
     String? type,
@@ -41,6 +42,15 @@ class WalletRemoteDataSourceImpl implements WalletRemoteDataSource {
   final Dio _dio;
 
   WalletRemoteDataSourceImpl(this._dio);
+
+  @override
+  Future<double> quotePayment(double amount) async {
+    final response = await _dio.post(
+      '/wallet/pay/quote',
+      data: {'amount': amount},
+    );
+    return (response.data['data']['amount'] as num).toDouble();
+  }
 
   @override
   Future<WalletModel> getWallet() async {

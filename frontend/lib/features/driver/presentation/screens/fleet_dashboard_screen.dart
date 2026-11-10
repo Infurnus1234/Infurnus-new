@@ -1,3 +1,4 @@
+import 'package:infurnus/core/utils/currency_formatter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -184,7 +185,7 @@ class FleetDashboardScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            '₹${earnings.netPayout.toStringAsFixed(2)}',
+            '₹${earnings.netPayout.rupeeText}',
             style: const TextStyle(
               fontSize: 32,
               fontWeight: FontWeight.w900,

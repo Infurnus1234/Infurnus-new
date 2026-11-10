@@ -75,12 +75,17 @@ export class AdminController {
     try {
       const q = z
         .object({
+          sector: z.enum(['passenger', 'premium', 'logistics', 'service']).optional(),
+          excludeSector: z.literal('logistics').optional(),
           limit: z.coerce.number().int().min(1).max(100).default(25),
           offset: z.coerce.number().int().min(0).max(100000).default(0),
         })
         .strict()
         .parse(req.query);
-      res.json({ success: true, data: await this.service.listVehicleTypes(q.limit, q.offset) });
+      res.json({
+        success: true,
+        data: await this.service.listVehicleTypes(q.limit, q.offset, q.sector, q.excludeSector),
+      });
     } catch (error) {
       next(error);
     }

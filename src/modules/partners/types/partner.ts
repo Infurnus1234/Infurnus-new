@@ -3,6 +3,7 @@ export type PartnerApprovalStatus = 'pending' | 'under_review' | 'approved' | 'r
 export type PartnerAvailabilityStatus = 'offline' | 'available' | 'unavailable';
 
 export interface Partner {
+  publicId?: string | null;
   id: string;
   userId: string;
 

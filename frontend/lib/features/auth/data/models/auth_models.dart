@@ -69,11 +69,13 @@ class VerifySignupRequest {
 
 class AuthResponse {
   final String userId;
+  final String? publicId;
   final String accessToken;
   final String expiresAt;
 
   AuthResponse({
     required this.userId,
+    this.publicId,
     required this.accessToken,
     required this.expiresAt,
   });
@@ -83,6 +85,7 @@ class AuthResponse {
       userId:
           json['userId'] as String? ??
           _accessTokenPayload(json['accessToken'] as String)['sub'] as String,
+      publicId: json['publicId'] as String?,
       accessToken: json['accessToken'] as String,
       expiresAt: json['expiresAt'] as String,
     );
@@ -100,15 +103,13 @@ class ResendSignupRequest {
 class LoginRequest {
   final String? email;
   final String? phone;
-  final String? password;
 
-  LoginRequest({this.email, this.phone, this.password});
+  LoginRequest({this.email, this.phone});
 
   Map<String, dynamic> toJson() => {
     'role': 'customer',
     if (email != null) 'email': email,
     if (phone != null) 'phone': phone,
-    if (password != null) 'password': password,
   };
 }
 
@@ -145,6 +146,7 @@ class ResendLoginRequest {
 
 class PublicUser {
   final String id;
+  final String? publicId;
   final String firstName;
   final String lastName;
   final String? email;
@@ -154,6 +156,7 @@ class PublicUser {
 
   PublicUser({
     required this.id,
+    this.publicId,
     required this.firstName,
     required this.lastName,
     this.email,
@@ -165,6 +168,7 @@ class PublicUser {
   factory PublicUser.fromJson(Map<String, dynamic> json) {
     return PublicUser(
       id: json['id'] as String,
+      publicId: json['publicId'] as String?,
       firstName: json['firstName'] as String,
       lastName: json['lastName'] as String,
       email: json['email'] as String?,
@@ -177,6 +181,7 @@ class PublicUser {
   User toEntity(String userRole) {
     return User(
       id: id,
+      publicId: publicId,
       firstName: firstName,
       lastName: lastName,
       email: email,

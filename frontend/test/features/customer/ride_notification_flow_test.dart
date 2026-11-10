@@ -51,6 +51,51 @@ void main() {
   final trace = jsonDecode(
     File('test/fixtures/actual_notification_route.json').readAsStringSync(),
   ) as Map<String, dynamic>;
+  testWidgets(
+    'missed completion event reconciles through API and stops terminal polling',
+    (tester) async {
+      final socket = _Socket();
+      final dio = Dio();
+      dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (o, h) => h.resolve(
+            Response(
+              requestOptions: o,
+              data: {
+                'data': {'distanceMeters': 1000, 'durationSeconds': 120},
+              },
+            ),
+          ),
+        ),
+      );
+      final notifications = NotificationService(dio);
+      final repository = _Repository(
+        model.RideModel.fromJson(trace['customerRide']),
+      );
+      final c = ProviderContainer(
+        overrides: [
+          dioProvider.overrideWithValue(dio),
+          socketServiceProvider.overrideWithValue(socket),
+          rideRepositoryProvider.overrideWithValue(repository),
+          notificationServiceProvider.overrideWithValue(notifications),
+        ],
+      );
+      await c.read(rideProvider.notifier).getRideDetails(repository.ride.id);
+      repository.ride = model.RideModel.fromJson({
+        ...Map<String, dynamic>.from(trace['customerRide']),
+        'status': 'completed',
+      });
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pump();
+      expect(c.read(rideProvider).status, RideStatus.completed);
+      final terminalReads = repository.reads;
+      await tester.pump(const Duration(seconds: 10));
+      expect(repository.reads, terminalReads);
+      c.dispose();
+      socket.dispose();
+      notifications.dispose();
+    },
+  );
   test('actual backend assignment reaches Customer state and late events cannot reopen cancelled ride', () async {
     final socket = _Socket();
     final dio = Dio();
@@ -96,6 +141,11 @@ void main() {
       c.read(rideProvider).currentRide!.assignedDriverId,
       trace['customerRide']['assignedDriverId'],
     );
+    repository.ride = model.RideModel.fromJson({
+      ...Map<String, dynamic>.from(trace['customerRide']),
+      'status': 'cancelled',
+      'cancellationReason': 'No eligible drivers accepted the ride',
+    });
     socket.events.add(
       SocketServerEvent(
         name: 'ride:cancelled',
@@ -111,6 +161,10 @@ void main() {
     );
     await Future<void>.delayed(Duration.zero);
     expect(c.read(rideProvider).status, RideStatus.cancelled);
+    expect(
+      c.read(rideProvider).currentRide?.cancellationReason,
+      'No eligible drivers accepted the ride',
+    );
   });
   test('push open reconciles through repository and rejects duplicates and expired hints', () async {
     final socket = _Socket();

@@ -62,15 +62,16 @@ describe('Payment Refund Lifecycle & Authorization', () => {
       findByRideId: vi.fn().mockResolvedValue([mockCapturedPayment]),
       findActiveByRideId: vi.fn().mockResolvedValue(mockCapturedPayment),
       listForUser: vi.fn().mockResolvedValue([mockCapturedPayment]),
-      refund: vi.fn().mockImplementation((id, _amount, reason) =>
-        Promise.resolve({
+      refund: vi.fn().mockImplementation(async (id, _amount, reason, _prior, submit) => {
+        await submit?.();
+        return {
           ...mockCapturedPayment,
           id,
           status: 'REFUNDED',
           refundedAt: new Date(),
           failureReason: reason ?? null,
-        }),
-      ),
+        };
+      }),
     };
 
     mockProvider = {
@@ -187,6 +188,8 @@ describe('Payment Refund Lifecycle & Authorization', () => {
         mockCapturedPayment.id,
         500,
         'Trip cancelled by partner',
+        0,
+        expect.any(Function),
       );
 
       expect(res.status).toHaveBeenCalledWith(200);
@@ -195,6 +198,32 @@ describe('Payment Refund Lifecycle & Authorization', () => {
         data: expect.objectContaining({ status: 'REFUNDED' }),
         message: 'Payment refunded successfully',
       });
+    });
+
+    it('rounds a new partial refund before submitting the exact same value to gateway and ledger', async () => {
+      const req = mockAdminRequest({ amount: 249.5 });
+      const res = mockResponse();
+      await controller.refund(req, res, vi.fn());
+      expect(mockProvider.refundPayment).toHaveBeenCalledWith(
+        expect.objectContaining({ refundAmount: 250 }),
+      );
+      expect(mockRepo.refund).toHaveBeenCalledWith(
+        mockCapturedPayment.id,
+        250,
+        undefined,
+        0,
+        expect.any(Function),
+      );
+    });
+    it('preserves the exact amount of a full refund of a historical fractional charge', async () => {
+      vi.mocked(mockRepo.findById).mockResolvedValueOnce({
+        ...mockCapturedPayment,
+        amount: 499.51,
+      });
+      await controller.refund(mockAdminRequest({ amount: 499.51 }), mockResponse(), vi.fn());
+      expect(mockProvider.refundPayment).toHaveBeenCalledWith(
+        expect.objectContaining({ refundAmount: 499.51 }),
+      );
     });
 
     it('returns 502 if Cashfree refund fails', async () => {
@@ -212,7 +241,7 @@ describe('Payment Refund Lifecycle & Authorization', () => {
         success: false,
         message: expect.stringContaining('Refund already in progress'),
       });
-      expect(mockRepo.refund).not.toHaveBeenCalled();
+      expect(mockRepo.refund).toHaveBeenCalledOnce();
     });
   });
 });

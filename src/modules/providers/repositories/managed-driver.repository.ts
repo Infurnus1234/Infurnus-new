@@ -1,3 +1,4 @@
+import { managedDriverContactsSchema } from '../schemas/managed-driver-contact.schemas.js';
 import { PostgresDriverRepository } from '../../rides/repositories/driver.repository.js';
 import type { Pool, PoolClient } from 'pg';
 import { AppError } from '../../../common/errors/app-error.js';
@@ -32,15 +33,15 @@ export class ManagedDriverRepository {
     const p = (
       await c.query(
         `SELECT p.id FROM partners p JOIN users u ON u.id=p.user_id
-   WHERE p.user_id=$1 AND p.approval_status='approved' AND u.role::text=$2 AND u.status='active' AND u.deleted_at IS NULL`,
+   WHERE p.user_id=$1 AND u.role::text=$2 AND u.status='active' AND u.deleted_at IS NULL`,
         [id, role],
       )
     ).rows[0];
     if (!p)
       throw new AppError(
-        'BUSINESS_APPROVAL_REQUIRED',
-        'An approved business is required to manage Drivers',
-        403,
+        'BUSINESS_PROFILE_REQUIRED',
+        'Save your Fleet business details before adding Driver profiles. Approval is required before assignment and operations.',
+        409,
       );
     return p.id as string;
   }
@@ -71,7 +72,8 @@ export class ManagedDriverRepository {
     const partner = await this.owner(this.pool, owner, role);
     return (
       await this.pool.query(
-        `SELECT u.id AS "userId",dp.id AS "profileId",u.first_name AS "firstName",u.last_name AS "lastName",u.email,
+        `SELECT provider_public_id(u.id) AS "publicId",u.id AS "userId",dp.id AS "profileId",u.first_name AS "firstName",u.last_name AS "lastName",u.email,
+   CASE WHEN m.provisioned_email IS NOT NULL OR m.provisioned_phone IS NOT NULL THEN 'fleet_provisioned' ELSE 'self_registered' END AS "accountOrigin",
    dp.verification_status AS "verificationStatus",dp.active_vehicle_id AS "vehicleId",m.onboarding_submitted_at AS "submittedAt"
    FROM fleet_managed_driver_accounts m JOIN users u ON u.id=m.driver_user_id JOIN driver_profiles dp ON dp.user_id=u.id
    WHERE m.partner_id=$1 AND m.status='ACTIVE' AND u.deleted_at IS NULL ORDER BY m.created_at DESC LIMIT 100`,
@@ -85,24 +87,36 @@ export class ManagedDriverRepository {
     input: UpsertDriverProfileInput & {
       firstName: string;
       lastName: string;
-      email: string;
+      email?: string | undefined;
       phone?: string | undefined;
       driverUserId?: string | undefined;
     },
   ) {
+    const contacts = managedDriverContactsSchema.parse(input);
+    input = { ...input, ...contacts };
     return this.transaction(async (c) => {
       const partner = await this.owner(c, owner, role);
-      await c.query(
-        "SELECT pg_advisory_xact_lock(hashtextextended('managed_driver:'||lower($1),0))",
-        [input.email],
-      );
-      const existing = (
+      // Lock both normalized identifiers in a stable order for concurrent retries.
+      const keys = [input.email && `email:${input.email}`, input.phone && `phone:${input.phone}`]
+        .filter((value): value is string => Boolean(value))
+        .sort();
+      for (const key of keys)
+        await c.query("SELECT pg_advisory_xact_lock(hashtextextended('managed_driver:'||$1,0))", [
+          key,
+        ]);
+      const candidates = (
         await c.query(
-          `SELECT id,role FROM users WHERE lower(btrim(email))=lower(btrim($1)) AND deleted_at IS NULL
-    AND role IN ('driver','driver_fleet_owner') AND ($2::uuid IS NULL OR id=$2) FOR UPDATE`,
-          [input.email, input.driverUserId ?? null],
+          `SELECT id,role,email,phone,CASE WHEN EXISTS(SELECT 1 FROM fleet_managed_driver_accounts m0 WHERE m0.driver_user_id=users.id AND (m0.provisioned_email IS NOT NULL OR m0.provisioned_phone IS NOT NULL)) THEN 'fleet_provisioned' ELSE 'self_registered' END AS "accountOrigin" FROM users WHERE deleted_at IS NULL
+           AND role IN ('driver','driver_fleet_owner') AND (
+             ($1::text IS NOT NULL AND lower(btrim(email))=$1) OR
+             ($2::text IS NOT NULL AND ltrim(btrim(phone),'+')=ltrim($2,'+')))
+           FOR UPDATE`,
+          [input.email ?? null, input.phone ?? null],
         )
       ).rows;
+      const existing = input.driverUserId
+        ? candidates.filter((row) => row.id === input.driverUserId)
+        : candidates;
       if (existing.length > 1)
         throw new AppError(
           'DRIVER_ACCOUNT_REQUIRED',
@@ -110,19 +124,30 @@ export class ManagedDriverRepository {
           409,
         );
       let user = existing[0];
+      if (
+        user &&
+        ((input.driverUserId && input.driverUserId !== user.id) ||
+          (input.email && input.email !== user.email?.trim().toLowerCase()) ||
+          (input.phone && input.phone.replace(/^\+/, '') !== user.phone?.trim().replace(/^\+/, '')))
+      )
+        throw new AppError(
+          'DRIVER_CONTACT_MISMATCH',
+          'Use the registered Driver contacts; contact changes require ownership verification',
+          409,
+        );
       if (!user) {
         if (input.driverUserId)
           throw new AppError('DRIVER_NOT_FOUND', 'Registered Driver not found', 404);
         user = (
           await c.query(
             `INSERT INTO users(first_name,last_name,email,phone,role,email_verified)
-     VALUES($1,$2,lower(btrim($3)),$4,'driver',FALSE) RETURNING id,role`,
-            [input.firstName, input.lastName, input.email, input.phone ?? null],
+     VALUES($1,$2,lower(btrim($3)),$4,'driver',FALSE) RETURNING id,role,'fleet_provisioned'::text AS "accountOrigin"`,
+            [input.firstName, input.lastName, input.email ?? null, input.phone ?? null],
           )
         ).rows[0];
         await c.query(
-          'INSERT INTO fleet_managed_driver_accounts(driver_user_id,partner_id,created_by) VALUES($1,$2,$3)',
-          [user.id, partner, owner],
+          'INSERT INTO fleet_managed_driver_accounts(driver_user_id,partner_id,created_by,provisioned_email,provisioned_phone) VALUES($1,$2,$3,$4,$5)',
+          [user.id, partner, owner, input.email ?? null, input.phone ?? null],
         );
         await c.query(
           'INSERT INTO provider_onboarding(user_id,role_flow_active,dashboard_deferred_at) VALUES($1,TRUE,NOW())',
@@ -175,6 +200,7 @@ export class ManagedDriverRepository {
         profileId: profile.id,
         verificationStatus: profile.verificationStatus,
         activationRequired: true,
+        accountOrigin: user.accountOrigin,
         authentication: 'Driver signs in using their own OTP; no Fleet password is created',
       };
     });
@@ -202,9 +228,8 @@ export class ManagedDriverRepository {
     const target = await this.authorizedProfile(owner, role, userId);
     const profile = (
       await this.pool.query(
-        `SELECT dp.id,u.id AS "userId",u.first_name AS "firstName",u.last_name AS "lastName",u.email,u.phone,
-   dp.license_number AS "licenseNumber",dp.license_expiry::text AS "licenseExpiry",dp.verification_status AS "verificationStatus",dp.active_vehicle_id AS "vehicleId",
-   (SELECT jsonb_build_object('id',v.id,'make',v.make,'model',v.model,'plateNumber',v.plate_number) FROM vehicles v WHERE v.id=dp.active_vehicle_id AND v.driver_profile_id=dp.id) AS "assignedVehicle"
+        `SELECT provider_public_id(u.id) AS "publicId",dp.id,u.id AS "userId",u.first_name AS "firstName",u.last_name AS "lastName",u.email,u.phone,
+   dp.license_number AS "licenseNumber",dp.license_expiry::text AS "licenseExpiry",dp.verification_status AS "verificationStatus"
    FROM driver_profiles dp JOIN users u ON u.id=dp.user_id WHERE dp.id=$1`,
         [target.id],
       )
@@ -223,7 +248,15 @@ export class ManagedDriverRepository {
         [target.role],
       )
     ).rows;
-    return { profile, documents, requirements };
+    const currentVehicle = await new PostgresDriverRepository(this.pool).getAssignedVehicle(
+      target.id,
+    );
+    const assignedVehicle = currentVehicle?.owner?.id === owner ? currentVehicle : null;
+    return {
+      profile: { ...profile, vehicleId: assignedVehicle?.id ?? null, assignedVehicle },
+      documents,
+      requirements,
+    };
   }
 
   async assign(owner: string, role: string, userId: string, code: string) {
@@ -279,10 +312,21 @@ export class ManagedDriverRepository {
         await c.query(
           `INSERT INTO provider_approval_requests(requester_id,requester_role,fleet_id,request_type,target_type,target_id)
     VALUES($1,$2,$3,(SELECT CASE WHEN verification_status='approved' THEN 'driver_association' ELSE 'driver_verification' END FROM driver_profiles WHERE id=$4),'driver_profile',$4)
-    ON CONFLICT(target_type,target_id,request_type) WHERE status='PENDING' DO UPDATE SET updated_at=provider_approval_requests.updated_at RETURNING id,status`,
+    ON CONFLICT(target_type,target_id,request_type) WHERE status='PENDING' DO UPDATE
+      SET requester_id=EXCLUDED.requester_id,requester_role=EXCLUDED.requester_role,
+          fleet_id=EXCLUDED.fleet_id,updated_at=NOW()
+      WHERE (provider_approval_requests.fleet_id IS NULL OR provider_approval_requests.fleet_id=EXCLUDED.fleet_id)
+        AND provider_approval_requests.requester_id IN (EXCLUDED.requester_id,(SELECT user_id FROM driver_profiles WHERE id=EXCLUDED.target_id))
+    RETURNING id,status`,
           [owner, role, partner, target.id],
         )
       ).rows[0];
+      if (!requests)
+        throw new AppError(
+          'APPROVAL_ALREADY_PENDING',
+          'Another Fleet already submitted this Driver for review',
+          409,
+        );
       await c.query(
         'UPDATE fleet_managed_driver_accounts SET onboarding_submitted_at=NOW(),updated_at=NOW() WHERE driver_user_id=$1 AND partner_id=$2',
         [userId, partner],

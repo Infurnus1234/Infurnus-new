@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeAll, afterAll, vi } from 'vitest';
 import { pool } from '../../../infrastructure/database/postgres.js';
 import { PostgresVehicleRepository } from '../../vehicles/repositories/vehicle.repository.js';
 import { PostgresRideRepository } from '../../rides/repositories/ride.repository.js';
@@ -63,6 +63,15 @@ async function type(
   return { t, admin };
 }
 live('persisted demand pricing and transactional booking', () => {
+  beforeAll(async () => {
+    // Docker's database clock can drift from the Windows test host. Align the
+    // consumer clock for fresh-sample tests; production freshness rules stay strict.
+    const realNow = Date.now.bind(Date);
+    const clock = (await pool.query('SELECT clock_timestamp() now')).rows[0].now as Date;
+    const offset = clock.getTime() - realNow();
+    vi.spyOn(Date, 'now').mockImplementation(() => realNow() + offset);
+  });
+  afterAll(() => vi.restoreAllMocks());
   afterEach(async () => {
     await pool.query('DELETE FROM rides WHERE customer_id=ANY($1::uuid[])', [ownedUsers]);
     await pool.query('DELETE FROM vehicle_types WHERE id=ANY($1::uuid[])', [ownedTypes.splice(0)]);

@@ -1,3 +1,5 @@
+import '../utils/currency_formatter.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -40,7 +42,7 @@ class UpiPaymentService {
     UpiPaymentApp app = UpiPaymentApp.any,
   }) async {
     try {
-      final formattedAmount = amount.toStringAsFixed(2);
+      final formattedAmount = amount.rupeeText;
       final encodedName = Uri.encodeComponent(merchantName);
       final encodedNote = Uri.encodeComponent('INFURNUS Ride Payment');
       final query =

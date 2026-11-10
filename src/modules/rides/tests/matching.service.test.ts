@@ -5,6 +5,91 @@ import type { MapProvider } from '../providers/map.provider.js';
 import type { Ride } from '../types/ride.js';
 
 describe('policy-aware dispatch matching', () => {
+  it('queries live GPS near pickup without requiring saved Premium city coverage', async () => {
+    const repo = driverRepository();
+    const area = {
+      configured: true,
+      required: true,
+      assertSupported: vi.fn().mockResolvedValue(undefined),
+    };
+    const resolve = vi.fn().mockResolvedValue(undefined);
+    const matcher = new MatchingService(repo, undefined, area, { resolve });
+    const result = await matcher.findDispatchDrivers(
+      {
+        id: 'synthetic',
+        customerId: 'synthetic-customer',
+        pickup: { latitude: 26.647, longitude: 84.917 },
+        sector: 'premium',
+        vehicleCategory: 'thar',
+      } as Ride,
+      null,
+    );
+    expect(result).toHaveLength(2);
+    expect(resolve).not.toHaveBeenCalled();
+    expect(vi.mocked(repo.findNearbyEligible).mock.calls[0]?.[2]).toBe(25000);
+  });
+
+  it.each([
+    ['logistics', 'tata_407'],
+    ['logistics', 'cargo_407'],
+    ['passenger', 'sedan'],
+    ['premium', 'thar'],
+    ['rental', 'sedan'],
+    ['service', 'ambulance'],
+    ['service', 'towing'],
+  ])(
+    '%s/%s dispatch resolves pickup independently of remote customer GPS and intercity destination',
+    async (sector, vehicleCategory) => {
+      const repo = driverRepository();
+      const pickup = { latitude: 25.617, longitude: 85.145 };
+      const area = {
+        configured: true,
+        required: true,
+        assertSupported: vi.fn().mockResolvedValue(undefined),
+      };
+      const resolve = vi.fn().mockResolvedValue({ cityId: 'PATNA', boundaryGeoJson: 'boundary' });
+      const matching = new MatchingService(repo, undefined, area, { resolve });
+      for (const customerLocation of [
+        { latitude: 28.6139, longitude: 77.209 },
+        { latitude: 19.076, longitude: 72.8777 },
+      ]) {
+        await matching.findDispatchDrivers(
+          {
+            id: 'remote-booking',
+            customerId: 'customer',
+            pickup,
+            destination: { latitude: 26.12, longitude: 85.39 },
+            customerLocation,
+            sector,
+            vehicleCategory,
+            assignedDriverId: null,
+            assignedVehicleId: null,
+            pickupAddress: null,
+            destinationAddress: null,
+            status: 'requested',
+            cancellationReason: null,
+            cancelledAt: null,
+            completedAt: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          } as Ride,
+          sector === 'premium' ? null : 20000,
+        );
+        expect(area.assertSupported).toHaveBeenLastCalledWith([pickup]);
+        expect(repo.findNearbyEligible).toHaveBeenLastCalledWith(
+          pickup.latitude,
+          pickup.longitude,
+          sector === 'premium' ? 25000 : 20000,
+          expect.any(Number),
+          expect.any(Date),
+          sector === 'rental' ? 'passenger' : sector,
+          vehicleCategory,
+          expect.objectContaining({ rideId: 'remote-booking', customerId: 'customer' }),
+        );
+      }
+      if (sector === 'premium') expect(resolve).not.toHaveBeenCalled();
+    },
+  );
   const ride = {
     id: 'test-ride',
     pickup: { latitude: 12, longitude: 77 },
@@ -58,7 +143,7 @@ describe('policy-aware dispatch matching', () => {
       expect(result.map((c) => c.driverProfileId)).toEqual(['a-driver', 'b-driver']);
     }
   });
-  it('resolves premium coverage before querying and attaches the selected city', async () => {
+  it('uses current pickup radius without attaching a legacy city', async () => {
     const repo = driverRepository(),
       resolve = vi
         .fn()
@@ -66,23 +151,24 @@ describe('policy-aware dispatch matching', () => {
     const result = await new MatchingService(repo, undefined, undefined, {
       resolve,
     }).findDispatchDrivers({ ...ride, sector: 'premium', vehicleCategory: 'sedan' }, null);
-    expect(resolve).toHaveBeenCalledWith(ride.pickup);
-    expect(result[0]).toMatchObject({
-      dispatchCityId: 'TEST_CITY',
-      dispatchBoundaryGeoJson: 'test-geometry',
-    });
+    expect(resolve).not.toHaveBeenCalled();
+    expect(result[0]).not.toHaveProperty('dispatchCityId');
     expect(repo.findNearbyEligible).toHaveBeenLastCalledWith(
       12,
       77,
-      20000,
+      25000,
       expect.any(Number),
       expect.any(Date),
       'premium',
       'sedan',
-      { rideId: 'test-ride', radiusMeters: null, boundaryGeoJson: 'test-geometry' },
+      {
+        rideId: 'test-ride',
+        customerId: ride.customerId,
+        radiusMeters: 25000,
+      },
     );
   });
-  it('does not query drivers when premium city coverage is missing', async () => {
+  it('uses live pickup radius when legacy city coverage is missing', async () => {
     const repo = driverRepository(),
       resolve = vi.fn().mockRejectedValue(new Error('city missing'));
     await expect(
@@ -90,8 +176,8 @@ describe('policy-aware dispatch matching', () => {
         { ...ride, sector: 'premium' },
         null,
       ),
-    ).rejects.toThrow('city missing');
-    expect(repo.findNearbyEligible).not.toHaveBeenCalled();
+    ).resolves.toHaveLength(2);
+    expect(resolve).not.toHaveBeenCalled();
   });
 });
 

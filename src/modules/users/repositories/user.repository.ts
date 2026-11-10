@@ -60,6 +60,7 @@ const PREFERENCE_COLUMNS = {
 
 const PUBLIC_USER_PROJECTION = `
   id,
+  provider_public_id(id) AS "publicId",
   first_name AS "firstName",
   last_name AS "lastName",
   email,

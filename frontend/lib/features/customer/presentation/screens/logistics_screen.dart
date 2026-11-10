@@ -1,3 +1,6 @@
+import '../providers/booking_catalog_provider.dart';
+import '../widgets/vehicle_presentation_catalog.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -15,46 +18,40 @@ class LogisticsScreen extends ConsumerStatefulWidget {
 class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
   String _selectedFilter = 'All';
 
-  final List<String> _filters = [
-    'All',
-    '3-Wheeler',
-    'Tata Magic',
-    '207',
-    '407',
-  ];
+  final List<String> _filters = ['All', '3-Wheeler', 'Mini Truck', 'Truck'];
 
-  final List<Map<String, dynamic>> _vehicles = [
+  static final List<Map<String, String>> _fallbackVehicles = [
     {
-      'title': '3-Wheeler (Goods)',
+      'name': 'Piaggio Ape',
+      'title': 'Piaggio Ape',
       'category': 'piaggio_ape',
       'filter': '3-Wheeler',
       'subtitle': 'Up to 500 kg • City delivery',
       'image': 'assets/images/piaggio_ape_yellow.png',
-      'fallbackIcon': Icons.electric_rickshaw_rounded,
     },
     {
+      'name': 'Tata Magic',
       'title': 'Tata Magic',
       'category': 'tata_magic',
-      'filter': 'Tata Magic',
+      'filter': 'Mini Truck',
       'subtitle': 'Up to 750 kg • Goods transport',
       'image': 'assets/images/tata_magic_cream.png',
-      'fallbackIcon': Icons.local_shipping_rounded,
     },
     {
-      'title': '207 Cargo',
+      'name': 'Tata 207',
+      'title': 'Tata 207',
       'category': 'cargo_207',
-      'filter': '207',
+      'filter': 'Truck',
       'subtitle': 'Up to 1500 kg • Medium cargo',
       'image': 'assets/images/cargo_207_heavy.png',
-      'fallbackIcon': Icons.local_shipping_rounded,
     },
     {
-      'title': '407 Cargo',
+      'name': 'Tata 407',
+      'title': 'Tata 407',
       'category': 'cargo_407',
-      'filter': '407',
+      'filter': 'Truck',
       'subtitle': 'Up to 2500 kg • Heavy cargo',
-      'image': 'assets/images/tata_407_beige.png',
-      'fallbackIcon': Icons.local_shipping_rounded,
+      'image': 'assets/images/cargo_407.jpg',
     },
   ];
 
@@ -65,12 +62,20 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
     final isUnavailable = fareEstimate?.isUnavailable ?? false;
     final hasBookingAmount = fareEstimate?.bookingAmount != null;
 
+    final catalogVehicles = customerVehiclePresentation(
+      'logistics',
+      ref.watch(bookingCatalogProvider('logistics')).value ?? [],
+    );
+    final vehicles = catalogVehicles.isNotEmpty
+        ? catalogVehicles
+        : _fallbackVehicles;
+
     final selectedCategory = rideState.selectedTier;
-    final matchedVehicle = _vehicles
+    final matchedVehicle = vehicles
         .where((v) => v['category'] == selectedCategory)
         .firstOrNull;
     final unavailableVehicleName = matchedVehicle != null
-        ? (matchedVehicle['title'] as String)
+        ? (matchedVehicle['name'] ?? matchedVehicle['title'])
         : (_selectedFilter != 'All'
               ? _selectedFilter
               : (selectedCategory.isNotEmpty
@@ -86,11 +91,11 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
                     : null));
 
     final filtered = _selectedFilter == 'All'
-        ? _vehicles
-        : _vehicles.where((v) => v['filter'] == _selectedFilter).toList();
+        ? vehicles
+        : vehicles.where((v) => v['filter'] == _selectedFilter).toList();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -227,7 +232,7 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
-                            '${item['title']} is currently unavailable for booking.',
+                            '${item['name'] ?? item['title']} is currently unavailable for booking.',
                           ),
                           duration: const Duration(seconds: 2),
                         ),
@@ -237,7 +242,7 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
                     ref.read(rideProvider.notifier).selectSector('logistics');
                     ref
                         .read(rideProvider.notifier)
-                        .selectTier(item['category'] as String);
+                        .selectTier(item['category']!);
                     context.push('/ride-booking');
                   },
                   child: Container(
@@ -275,10 +280,12 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(8),
                             child: Image.asset(
-                              item['image'] as String,
+                              item['image']!,
                               fit: BoxFit.contain,
                               errorBuilder: (_, __, ___) => Icon(
-                                item['fallbackIcon'] as IconData,
+                                item['filter'] == '3-Wheeler'
+                                    ? Icons.electric_rickshaw_rounded
+                                    : Icons.local_shipping_rounded,
                                 size: 28,
                                 color: const Color(0xFF16A34A),
                               ),
@@ -296,7 +303,7 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
                                 children: [
                                   Expanded(
                                     child: Text(
-                                      item['title'] as String,
+                                      item['name'] ?? item['title'] ?? '',
                                       style: const TextStyle(
                                         fontSize: 15,
                                         fontWeight: FontWeight.bold,
@@ -331,7 +338,7 @@ class _LogisticsScreenState extends ConsumerState<LogisticsScreen> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                item['subtitle'] as String,
+                                item['subtitle']!,
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: Color(0xFF6B7280),

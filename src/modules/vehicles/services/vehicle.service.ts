@@ -1,3 +1,4 @@
+import { bookingInventorySector } from './rental-inventory.js';
 import { AppError } from '../../../common/errors/app-error.js';
 
 import type {
@@ -60,6 +61,38 @@ export class VehicleService {
     }
 
     return this.repository.findByDriver(query.driverProfileId, query.activeOnly);
+  }
+
+  async catalog(
+    sector: 'passenger' | 'premium' | 'logistics' | 'service' | 'rental',
+    limit: number,
+    offset: number,
+  ) {
+    if (!this.repository.listTypes)
+      throw new AppError('VEHICLE_CATALOG_UNAVAILABLE', 'Vehicle catalog is unavailable', 503);
+    const types = await this.repository.listTypes(
+      limit,
+      offset,
+      bookingInventorySector(sector),
+      false,
+      undefined,
+      true,
+    );
+    return types
+      .filter((type) => type.catalogVisible !== false)
+      .map(({ fixedHourlyPricing, rentalPricingVersion: _rentalVersion, ...type }) =>
+        sector === 'rental'
+          ? {
+              ...type,
+              sector: 'rental' as const,
+              pricingStatus: !fixedHourlyPricing
+                ? ('needs_pricing' as const)
+                : type.active
+                  ? ('available' as const)
+                  : ('inactive' as const),
+            }
+          : type,
+      );
   }
 
   async listFleet(query: VehicleFleetQuery) {

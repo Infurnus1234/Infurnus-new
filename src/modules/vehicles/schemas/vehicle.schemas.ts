@@ -1,3 +1,4 @@
+import { operatingLocationSchema } from '../../maps/vehicle-operating-location.js';
 import { z } from 'zod';
 
 const uuid = z.string().uuid();
@@ -33,6 +34,10 @@ export const vehicleFleetQuerySchema = z
   .object({
     sector: vehicleSector.optional(),
     category: vehicleCategory.optional(),
+    operatingCityId: z
+      .string()
+      .regex(/^[a-z][a-z0-9_-]{0,99}$/)
+      .optional(),
   })
   .strict();
 
@@ -62,6 +67,11 @@ export const createVehicleSchema = z
     sector: vehicleSector.default('passenger'),
 
     category: vehicleCategory.default('sedan'),
+    operatingLocation: operatingLocationSchema.optional(),
+    operatingCityId: z
+      .string()
+      .regex(/^[a-z][a-z0-9_-]{0,99}$/)
+      .optional(),
 
     fuelRatePerKm: z.number().nonnegative().default(0),
 
@@ -106,6 +116,11 @@ export const updateVehicleSchema = z
     sector: vehicleSector.optional(),
 
     category: vehicleCategory.optional(),
+    operatingLocation: operatingLocationSchema.optional(),
+    operatingCityId: z
+      .string()
+      .regex(/^[a-z][a-z0-9_-]{0,99}$/)
+      .optional(),
 
     fuelRatePerKm: z.number().nonnegative().optional(),
 
@@ -163,6 +178,23 @@ const exactFare = z
   .nonnegative()
   .max(99_999_999.99)
   .refine((v) => /^\d+(?:\.\d{1,2})?$/.test(String(v)), 'Use at most two decimal places');
+export const hourlyBaseFaresSchema = z.partialRecord(
+  z.enum(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '12_plus']),
+  exactFare,
+);
+const hourlyFields = {
+  fixedHourlyPricing: z
+    .object({
+      hourlyRate: exactFare,
+      fuelRate: exactFare,
+      fuelUnit: z.enum(['per_booking', 'per_hour', 'per_km']),
+    })
+    .strict()
+    .optional(),
+  hourlyBaseFares: hourlyBaseFaresSchema.nullable().optional(),
+  missingDurationPolicy: z.enum(['legacy_base', 'require_duration']).optional(),
+  extendedDurationPolicy: z.literal('booked_duration').nullable().optional(),
+};
 const referenceAmount = z.number().int().nonnegative().max(9999999999);
 export const vehiclePricingReferenceSchema = z
   .object({
@@ -196,6 +228,12 @@ export const vehiclePricingReferenceSchema = z
         : v.routeBased === true),
     'Invalid pricing range',
   );
+const logisticsSlabs = z
+  .object({
+    below_15: z.object({ baseFare: exactFare, perKmRate: exactFare }).strict(),
+    from_15: z.object({ baseFare: exactFare, perKmRate: exactFare }).strict(),
+  })
+  .strict();
 export const createVehicleTypeSchema = z
   .object({
     name: vehicleText,
@@ -204,8 +242,14 @@ export const createVehicleTypeSchema = z
     baseFare: exactFare.nullable(),
     perKmRate: exactFare.nullable(),
     pricingReference: vehiclePricingReferenceSchema.nullable().optional(),
+    serviceFixedFare: exactFare.nullable().optional(),
+    serviceRadiusMeters: z.number().int().min(1).max(200000).optional(),
+    ...hourlyFields,
+    logisticsSlabs: logisticsSlabs.nullable().optional(),
     currency: z.literal('INR').default('INR'),
     active: z.boolean().default(false),
+    catalogVisible: z.boolean().optional(),
+    registrationActive: z.boolean().optional(),
   })
   .strict();
 export const updateVehicleTypeSchema = z
@@ -214,12 +258,20 @@ export const updateVehicleTypeSchema = z
     baseFare: exactFare.nullable().optional(),
     perKmRate: exactFare.nullable().optional(),
     active: z.boolean().optional(),
+    catalogVisible: z.boolean().optional(),
+    registrationActive: z.boolean().optional(),
     pricingReference: vehiclePricingReferenceSchema.nullable().optional(),
+    serviceFixedFare: exactFare.nullable().optional(),
+    serviceRadiusMeters: z.number().int().min(1).max(200000).optional(),
+    ...hourlyFields,
+    logisticsSlabs: logisticsSlabs.nullable().optional(),
     expectedVersion: z.number().int().positive(),
+    expectedRentalPricingVersion: z.number().int().nonnegative().optional(),
   })
   .strict()
   .refine(
-    (v) => Object.keys(v).some((k) => k !== 'expectedVersion'),
+    (v) =>
+      Object.keys(v).some((k) => k !== 'expectedVersion' && k !== 'expectedRentalPricingVersion'),
     'At least one change is required',
   );
 export const vehicleTypeStatusSchema = z

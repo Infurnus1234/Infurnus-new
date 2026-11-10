@@ -31,6 +31,8 @@ export interface FareCalculationInput {
   weightKg?: number | undefined;
   hasLoadingAssistance?: boolean | undefined;
   rentalHours?: number | undefined;
+  bookingHours?: number | undefined;
+  tripType?: 'one_way' | 'round_trip' | undefined;
   fuelRatePerKm?: number | undefined;
 }
 
@@ -44,6 +46,8 @@ export interface FareCalculationInput {
  *   1250 = ₹12.50
  */
 export interface FareBreakdown {
+  roundingAdjustmentPaise?: number;
+  monetaryPolicy?: 'whole_rupee_half_up_v1';
   baseAmount: number;
   distanceAmount: number;
   timeAmount: number;
@@ -66,9 +70,15 @@ export interface FareBreakdown {
  * future pricing-model changes without ambiguity.
  */
 export interface FareCalculationResult extends FareBreakdown {
+  logisticsPayment?: {
+    totalPaise: number;
+    upfrontPaise: number;
+    finalPaise: number;
+    currency: 'INR';
+  };
   oneWayDistanceMeters?: number;
   billableDistanceMeters?: number;
-  distanceMultiplier?: 2;
+  distanceMultiplier?: 1 | 2;
   vehicleConfiguration?: VehicleFareSnapshot;
   demandPricing?: DemandPricingProvenance;
   distanceMeters: number;
@@ -126,7 +136,7 @@ export interface VehiclePricing {
 export interface VehicleFareEstimate {
   oneWayDistanceMeters?: number;
   billableDistanceMeters?: number;
-  distanceMultiplier?: 2;
+  distanceMultiplier?: 1 | 2;
   estimateType: 'range' | 'quote_required';
   demandPricing?: DemandPricingProvenance;
   vehicleCategory: string;

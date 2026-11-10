@@ -73,7 +73,7 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
               .get(`/support/tickets/${id}`)
               .set('authorization', `Bearer ${await token('other')}`)
           ).status,
-        ).toBe(404);
+        ).toBe(403);
         expect((await request(app).get('/support/tickets')).status).toBe(401);
         expect(
           (

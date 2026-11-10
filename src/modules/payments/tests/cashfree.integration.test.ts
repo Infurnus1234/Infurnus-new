@@ -521,9 +521,9 @@ describe('INFURNUS Payments - Cashfree Provider Integration', () => {
 
       await controller.initiate(req, res, vi.fn());
 
-      expect(mockRepo.initiate).toHaveBeenCalledWith(expect.objectContaining({ amount: 3622.5 }));
+      expect(mockRepo.initiate).toHaveBeenCalledWith(expect.objectContaining({ amount: 3623 }));
       expect(mockProvider.createOrder).toHaveBeenCalledWith(
-        expect.objectContaining({ amount: 3622.5 }),
+        expect.objectContaining({ amount: 3623 }),
       );
     });
 

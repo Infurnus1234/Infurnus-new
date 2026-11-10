@@ -1,8 +1,10 @@
+import { RouteRecalculationService } from '../rides/services/route-recalculation.service.js';
 import { env } from '../../config/env.js';
 import { createHash } from 'node:crypto';
 import { serviceArea, type ServiceAreaGate } from './service-area.js';
 import { AppError } from '../../common/errors/app-error.js';
 import type {
+  AdministrativeDistrict,
   Coordinates,
   MapProvider,
   MapRequestOptions,
@@ -56,6 +58,7 @@ const emptyMetric = (): Metric => ({
 });
 export class CommonMapService implements MapProvider {
   readonly providerName: string;
+  readonly navigation: RouteRecalculationService;
   private readonly pending = new Map<string, Promise<unknown>>();
   private readonly metrics = new Map<string, Metric>();
   private readonly popularity = new Map<string, number>();
@@ -71,6 +74,7 @@ export class CommonMapService implements MapProvider {
     private readonly area: ServiceAreaGate = serviceArea,
   ) {
     this.providerName = provider.providerName ?? 'configured';
+    this.navigation = new RouteRecalculationService(this, now, config);
   }
   get navigationStorageAllowed() {
     // Redis cache permission does not authorize indefinite ride JSONB retention.
@@ -128,7 +132,8 @@ export class CommonMapService implements MapProvider {
     }
   }
   private valid(kind: string, value: unknown): boolean {
-    if (value === null) return kind === 'geocode' || kind === 'reverse' || kind === 'route';
+    if (value === null)
+      return kind === 'district' || kind === 'geocode' || kind === 'reverse' || kind === 'route';
     const point = (v: unknown) => {
       try {
         validateCoordinates(v as Coordinates);
@@ -138,6 +143,16 @@ export class CommonMapService implements MapProvider {
       }
     };
     const route = validRouteResult;
+    if (kind === 'district') {
+      const d = value as AdministrativeDistrict;
+      return (
+        typeof d.name === 'string' &&
+        d.name.length > 0 &&
+        d.name.length <= 120 &&
+        /^[A-Z]{2}$/.test(d.countryCode) &&
+        [2, 3].includes(d.level)
+      );
+    }
     if (kind === 'geocode') return point(value);
     if (kind === 'route') return route(value);
     if (kind === 'reverse') {
@@ -398,11 +413,28 @@ export class CommonMapService implements MapProvider {
       options,
     );
   }
+  async resolveDistrict(
+    point: Coordinates,
+    options: MapRequestOptions = {},
+  ): Promise<AdministrativeDistrict | null> {
+    validateCoordinates(point);
+    if (!this.provider.resolveDistrict) return null;
+    // Exact selected coordinates: rounding a reverse-geocode cache key can cross a district boundary.
+    return this.request(
+      'district',
+      point,
+      0,
+      (callOptions) => this.provider.resolveDistrict!(point, callOptions),
+      { ...options, source: 'LOGISTICS' },
+    );
+  }
   async reverseGeocode(
     point: Coordinates,
     options: MapRequestOptions = {},
   ): Promise<ReverseGeocodeResult | null> {
-    await this.area.assertSupported([point]);
+    // Address lookup also describes a remote customer's GPS position. Coverage
+    // belongs to route/booking validation, not to this informational lookup.
+    await this.area.assertSupported([]);
     const p = this.point(point, this.config.reversePrecision);
     if (!this.provider.reverseGeocode)
       throw new AppError('MAP_OPERATION_UNAVAILABLE', 'Reverse geocoding is not configured', 503);

@@ -59,10 +59,10 @@ describe('Vehicle fare ranges', () => {
       expect(result.estimatedFare.maximum?.distanceAmount).toBe(highRate * 20);
       const taxFactor = sector === 'logistics' ? 1.05 : 1;
       expect(result.estimatedFare.minimum.grossAmount).toBe(
-        Math.round((lowBase + lowRate * 20 + 2000) * taxFactor),
+        Math.round(Math.round((lowBase + lowRate * 20 + 2000) * taxFactor) / 100) * 100,
       );
       expect(result.estimatedFare.maximum?.grossAmount).toBe(
-        Math.round((highBase + highRate * 20 + 2000) * taxFactor),
+        Math.round(Math.round((highBase + highRate * 20 + 2000) * taxFactor) / 100) * 100,
       );
       expect(result.bookable).toBe(false);
       expect(result).not.toHaveProperty('grossAmount');
@@ -130,7 +130,7 @@ describe('Vehicle fare ranges', () => {
           waitingAmount: 400,
           weightAmount: 5000,
           loadingAmount: 15000,
-          grossAmount: 85995,
+          grossAmount: 86000,
         },
       },
     });
@@ -254,7 +254,6 @@ describe('Estimate API and booking integration', () => {
         destination,
         sector: 'passenger',
         vehicleCategory: 'bike',
-        fareEstimate: 1,
       }),
     ).rejects.toMatchObject({ code: 'FARE_FIXED_QUOTE_REQUIRED' });
     expect(create).not.toHaveBeenCalled();
@@ -277,7 +276,6 @@ describe('Estimate API and booking integration', () => {
       destination,
       sector: 'passenger',
       vehicleCategory: 'bike',
-      fareEstimate: 1,
     });
     expect(create).toHaveBeenCalledWith('customer', expect.objectContaining({ fareEstimate: 158 }));
   });
@@ -321,7 +319,6 @@ describe('Follow-up booking guards', () => {
         destination,
         sector: 'passenger',
         vehicleCategory: 'bike',
-        fareEstimate: 1,
       }),
     ).rejects.toMatchObject({ code: 'FARE_FIXED_QUOTE_REQUIRED' });
     expect(create).not.toHaveBeenCalled();
@@ -341,7 +338,6 @@ describe('Follow-up booking guards', () => {
         destination,
         sector: 'logistics',
         vehicleCategory: 'ftl',
-        fareEstimate: 1,
       }),
     ).rejects.toMatchObject({ code: 'FARE_FIXED_QUOTE_REQUIRED' });
     expect(create).not.toHaveBeenCalled();
@@ -470,7 +466,7 @@ describe('Final end-to-end fare validation', () => {
       undefined,
       undefined,
       estimator,
-    ).createRide('customer', { ...input, fareEstimate: 1 });
+    ).createRide('customer', input);
     expect(create).toHaveBeenCalledWith('customer', expect.objectContaining({ fareEstimate: 162 }));
   });
   it('FTL remains unavailable with valid route metadata and cannot accept invented truck-size fields', async () => {
@@ -553,7 +549,7 @@ describe('Existing rental input compatibility', () => {
       undefined,
       undefined,
       estimator,
-    ).createRide('customer', { ...input, fareEstimate: 1 });
+    ).createRide('customer', input);
     expect(create).toHaveBeenCalledWith(
       'customer',
       expect.objectContaining({ fareEstimate: 3465 }),

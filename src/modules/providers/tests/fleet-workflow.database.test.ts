@@ -40,7 +40,7 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
           model: 'Goods',
           plateNumber: randomUUID().slice(0, 20),
           sector: 'logistics',
-          category: 'mini_truck',
+          category: 'tata_407',
         }),
       );
       expect(code).toMatch(/^\d{6}$/);
@@ -153,13 +153,11 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
           .rowCount,
       ).toBe(1);
     });
-    it('rotation revokes the previous code, rejects expired codes, and never exposes owner codes across Fleets', async () => {
+    it('retrieval preserves the permanent code while expired legacy tokens and cross-Fleet access remain blocked', async () => {
       const f = await fixture(),
         other = await fixture();
       const next = await fleet.generateAssignmentCode(f.owner, f.vehicle.id);
-      await expect(drivers.claimAssignmentCode(f.code, f.driver, f.profile)).rejects.toThrow(
-        'ASSIGNMENT_CODE_INVALID',
-      );
+      expect(next.code).toBe(f.code);
       await expect(fleet.generateAssignmentCode(other.owner, f.vehicle.id)).rejects.toThrow();
       expect(
         (await fleet.listVehicles(other.owner)).some((v) => v.activeAssignmentCode === next.code),
@@ -168,10 +166,18 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
         "UPDATE driver_assignment_codes SET expires_at=NOW()-INTERVAL '1 day' WHERE code=$1",
         [next.code],
       );
-      await expect(drivers.claimAssignmentCode(next.code, f.driver, f.profile)).rejects.toThrow(
+      expect((await drivers.claimAssignmentCode(next.code, f.driver, f.profile)).vehicleId).toBe(
+        f.vehicle.id,
+      );
+      const legacy = 'legacy_' + randomUUID().replaceAll('-', '').slice(0, 12);
+      await pool.query(
+        "INSERT INTO driver_assignment_codes(code,vehicle_id,fleet_owner_id,expires_at,status) VALUES($1,$2,$3,NOW()-INTERVAL '1 day','EXPIRED')",
+        [legacy, f.vehicle.id, f.owner],
+      );
+      await expect(drivers.claimAssignmentCode(legacy, f.driver, f.profile)).rejects.toThrow(
         'ASSIGNMENT_CODE_INVALID',
       );
-      expect(await drivers.getAssignedVehicle(f.profile)).toBeNull();
+      expect((await drivers.getAssignedVehicle(f.profile))?.id).toBe(f.vehicle.id);
     });
     it('allows configured rental inventory and rejects a mismatched sector/type', async () => {
       const f = await fixture();

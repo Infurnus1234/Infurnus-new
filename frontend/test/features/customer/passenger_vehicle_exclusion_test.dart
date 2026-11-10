@@ -16,7 +16,7 @@ import 'package:infurnus/features/customer/presentation/screens/ride_booking_scr
 
 class NoLocation extends LocationService {
   @override
-  Future<Position?> getCurrentPosition() async => null;
+  Future<Position?> getCurrentPosition({bool retry = false}) async => null;
 }
 
 class _FakeRideRepository implements RideRepository {
@@ -24,7 +24,42 @@ class _FakeRideRepository implements RideRepository {
   Future<List<FleetVehicleModel>> getFleet({
     String? sector,
     String? category,
-  }) async => [];
+  }) async => [
+    for (final entry
+        in ((sector == 'passenger' || sector == 'rental')
+                ? <String, String>{
+                    'hatchback': 'Hatchback',
+                    'sedan': 'Sedan',
+                    'innova': 'Innova Crysta',
+                    'mini': 'Mini',
+                    'winger': 'Winger',
+                    'traveller': 'Force Traveller',
+                    'bike': 'Bike',
+                    'auto': 'Auto',
+                    'e_rickshaw': 'E-Rickshaw',
+                  }
+                : <String, String>{
+                    'piaggio_ape': 'Piaggio Ape',
+                    'tata_magic': 'Tata Magic',
+                  })
+            .entries)
+      FleetVehicleModel(
+        catalogVisible:
+            sector == 'logistics' ||
+            const {'hatchback', 'sedan', 'innova', 'mini'}.contains(entry.key),
+        active:
+            sector == 'logistics' ||
+            const {'hatchback', 'sedan', 'innova', 'mini'}.contains(entry.key),
+        id: entry.key,
+        make: '',
+        model: entry.value,
+        name: entry.value,
+        sector: sector ?? 'passenger',
+        category: entry.key,
+        fuelRatePerKm: 0,
+        loadCapacityKg: 0,
+      ),
+  ];
 
   @override
   Future<FareEstimateModel> estimateFare(Map<String, dynamic> data) async =>
@@ -99,7 +134,12 @@ void main() {
         });
 
         await tester.pumpWidget(
-          const ProviderScope(child: MaterialApp(home: PassengerRidesScreen())),
+          ProviderScope(
+            overrides: [
+              rideRepositoryProvider.overrideWithValue(_FakeRideRepository()),
+            ],
+            child: const MaterialApp(home: PassengerRidesScreen()),
+          ),
         );
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 100));
@@ -114,8 +154,9 @@ void main() {
         expect(find.text('Hatchback'), findsWidgets);
         expect(find.text('Sedan'), findsWidgets);
         expect(find.text('Innova Crysta'), findsOneWidget);
-        expect(find.text('Winger'), findsOneWidget);
-        expect(find.text('Force Traveller'), findsOneWidget);
+        expect(find.text('Mini'), findsOneWidget);
+        expect(find.text('Winger'), findsNothing);
+        expect(find.text('Force Traveller'), findsNothing);
       },
     );
 
@@ -136,7 +177,6 @@ void main() {
             locationServiceProvider.overrideWithValue(NoLocation()),
           ],
         );
-        addTearDown(container.dispose);
 
         container
             .read(rideProvider.notifier)
@@ -181,27 +221,36 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(container.read(rideProvider).selectedTier, 'hatchback');
+        await tester.pumpWidget(const SizedBox());
+        container.dispose();
+        await tester.pump();
       },
     );
 
-    testWidgets('Other sectors (Logistics, Emergency, Rentals) are unaffected', (
-      tester,
-    ) async {
-      tester.view.physicalSize = const Size(800, 1600);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(() {
-        tester.view.resetPhysicalSize();
-        tester.view.resetDevicePixelRatio();
-      });
+    testWidgets(
+      'Other sectors (Logistics, Emergency, Rentals) are unaffected',
+      (tester) async {
+        tester.view.physicalSize = const Size(800, 1600);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() {
+          tester.view.resetPhysicalSize();
+          tester.view.resetDevicePixelRatio();
+        });
 
-      // Logistics retains cargo vehicles (3-Wheeler (Goods), Tata Magic, etc.)
-      await tester.pumpWidget(
-        const ProviderScope(child: MaterialApp(home: LogisticsScreen())),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-      expect(find.text('3-Wheeler (Goods)'), findsOneWidget);
-      expect(find.text('Tata Magic'), findsAtLeast(1));
-    });
+        // Logistics retains cargo vehicles (Piaggio Ape, Tata Magic, etc.)
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              rideRepositoryProvider.overrideWithValue(_FakeRideRepository()),
+            ],
+            child: const MaterialApp(home: LogisticsScreen()),
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(find.text('Piaggio Ape'), findsOneWidget);
+        expect(find.text('Tata Magic'), findsOneWidget);
+      },
+    );
   });
 }

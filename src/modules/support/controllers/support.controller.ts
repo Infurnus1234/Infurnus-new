@@ -6,6 +6,7 @@ import {
   supportListSchema,
 } from '../schemas/support.schemas.js';
 import type { SupportService } from '../services/support.service.js';
+import { supportValidationError } from '../schemas/support-validation.js';
 
 export class SupportController {
   constructor(private readonly supportService: SupportService) {}
@@ -13,7 +14,7 @@ export class SupportController {
   createTicket = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const input = createSupportTicketSchema.parse(req.body);
-      const role = req.auth?.role ?? 'driver';
+      const role = req.auth!.role;
       const ticket = await this.supportService.createTicket(req.auth!.userId, role, input);
       res.status(201).json({
         success: true,
@@ -21,7 +22,7 @@ export class SupportController {
         message: 'Support ticket created successfully',
       });
     } catch (error) {
-      next(error);
+      next(supportValidationError(error));
     }
   };
 
@@ -43,7 +44,7 @@ export class SupportController {
           : {}),
       });
     } catch (error) {
-      next(error);
+      next(supportValidationError(error));
     }
   };
 
@@ -56,7 +57,7 @@ export class SupportController {
       }
       res.json({ success: true, data: ticket });
     } catch (error) {
-      next(error);
+      next(supportValidationError(error));
     }
   };
 }

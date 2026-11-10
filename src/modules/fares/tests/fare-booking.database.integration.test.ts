@@ -62,7 +62,7 @@ live('fare-to-booking PostgreSQL persistence and transactions', () => {
     if (configuredCode)
       await pool.query('DELETE FROM vehicle_types WHERE code=$1', [configuredCode]);
   });
-  it('persists the server estimate including waiting and ignores client fare', async () => {
+  it('persists the server estimate including waiting and rejects forged client fare', async () => {
     // Use a real, isolated catalog configuration. The seeded Bike is deliberately
     // inactive; an in-memory fixed quote must never bypass that production guard.
     configuredCode = 'qa_bike_' + randomUUID().replaceAll('-', '');
@@ -82,7 +82,11 @@ live('fare-to-booking PostgreSQL persistence and transactions', () => {
     if (!('estimateType' in estimate) || estimate.estimateType !== 'range' || !estimate.bookingFare)
       throw new Error('Expected test-only configured fixed quote');
     const service = new RideService(new PostgresRideRepository(pool), undefined, undefined, fare);
-    const ride = await service.createRide(customerId, bookingInput);
+    await expect(service.createRide(customerId, bookingInput)).rejects.toMatchObject({
+      code: 'FARE_QUOTE_MISMATCH',
+    });
+    const { fareEstimate: _untrusted, ...validInput } = bookingInput;
+    const ride = await service.createRide(customerId, validInput);
     const row = await pool.query('SELECT fare_estimate FROM rides WHERE id=$1', [ride.id]);
     expect(Number(row.rows[0].fare_estimate)).toBe(estimate.bookingFare.grossAmount / 100);
     expect(Number(row.rows[0].fare_estimate)).not.toBe(input.fareEstimate);

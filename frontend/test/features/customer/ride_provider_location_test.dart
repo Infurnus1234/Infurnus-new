@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -10,12 +11,13 @@ import 'package:infurnus/features/customer/presentation/providers/ride_provider.
 
 class _UnavailableLocationService extends LocationService {
   @override
-  Future<Position?> getCurrentPosition() async => null;
+  Future<Position?> getCurrentPosition({bool retry = false}) async => null;
 }
 
 class _GpsPlatform extends GeolocatorPlatform {
   LocationPermission permission = LocationPermission.whileInUse;
   final fix = Completer<Position>();
+  final fixStarted = Completer<void>();
   int requests = 0;
   int fixes = 0;
   @override
@@ -31,6 +33,7 @@ class _GpsPlatform extends GeolocatorPlatform {
   @override
   Future<Position> getCurrentPosition({LocationSettings? locationSettings}) {
     fixes++;
+    fixStarted.complete();
     return fix.future;
   }
 }
@@ -46,6 +49,17 @@ class _RecordingGeocodingService extends GeocodingService {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  const channel = MethodChannel('infurnus/location_settings');
+  final messenger =
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+  setUp(
+    () => messenger.setMockMethodCallHandler(channel, (call) async {
+      expect(call.method, 'isEnabled');
+      return true;
+    }),
+  );
+  tearDown(() => messenger.setMockMethodCallHandler(channel, null));
   test(
     'standby requires a selected pickup instead of invented coordinates',
     () async {
@@ -78,7 +92,7 @@ void main() {
     final one = service.getCurrentPosition();
     final two = service.getCurrentPosition();
     expect(identical(one, two), isTrue);
-    await Future<void>.delayed(Duration.zero);
+    await gps.fixStarted.future;
     expect(gps.fixes, 1);
     gps.fix.complete(
       Position(

@@ -19,6 +19,7 @@ export const initiatePaymentSchema = z
     },
     z
       .object({
+        stage: z.enum(['upfront', 'final']).optional(),
         rideId: uuid.optional(),
         rentalId: uuid.optional(),
         logisticsOrderId: uuid.optional(),

@@ -7,6 +7,10 @@ export function createFirebasePushSender(
 ): PushSender {
   return {
     async send(tokens, job) {
+      const driverOffer =
+        ['ride.created', 'driver.offer'].includes(job.type) &&
+        !!job.data?.rideId &&
+        !!job.data?.expiresAt;
       const lifetime = offerTransportPolicy(job.data?.expiresAt);
       const channelId =
         job.data?.channelId ??
@@ -18,18 +22,28 @@ export function createFirebasePushSender(
 
       const result = await messaging.sendEachForMulticast({
         tokens,
-        notification: { title: job.title, body: job.body },
-        data: { ...job.data, notificationId: job.notificationId, type: job.type, channelId },
+        ...(driverOffer ? {} : { notification: { title: job.title, body: job.body } }),
+        data: {
+          ...job.data,
+          ...(driverOffer ? { title: job.title, body: job.body } : {}),
+          notificationId: job.notificationId,
+          type: job.type,
+          channelId,
+        },
         android: {
           priority: 'high',
           ...(lifetime ? { ttl: lifetime.ttl } : {}),
           collapseKey: job.notificationId,
-          notification: {
-            tag: job.notificationId,
-            channelId,
-            sound: 'infurnus_alert',
-            defaultSound: false,
-          },
+          ...(driverOffer
+            ? {}
+            : {
+                notification: {
+                  tag: job.notificationId,
+                  channelId,
+                  sound: 'infurnus_alert',
+                  defaultSound: false,
+                },
+              }),
         },
         apns: {
           headers: {
@@ -38,6 +52,7 @@ export function createFirebasePushSender(
           },
           payload: {
             aps: {
+              ...(driverOffer ? { alert: { title: job.title, body: job.body } } : {}),
               sound: 'infurnus_alert.wav',
             },
           },

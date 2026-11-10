@@ -1,3 +1,4 @@
+import { wholeRupeePaise } from '../../../common/utils/whole-rupee.js';
 import type { Pool, PoolClient } from 'pg';
 import { AppError } from '../../../common/errors/app-error.js';
 
@@ -178,6 +179,8 @@ export class PostgresProviderFinanceRepository {
     ) {
       throw new AppError('INVALID_PAYOUT', 'Invalid payout request', 400);
     }
+    const requestedPaise = amountPaise;
+    amountPaise = wholeRupeePaise(requestedPaise);
     return this.transaction(async (client) => {
       await this.authorize(client, userId, role);
       // Bank lock precedes wallet lock throughout payout creation. Bank updates
@@ -194,10 +197,12 @@ export class PostgresProviderFinanceRepository {
         [userId, key],
       );
       if (previous.rows[0]) {
-        if (previous.rows[0].amount_paise !== String(amountPaise))
+        if (![String(requestedPaise), String(amountPaise)].includes(previous.rows[0].amount_paise))
           throw new AppError('IDEMPOTENCY_CONFLICT', 'Different payout amount for this key', 409);
         return previous.rows[0];
       }
+      if (!amountPaise)
+        throw new AppError('INVALID_PAYOUT', 'Rounded payout must be positive', 400);
       if (balance < BigInt(amountPaise))
         throw new AppError('INSUFFICIENT_BALANCE', 'Insufficient wallet balance', 409);
       const payout = await client.query<{ id: string; amount_paise: string; status: string }>(

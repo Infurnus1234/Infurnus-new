@@ -1,3 +1,5 @@
+import { loadPremiumCities } from './modules/maps/premium-city-registry.js';
+import { LiveLocationCache } from './modules/rides/repositories/live-location.cache.js';
 import { attachProviderTracking } from './modules/providers/services/provider-tracking.socket.js';
 import { loadDeletedSubjects } from './modules/auth/services/deleted-subjects.js';
 import { PostgresProviderOperationsRepository } from './modules/providers/repositories/provider-operations.repository.js';
@@ -11,7 +13,6 @@ import {
   waitForBackendInstance,
 } from './infrastructure/database/backend-standby.js';
 import { GoogleMapsProvider } from './modules/rides/providers/google.maps.provider.js';
-import { RouteRecalculationService } from './modules/rides/services/route-recalculation.service.js';
 import { createApp } from './app.js';
 import { localStorageProvider } from './infrastructure/storage/index.js';
 import { env } from './config/env.js';
@@ -63,6 +64,7 @@ async function startServer() {
   // ==========================================================
 
   await checkDatabaseConnection();
+  await loadPremiumCities();
 
   // Push delivery is optional for the API. Loading the worker eagerly requires
   // Redis and Firebase even when neither service is configured locally.
@@ -152,6 +154,13 @@ async function startServer() {
     void connectRedis().catch(() => console.warn('Map Redis unavailable; cache fallback active'));
 
     mapCache = new RedisMapCache(redis);
+    const trackingCache = new LiveLocationCache(
+      redis,
+      env.DRIVER_LOCATION_CACHE_TTL_SECONDS,
+      env.DRIVER_LOCATION_PERSIST_MS,
+    );
+    driverRepository.trackingCache = trackingCache;
+    rideRepository.trackingCache = trackingCache;
   }
 
   const googleMapsProvider = new CommonMapService(
@@ -258,9 +267,15 @@ async function startServer() {
     googleMapsProvider,
   );
 
-  const driverService = new DriverService(driverRepository, undefined, rideRepository);
+  const driverService = new DriverService(
+    driverRepository,
+    undefined,
+    rideRepository,
+    undefined,
+    (ride) => rideService.prepareDriverRide(ride),
+  );
 
-  const routeRecalculationService = new RouteRecalculationService(googleMapsProvider);
+  const routeRecalculationService = googleMapsProvider.navigation;
 
   const matchingService = new MatchingService(driverRepository, googleMapsProvider);
 
@@ -280,6 +295,12 @@ async function startServer() {
 
   await loadDeletedSubjects(pool);
   const io = createSocketServer(server, {
+    canPushRideOffer: async (userId) => {
+      if (!notifications) return false;
+      const { PostgresDeviceTokenRepository } =
+        await import('./modules/notifications/device-tokens/repositories/device-token.repository.js');
+      return (await new PostgresDeviceTokenRepository().findActiveByUserId(userId)).length > 0;
+    },
     ...(env.REDIS_URL
       ? {
           notifyRideOffer: async (
@@ -292,12 +313,13 @@ async function startServer() {
             await new NotificationService().send({
               userId,
               type: 'ride.created',
-              title: 'New ride offer',
+              title: ride.sector === 'rental' ? 'New Rental offer' : 'New ride offer',
               body: 'Open INFURNUS to review the current offer.',
               resourceId: `${ride.id}:${expiresAt.getTime()}`,
               eventVersion: 1,
               data: {
                 rideId: ride.id,
+                sector: ride.sector ?? 'passenger',
                 expiresAt: expiresAt.toISOString(),
                 dispatchNotificationRequestedAt: new Date().toISOString(),
                 channelId: 'infurnus_driver_channel_v2',
@@ -422,6 +444,22 @@ async function startServer() {
   // Start server
   // ==========================================================
 
+  // Expiry reads and allocations are already safe if a maintenance tick is delayed.
+  let releasingBookingIds = false;
+  const releaseBookingIds = async () => {
+    if (releasingBookingIds) return;
+    releasingBookingIds = true;
+    try {
+      await pool.query('SELECT release_expired_booking_ids()');
+    } catch {
+      console.warn(JSON.stringify({ event: 'booking_id_release_unavailable' }));
+    } finally {
+      releasingBookingIds = false;
+    }
+  };
+  const bookingReleaseTimer = setInterval(() => void releaseBookingIds(), 60000);
+  bookingReleaseTimer.unref();
+  void releaseBookingIds();
   active = true;
   process.off('SIGINT', stopStandby);
   process.off('SIGTERM', stopStandby);
@@ -432,6 +470,7 @@ async function startServer() {
   // ==========================================================
 
   const shutdown = async (signal: string) => {
+    clearInterval(bookingReleaseTimer);
     console.log(`${signal} received. Shutting down gracefully...`);
 
     io.disconnectSockets(true);
@@ -470,21 +509,11 @@ async function startServer() {
 // ============================================================
 
 startServer().catch(async (error: unknown) => {
-  // Temporary detailed startup diagnostics.
-  // This is intentionally verbose so the actual TypeError,
-  // message, and stack trace are visible during local debugging.
-
-  console.error('========== BACKEND STARTUP ERROR ==========');
-  console.error(error);
-  console.error('===========================================');
-
   console.error(
     JSON.stringify({
       event: 'backend_startup_failed',
       code: error instanceof AppError ? error.code : 'BACKEND_STARTUP_UNAVAILABLE',
       reason: error instanceof Error ? error.name : 'unknown',
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
     }),
   );
 

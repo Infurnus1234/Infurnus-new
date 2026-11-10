@@ -313,24 +313,20 @@ describe.runIf(process.env.AUTH_SECURITY_AUDIT_TESTS === 'true')(
       });
     }
     for (const role of ['driver', 'fleet_owner']) {
-      it(`${role} email/password login still requires OTP and rejects incorrect credentials when applicable`, async () => {
+      it(`${role} OTP login rejects password payloads and requires ownership verification`, async () => {
         const a = await signup('email', role);
         const before = await sessionCount();
-        if (role === 'fleet_owner')
-          expect(
-            (
-              await request(app)
-                .post('/auth/login')
-                .send({ email: a.contact, password: 'incorrect-fixture', role })
-            ).status,
-          ).toBe(401);
-        const r = await request(app)
-          .post('/auth/login')
-          .send({
-            email: a.contact,
-            role,
-            ...(role === 'fleet_owner' ? { password: 'Audit-fixture-pass-42!' } : {}),
-          });
+        expect(
+          (
+            await request(app)
+              .post('/auth/login')
+              .send({ email: a.contact, password: 'incorrect-fixture', role })
+          ).status,
+        ).toBe(400);
+        const r = await request(app).post('/auth/login').send({
+          email: a.contact,
+          role,
+        });
         expect(r.status).toBe(200);
         noCredential(r);
         expect(await sessionCount()).toBe(before);
@@ -630,7 +626,6 @@ describe.runIf(process.env.AUTH_SECURITY_AUDIT_TESTS === 'true')(
           .send({
             [field]: alternate,
             role,
-            ...(role === 'fleet_owner' ? { password: 'Audit-fixture-pass-42!' } : {}),
           });
         noCredential(attempted);
         expect(delivery.sends).toBe(before);

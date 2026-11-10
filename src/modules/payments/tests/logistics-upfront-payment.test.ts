@@ -1,3 +1,4 @@
+import { logisticsSplit, rupeesToPaise } from '../../../common/utils/whole-rupee.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Request, Response } from 'express';
 import { PaymentController } from '../controllers/payment.controller.js';
@@ -135,10 +136,14 @@ describe('Logistics 40% Upfront Payment Confirmation Flow', () => {
 
     mockProvider = {
       providerName: 'cashfree',
-      createOrder: vi.fn().mockResolvedValue({
-        providerOrderId: 'order_pay-1',
+      createOrder: vi.fn(async ({ orderId, amount, currency }) => ({
+        providerOrderId: orderId,
         paymentSessionId: 'sess_123',
-      }),
+        orderAmount: amount,
+        orderCurrency: currency,
+        orderStatus: 'ACTIVE',
+        entity: 'order',
+      })),
       getPaymentStatus: vi.fn().mockResolvedValue({
         orderStatus: 'PAID',
         orderAmount: 340.0,
@@ -158,23 +163,20 @@ describe('Logistics 40% Upfront Payment Confirmation Flow', () => {
   });
 
   describe('STEP 2: Backend Authoritative Fare & Rounding Rules', () => {
-    it('calculates exact 40% upfront and 60% remaining without rounding drift', () => {
-      // Test cases with various amounts
-      const testCases = [
-        { total: 850.0, expectedUpfront: 340.0, expectedRemaining: 510.0 },
-        { total: 105.55, expectedUpfront: 42.22, expectedRemaining: 63.33 },
-        { total: 333.33, expectedUpfront: 133.33, expectedRemaining: 200.0 },
-        { total: 99.99, expectedUpfront: 40.0, expectedRemaining: 59.99 },
-      ];
-
-      for (const tc of testCases) {
-        const total = Math.round(tc.total * 100) / 100;
-        const upfront = Math.round(total * 0.4 * 100) / 100;
-        const remaining = Math.round((total - upfront) * 100) / 100;
-
-        expect(upfront).toBe(tc.expectedUpfront);
-        expect(remaining).toBe(tc.expectedRemaining);
-        expect(Math.round((upfront + remaining) * 100) / 100).toBe(total);
+    it('reconciles whole-rupee upfront and remaining amounts without rounding drift', () => {
+      for (const [raw, total, advance, remaining] of [
+        [850, 850, 340, 510],
+        [105.55, 106, 42, 64],
+        [333.33, 333, 133, 200],
+        [99.99, 100, 40, 60],
+        [2003, 2003, 801, 1202],
+      ] as const) {
+        expect(logisticsSplit(rupeesToPaise(raw))).toEqual({
+          totalPaise: total * 100,
+          upfrontPaise: advance * 100,
+          finalPaise: remaining * 100,
+          currency: 'INR',
+        });
       }
     });
 
@@ -425,7 +427,7 @@ describe('Logistics 40% Upfront Payment Confirmation Flow', () => {
 
       vi.mocked(mockPaymentRepo.findById).mockResolvedValue(payment);
       vi.mocked(mockProvider.getPaymentStatus).mockResolvedValue({
-        providerOrderId: 'order_pay-1',
+        providerOrderId: payment.providerOrderId!,
         orderCurrency: 'INR',
         orderStatus: 'ACTIVE',
         orderAmount: 340.0,

@@ -42,8 +42,10 @@ export class CashfreePaymentProvider implements PaymentProvider {
   private sanitizeError(error: unknown): Error {
     const rawMessage = error instanceof Error ? error.message : String(error);
     const sanitized = rawMessage
-      .replace(new RegExp(this.config.clientSecret, 'g'), '[REDACTED_SECRET]')
-      .replace(new RegExp(this.config.clientId, 'g'), '[REDACTED_CLIENT_ID]');
+      .split(this.config.clientSecret)
+      .join('[REDACTED_SECRET]')
+      .split(this.config.clientId)
+      .join('[REDACTED_CLIENT_ID]');
     return new Error(sanitized);
   }
 
@@ -55,7 +57,7 @@ export class CashfreePaymentProvider implements PaymentProvider {
 
       const requestBody = {
         order_id: params.orderId,
-        order_amount: Math.round(params.amount * 100) / 100,
+        order_amount: params.amount,
         order_currency: params.currency || 'INR',
         customer_details: {
           customer_id: params.customerId,
@@ -69,7 +71,10 @@ export class CashfreePaymentProvider implements PaymentProvider {
 
       const response = await fetch(`${this.baseUrl}/orders`, {
         method: 'POST',
-        headers: this.getHeaders(),
+        headers: {
+          ...this.getHeaders(),
+          'x-idempotency-key': this.orderIdempotencyKey(params.orderId),
+        },
         body: JSON.stringify(requestBody),
       });
 
@@ -107,6 +112,11 @@ export class CashfreePaymentProvider implements PaymentProvider {
     } catch (err) {
       throw this.sanitizeError(err);
     }
+  }
+
+  private orderIdempotencyKey(orderId: string): string {
+    const hash = crypto.createHash('sha256').update(orderId).digest('hex');
+    return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-8${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
   }
 
   async getPaymentStatus(providerOrderId: string): Promise<PaymentStatusResult> {

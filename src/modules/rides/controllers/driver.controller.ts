@@ -40,6 +40,15 @@ export class DriverController {
     private readonly driverDocumentStorageService: DriverDocumentStorageService,
   ) {}
 
+  todaySummary = async (req: Request, res: Response, next: NextFunction) => {
+    res.set('Cache-Control', 'no-store');
+    try {
+      res.json({ success: true, data: await this.driverService.todaySummary(req.auth!.userId) });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   availability = async (req: Request, res: Response, next: NextFunction) => {
     try {
       await this.driverService.updateAvailability(

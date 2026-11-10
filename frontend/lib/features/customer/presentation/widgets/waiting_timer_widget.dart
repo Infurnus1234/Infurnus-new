@@ -1,3 +1,5 @@
+import 'package:infurnus/core/utils/currency_formatter.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -121,18 +123,23 @@ class _WaitingTimerWidgetState extends State<WaitingTimerWidget>
             ),
           ),
           if (!isFree)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: statusColor,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                '+₹${accruedCharge.toStringAsFixed(2)}',
-                style: const TextStyle(
-                  color: Colors.black,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
+            Flexible(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: statusColor,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '+₹${accruedCharge.rupeeText}',
+                  style: const TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
                 ),
               ),
             ),

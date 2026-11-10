@@ -118,7 +118,8 @@ export class RouteRecalculationService {
     if (
       !changedSegment &&
       m.lastValidatedOrigin &&
-      geographicDistance(m.lastValidatedOrigin, origin) < this.config.movementMeters
+      geographicDistance(m.lastValidatedOrigin, origin) < this.config.movementMeters &&
+      !(m.offRouteSince !== undefined && now - m.offRouteSince >= this.config.offRouteSustainMs)
     )
       return null;
     m.lastValidatedOrigin = origin;
@@ -133,9 +134,13 @@ export class RouteRecalculationService {
       m.etaSeconds = Math.ceil(m.route!.durationSeconds * progress.remainingFraction);
     }
     m.routeState = state;
+    if (state === 'OFF_ROUTE') m.offRouteSince ??= now;
+    else delete m.offRouteSince;
+    const sustainedDeviation =
+      state === 'OFF_ROUTE' && now - m.offRouteSince! >= this.config.offRouteSustainMs;
     const expired =
       m.lastCalculatedAt === null || now - m.lastCalculatedAt >= this.config.refreshMs;
-    const needed = changedSegment || !m.route || state === 'OFF_ROUTE' || expired;
+    const needed = changedSegment || !m.route || sustainedDeviation || expired;
     if (
       needed &&
       ((m.lastExternalRequestAt === undefined && m.externalRequestReservedAt === undefined) ||

@@ -85,6 +85,7 @@ const userProjection = `
 
 const driverProjection = `
   dp.id,
+  provider_public_id(u.id) AS "publicId",
   u.id AS "userId",
   u.role::text AS role,
   u.first_name AS "firstName",
@@ -144,7 +145,8 @@ const driverApplicationProjection = `
 `;
 
 const partnerProjection = `
-  p.id, p.user_id AS "userId", p.business_name AS "businessName",
+  p.id, provider_public_id(p.user_id) AS "publicId", p.user_id AS "userId", p.business_name AS "businessName",
+  (SELECT COALESCE(NULLIF(btrim(concat_ws(' ',u.first_name,u.last_name)),''),p.owner_name) FROM users u WHERE u.id=p.user_id AND u.deleted_at IS NULL) AS "ownerName",
   p.business_description AS "businessDescription", p.approval_status AS "approvalStatus",
   p.availability_status AS "availabilityStatus", p.created_at AS "createdAt",
   p.updated_at AS "updatedAt",
@@ -164,12 +166,13 @@ const partnerProjection = `
     'insuranceStatus', (SELECT pd.status::text FROM partner_documents pd WHERE pd.vehicle_id = v.id AND pd.document_type = 'VEHICLE_INSURANCE' ORDER BY pd.updated_at DESC LIMIT 1),
     'permitStatus', (SELECT pd.status::text FROM partner_documents pd WHERE pd.vehicle_id = v.id AND pd.document_type = 'VEHICLE_PERMIT' ORDER BY pd.updated_at DESC LIMIT 1),
     'fitnessStatus', (SELECT pd.status::text FROM partner_documents pd WHERE pd.vehicle_id = v.id AND pd.document_type = 'VEHICLE_FITNESS' ORDER BY pd.updated_at DESC LIMIT 1)
-  ) ORDER BY v.created_at DESC)
+  ) ORDER BY v.created_at DESC, v.id DESC)
   FROM vehicles v LEFT JOIN driver_profiles d ON d.id = v.driver_profile_id
   WHERE v.owner_id = p.user_id OR (v.owner_id IS NULL AND d.user_id = p.user_id)), '[]'::jsonb) AS "vehicles",
   COALESCE((SELECT jsonb_agg(jsonb_build_object(
     'id', d.id,
     'userId', d.user_id,
+    'publicId', provider_public_id(d.user_id),
     'firstName', u.first_name,
     'lastName', u.last_name,
     'email', u.email,
@@ -183,7 +186,7 @@ const partnerProjection = `
     'city', d.city,
     'state', d.state,
     'pinCode', d.pin_code
-  ) ORDER BY pd.created_at DESC)
+  ) ORDER BY pd.created_at DESC, pd.id DESC)
   FROM partner_drivers pd
   INNER JOIN driver_profiles d ON d.id = pd.driver_profile_id
   INNER JOIN users u ON u.id = d.user_id
@@ -238,7 +241,7 @@ export class PostgresAdminRepository implements AdminRepository {
     const { where, values } = userWhere(filters);
 
     return this.paginate<AdminUser>(
-      `SELECT ${userProjection} FROM users${where} ORDER BY created_at DESC`,
+      `SELECT ${userProjection} FROM users${where} ORDER BY created_at DESC, id DESC`,
       `SELECT COUNT(*)::int AS count FROM users${where}`,
       values,
       filters.page,
@@ -331,7 +334,7 @@ export class PostgresAdminRepository implements AdminRepository {
           ON p.id = pd.partner_id
         WHERE pd.driver_profile_id = dp.id
           AND pd.status = 'ACTIVE'
-        ORDER BY pd.created_at DESC
+        ORDER BY pd.created_at DESC, pd.id DESC
         LIMIT 1
       ) partner ON TRUE
 
@@ -340,7 +343,7 @@ export class PostgresAdminRepository implements AdminRepository {
 
       ${where}
 
-      ORDER BY dp.created_at DESC
+      ORDER BY dp.created_at DESC, dp.id DESC
     `;
 
     const countSql = `
@@ -358,7 +361,7 @@ export class PostgresAdminRepository implements AdminRepository {
           ON p.id = pd.partner_id
         WHERE pd.driver_profile_id = dp.id
           AND pd.status = 'ACTIVE'
-        ORDER BY pd.created_at DESC
+        ORDER BY pd.created_at DESC, pd.id DESC
         LIMIT 1
       ) partner ON TRUE
 
@@ -375,6 +378,7 @@ export class PostgresAdminRepository implements AdminRepository {
     const sql = `
       SELECT
         dp.id,
+        provider_public_id(dp.user_id) AS "publicId",
         dp.user_id AS "userId",
 
         dp.license_number AS "licenseNumber",
@@ -423,7 +427,7 @@ export class PostgresAdminRepository implements AdminRepository {
                 'joinedAt', pd.created_at,
                 'updatedAt', pd.updated_at
               )
-              ORDER BY pd.created_at DESC
+              ORDER BY pd.created_at DESC, pd.id DESC
             )
             FROM partner_drivers pd
             INNER JOIN partners p
@@ -457,7 +461,7 @@ export class PostgresAdminRepository implements AdminRepository {
                 'createdAt', v.created_at,
                 'updatedAt', v.updated_at
               )
-              ORDER BY v.created_at DESC
+              ORDER BY v.created_at DESC, v.id DESC
             )
             FROM vehicles v
             WHERE v.driver_profile_id = dp.id
@@ -489,7 +493,7 @@ export class PostgresAdminRepository implements AdminRepository {
                 'createdAt', dd.created_at,
                 'updatedAt', dd.updated_at
               )
-              ORDER BY dd.created_at DESC
+              ORDER BY dd.created_at DESC, dd.id DESC
             )
             FROM driver_documents dd
             WHERE dd.driver_profile_id = dp.id
@@ -517,7 +521,7 @@ export class PostgresAdminRepository implements AdminRepository {
                 'createdAt', da.created_at,
                 'updatedAt', da.updated_at
               )
-              ORDER BY da.created_at DESC
+              ORDER BY da.created_at DESC, da.id DESC
             )
             FROM driver_applications da
             LEFT JOIN partners p2
@@ -558,7 +562,7 @@ export class PostgresAdminRepository implements AdminRepository {
 
       ${where}
 
-      ORDER BY da.created_at DESC
+      ORDER BY da.created_at DESC, da.id DESC
     `;
 
     const countSql = `
@@ -587,7 +591,7 @@ export class PostgresAdminRepository implements AdminRepository {
     const { where, values } = partnerWhere(filters);
 
     return this.paginate<AdminPartner>(
-      `SELECT ${partnerProjection} FROM partners p${where} ORDER BY p.created_at DESC`,
+      `SELECT ${partnerProjection} FROM partners p${where} ORDER BY p.created_at DESC, p.id DESC`,
       `SELECT COUNT(*)::int AS count FROM partners p${where}`,
       values,
       filters.page,
@@ -599,7 +603,7 @@ export class PostgresAdminRepository implements AdminRepository {
     const result = await this.pool.query<AdminPartner>(
       `SELECT ${partnerProjection}
        FROM partners p
-       WHERE p.id = $1`,
+       WHERE p.id = $1 AND EXISTS(SELECT 1 FROM users account WHERE account.id=p.user_id AND account.deleted_at IS NULL)`,
       [id],
     );
 
@@ -613,7 +617,7 @@ export class PostgresAdminRepository implements AdminRepository {
       `SELECT ${vehicleProjection} FROM vehicles v
        LEFT JOIN driver_profiles d ON d.id = v.driver_profile_id
        LEFT JOIN partners p ON p.user_id = COALESCE(v.owner_id, d.user_id)${where}
-       ORDER BY v.created_at DESC`,
+       ORDER BY v.created_at DESC, v.id DESC`,
       `SELECT COUNT(*)::int AS count FROM vehicles v
        LEFT JOIN driver_profiles d ON d.id = v.driver_profile_id
        LEFT JOIN partners p ON p.user_id = COALESCE(v.owner_id, d.user_id)${where}`,
@@ -628,7 +632,7 @@ export class PostgresAdminRepository implements AdminRepository {
       `SELECT ${vehicleProjection} FROM vehicles v
        LEFT JOIN driver_profiles d ON d.id = v.driver_profile_id
        LEFT JOIN partners p ON p.user_id = COALESCE(v.owner_id, d.user_id)
-       WHERE v.id = $1`,
+       WHERE v.id = $1 AND NOT EXISTS (SELECT 1 FROM user_history deleted WHERE deleted.event_type='ADMIN_RECORD_DELETED' AND deleted.entity_id=v.id AND deleted.metadata->>'module'='vehicles')`,
       [id],
     );
 
@@ -676,7 +680,7 @@ export class PostgresAdminRepository implements AdminRepository {
                 COUNT(*) FILTER (WHERE approval_status = 'approved')::int AS approved,
                 COUNT(*) FILTER (WHERE approval_status IN ('pending', 'under_review'))::int AS pending,
                 COUNT(*) FILTER (WHERE availability_status = 'available')::int AS active
-         FROM partners`,
+         FROM partners WHERE EXISTS (SELECT 1 FROM users account WHERE account.id=partners.user_id AND account.deleted_at IS NULL)`,
         ),
 
         this.pool.query<{ total: number }>(
@@ -843,7 +847,7 @@ export class PostgresAdminRepository implements AdminRepository {
             'driver_arrived',
             'in_progress'
           )
-        ORDER BY r.created_at DESC
+        ORDER BY r.created_at DESC, r.id DESC
         LIMIT 1
       ) active_ride ON TRUE
 
@@ -921,7 +925,7 @@ export class PostgresAdminRepository implements AdminRepository {
             'driver_arrived',
             'in_progress'
           )
-        ORDER BY r.created_at DESC
+        ORDER BY r.created_at DESC, r.id DESC
         LIMIT 1
       ) active_ride ON TRUE
 
@@ -985,7 +989,7 @@ export class PostgresAdminRepository implements AdminRepository {
             'driver_arrived',
             'in_progress'
           )
-        ORDER BY r.created_at DESC
+        ORDER BY r.created_at DESC, r.id DESC
         LIMIT 1
       ) active_ride ON TRUE
 
@@ -1062,13 +1066,13 @@ export class PostgresAdminRepository implements AdminRepository {
             'driver_arrived',
             'in_progress'
           )
-        ORDER BY r.created_at DESC
+        ORDER BY r.created_at DESC, r.id DESC
         LIMIT 1
       ) active_ride ON TRUE
 
       ${where}
 
-      ORDER BY v.created_at DESC
+      ORDER BY v.created_at DESC, v.id DESC
     `;
 
     const countSql = `
@@ -1088,7 +1092,7 @@ export class PostgresAdminRepository implements AdminRepository {
             'driver_arrived',
             'in_progress'
           )
-        ORDER BY r.created_at DESC
+        ORDER BY r.created_at DESC, r.id DESC
         LIMIT 1
       ) active_ride ON TRUE
 
@@ -1158,7 +1162,7 @@ export class PostgresAdminRepository implements AdminRepository {
             'driver_arrived',
             'in_progress'
           )
-        ORDER BY r.created_at DESC
+        ORDER BY r.created_at DESC, r.id DESC
         LIMIT 1
       ) active_ride ON TRUE
 
@@ -1263,6 +1267,7 @@ function driverWhere(filters: AdminFilters) {
         OR u.last_name ILIKE $${values.length}
         OR u.email ILIKE $${values.length}
         OR u.phone ILIKE $${values.length}
+        OR provider_public_id(u.id) LIKE $${values.length}
         OR dp.license_number ILIKE $${values.length}
         OR v.plate_number ILIKE $${values.length})`,
     );
@@ -1303,6 +1308,7 @@ function driverWhere(filters: AdminFilters) {
 
 function driverApplicationWhere(filters: AdminFilters) {
   const conditions: string[] = [
+    `da.admin_deleted_at IS NULL`,
     `u.deleted_at IS NULL`,
     `u.role IN ('driver', 'driver_fleet_owner')`,
   ];
@@ -1356,7 +1362,9 @@ function driverApplicationWhere(filters: AdminFilters) {
 }
 
 function partnerWhere(filters: AdminFilters) {
-  const conditions: string[] = [];
+  const conditions: string[] = [
+    'EXISTS (SELECT 1 FROM users account WHERE account.id=p.user_id AND account.deleted_at IS NULL)',
+  ];
   const values: unknown[] = [];
 
   if (filters.search) {
@@ -1364,7 +1372,8 @@ function partnerWhere(filters: AdminFilters) {
 
     conditions.push(
       `(p.business_name ILIKE $${values.length}
-        OR p.business_description ILIKE $${values.length})`,
+        OR p.business_description ILIKE $${values.length}
+        OR provider_public_id(p.user_id) LIKE $${values.length})`,
     );
   }
 
@@ -1405,7 +1414,9 @@ function partnerWhere(filters: AdminFilters) {
 }
 
 function vehicleWhere(filters: AdminFilters) {
-  const conditions: string[] = [];
+  const conditions: string[] = [
+    "NOT EXISTS (SELECT 1 FROM user_history deleted WHERE deleted.event_type='ADMIN_RECORD_DELETED' AND deleted.entity_id=v.id AND deleted.metadata->>'module'='vehicles')",
+  ];
   const values: unknown[] = [];
 
   if (filters.partnerId) {
@@ -1459,7 +1470,9 @@ function vehicleWhere(filters: AdminFilters) {
 }
 
 function fleetWhere(filters: FleetFilters) {
-  const conditions: string[] = [];
+  const conditions: string[] = [
+    "NOT EXISTS (SELECT 1 FROM user_history deleted WHERE deleted.event_type='ADMIN_RECORD_DELETED' AND deleted.entity_id=v.id AND deleted.metadata->>'module'='vehicles')",
+  ];
   const values: unknown[] = [];
 
   if (filters.state) {

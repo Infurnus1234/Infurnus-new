@@ -349,7 +349,7 @@ class _DriverOnboardingScreenState
           ),
           const SizedBox(height: 8),
           Text(
-            'Partner ID: ${partner.id}',
+            'Partner ID: ${partner.publicId ?? 'Unavailable'}',
             style: TextStyle(color: Colors.grey[600], fontSize: 12),
           ),
           if (partner.approvalStatus == 'approved') ...[

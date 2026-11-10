@@ -1,0 +1,115 @@
+[
+  {
+    "label": "service",
+    "sector": "service",
+    "vehicles": [
+      {
+        "name": "Ambulance",
+        "code": "ambulance"
+      },
+      {
+        "name": "Crane",
+        "code": "crane"
+      },
+      {
+        "name": "JCB",
+        "code": "jcb"
+      }
+    ],
+    "assets": [
+      "assets/images/ambulance_clean.jpg",
+      "assets/images/crane_truck.png",
+      "assets/images/jcb_excavator.jpg"
+    ]
+  },
+  {
+    "label": "logistics",
+    "sector": "logistics",
+    "vehicles": [
+      {
+        "name": "Tata 407",
+        "code": "tata_407"
+      },
+      {
+        "name": "Tata 207",
+        "code": "cargo_207"
+      },
+      {
+        "name": "Tata Magic",
+        "code": "tata_magic"
+      },
+      {
+        "name": "Piaggio Ape",
+        "code": "piaggio_ape"
+      }
+    ],
+    "assets": [
+      "assets/images/piaggio_ape_yellow.png",
+      "assets/images/tata_magic_cream.png",
+      "assets/images/cargo_207_heavy.png",
+      "assets/images/cargo_407.jpg"
+    ]
+  },
+  {
+    "label": "premium",
+    "sector": "premium",
+    "vehicles": [
+      {
+        "name": "Scorpio N",
+        "code": "scorpio"
+      },
+      {
+        "name": "Mahindra Thar",
+        "code": "thar"
+      },
+      {
+        "name": "Innova Crysta",
+        "code": "innova"
+      },
+      {
+        "name": "Mercedes V-Class",
+        "code": "mercedes"
+      },
+      {
+        "name": "Helicopter",
+        "code": "helicopter"
+      },
+      {
+        "name": "Force Traveller",
+        "code": "traveller"
+      }
+    ],
+    "assets": [
+      "assets/images/premium_scorpio_n_black.png",
+      "assets/images/premium_mercedes_v_class_black.png",
+      "assets/images/premium_helicopter.png"
+    ]
+  },
+  {
+    "label": "rentals",
+    "sector": "rental",
+    "vehicles": [
+      {
+        "name": "Hatchback",
+        "code": "hatchback"
+      },
+      {
+        "name": "Mini Cab",
+        "code": "mini"
+      },
+      {
+        "name": "Sedan",
+        "code": "sedan"
+      },
+      {
+        "name": "Innova Crysta",
+        "code": "innova"
+      }
+    ],
+    "assets": [
+      "assets/images/hatchback_clean.jpg",
+      "assets/images/sedan_clean.jpg",
+      "assets/images/innova_crysta_clean.jpg"
+    ]
+  }
+]

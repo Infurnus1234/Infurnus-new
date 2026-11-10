@@ -26,6 +26,10 @@ class VehicleVisualImage extends StatelessWidget {
   static String? getAssetPath(String? name, String? cat) {
     final key = '${name ?? ''} ${cat ?? ''}'.toLowerCase().trim();
 
+    if (key.contains('helicopter') || key.contains('mercedes')) {
+      return null;
+    }
+
     if (key.contains('bike') ||
         key.contains('two-wheeler') ||
         key.contains('motorcycle')) {
@@ -41,12 +45,10 @@ class VehicleVisualImage extends StatelessWidget {
         (key.contains('rickshaw') && key.contains('electric'))) {
       return 'assets/images/e_rickshaw_green_white.png';
     }
-    if (key.contains('3-wheeler') ||
-        key.contains('three_wheeler') ||
-        key.contains('3 wheeler') ||
-        key.contains('ape') ||
-        key.contains('piaggio')) {
-      return 'assets/images/piaggio_ape_yellow.png';
+    if (key.contains('three_wheeler') ||
+        key.contains('3-wheeler') ||
+        key.contains('3 wheeler')) {
+      return 'assets/images/e_rickshaw_green_white.png';
     }
     if (key.contains('auto') || key.contains('rickshaw')) {
       return 'assets/images/auto_rickshaw.png';
@@ -85,24 +87,23 @@ class VehicleVisualImage extends StatelessWidget {
         key.contains('tow')) {
       return 'assets/images/towing_van.jpg';
     }
-    if (key.contains('ambulance') || key.contains('emergency')) {
-      return 'assets/images/ambulance_van.png';
-    }
-    if (key.contains('winger')) {
-      return 'assets/images/winger.jpg';
-    }
-    if (key.contains('traveller') ||
-        key.contains('urbania') ||
-        key.contains('van')) {
-      return 'assets/images/force_urbania.jpg';
+    if (key.contains('mini truck') || key.contains('mini_truck')) {
+      return 'assets/images/mini_truck.jpg';
     }
     if (key.contains('407')) {
-      return 'assets/images/tata_407_beige.png';
+      return 'assets/images/cargo_407.jpg';
     }
-    if (key.contains('tata magic') ||
-        key.contains('magic') ||
-        key.contains('mini truck') ||
-        key.contains('mini_truck')) {
+    if (key.contains('piaggio')) return 'assets/images/piaggio_ape_yellow.png';
+    if (key.contains('mini / commercial') ||
+        key.contains('mini commercial') ||
+        key.contains('commercial') ||
+        key.contains('ape')) {
+      return 'assets/images/mini_commercial.jpg';
+    }
+    if (key.contains('sedan')) {
+      return 'assets/images/sedan_clean.jpg';
+    }
+    if (key.contains('tata magic') || key.contains('magic')) {
       return 'assets/images/tata_magic_cream.png';
     }
     if (key.contains('207') &&
@@ -112,10 +113,23 @@ class VehicleVisualImage extends StatelessWidget {
     if (key.contains('207')) {
       return 'assets/images/cargo_207_heavy.png';
     }
-    if (key.contains('mini / commercial') ||
-        key.contains('mini commercial') ||
-        key.contains('commercial')) {
-      return 'assets/images/mini_commercial.jpg';
+    if (key.contains('pickup')) {
+      return 'assets/images/cargo_407.jpg';
+    }
+    if (key.contains('truck') || key.contains('logistics')) {
+      return 'assets/images/mini_truck.jpg';
+    }
+    if (key.contains('ambulance') || key.contains('emergency')) {
+      return 'assets/images/ambulance_van.png';
+    }
+    if (key.contains('winger')) {
+      return 'assets/images/winger.jpg';
+    }
+    if (key.contains('traveller')) {
+      return 'assets/images/force_traveller_clean.jpg';
+    }
+    if (key.contains('urbania') || key.contains('van')) {
+      return 'assets/images/force_urbania.jpg';
     }
     if (key.contains('mini cab') ||
         key.contains('mini_cab') ||
@@ -123,9 +137,6 @@ class VehicleVisualImage extends StatelessWidget {
         key.contains('compact') ||
         key.contains('baleno')) {
       return 'assets/images/hatchback_clean.jpg';
-    }
-    if (key.contains('sedan')) {
-      return 'assets/images/sedan_clean.jpg';
     }
     if (key.contains('suv')) {
       return 'assets/images/scorpio_n_white.png';
@@ -161,6 +172,7 @@ class VehicleVisualImage extends StatelessWidget {
       return Icons.construction_rounded;
     }
     if (key.contains('helicopter')) return Icons.airplanemode_active_rounded;
+    if (key.contains('mercedes')) return Icons.airport_shuttle_rounded;
     if (key.contains('traveller') || key.contains('van')) {
       return Icons.airport_shuttle_rounded;
     }

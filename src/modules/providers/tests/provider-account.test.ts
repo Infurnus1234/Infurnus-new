@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { PostgresVehicleRepository } from '../../vehicles/repositories/vehicle.repository.js';
+import { VehicleService } from '../../vehicles/services/vehicle.service.js';
 import { vehicleModelSchema } from '../routes/provider-model.routes.js';
 import { PostgresFleetRepository } from '../../fleet/repositories/fleet.repository.js';
 import { createFleetVehicleSchema } from '../../fleet/schemas/fleet.schemas.js';
@@ -87,31 +88,31 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
         .send({ userId: randomUUID(), email: 'other@example.test' })
         .expect(400);
     });
-    it('covers every literal Customer catalog code without changing its frontend', async () => {
+    it('provider catalog covers dynamically configured Customer booking codes', async () => {
       const { id } = await fixture();
-      const catalog = await new PostgresFleetRepository(pool).catalog(id);
-      const sources: Record<string, string> = {
-        'passenger_rides_screen.dart': 'passenger',
-        'logistics_screen.dart': 'logistics',
-        'specialty_emergency_screen.dart': 'service',
-        'concierge_fleet_screen.dart': 'premium',
-        'rentals_screen.dart': 'rental',
-      };
-      for (const [file, sector] of Object.entries(sources)) {
-        const text = readFileSync(
-          new URL(
-            '../../../../frontend/lib/features/customer/presentation/screens/' + file,
-            import.meta.url,
-          ),
-          'utf8',
-        );
-        const codes = [...text.matchAll(/'category':\s*'([^']+)'/g)].map((match) => match[1]);
-        expect(codes.length).toBeGreaterThan(0);
-        for (const code of codes)
-          expect(
-            catalog.types.some((t) => t.code === code && t.sector === sector),
-            `${sector}/${code}`,
-          ).toBe(true);
+      const code = `test_${randomUUID().replaceAll('-', '')}`;
+      await pool.query(
+        `INSERT INTO vehicle_types(name,code,sector,active,registration_active,base_fare_paise,per_km_rate_paise)
+         VALUES('TEST ONLY dynamic catalog',$1,'passenger',TRUE,TRUE,10000,1000)`,
+        [code],
+      );
+      try {
+        const catalog = await new PostgresFleetRepository(pool).catalog(id);
+        const customer = new VehicleService(new PostgresVehicleRepository(pool));
+        const passenger = await customer.catalog('passenger', 100, 0);
+        expect(passenger.some((type) => type.code === code)).toBe(true);
+        for (const sector of ['passenger', 'logistics', 'service', 'premium'] as const) {
+          const types = await customer.catalog(sector, 100, 0);
+          for (const type of types.filter((type) => type.registrationActive)) {
+            expect(type.catalogVisible).not.toBe(false);
+            expect(
+              catalog.types.some((entry) => entry.code === type.code && entry.sector === sector),
+              `${sector}/${type.code}`,
+            ).toBe(true);
+          }
+        }
+      } finally {
+        await pool.query('DELETE FROM vehicle_types WHERE code=$1', [code]);
       }
     });
     it('mobile accounts can add contact email without altering the verified phone', async () => {
@@ -197,10 +198,10 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
         sector: 'logistics',
         category: code,
       });
-      const vehicle = await fleet.createVehicle(owner.id, input);
-      expect(vehicle.ownerId).toBe(owner.id);
-      expect((await fleet.listVehicles(owner.id)).some((v) => v.id === vehicle.id)).toBe(true);
-      expect((await fleet.catalog(owner.id)).types.some((t) => t.code === code)).toBe(true);
+      await expect(fleet.createVehicle(owner.id, input)).rejects.toMatchObject({
+        code: 'INVALID_VEHICLE_CATEGORY',
+      });
+      expect((await fleet.catalog(owner.id)).types.some((t) => t.code === code)).toBe(false);
       const other = await fixture();
       await expect(
         fleet.createVehicle(other.id, { ...input, plateNumber: randomUUID().slice(0, 20) }),

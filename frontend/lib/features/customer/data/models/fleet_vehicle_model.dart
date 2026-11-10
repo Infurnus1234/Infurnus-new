@@ -1,4 +1,6 @@
 class FleetVehicleModel {
+  final bool active;
+  final bool catalogVisible;
   final String id;
   final String make;
   final String model;
@@ -19,6 +21,8 @@ class FleetVehicleModel {
   final Map<String, dynamic>? attributes;
 
   FleetVehicleModel({
+    this.active = true,
+    this.catalogVisible = true,
     required this.id,
     required this.make,
     required this.model,
@@ -43,6 +47,8 @@ class FleetVehicleModel {
 
   factory FleetVehicleModel.fromJson(Map<String, dynamic> json) {
     return FleetVehicleModel(
+      active: json['active'] != false,
+      catalogVisible: json['catalogVisible'] != false,
       id: json['id'] as String,
       make: json['make'] as String? ?? '',
       model: json['model'] as String? ?? '',
@@ -65,6 +71,8 @@ class FleetVehicleModel {
   }
 
   Map<String, dynamic> toJson() => {
+    'active': active,
+    'catalogVisible': catalogVisible,
     'id': id,
     'make': make,
     'model': model,

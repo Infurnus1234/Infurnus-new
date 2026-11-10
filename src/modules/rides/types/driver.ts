@@ -29,6 +29,7 @@ export interface DriverCandidate {
 }
 
 export interface DriverProfile {
+  publicId?: string | null;
   id: string;
   userId: string;
   licenseNumber: string;
@@ -38,6 +39,7 @@ export interface DriverProfile {
   verifiedAt?: Date | null;
   rejectionReason?: string | null;
   availabilityStatus?: DriverAvailabilityStatus | null;
+  onlinePreference?: boolean;
   dob?: string | null;
   gender?: string | null;
   address?: string | null;

@@ -62,7 +62,7 @@ export class PostgresPasswordResetRepository implements PasswordResetRepository 
       const challenge = await client.query<{ user_id: string }>(
         `SELECT c.user_id FROM password_reset_challenges c JOIN users u ON u.id=c.user_id
          WHERE c.session_token_hash=$1 AND c.verified_at IS NOT NULL AND c.consumed_at IS NULL
-         AND u.role NOT IN ('customer', 'driver') AND u.email_verified=TRUE AND c.expires_at>NOW() AND u.status='active' AND u.deleted_at IS NULL FOR UPDATE OF u,c`,
+         AND u.role IN ('admin', 'super_admin') AND u.email_verified=TRUE AND c.expires_at>NOW() AND u.status='active' AND u.deleted_at IS NULL FOR UPDATE OF u,c`,
         [sessionTokenHash],
       );
       const userId = challenge.rows[0]?.user_id;
@@ -118,7 +118,7 @@ export class PostgresPasswordResetRepository implements PasswordResetRepository 
     return row &&
       row.status === 'active' &&
       row.email_verified &&
-      !['customer', 'driver'].includes(row.role)
+      ['admin', 'super_admin'].includes(row.role)
       ? row
       : null;
   }

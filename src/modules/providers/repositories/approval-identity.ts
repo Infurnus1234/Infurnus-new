@@ -1,6 +1,20 @@
 /** The queue FK is users.id. Business records supplement that identity, not its role. */
 import { accountDisplayNameSql } from '../../users/repositories/account-identity.js';
+export const approvalFleetFields = `
+  r.requester_id AS submitted_by_id,
+  CASE WHEN submitter.deleted_at IS NULL THEN NULLIF(btrim(concat_ws(' ',submitter.first_name,submitter.last_name)),'') END AS submitted_by_name,
+  fleet.id AS fleet_id, fleet.user_id AS fleet_owner_id,
+  provider_public_id(fleet.user_id) AS fleet_owner_public_id,
+  provider_public_id(r.requester_id) AS requester_public_id,
+  CASE WHEN fleet_user.deleted_at IS NULL THEN COALESCE(NULLIF(btrim(concat_ws(' ',fleet_user.first_name,fleet_user.last_name)),''),NULLIF(btrim(fleet.owner_name),''),NULLIF(btrim(fleet.business_name),'')) END AS fleet_owner_name`;
+export const approvalFleetJoins = `
+  LEFT JOIN users submitter ON submitter.id=r.requester_id
+  LEFT JOIN partners submitted_business ON submitted_business.user_id=submitter.id
+    AND submitter.role IN ('fleet_owner','driver_fleet_owner')
+  LEFT JOIN partners fleet ON fleet.id=COALESCE(r.fleet_id,submitted_business.id)
+  LEFT JOIN users fleet_user ON fleet_user.id=fleet.user_id`;
 export const approvalIdentityFields = `
+  ${approvalFleetFields},
   ${accountDisplayNameSql} AS requester_display_name,
   COALESCE(u.role::text, r.requester_role) AS requester_account_role,
   CASE r.target_type
@@ -15,6 +29,7 @@ export const approvalIdentityFields = `
 
 // users.id and partners.user_id are unique: joins never multiply a request.
 export const approvalIdentityJoins = `
+  ${approvalFleetJoins}
   LEFT JOIN users u ON u.id = r.requester_id
   LEFT JOIN partners owner ON owner.user_id = u.id
   LEFT JOIN partners target_partner ON r.target_type = 'partner' AND target_partner.id = r.target_id

@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { NextFunction, Request, Response } from 'express';
 
 import {
@@ -13,6 +14,26 @@ import type { VehicleService } from '../services/vehicle.service.js';
 
 export class VehicleController {
   constructor(private readonly service: VehicleService) {}
+
+  catalog = async (request: Request, response: Response, next: NextFunction) => {
+    try {
+      response.setHeader('Cache-Control', 'no-store');
+      const query = z
+        .object({
+          sector: z.enum(['passenger', 'premium', 'logistics', 'service', 'rental']),
+          limit: z.coerce.number().int().min(1).max(100).default(25),
+          offset: z.coerce.number().int().min(0).default(0),
+        })
+        .strict()
+        .parse(request.query);
+      response.json({
+        success: true,
+        data: await this.service.catalog(query.sector, query.limit, query.offset),
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
 
   create = async (request: Request, response: Response, next: NextFunction) => {
     try {

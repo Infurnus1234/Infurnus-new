@@ -5,6 +5,7 @@ export type LoginOtpChannel = 'sms' | 'email';
 // ============================================================
 
 export interface CreateLoginChallengeData {
+  provisionedContactValue?: string;
   userId: string;
 
   otpProvider: string;

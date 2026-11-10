@@ -1,3 +1,8 @@
+import {
+  configureServiceFixture,
+  restoreServiceFixtures,
+  type ServiceFixtureSnapshots,
+} from './service-catalog.fixture.js';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { pinVerifier, sealRidePin } from '../repositories/ride-pin.js';
@@ -29,8 +34,9 @@ import { RideService } from '../services/ride.service.js';
 const databaseEnabled = process.env.RIDE_DB_TESTS === 'true';
 const describeDatabase = databaseEnabled ? describe : describe.skip;
 const repository = new PostgresRideRepository(pool, syntheticDispatchAreas);
-const driverRepository = new PostgresDriverRepository(pool);
+const driverRepository = new PostgresDriverRepository(pool, syntheticDispatchAreas);
 const service = new RideService(repository, driverRepository);
+const serviceCatalog: ServiceFixtureSnapshots = new Map();
 
 interface Fixture {
   rideIds: string[];
@@ -65,7 +71,7 @@ async function createFixture(rideCount = 1): Promise<Fixture> {
   );
   await pool.query(
     `UPDATE driver_profiles
-     SET active_vehicle_id=$3, availability_status = 'available',
+     SET active_vehicle_id=$3, availability_status = 'available', online_preference = true,
          last_location = ST_SetSRID(ST_MakePoint(77.5946, 12.9716), 4326)::geography,
          last_location_at = $2
      WHERE id = $1`,
@@ -118,6 +124,154 @@ describeDatabase('ride PostgreSQL integration', () => {
 
   afterEach(async () => {
     if (fixture) await cleanFixture(fixture);
+    await restoreServiceFixtures(pool, serviceCatalog);
+  });
+
+  describe('Premium live pickup radius', () => {
+    async function premiumAt(distance: number, pickup = { longitude: 85.145, latitude: 25.617 }) {
+      const id = fixture.rideIds[0]!;
+      await pool.query('DELETE FROM ride_dispatch_attempts WHERE ride_id=$1', [id]);
+      await pool.query(
+        `UPDATE rides SET sector='premium',vehicle_category='sedan',dispatch_driver_id=NULL,dispatch_expires_at=NULL,
+        pickup_location=ST_SetSRID(ST_MakePoint($2,$3),4326)::geography WHERE id=$1`,
+        [id, pickup.longitude, pickup.latitude],
+      );
+      await pool.query(
+        "UPDATE vehicles SET sector='premium',category='sedan',operating_city_id=NULL WHERE id=$1",
+        [fixture.vehicleId],
+      );
+      await pool.query(
+        `UPDATE driver_profiles SET last_location=ST_Project(ST_SetSRID(ST_MakePoint($2,$3),4326)::geography,$4::float8,0::float8),last_location_at=NOW() WHERE id=$1`,
+        [fixture.driverProfileId, pickup.longitude, pickup.latitude, distance],
+      );
+      await pool.query(
+        "UPDATE vehicles SET verification_status='approved',is_active=TRUE WHERE id=$1",
+        [fixture.vehicleId],
+      );
+      return id;
+    }
+    it.each([5000, 10000, 15000, 20000, 25000, 25000.01, 26000, 30000, 50000])(
+      'dispatch and acceptance at %s metres',
+      async (distance) => {
+        const id = await premiumAt(distance);
+        const eligible = distance <= 25000;
+        const candidates = await driverRepository.findNearbyEligible(
+          25.617,
+          85.145,
+          1000,
+          10,
+          new Date(Date.now() - 60000),
+          'premium',
+          'sedan',
+          { rideId: id, radiusMeters: null },
+        );
+        expect(candidates.some((c) => c.driverProfileId === fixture.driverProfileId)).toBe(
+          eligible,
+        );
+        expect(await repository.offerDispatch(id, fixture.driverProfileId, 3600000)).toBe(eligible);
+        expect(Boolean(await repository.accept(id, fixture.driverProfileId))).toBe(eligible);
+      },
+    );
+    it.each(['missing', 'stale', 'moved'])(
+      'rejects %s GPS after an offer at acceptance and recovery',
+      async (mode) => {
+        const id = await premiumAt(10000);
+        expect(await repository.offerDispatch(id, fixture.driverProfileId, 3600000)).toBe(true);
+        if (mode === 'missing')
+          await pool.query(
+            'UPDATE driver_profiles SET last_location=NULL,last_location_at=NULL WHERE id=$1',
+            [fixture.driverProfileId],
+          );
+        if (mode === 'stale')
+          await pool.query(
+            "UPDATE driver_profiles SET last_location_at=NOW()-INTERVAL '1 day' WHERE id=$1",
+            [fixture.driverProfileId],
+          );
+        if (mode === 'moved')
+          await pool.query(
+            'UPDATE driver_profiles SET last_location=ST_Project(last_location,30000::float8,0::float8) WHERE id=$1',
+            [fixture.driverProfileId],
+          );
+        expect(await repository.accept(id, fixture.driverProfileId)).toBeNull();
+        expect(await repository.pendingDispatch(id)).toBeNull();
+      },
+    );
+    it.each([
+      { longitude: 85.145, latitude: 25.617 },
+      { longitude: 84.917, latitude: 26.647 },
+    ])('matches dynamically around selected pickup $latitude', async (pickup) => {
+      const id = await premiumAt(20000, pickup);
+      expect(await repository.offerDispatch(id, fixture.driverProfileId, 3600000)).toBe(true);
+      expect(await repository.accept(id, fixture.driverProfileId)).not.toBeNull();
+    });
+  });
+
+  it('keeps the online preference across disconnect and restores dispatch after a fresh fix', async () => {
+    const driver = new DriverService(driverRepository);
+    const id = fixture.driverProfileId;
+    await driver.markDisconnected(fixture.driverUserId);
+    expect(await driver.getProfile(fixture.driverUserId)).toMatchObject({
+      onlinePreference: true,
+      availabilityStatus: 'stale',
+    });
+    expect(await repository.pendingDispatch(fixture.rideIds[0]!)).toBeNull();
+    expect(
+      await driverRepository.updateLocation(id, {
+        latitude: 12.9716,
+        longitude: 77.5946,
+        recordedAt: new Date(),
+      }),
+    ).toBe(true);
+    expect(await driver.getProfile(fixture.driverUserId)).toMatchObject({
+      onlinePreference: true,
+      availabilityStatus: 'available',
+    });
+    await driver.updateAvailability(fixture.driverUserId, { status: 'unavailable' });
+    expect(await driver.getProfile(fixture.driverUserId)).toMatchObject({
+      onlinePreference: false,
+      availabilityStatus: 'unavailable',
+    });
+    expect(await repository.offerDispatch(fixture.rideIds[0]!, id, 60000)).toBe(false);
+  });
+
+  it('a socket disconnect preserves availability and assignment throughout an active ride', async () => {
+    const id = fixture.rideIds[0]!;
+    await service.acceptRide(fixture.driverProfileId, id);
+    for (const status of ['driver_assigned', 'driver_arriving', 'driver_arrived', 'in_progress']) {
+      if (status === 'in_progress') {
+        expect(await repository.verifyPinAttempt(id, fixture.driverProfileId, '7391')).toBe(
+          'verified',
+        );
+      } else {
+        await pool.query('UPDATE rides SET status=$2 WHERE id=$1', [id, status]);
+      }
+      for (const availability of ['available', 'busy']) {
+        await pool.query('UPDATE driver_profiles SET availability_status=$2 WHERE id=$1', [
+          fixture.driverProfileId,
+          availability,
+        ]);
+        expect(await driverRepository.markStale(fixture.driverProfileId)).toBe(false);
+        const row = (
+          await pool.query('SELECT availability_status FROM driver_profiles WHERE id=$1', [
+            fixture.driverProfileId,
+          ])
+        ).rows[0];
+        expect(row.availability_status).toBe(availability);
+        const ride = await repository.findById(id);
+        expect(ride?.status).toBe(status);
+        expect(ride?.assignedDriverId).toBe(fixture.driverProfileId);
+      }
+    }
+    const driver = new DriverService(driverRepository);
+    await driver.updateAvailability(fixture.driverUserId, { status: 'unavailable' });
+    expect(await driver.getProfile(fixture.driverUserId)).toMatchObject({
+      onlinePreference: false,
+      availabilityStatus: 'busy',
+    });
+    expect(await repository.findById(id)).toMatchObject({
+      status: 'in_progress',
+      assignedDriverId: fixture.driverProfileId,
+    });
   });
 
   it('exposes customer contact only after actual acceptance and revokes it on cancellation/reassignment', async () => {
@@ -141,16 +295,19 @@ describeDatabase('ride PostgreSQL integration', () => {
       request(app)
         .get(`/rides/driver/rides/${id}/customer-contact`)
         .auth(token, { type: 'bearer' });
-    await pool.query('UPDATE users SET phone=$2 WHERE id=$1', [
-      fixture.customerId,
-      '+919876543210',
-    ]);
+    const customerPhone =
+      '+91' +
+      (BigInt('0x' + fixture.customerId.replaceAll('-', '')) % 10_000_000_000n)
+        .toString()
+        .padStart(10, '0');
+    await pool.query('UPDATE users SET phone=$2 WHERE id=$1', [fixture.customerId, customerPhone]);
     expect((await get()).status).toBe(404); // live offer is not permission
     await service.acceptRide(fixture.driverProfileId, id);
     expect((await get()).body.data).toEqual({
       rideId: id,
       name: 'Ride Customer',
-      phone: '+919876543210',
+      phone: null,
+      callingNumber: '+919153787859',
     });
     await pool.query('UPDATE users SET deleted_at=NOW() WHERE id=$1', [fixture.driverUserId]);
     expect((await get()).status).toBe(404);
@@ -225,21 +382,19 @@ describeDatabase('ride PostgreSQL integration', () => {
   it('allows each real accepted-trip phase and stops exposing contact after completion', async () => {
     const contactService = new DriverService(driverRepository, undefined, repository);
     const id = fixture.rideIds[0]!;
-    await pool.query('UPDATE users SET phone=$2 WHERE id=$1', [
-      fixture.customerId,
-      '+919876543210',
-    ]);
+    const customerPhone =
+      '+91' +
+      (BigInt('0x' + fixture.customerId.replaceAll('-', '')) % 10_000_000_000n)
+        .toString()
+        .padStart(10, '0');
+    await pool.query('UPDATE users SET phone=$2 WHERE id=$1', [fixture.customerId, customerPhone]);
     await service.acceptRide(fixture.driverProfileId, id);
     for (const status of ['driver_arriving', 'driver_arrived'] as const) {
       await service.transitionRide(id, status, fixture.driverProfileId);
-      expect((await contactService.getCustomerContact(fixture.driverUserId, id)).phone).toBe(
-        '+919876543210',
-      );
+      expect((await contactService.getCustomerContact(fixture.driverUserId, id)).phone).toBeNull();
     }
     await service.transitionRide(id, 'in_progress', fixture.driverProfileId, '7391');
-    expect((await contactService.getCustomerContact(fixture.driverUserId, id)).phone).toBe(
-      '+919876543210',
-    );
+    expect((await contactService.getCustomerContact(fixture.driverUserId, id)).phone).toBeNull();
     await service.completeRide(id, fixture.driverProfileId);
     await expect(contactService.getCustomerContact(fixture.driverUserId, id)).rejects.toMatchObject(
       { statusCode: 404 },
@@ -312,17 +467,23 @@ describeDatabase('ride PostgreSQL integration', () => {
     ['service', 'ambulance', 30000],
     ['premium', 'sedan', 3600000],
   ])('enforces the persisted %s/%s deadline', async (sector, category, milliseconds) => {
+    if (sector === 'service') {
+      await configureServiceFixture(pool, category as string, serviceCatalog);
+      await pool.query(
+        'UPDATE driver_profiles SET online_preference=TRUE,location_accuracy=8 WHERE id=$1',
+        [fixture.driverProfileId],
+      );
+    }
     const id = fixture.rideIds[0]!;
     await pool.query('DELETE FROM ride_dispatch_attempts WHERE ride_id=$1', [id]);
     await pool.query(
       'UPDATE rides SET dispatch_driver_id=NULL,dispatch_expires_at=NULL,sector=$2,vehicle_category=$3 WHERE id=$1',
       [id, sector, category],
     );
-    await pool.query('UPDATE vehicles SET sector=$2,category=$3 WHERE id=$1', [
-      fixture.vehicleId,
-      sector,
-      category,
-    ]);
+    await pool.query(
+      "UPDATE vehicles SET sector=$2,category=$3,operating_city_id='TEST_ONLY_CITY' WHERE id=$1",
+      [fixture.vehicleId, sector, category],
+    );
     // Isolated fixture: vehicle identity changes correctly invalidate approval.
     await pool.query(
       "UPDATE vehicles SET verification_status='approved',is_active=TRUE WHERE id=$1",
@@ -378,17 +539,23 @@ describeDatabase('ride PostgreSQL integration', () => {
     };
   }
   async function prepareMap(sector = 'passenger', amount = 106, distance = 8500) {
+    if (sector === 'service') {
+      await configureServiceFixture(pool, 'ambulance', serviceCatalog);
+      await pool.query(
+        'UPDATE driver_profiles SET online_preference=TRUE,location_accuracy=8 WHERE id=$1',
+        [fixture.driverProfileId],
+      );
+    }
     const category =
       sector === 'logistics' ? 'mini_truck' : sector === 'service' ? 'ambulance' : 'sedan';
     await pool.query(
       `UPDATE rides SET sector=$2,fare_estimate=$3,vehicle_category=$5,route_metadata=COALESCE(route_metadata,'{}'::jsonb)||jsonb_build_object('bookingDistanceMeters',$4::numeric) WHERE id=$1`,
       [fixture.rideIds[0], sector, amount, distance, category],
     );
-    await pool.query('UPDATE vehicles SET sector=$2,category=$3 WHERE id=$1', [
-      fixture.vehicleId,
-      sector,
-      category,
-    ]);
+    await pool.query(
+      "UPDATE vehicles SET sector=$2,category=$3,operating_city_id='TEST_ONLY_CITY' WHERE id=$1",
+      [fixture.vehicleId, sector, category],
+    );
     // Changing vehicle identity invalidates approval; model the completed re-review.
     if (sector !== 'passenger') {
       const changed = await pool.query(
@@ -436,7 +603,13 @@ describeDatabase('ride PostgreSQL integration', () => {
       expect(driver.totalDistance).toEqual(user.totalDistance);
       expect(user.pickup).toEqual(driver.pickup);
       expect(user.drop).not.toBeNull();
-      expect(driver.drop).toBeNull();
+      if (sector === 'logistics') expect(driver.drop).toEqual({ address: null });
+      else
+        expect(driver.drop).toMatchObject({
+          latitude: expect.any(Number),
+          longitude: expect.any(Number),
+          address: null,
+        });
       expect(driver.rideType).toBe(sector);
       expect(user.driverLocation).not.toBeNull();
       expect(user.routeStatus).toBe('not_requested');
@@ -616,7 +789,7 @@ describeDatabase('ride PostgreSQL integration', () => {
     );
     expect(await repository.findByIdForCustomer(booked.id, fixture.driverUserId)).toBeNull();
   });
-  it('starts once with a leading-zero PIN, rejects replay and never leaks destination before verification', async () => {
+  it('starts once with a leading-zero PIN, rejects replay and preserves the assigned destination marker', async () => {
     await prepareMap();
     const id = fixture.rideIds[0]!;
     await pool.query(`UPDATE rides SET pin=NULL,pin_ciphertext=$2,pin_verifier=$3 WHERE id=$1`, [
@@ -627,7 +800,7 @@ describeDatabase('ride PostgreSQL integration', () => {
     await service.transitionRide(id, 'driver_arriving', fixture.driverProfileId);
     await service.transitionRide(id, 'driver_arrived', fixture.driverProfileId);
     const m = mapService();
-    expect((await m.service.getDriverMap(fixture.driverUserId, id, true)).drop).toBeNull();
+    expect((await m.service.getDriverMap(fixture.driverUserId, id, true)).drop).not.toBeNull();
     await expect(
       service.transitionRide(id, 'in_progress', fixture.driverProfileId),
     ).rejects.toMatchObject({ code: 'PIN_VERIFICATION_REQUIRED' });
@@ -895,9 +1068,10 @@ describeDatabase('ride PostgreSQL integration', () => {
       undefined,
       maps,
     );
-    await expect(serviceMap.getDriverMap(fixture.driverUserId, id, true)).rejects.toMatchObject({
-      statusCode: 503,
-    });
+    const unavailable = await serviceMap.getDriverMap(fixture.driverUserId, id, true);
+    expect(unavailable.routeStatus).toBe('unavailable');
+    expect(unavailable.route).toBeNull();
+    expect(unavailable.eta).toBeNull();
     await pool.query('UPDATE driver_profiles SET last_location_at=$2 WHERE id=$1', [
       fixture.driverProfileId,
       new Date(Date.now() - 60000),

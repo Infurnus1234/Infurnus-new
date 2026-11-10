@@ -1,3 +1,4 @@
+import { sameMoney } from '../../../common/utils/whole-rupee.js';
 import type { Pool } from 'pg';
 import type { PaymentRepository } from '../repositories/payment.repository.js';
 import type { PaymentProvider } from '../providers/payment.provider.js';
@@ -12,8 +13,15 @@ export class PaymentReconciliationService {
   async reconcileStuckPayments(
     staleMinutes: number = 10,
   ): Promise<{ reconciled: number; failed: number }> {
-    const result = await this.pool.query<{ id: string; providerOrderId: string; provider: string }>(
-      `SELECT id, provider_order_id AS "providerOrderId", provider
+    const result = await this.pool.query<{
+      id: string;
+      providerOrderId: string;
+      provider: string;
+      amount: string;
+      currency: string;
+      payment_stage: string | null;
+    }>(
+      `SELECT id, amount, currency, payment_stage, provider_order_id AS "providerOrderId", provider
        FROM payments
        WHERE status = 'INITIATED'
          AND created_at < NOW() - (INTERVAL '1 minute' * $1)`,
@@ -24,15 +32,25 @@ export class PaymentReconciliationService {
     let failed = 0;
 
     for (const payment of result.rows) {
-      if (!payment.providerOrderId || !this.paymentProvider) continue;
+      if (payment.provider !== 'cashfree' || !payment.providerOrderId || !this.paymentProvider)
+        continue;
 
       try {
         const providerStatus = await this.paymentProvider.getPaymentStatus(payment.providerOrderId);
 
+        if (
+          providerStatus.orderStatus === 'PAID' &&
+          (providerStatus.providerOrderId !== payment.providerOrderId ||
+            providerStatus.orderCurrency !== payment.currency ||
+            !sameMoney(providerStatus.orderAmount, payment.amount) ||
+            (payment.payment_stage && !providerStatus.providerPaymentId))
+        )
+          continue;
         if (providerStatus.orderStatus === 'PAID') {
           await this.paymentRepository.capture({
             paymentId: payment.id,
             providerPaymentId: providerStatus.providerPaymentId ?? undefined,
+            ...(payment.payment_stage ? { verifiedOnline: true } : {}),
           });
           reconciled++;
         } else if (

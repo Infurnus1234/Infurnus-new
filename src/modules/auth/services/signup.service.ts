@@ -318,8 +318,18 @@ export class SignupService {
     )
       existingPendingSignup = null;
 
-    if (existingPendingSignup && (input.role === 'customer' || input.role === 'driver')) {
-      return { signupId: randomUUID(), contactType, expiresAt: new Date(Date.now() + 10 * 60_000) };
+    if (
+      existingPendingSignup?.otpProviderExpiresAt &&
+      existingPendingSignup.otpProviderExpiresAt.getTime() > Date.now()
+    ) {
+      // A retry must identify the persisted session that received the code.
+      // Keep its original details and delivery budget; resending still goes through
+      // the existing cooldown/attempt checks in the resend endpoint.
+      return {
+        signupId: existingPendingSignup.id,
+        contactType,
+        expiresAt: existingPendingSignup.otpProviderExpiresAt,
+      };
     }
     if (existingPendingSignup) {
       throw new AppError(
@@ -334,13 +344,7 @@ export class SignupService {
     // ========================================================
 
     // Retain the non-null legacy column without creating a usable password credential.
-    const passwordless = input.role === 'customer' || input.role === 'driver';
-    if (!passwordless && !input.password) {
-      throw new AppError('INVALID_PASSWORD', 'Password is required', 400);
-    }
-    const passwordHash = await hashPassword(
-      passwordless ? randomBytes(48).toString('hex') : input.password!,
-    );
+    const passwordHash = await hashPassword(randomBytes(48).toString('hex'));
 
     // ========================================================
     // Request provider-managed OTP

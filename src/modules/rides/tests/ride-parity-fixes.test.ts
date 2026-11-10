@@ -113,7 +113,6 @@ describe('BUG-P3-02 & BUG-P3-04: Parity Fixes — Real Details & Secure PIN', ()
         destination: { latitude: 12.9352, longitude: 77.6245 },
         sector: 'passenger',
         vehicleCategory: 'sedan',
-        fareEstimate: 1,
       });
 
       expect(fareEstimator.estimate).toHaveBeenCalledWith(

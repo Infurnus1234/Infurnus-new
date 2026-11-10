@@ -147,13 +147,33 @@ class _ScanAndPaySheetState extends ConsumerState<ScanAndPaySheet> {
   Future<void> _submitPayment() async {
     if (_isSubmittingPayment || _confirmedPayload == null) return;
 
-    final amount = double.tryParse(_amountController.text.trim());
-    if (amount == null || amount <= 0) {
+    final requested = double.tryParse(_amountController.text.trim());
+    if (requested == null || requested <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a valid amount')),
       );
       return;
     }
+
+    final double amount;
+    setState(() => _isSubmittingPayment = true);
+    try {
+      amount = await ref.read(walletProvider.notifier).quotePayment(requested);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Unable to confirm the payable amount. Please retry.',
+            ),
+          ),
+        );
+      }
+      return;
+    } finally {
+      if (mounted) setState(() => _isSubmittingPayment = false);
+    }
+    if (!mounted) return;
 
     final currentBalance = ref.read(walletProvider).wallet?.balance ?? 0.0;
     if (amount > currentBalance) {
@@ -193,8 +213,8 @@ class _ScanAndPaySheetState extends ConsumerState<ScanAndPaySheet> {
       ),
     );
 
-    if (confirmed != true) return;
-
+    if (confirmed != true || !mounted) return;
+    _amountController.text = amount.rupeeText;
     setState(() => _isSubmittingPayment = true);
 
     final targetType =

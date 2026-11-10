@@ -4,6 +4,9 @@ import type { RouteResult } from '../providers/map.provider.js';
 
 export interface LiveRideLocation extends RideLocation {
   timestamp: string;
+  heading?: number | undefined;
+  speed?: number | undefined;
+  accuracy?: number | undefined;
 }
 export interface RideMapSnapshot {
   ride: Ride;
@@ -24,7 +27,7 @@ export interface RideInformation {
     source: 'booking' | 'geographic_estimate' | 'unavailable';
   };
   pickup: RideLocation & { address: string | null };
-  drop: (RideLocation & { address: string | null }) | null;
+  drop: (Partial<RideLocation> & { address: string | null }) | null;
   rideType: string;
   vehicleCategory: string | null;
   rideStatus: Ride['status'];

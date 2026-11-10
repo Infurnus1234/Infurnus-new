@@ -1,6 +1,8 @@
 import type { PoolClient } from 'pg';
+import { newestFirstSql } from '../../../common/utils/chronological-order.js';
 import { AppError } from '../../../common/errors/app-error.js';
 import { accountDisplayNameSql } from '../../users/repositories/account-identity.js';
+import { approvalFleetFields, approvalFleetJoins } from './approval-identity.js';
 
 // Group by the resource owner, not uploader/email text. A fleet can submit a
 // driver's documents; that must never merge two drivers or another provider role.
@@ -31,13 +33,20 @@ export async function onboardingItems(client: PoolClient, profileId: string) {
   ).rows;
 }
 
-export async function groupedApprovals(client: PoolClient, actorId: string, status: string) {
+export async function groupedApprovals(
+  client: PoolClient,
+  actorId: string,
+  status: string,
+  options: { kind?: 'driver' | 'vehicle'; page?: number; pageSize?: number; search?: string } = {},
+) {
   return (
     await client.query(
       `WITH scoped AS (
-    SELECT r.*,dp.id AS driver_profile_id,COALESCE(dp.user_id,r.requester_id) AS owner_id,
+    SELECT r.*,dp.id AS driver_profile_id,COALESCE(dp.user_id,association_driver.user_id,r.requester_id) AS owner_id,
       CASE WHEN dp.id IS NOT NULL THEN 'driver:'||dp.id::text ELSE r.id::text END AS group_id
     FROM provider_approval_requests r ${onboardingJoinsSql}
+    LEFT JOIN driver_profiles association_driver ON r.request_type='driver_association' AND r.target_type='driver_profile' AND association_driver.id=r.target_id
+    WHERE r.admin_deleted_at IS NULL
   ), ranked AS (
     SELECT s.*,row_number() OVER(PARTITION BY group_id ORDER BY (status='PENDING') DESC,
       (target_type='driver_profile') DESC,submitted_at DESC,id DESC) AS position,
@@ -58,6 +67,10 @@ export async function groupedApprovals(client: PoolClient, actorId: string, stat
     LEFT JOIN users account ON account.id=profile.user_id
     LEFT JOIN vehicles assigned ON assigned.id=profile.active_vehicle_id WHERE r.position=1
   ) SELECT r.id,r.owner_id AS requester_id,r.requester_role,u.role::text AS requester_account_role,
+    ${approvalFleetFields},count(*) OVER()::int AS total_count,
+    CASE WHEN u.deleted_at IS NULL THEN NULLIF(btrim(concat_ws(' ',u.first_name,u.last_name)),'') END AS driver_name,
+    request_vehicle.plate_number,request_vehicle.make,request_vehicle.model,
+    request_vehicle.category AS vehicle_type,request_vehicle.sector,
     ${accountDisplayNameSql} AS requester_display_name,
     CASE WHEN u.deleted_at IS NULL THEN u.email END AS requester_email,
     r.target_type,r.target_id,r.onboarding_status AS status,r.first_submitted_at AS submitted_at,r.item_count,r.driver_profile_id,
@@ -73,9 +86,20 @@ export async function groupedApprovals(client: PoolClient, actorId: string, stat
     LEFT JOIN partners p ON r.target_type='partner' AND p.id=r.target_id
     LEFT JOIN vehicles v ON r.target_type='vehicle' AND v.id=r.target_id
     LEFT JOIN partner_documents pd ON r.target_type='partner_document' AND pd.id=r.target_id
+    LEFT JOIN vehicles request_vehicle ON request_vehicle.id=CASE WHEN r.target_type='vehicle' THEN r.target_id WHEN r.target_type='partner_document' THEN pd.vehicle_id END
+    ${approvalFleetJoins}
     WHERE ($1='ALL' OR r.onboarding_status=$1)
-    ORDER BY CASE WHEN $1='PENDING' THEN r.first_submitted_at END ASC,r.first_submitted_at DESC,r.id LIMIT 100`,
-      [status, actorId],
+      AND ($3::text IS NULL OR ($3='driver' AND r.target_type IN ('driver_profile','driver_document')) OR ($3='vehicle' AND request_vehicle.id IS NOT NULL))
+      AND ($4::text='' OR concat_ws(' ',provider_public_id(u.id),provider_public_id(fleet.user_id),u.first_name,u.last_name,u.email,fleet_user.first_name,fleet_user.last_name,fleet.user_id::text,r.id::text,request_vehicle.plate_number,request_vehicle.make,request_vehicle.model) ILIKE '%'||$4||'%')
+    ORDER BY ${newestFirstSql('r.first_submitted_at', 'r.id')} LIMIT $5 OFFSET $6`,
+      [
+        status,
+        actorId,
+        options.kind ?? null,
+        options.search ?? '',
+        options.pageSize ?? 100,
+        ((options.page ?? 1) - 1) * (options.pageSize ?? 100),
+      ],
     )
   ).rows;
 }

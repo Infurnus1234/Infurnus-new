@@ -37,6 +37,7 @@ export const permissionCatalog = [
   'approvals.sensitive',
   'approvals.approve',
   'approvals.reject',
+  'approvals.delete',
   'rides.read',
   'logistics.read',
   'rentals.read',
@@ -52,7 +53,9 @@ export const permissionCatalog = [
   'coupons.delete',
   'support.read',
   'support.update',
+  'support.delete',
   'notifications.read',
+  'notifications.delete',
   'activity.read',
   'reports.read',
   'maps.read',
@@ -64,17 +67,28 @@ export function requiredPermissions(
   body?: { status?: string },
 ): string[] | null {
   const path = rawPath.replace(/\/+$/, '');
+  if (method === 'GET' && /^\/admin\/provider-identities\/[1-9][0-9]{5,63}$/.test(path))
+    return ['users.read', 'users.detail'];
   const deletion = path.match(
-    /^\/admin\/records\/(users|drivers|partners|vehicles|vehicle-types|coupons)\/[\da-f-]{36}$/i,
+    /^\/admin\/records\/(users|drivers|partners|vehicles|vehicle-types|coupons|support|notifications|approvals|fleet-applications)\/[\da-f-]{36}$/i,
   );
   if (deletion && method === 'DELETE') {
-    const resource = deletion[1] === 'vehicle-types' ? 'pricing' : deletion[1]!;
+    const resource =
+      deletion[1] === 'vehicle-types'
+        ? 'pricing'
+        : deletion[1] === 'fleet-applications'
+          ? 'approvals'
+          : deletion[1]!;
     return [resource + '.read', resource + '.delete'];
   }
   if (path === '/admin/access/me') return method === 'GET' ? [] : null;
   if (/^\/auth\/(logout|logout-all|refresh|sessions(?:\/[^/]+)?|change-password)$/.test(path))
     return [];
+  if (path === '/admin/logistics/payments')
+    return method === 'GET' ? ['logistics.read', 'payments.read'] : null;
   if (path === '/admin/dashboard') return method === 'GET' ? ['dashboard.read'] : null;
+  if (/^\/admin\/operations\/booking-reference\/[0-9]{7}$/.test(path))
+    return method === 'GET' ? ['rides.read', 'users.sensitive', 'drivers.sensitive'] : null;
   if (path === '/admin/operations/summary') return method === 'GET' ? ['reports.read'] : null;
   const operation = path.match(/^\/admin\/operations\/([^/]+)(?:\/[^/]+\/(status|active))?$/);
   if (operation) {
@@ -114,6 +128,12 @@ export function requiredPermissions(
     if (method === 'PATCH') return ['pricing.read', 'pricing.update'];
     return null;
   }
+  if (path === '/vehicles/operating-cities')
+    return method === 'GET'
+      ? ['vehicles.read']
+      : method === 'POST'
+        ? ['vehicles.read', 'vehicles.create']
+        : null;
   if (/^\/vehicles(?:\/[^/]+(?:\/deactivate)?)?$/.test(path)) {
     if (method === 'GET')
       return ['vehicles.read', ...(path === '/vehicles' ? [] : ['vehicles.detail'])];

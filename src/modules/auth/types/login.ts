@@ -1,4 +1,5 @@
 export interface LoginInput {
+  driverFlow?: boolean | undefined;
   role?: string | undefined;
   email?: string;
   phone?: string;

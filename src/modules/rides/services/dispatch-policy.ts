@@ -11,9 +11,9 @@ export function dispatchPolicy(sector = 'passenger', category = ''): DispatchPol
   if (sector === 'premium')
     return {
       kind: 'premium',
-      radiiMeters: [],
+      radiiMeters: [25000],
       responseMs: 3600000,
-      cityWide: true,
+      cityWide: false,
       rankByDistance: false,
     };
   if (sector === 'logistics')
@@ -24,23 +24,21 @@ export function dispatchPolicy(sector = 'passenger', category = ''): DispatchPol
       cityWide: false,
       rankByDistance: false,
     };
-  if (sector === 'service' && ['towing', 'towing_van'].includes(category))
+  if (sector === 'service')
     return {
-      kind: 'towing',
-      radiiMeters: [10000, 15000, 20000],
-      responseMs: 600000,
+      kind:
+        category === 'ambulance'
+          ? 'ambulance'
+          : ['towing', 'towing_van'].includes(category)
+            ? 'towing'
+            : 'legacy',
+      // The repository resolves the active Admin radius for every query/offer/accept.
+      radiiMeters: [25000],
+      responseMs: category === 'ambulance' ? 30000 : 600000,
       cityWide: false,
-      rankByDistance: false,
+      rankByDistance: category === 'ambulance',
     };
-  if (sector === 'service' && category === 'ambulance')
-    return {
-      kind: 'ambulance',
-      radiiMeters: [],
-      responseMs: 30000,
-      cityWide: false,
-      rankByDistance: true,
-    };
-  if (sector === 'passenger')
+  if (sector === 'passenger' || sector === 'rental')
     return {
       kind: 'normal',
       radiiMeters: [2000, 5000, 10000],

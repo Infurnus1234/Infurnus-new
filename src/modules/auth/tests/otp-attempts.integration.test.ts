@@ -49,6 +49,46 @@ function fixture() {
   return { app, verify, send };
 }
 describe('provider-independent OTP attempt budgets and passwordless identities', () => {
+  for (const role of ['customer', 'driver', 'fleet_owner', 'driver_fleet_owner'] as const)
+    for (const channel of ['email', 'phone'] as const)
+      it(`${role} ${channel}: registration retry keeps the delivered OTP session without sending again`, async () => {
+        const { app, send } = fixture();
+        const payload = {
+          firstName: 'Retry',
+          lastName: 'Registration',
+          role,
+          [channel]:
+            channel === 'email'
+              ? `retry-${randomUUID()}@example.com`
+              : '+91' + randomUUID().replace(/\D/g, '').padEnd(10, '1').slice(0, 10),
+          ...(['driver', 'driver_fleet_owner'].includes(role)
+            ? { onboardingLicencePending: true }
+            : {}),
+          ...(['fleet_owner', 'driver_fleet_owner'].includes(role)
+            ? { businessName: 'Retry test Fleet' }
+            : {}),
+        };
+        const first = await request(app).post('/auth/signup').send(payload).expect(201);
+        signups.push(first.body.data.signupId);
+        const retry = await request(app).post('/auth/signup').send(payload).expect(201);
+        expect(retry.body.data.signupId).toBe(first.body.data.signupId);
+        expect(retry.body.data.expiresAt).toBe(first.body.data.expiresAt);
+        expect(send).toHaveBeenCalledTimes(1);
+        await request(app)
+          .post('/auth/signup/resend')
+          .send({ signupId: retry.body.data.signupId })
+          .expect(429);
+        const verified = await request(app)
+          .post('/auth/signup/verify')
+          .send({ signupId: retry.body.data.signupId, otp: '123456' })
+          .expect(200);
+        users.push(verified.body.data.userId);
+        expect(verified.body.data.accessToken).toEqual(expect.any(String));
+        await request(app)
+          .post('/auth/signup/verify')
+          .send({ signupId: retry.body.data.signupId, otp: '123456' })
+          .expect(400);
+      });
   it.each(['fleet_owner', 'driver_fleet_owner'])(
     '%s restarts an expired signup without altering live requests or registered accounts',
     async (role) => {
@@ -59,8 +99,6 @@ describe('provider-independent OTP attempt budgets and passwordless identities',
         lastName: 'Provider',
         email,
         role,
-        password: 'Fixture123!',
-        confirmPassword: 'Fixture123!',
         businessName: 'Test Fleet',
         ...(role === 'driver_fleet_owner' ? { onboardingLicencePending: true } : {}),
       };
@@ -68,11 +106,13 @@ describe('provider-independent OTP attempt budgets and passwordless identities',
       const oldId = first.body.data.signupId;
       signups.push(oldId);
       expect(send).toHaveBeenCalledTimes(1);
-      await request(app).post('/auth/signup').send(payload).expect(409);
+      const duplicate = await request(app).post('/auth/signup').send(payload).expect(201);
+      expect(duplicate.body.data.signupId).toBe(oldId);
       expect(send).toHaveBeenCalledTimes(1);
+      // The service and database check expiry with different clocks.
       await pool.query(
-        "UPDATE pending_signups SET otp_provider_expires_at=NOW()-INTERVAL '1 second' WHERE id=$1",
-        [oldId],
+        "UPDATE pending_signups SET otp_provider_expires_at=LEAST(NOW(),$2::timestamptz)-INTERVAL '1 minute' WHERE id=$1",
+        [oldId, new Date()],
       );
       const retry = await request(app).post('/auth/signup').send(payload).expect(201);
       const newId = retry.body.data.signupId;
@@ -138,7 +178,7 @@ describe('provider-independent OTP attempt budgets and passwordless identities',
       }
     },
   );
-  for (const role of ['customer', 'driver'] as const)
+  for (const role of ['customer', 'driver', 'fleet_owner', 'driver_fleet_owner'] as const)
     for (const channel of ['email', 'phone'] as const) {
       it(`${role} ${channel}: signup/login, cooldown, attempt exhaustion, single-use and account identity`, async () => {
         const { app, verify } = fixture();
@@ -151,8 +191,11 @@ describe('provider-independent OTP attempt budgets and passwordless identities',
           lastName: 'Fixture',
           [channel]: contact,
           role,
-          ...(role === 'driver'
+          ...(['driver', 'driver_fleet_owner'].includes(role)
             ? { licenseNumber: 'BOUND-' + randomUUID().slice(0, 16), licenseExpiry: '2099-12-31' }
+            : {}),
+          ...(['fleet_owner', 'driver_fleet_owner'].includes(role)
+            ? { businessName: 'Bounded test Fleet' }
             : {}),
         };
         const signup = await request(app).post('/auth/signup').send(data).expect(201);
@@ -215,6 +258,10 @@ describe('provider-independent OTP attempt budgets and passwordless identities',
           "UPDATE login_challenges SET expires_at=NOW()-INTERVAL '1 second' WHERE id=$1",
           [challengeId],
         );
+        await request(app)
+          .post('/auth/login/verify')
+          .send({ challengeId, otp: '123456' })
+          .expect(400);
         const fresh = await request(app)
           .post('/auth/login')
           .send({ [channel]: contact })
@@ -229,7 +276,7 @@ describe('provider-independent OTP attempt budgets and passwordless identities',
           .post('/auth/login/verify')
           .send({ challengeId: fresh.body.data.challengeId, otp: '123456' })
           .expect(400);
-        if (role === 'driver')
+        if (['driver', 'driver_fleet_owner'].includes(role))
           expect(
             (
               await pool.query('SELECT verification_status FROM driver_profiles WHERE user_id=$1', [

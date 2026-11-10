@@ -169,7 +169,7 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
         statusCode: 400,
       });
     });
-    it('generates six numeric digits bound to one eligible Driver; rotation and wrong-driver access fail safely', async () => {
+    it('keeps the permanent vehicle code stable while enforcing Driver assignment eligibility', async () => {
       const profiles = [];
       for (const user of [ids[2], ids[3]]) {
         const id = (
@@ -199,8 +199,8 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
         'ASSIGNMENT_CODE_INVALID',
       );
       const b = await fleet.generateAssignmentCode(ids[1]!, vehicle, profile);
-      expect(b.code).not.toBe(a.code);
-      expect(await drivers.verifyAssignmentCode(a.code, ids[2]!)).toBe(null);
+      expect(b.code).toBe(a.code);
+      expect(await drivers.verifyAssignmentCode(a.code, ids[2]!)).not.toBe(null);
       const claims = await Promise.allSettled([
         drivers.claimAssignmentCode(b.code, ids[2]!, profile),
         drivers.claimAssignmentCode(b.code, ids[2]!, profile),
@@ -216,7 +216,11 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
           .driver_profile_id,
       ).toBe(profile);
       await fleet.unassignDriver(ids[1]!, vehicle);
-      expect(await drivers.verifyAssignmentCode(b.code, ids[2]!)).toBe(null);
+      expect(await drivers.verifyAssignmentCode(b.code, ids[2]!)).not.toBe(null);
+      expect(
+        (await pool.query('SELECT driver_profile_id FROM vehicles WHERE id=$1', [vehicle])).rows[0]
+          .driver_profile_id,
+      ).toBe(null);
     });
     it('does not expose another Drivers completed-trip totals through Driver-owned historical vehicles', async () => {
       const historicalVehicle = (

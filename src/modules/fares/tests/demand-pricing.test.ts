@@ -93,6 +93,15 @@ describe('validated booking-demand pricing', () => {
       Object.entries(types).map(([code, pricing]) => ({ sector, code, pricing })),
     ),
   )('honors all chart boundaries $sector/$code', ({ sector, code, pricing }) => {
+    if (sector === 'logistics') {
+      expect(() =>
+        calc.calculateEstimate(
+          { ...input, sector, vehicleCategory: code },
+          vehicle(sector, code, pricing),
+        ),
+      ).toThrow(/Configure both Logistics distance slabs/);
+      return;
+    }
     for (const score of [0, 5000, 10000]) {
       const d = { ...demandProvenance(settings), scoreBasisPoints: score };
       const r = calc.calculateEstimate(
@@ -111,7 +120,7 @@ describe('validated booking-demand pricing', () => {
         baseAmount: rates.baseFare,
         distanceAmount: 2 * rates.distanceRatePerKm,
         timeAmount: 0,
-        grossAmount: rates.baseFare + 2 * rates.distanceRatePerKm,
+        grossAmount: Math.round((rates.baseFare + 2 * rates.distanceRatePerKm) / 100) * 100,
         pricingVersion: 'vehicle-type:test-type:v7',
       });
       expect(r.bookingFare?.baseAmount).toBeGreaterThanOrEqual(pricing.baseFare!.minimum);
@@ -119,7 +128,7 @@ describe('validated booking-demand pricing', () => {
         expect(r.bookingFare!.baseAmount).toBeLessThanOrEqual(pricing.baseFare!.maximum!);
     }
   });
-  it('Bike is 25 / 30.50 / 36 INR for one-way 1 km at low/mid/high demand', () => {
+  it('Bike final payable is 25 / 31 / 36 INR for one-way 1 km at low/mid/high demand', () => {
     expect(
       [0, 5000, 10000].map((score) => {
         const r = calc.calculateEstimate(input, vehicle(), undefined, {
@@ -128,7 +137,7 @@ describe('validated booking-demand pricing', () => {
         });
         return 'bookingFare' in r ? r.bookingFare?.grossAmount : undefined;
       }),
-    ).toEqual([2500, 3050, 3600]);
+    ).toEqual([2500, 3100, 3600]);
   });
   it('rejects inactive and cross-sector configurations', () => {
     expect(() => calc.calculateEstimate(input, { ...vehicle(), active: false })).toThrow();
@@ -136,7 +145,7 @@ describe('validated booking-demand pricing', () => {
   });
   it('rejects invalid thresholds', () =>
     expect(() => demandProvenance({ ...settings, highBookingCount: 5 })).toThrow());
-  it('Scorpio N requires an explicitly saved approved tariff, not SUV fallback', async () => {
+  it('Scorpio N stays in Premium and requires an explicitly saved tariff', async () => {
     const repo = { findTypeByCode: vi.fn(async () => null) } as unknown as VehicleRepository;
     const maps = { calculateRoute: vi.fn() } as unknown as MapProvider;
     await expect(
@@ -148,17 +157,20 @@ describe('validated booking-demand pricing', () => {
     ).rejects.toMatchObject({ code: 'FARE_CONFIGURATION_MISSING' });
     expect(maps.calculateRoute).not.toHaveBeenCalled();
     // Hypothetical explicitly approved tariff exists only in this isolated unit fixture.
-    const approved = vehicle('rental', 'scorpio_n', {
-      displayName: 'Scorpio N',
-      baseFare: { minimum: 10000, maximum: 10000 },
-      perKmRate: { minimum: 2000, maximum: 2000 },
-    });
+    const approved: VehicleType = {
+      ...vehicle('premium', 'scorpio_n', {
+        displayName: 'Scorpio N',
+        baseFare: { minimum: 10000, maximum: 10000 },
+        perKmRate: { minimum: 2000, maximum: 2000 },
+      }),
+      fixedHourlyPricing: { hourlyRate: 100, fuelRate: 20, fuelUnit: 'per_booking' },
+    };
     expect(
       calc.calculateEstimate(
-        { ...input, sector: 'rental', vehicleCategory: 'scorpio_n' },
+        { ...input, sector: 'premium', vehicleCategory: 'scorpio_n', bookingHours: 2 },
         approved,
       ),
-    ).toMatchObject({ bookable: true });
+    ).toMatchObject({ bookable: true, bookingFare: { grossAmount: 22000 } });
   });
   it('does not fall back to legacy service/premium or undeclared aliases with a repository', async () => {
     for (const [sector, code] of [

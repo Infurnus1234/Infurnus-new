@@ -25,7 +25,7 @@ class RideRepositoryImpl implements RideRepository {
           error['code'] is String &&
           (error['code'] as String).startsWith('FARE_') &&
           error['message'] is String) {
-        throw ServerFailure(error['message'] as String);
+        throw FareFailure(error['code'] as String, error['message'] as String);
       }
       throw _handleDioException(e);
     } catch (e) {
@@ -180,7 +180,12 @@ class RideRepositoryImpl implements RideRepository {
       return NetworkFailure();
     }
 
-    final message = e.response?.data?['message'] ?? e.message;
+    final body = e.response?.data;
+    final error = body is Map ? body['error'] : null;
+    final message =
+        (error is Map ? error['message'] : null) ??
+        (body is Map ? body['message'] : null) ??
+        e.message;
     return ServerFailure(message.toString());
   }
 }

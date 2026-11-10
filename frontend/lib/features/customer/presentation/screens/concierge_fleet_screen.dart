@@ -1,9 +1,12 @@
+import '../providers/booking_catalog_provider.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../shared/widgets/vehicle_visual_image.dart';
+import '../widgets/vehicle_presentation_catalog.dart';
 import '../providers/ride_provider.dart';
 
 class ConciergeFleetScreen extends ConsumerStatefulWidget {
@@ -19,60 +22,19 @@ class _ConciergeFleetScreenState extends ConsumerState<ConciergeFleetScreen> {
 
   final List<String> _filters = ['All', 'SUV', 'Off-road', 'Luxury', 'Vans'];
 
-  final List<Map<String, String>> _conciergeVehicles = [
-    {
-      'title': 'Scorpio N',
-      'category': 'scorpio',
-      'subtitle': 'Rugged SUV',
-      'service': 'Chauffeur + Fuel',
-      'filterCategory': 'SUV',
-    },
-    {
-      'title': 'Mahindra Thar',
-      'category': 'thar',
-      'subtitle': 'Off-road',
-      'service': 'Chauffeur + Fuel',
-      'filterCategory': 'Off-road',
-    },
-    {
-      'title': 'Innova Crysta',
-      'category': 'innova',
-      'subtitle': 'Executive',
-      'service': 'Chauffeur + Fuel',
-      'filterCategory': 'Luxury',
-    },
-    {
-      'title': 'Force Traveller',
-      'category': 'traveller',
-      'subtitle': '12 seater',
-      'service': 'Chauffeur + Fuel',
-      'filterCategory': 'Vans',
-    },
-    {
-      'title': 'Mercedes V-Class',
-      'category': 'mercedes',
-      'subtitle': 'Luxury Van',
-      'service': 'Chauffeur + Fuel',
-      'filterCategory': 'Luxury',
-    },
-    {
-      'title': 'Helicopter',
-      'category': 'helicopter',
-      'subtitle': 'On-demand',
-      'service': 'Chauffeur + Pilot',
-      'filterCategory': 'Luxury',
-    },
-  ];
-
   @override
   Widget build(BuildContext context) {
-    final filteredVehicles = _conciergeVehicles.where((item) {
+    final vehicles = customerVehiclePresentation(
+      'premium',
+      ref.watch(bookingCatalogProvider('premium')).value ?? [],
+    ).map((item) => <String, String>{...item, 'title': item['name']!}).toList();
+    final filteredVehicles = vehicles.where((item) {
       if (_selectedFilter == 'All') return true;
       return item['filterCategory'] == _selectedFilter;
     }).toList();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -151,7 +113,7 @@ class _ConciergeFleetScreenState extends ConsumerState<ConciergeFleetScreen> {
                     ref
                         .read(rideProvider.notifier)
                         .selectTier(item['category']!);
-                    context.push('/rentals');
+                    context.push('/ride-booking');
                   },
                   child: Container(
                     padding: const EdgeInsets.all(14),
@@ -171,6 +133,8 @@ class _ConciergeFleetScreenState extends ConsumerState<ConciergeFleetScreen> {
                       children: [
                         VehicleVisualImage(
                           vehicleName: item['title'],
+                          customAssetPath:
+                              premiumVehicleImages[item['category']],
                           category: item['category'],
                           width: 68,
                           height: 52,

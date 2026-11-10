@@ -164,12 +164,12 @@ export class PostgresRentalRepository implements RentalRepository {
   ): Promise<Rental | null> {
     const result = await client.query(
       `UPDATE rentals
-       SET status = $2::rental_status,
+       SET status = $3::rental_status,
            completed_at = CASE
-             WHEN $2::rental_status = 'COMPLETED' THEN NOW()
+             WHEN $3::rental_status = 'COMPLETED' THEN NOW()
              ELSE completed_at
            END
-       WHERE id = $1
+       WHERE id = $1 AND status = $2::rental_status
        RETURNING ${projection}`,
       [id, fromStatus, toStatus],
     );

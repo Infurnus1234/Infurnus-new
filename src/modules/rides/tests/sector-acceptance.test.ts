@@ -103,7 +103,7 @@ describe('Phase 4 Step 3: Sector & Category Matching and Acceptance Isolation', 
   });
 
   describe('PostgresRideRepository.accept Sector & Category Enforcement', () => {
-    it('generates SQL enforcing v.sector = r.sector and category match', async () => {
+    it('matches Rental against Passenger inventory and preserves exact category isolation', async () => {
       const queryMock = vi.fn().mockResolvedValue({
         rows: [],
       });
@@ -121,7 +121,9 @@ describe('Phase 4 Step 3: Sector & Category Matching and Acceptance Isolation', 
         .replace(/\s+\)/g, ')')
         .trim();
 
-      expect(normalizedSql).toContain('v.sector = r.sector');
+      expect(normalizedSql).toContain(
+        "v.sector = (CASE WHEN r.sector='rental' THEN 'passenger' ELSE r.sector END)",
+      );
       expect(normalizedSql).toContain('v.category = r.vehicle_category');
       expect(normalizedSql).not.toContain('r.vehicle_category IS NULL');
       expect(normalizedSql).toContain('v.verification_status =');

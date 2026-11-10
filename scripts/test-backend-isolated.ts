@@ -47,34 +47,53 @@ let created = false;
 try {
   await admin.query(`CREATE DATABASE "${name}"`);
   created = true;
-  for (const [label, command] of [
-    [
-      'isolated-migrations',
-      ['node_modules/tsx/dist/cli.mjs', 'src/infrastructure/database/run-migrations.ts'],
-    ],
-    [
-      'isolated-migration-validation',
-      ['node_modules/tsx/dist/cli.mjs', 'scripts/test-migrations.ts'],
-    ],
-    [
-      'isolated-role-migration-rollback',
-      ['node_modules/tsx/dist/cli.mjs', 'scripts/test-role-identity-migration.ts'],
-    ],
-    [
-      'isolated-auth',
-      [
-        'node_modules/vitest/vitest.mjs',
-        'run',
-        'src/modules/auth/tests',
-        '--no-file-parallelism',
-        '--reporter=dot',
-      ],
-    ],
-    [
-      'isolated-full',
-      ['node_modules/vitest/vitest.mjs', 'run', '--no-file-parallelism', '--reporter=dot'],
-    ],
-  ] as const) {
+  const targets = process.argv.slice(2);
+  const checks: [string, string[]][] = targets.length
+    ? [
+        [
+          'isolated-migrations',
+          ['node_modules/tsx/dist/cli.mjs', 'src/infrastructure/database/run-migrations.ts'],
+        ],
+        [
+          'isolated-focused',
+          [
+            'node_modules/vitest/vitest.mjs',
+            'run',
+            ...targets,
+            '--no-file-parallelism',
+            '--reporter=dot',
+          ],
+        ],
+      ]
+    : [
+        [
+          'isolated-migrations',
+          ['node_modules/tsx/dist/cli.mjs', 'src/infrastructure/database/run-migrations.ts'],
+        ],
+        [
+          'isolated-migration-validation',
+          ['node_modules/tsx/dist/cli.mjs', 'scripts/test-migrations.ts'],
+        ],
+        [
+          'isolated-role-migration-rollback',
+          ['node_modules/tsx/dist/cli.mjs', 'scripts/test-role-identity-migration.ts'],
+        ],
+        [
+          'isolated-auth',
+          [
+            'node_modules/vitest/vitest.mjs',
+            'run',
+            'src/modules/auth/tests',
+            '--no-file-parallelism',
+            '--reporter=dot',
+          ],
+        ],
+        [
+          'isolated-full',
+          ['node_modules/vitest/vitest.mjs', 'run', '--no-file-parallelism', '--reporter=dot'],
+        ],
+      ];
+  for (const [label, command] of checks) {
     try {
       const result = await run(process.execPath, [...command], {
         env: childEnv,

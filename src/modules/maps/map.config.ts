@@ -11,6 +11,7 @@ export const mapConfig = {
   popularTtl: env.MAP_POPULAR_CACHE_TTL,
   reversePrecision: env.MAP_REVERSE_PRECISION,
   movementMeters: env.MAP_MOVEMENT_THRESHOLD_METERS,
+  offRouteSustainMs: env.MAP_OFF_ROUTE_SUSTAIN_MS,
   offRouteEnter: env.MAP_OFF_ROUTE_ENTER_METERS,
   offRouteExit: env.MAP_OFF_ROUTE_EXIT_METERS,
   minRerouteMs: env.MAP_MIN_REROUTE_INTERVAL_MS,

@@ -1,3 +1,6 @@
+import { wholeRupees, rupeesToPaise, sameMoney } from '../../../common/utils/whole-rupee.js';
+import type { PaymentProvider } from '../../payments/providers/payment.provider.js';
+import { AppError } from '../../../common/errors/app-error.js';
 import type { NextFunction, Request, Response } from 'express';
 import { z } from 'zod';
 import type { PostgresWalletRepository } from '../repositories/wallet.repository.js';
@@ -5,7 +8,7 @@ import type { PostgresWalletRepository } from '../repositories/wallet.repository
 const topUpInitiateSchema = z.object({
   amount: z.number().min(10, 'Minimum top-up is ₹10').max(100000, 'Maximum top-up is ₹1,00,000'),
   paymentMethod: z.string().default('upi'),
-  idempotencyKey: z.string().min(1, 'Idempotency key required'),
+  idempotencyKey: z.string().min(1, 'Idempotency key required').max(100),
 });
 
 const topUpVerifySchema = z.object({
@@ -21,7 +24,7 @@ const paySchema = z.object({
   targetId: z.string().min(1),
   amount: z.number().positive('Payment amount must be greater than zero'),
   note: z.string().max(200).optional(),
-  idempotencyKey: z.string().min(1, 'Idempotency key required'),
+  idempotencyKey: z.string().min(1, 'Idempotency key required').max(100),
   authConfirmation: z.string().optional(),
 });
 
@@ -31,7 +34,10 @@ const resolveRecipientSchema = z.object({
 });
 
 export class WalletController {
-  constructor(private readonly repository: PostgresWalletRepository) {}
+  constructor(
+    private readonly repository: PostgresWalletRepository,
+    private readonly provider?: PaymentProvider,
+  ) {}
 
   getWallet = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -88,20 +94,47 @@ export class WalletController {
       }
 
       const input = topUpInitiateSchema.parse(req.body);
-      const amountPaise = Math.round(input.amount * 100);
-      const orderId = `order_topup_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const roundedPaise = wholeRupees(input.amount) * 100;
+      if (!this.provider)
+        throw new AppError('PAYMENT_PROVIDER_UNAVAILABLE', 'Wallet checkout is unavailable', 503);
+      const stored = await this.repository.createTopUpOrder(
+        userId,
+        roundedPaise,
+        input.idempotencyKey,
+        rupeesToPaise(input.amount),
+      );
+      const amountPaise = Number(stored.amountPaise);
+      const orderId = stored.orderId;
+      const order = await this.provider.createOrder({
+        orderId,
+        amount: amountPaise / 100,
+        currency: 'INR',
+        customerId: userId,
+        orderNote: 'INFURNUS Wallet Top-Up',
+      });
+      if (
+        order.providerOrderId !== orderId ||
+        !order.paymentSessionId ||
+        order.orderCurrency !== 'INR' ||
+        !sameMoney(order.orderAmount, amountPaise / 100)
+      )
+        throw new AppError(
+          'PAYMENT_PROVIDER_UNAVAILABLE',
+          'Wallet checkout session unavailable',
+          502,
+        );
 
       res.json({
         success: true,
         data: {
           orderId,
-          amount: input.amount,
+          amount: amountPaise / 100,
           amountPaise,
           currency: 'INR',
           paymentMethod: input.paymentMethod,
           idempotencyKey: input.idempotencyKey,
           // Provider session details for checkout
-          paymentSessionId: `session_${orderId}`,
+          paymentSessionId: order.paymentSessionId,
         },
       });
     } catch (error) {
@@ -118,16 +151,31 @@ export class WalletController {
       }
 
       const input = topUpVerifySchema.parse(req.body);
-      const amountPaise = Math.round(input.amount * 100);
-
-      // Server verification step: credits wallet ONLY here
+      if (!this.provider)
+        throw new AppError('PAYMENT_PROVIDER_UNAVAILABLE', 'Wallet verification unavailable', 503);
+      const order = await this.repository.findTopUpOrder(userId, input.orderId);
+      if (!order) throw new AppError('TOPUP_NOT_FOUND', 'Wallet top-up order not found', 404);
+      const status = await this.provider.getPaymentStatus(order.orderId);
+      const amountPaise = Number(order.amountPaise);
+      if (
+        status.orderStatus !== 'PAID' ||
+        status.providerOrderId !== order.orderId ||
+        status.orderCurrency !== 'INR' ||
+        !sameMoney(status.orderAmount, amountPaise / 100) ||
+        !status.providerPaymentId
+      )
+        throw new AppError(
+          'PAYMENT_VERIFICATION_REQUIRED',
+          'A matching paid gateway transaction is required',
+          409,
+        );
       const result = await this.repository.topUp(
         userId,
         amountPaise,
-        input.paymentMethod,
-        input.referenceId || input.orderId,
-        input.idempotencyKey,
-        `Top-Up via ${input.paymentMethod}`,
+        'CASHFREE',
+        status.providerPaymentId,
+        order.orderId,
+        'Verified wallet top-up',
       );
 
       res.json({
@@ -135,6 +183,21 @@ export class WalletController {
         message: 'Wallet top-up verified and credited successfully',
         data: result,
       });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  quotePayment = (req: Request, res: Response, next: NextFunction): void => {
+    try {
+      const input = z
+        .object({ amount: z.number().positive().max(99999999) })
+        .strict()
+        .parse(req.body);
+      const amount = wholeRupees(input.amount);
+      if (!amount)
+        throw new AppError('INVALID_AMOUNT', 'Rounded payment amount must be positive', 400);
+      res.json({ success: true, data: { amount, currency: 'INR' } });
     } catch (error) {
       next(error);
     }
@@ -149,7 +212,7 @@ export class WalletController {
       }
 
       const input = paySchema.parse(req.body);
-      const amountPaise = Math.round(input.amount * 100);
+      const amountPaise = wholeRupees(input.amount) * 100;
 
       const result = await this.repository.pay(
         userId,

@@ -7,3 +7,17 @@ frontend
 *.log
 tmp
 predeploy-isolated.py
+artifacts
+**/*.apk
+**/*.jks
+**/*.keystore
+**/key.properties
+**/local.properties
+*-operation.json
+final-health.json
+live-verification.json
+predeploy-source-manifest.json
+configure-*.py
+role-*.mjs
+run-adc-tests.py
+deployment-*.mjs

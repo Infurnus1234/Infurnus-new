@@ -94,9 +94,10 @@ describe('Phase 4 Step 12: End-to-End Validation & Final Audit Suite', () => {
       releaseBusy: vi.fn().mockResolvedValue(true),
     };
 
+    const commissionQuery = vi.fn().mockResolvedValue({ rowCount: 1, rows: [] });
     const mockTransactionRunner = vi.fn(async (callback) =>
       callback({
-        query: vi.fn().mockResolvedValue({ rows: [], rowCount: 1 }),
+        query: commissionQuery,
       } as never),
     );
 
@@ -121,6 +122,15 @@ describe('Phase 4 Step 12: End-to-End Validation & Final Audit Suite', () => {
     );
     expect(completed.status).toBe('completed');
     expect(completed.finalFare).toBe(350.0);
+    expect(commissionQuery).toHaveBeenCalledWith(expect.stringContaining('UPDATE rides'), [
+      '11111111-1111-4111-8111-111111111111',
+      35,
+      315,
+    ]);
+    expect(mockDriverRepo.releaseBusy).toHaveBeenCalledWith(
+      'driver-e2e-1',
+      expect.objectContaining({ query: commissionQuery }),
+    );
   });
 
   // 2. Logistics complete lifecycle
@@ -141,26 +151,43 @@ describe('Phase 4 Step 12: End-to-End Validation & Final Audit Suite', () => {
   });
 
   // 3. Service Vehicle complete lifecycle
-  it('3. Service Vehicle complete lifecycle: strictly trip-based, immune to rentalHours', () => {
-    const standardJcb = fareCalculator.calculate({
-      distanceMeters: 8000,
-      durationSeconds: 1200,
-      sector: 'service',
-      vehicleCategory: 'jcb',
+  it('3. Service Vehicle complete lifecycle: fixed fare is immune to rentalHours and distance', () => {
+    const type = {
+      id: '7d7c2be0-21bd-4a75-907a-8b558079ef17',
+      name: 'JCB',
+      code: 'jcb',
+      sector: 'service' as const,
+      baseFare: null,
+      perKmRate: null,
+      serviceFixedFare: 1200,
+      serviceRadiusMeters: 25000,
+      active: true,
+      currency: 'INR' as const,
+      version: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const standardJcb = fareCalculator.calculateEstimate(
+      { distanceMeters: 8000, durationSeconds: 1200, sector: 'service', vehicleCategory: 'jcb' },
+      type,
+    );
+    const tamperedJcb = fareCalculator.calculateEstimate(
+      {
+        distanceMeters: 80000,
+        durationSeconds: 12000,
+        sector: 'service',
+        vehicleCategory: 'jcb',
+        rentalHours: 12,
+      },
+      type,
+    );
+    expect(standardJcb).toMatchObject({
+      bookingFare: { baseAmount: 120000, grossAmount: 120000, distanceAmount: 0, timeAmount: 0 },
     });
-
-    const tamperedJcb = fareCalculator.calculate({
-      distanceMeters: 8000,
-      durationSeconds: 1200,
-      sector: 'service',
-      vehicleCategory: 'jcb',
-      rentalHours: 12,
+    expect(tamperedJcb).toMatchObject({
+      bookingFare: { baseAmount: 120000, grossAmount: 120000, distanceAmount: 0, timeAmount: 0 },
     });
-
-    expect(standardJcb.baseAmount).toBe(120000); // 1200 INR mobilization
-    expect(tamperedJcb.baseAmount).toBe(standardJcb.baseAmount);
-    expect(tamperedJcb.grossAmount).toBe(standardJcb.grossAmount);
-    expect(tamperedJcb.fuelAmount).toBeUndefined();
+    expect('bookingFare' in tamperedJcb && tamperedJcb.bookingFare?.fuelAmount).toBeUndefined();
   });
 
   // 4. Premium GPS/fuel reconciliation
@@ -440,11 +467,13 @@ describe('Phase 4 Step 12: End-to-End Validation & Final Audit Suite', () => {
 
     const mockPaymentRepo: Partial<PaymentRepository> = {
       findById: vi.fn().mockResolvedValue(mockPayment),
+      capture: vi.fn(),
     };
 
     const mockProvider = {
       getPaymentStatus: vi.fn().mockResolvedValue({
-        orderId: 'order-cf-999',
+        providerOrderId: 'order-cf-999',
+        orderCurrency: 'INR',
         orderStatus: 'PAID',
         providerPaymentId: 'cf-trans-999',
         orderAmount: 250.0, // Discrepancy: paid ₹250 instead of expected ₹450!
@@ -474,6 +503,8 @@ describe('Phase 4 Step 12: End-to-End Validation & Final Audit Suite', () => {
         message: expect.stringContaining('Payment amount mismatch'),
       }),
     );
+    expect(mockPaymentRepo.capture).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
   });
 
   // 12. Refund authorization/reconciliation

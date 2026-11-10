@@ -1,5 +1,6 @@
+import { bookingInventorySector } from '../../vehicles/services/rental-inventory.js';
 import { serviceArea, type ServiceAreaGate } from '../../maps/service-area.js';
-import { premiumCityAreas, type PremiumCityAreas } from '../../maps/premium-city-areas.js';
+import type { PremiumCityAreas } from '../../maps/premium-city-areas.js';
 import type { DriverRepository } from '../repositories/driver.repository.js';
 import type { Coordinates, MapProvider } from '../providers/map.provider.js';
 import type { DriverCandidate } from '../types/driver.js';
@@ -12,7 +13,7 @@ export class MatchingService {
     private readonly drivers: DriverRepository,
     private readonly maps?: MapProvider,
     private readonly area: ServiceAreaGate = serviceArea,
-    private readonly premiumAreas: Pick<PremiumCityAreas, 'resolve'> = premiumCityAreas,
+    _premiumAreas?: Pick<PremiumCityAreas, 'resolve'>,
   ) {}
 
   async findBestDriver(
@@ -30,12 +31,14 @@ export class MatchingService {
   ): Promise<DriverCandidate[]> {
     await this.area.assertSupported([pickup]);
     const staleBefore = new Date(Date.now() - env.DRIVER_LOCATION_STALE_SECONDS * 1000);
+    const radii =
+      sector === 'premium' ? dispatchPolicy(sector).radiiMeters : env.MAP_DRIVER_RADII_METERS;
     let candidates =
       sector !== undefined || vehicleCategory !== undefined
         ? await this.drivers.findNearbyEligible(
             pickup.latitude,
             pickup.longitude,
-            env.MAP_DRIVER_RADII_METERS[0]!,
+            radii[0]!,
             env.MAX_DRIVER_MATCH_CANDIDATES,
             staleBefore,
             sector,
@@ -44,12 +47,12 @@ export class MatchingService {
         : await this.drivers.findNearbyEligible(
             pickup.latitude,
             pickup.longitude,
-            env.MAP_DRIVER_RADII_METERS[0]!,
+            radii[0]!,
             env.MAX_DRIVER_MATCH_CANDIDATES,
             staleBefore,
           );
 
-    for (const radius of env.MAP_DRIVER_RADII_METERS.slice(1)) {
+    for (const radius of radii.slice(1)) {
       if (candidates.length) break;
       candidates = await this.drivers.findNearbyEligible(
         pickup.latitude,
@@ -68,31 +71,23 @@ export class MatchingService {
   async findDispatchDrivers(ride: Ride, radiusMeters: number | null): Promise<DriverCandidate[]> {
     await this.area.assertSupported([ride.pickup]);
     const policy = dispatchPolicy(ride.sector ?? 'passenger', ride.vehicleCategory ?? '');
-    const city = policy.cityWide ? await this.premiumAreas.resolve(ride.pickup) : undefined;
+    if (policy.kind === 'premium') radiusMeters = policy.radiiMeters[0]!;
     const candidates = await this.drivers.findNearbyEligible(
       ride.pickup.latitude,
       ride.pickup.longitude,
       radiusMeters ?? 20000,
       env.MAX_DRIVER_MATCH_CANDIDATES,
       new Date(Date.now() - env.DRIVER_LOCATION_STALE_SECONDS * 1000),
-      ride.sector ?? 'passenger',
+      bookingInventorySector(ride.sector ?? 'passenger'),
       ride.vehicleCategory ?? undefined,
-      { rideId: ride.id, radiusMeters, ...(city ? { boundaryGeoJson: city.boundaryGeoJson } : {}) },
+      {
+        rideId: ride.id,
+        customerId: ride.customerId,
+        radiusMeters,
+      },
     );
     return this.rankCandidates(
-      [
-        ...new Map(
-          candidates.map((candidate) => [
-            candidate.driverProfileId,
-            {
-              ...candidate,
-              ...(city
-                ? { dispatchBoundaryGeoJson: city.boundaryGeoJson, dispatchCityId: city.cityId }
-                : {}),
-            },
-          ]),
-        ).values(),
-      ],
+      [...new Map(candidates.map((candidate) => [candidate.driverProfileId, candidate])).values()],
       ride.pickup,
       policy.rankByDistance,
     );

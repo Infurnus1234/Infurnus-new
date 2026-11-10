@@ -115,7 +115,7 @@ export class AdminManagementService {
       [adminId || null],
     );
     const result = await this.database.query(
-      `SELECT id,first_name AS "firstName",last_name AS "lastName",email,status,updated_at::text AS "updatedAt" FROM users WHERE role='admin' AND deleted_at IS NULL AND ($1::uuid IS NULL OR id=$1) ORDER BY created_at DESC,id LIMIT 25 OFFSET $2`,
+      `SELECT id,first_name AS "firstName",last_name AS "lastName",email,status,updated_at::text AS "updatedAt" FROM users WHERE role='admin' AND deleted_at IS NULL AND ($1::uuid IS NULL OR id=$1) ORDER BY created_at DESC,id DESC LIMIT 25 OFFSET $2`,
       [adminId || null, (page - 1) * 25],
     );
     const users = await Promise.all(

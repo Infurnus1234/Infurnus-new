@@ -15,6 +15,7 @@ export class FleetController {
 
   catalog = async (_req: Request, res: Response, next: NextFunction) => {
     try {
+      res.setHeader('Cache-Control', 'no-store');
       res.json({ success: true, data: await this.fleetService.catalog(_req.auth!.userId) });
     } catch (e) {
       next(e);

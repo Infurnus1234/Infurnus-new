@@ -1,17 +1,9 @@
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+import '../services/location_access.dart';
 
 class PermissionService {
-  Future<void> requestStartupLocation() async {
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
-    const storage = FlutterSecureStorage();
-    if (await storage.read(key: 'startup_location_requested') == 'true') return;
-    await storage.write(key: 'startup_location_requested', value: 'true');
-    await requestLocationPermission();
-  }
-
   Future<bool> _request(Permission permission) async {
     final current = await permission.status;
     if (current.isGranted) return true;
@@ -20,7 +12,8 @@ class PermissionService {
   }
 
   Future<bool> requestLocationPermission() async {
-    return _request(Permission.locationWhenInUse);
+    final issue = await locationAccess.check(retry: true);
+    return issue == null;
   }
 
   Future<bool> requestNotificationPermission() async {

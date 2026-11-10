@@ -1,3 +1,4 @@
+import { assignFirstOwnerVehicle } from './default-owner-vehicle.js';
 import { FleetFinancialReportRepository } from './fleet-financial-report.repository.js';
 import type { Pool, PoolClient } from 'pg';
 import { createHash, randomBytes } from 'node:crypto';
@@ -39,6 +40,7 @@ export class RoleEnrolmentRepository {
   ) {
     return this.transaction(async (c) => {
       await this.actor(c, id, role);
+      if (role === 'driver_fleet_owner') await assignFirstOwnerVehicle(c, id);
       await c.query(
         'INSERT INTO provider_onboarding(user_id,role_flow_active) VALUES($1,TRUE) ON CONFLICT(user_id) DO UPDATE SET role_flow_active=TRUE WHERE NOT provider_onboarding.role_flow_active',
         [id],
@@ -194,6 +196,28 @@ export class RoleEnrolmentRepository {
       return role;
     });
   }
+  async upgradeCapabilities(id: string, currentRole: string) {
+    return this.transaction(async (c) => {
+      await c.query('SELECT id FROM users WHERE id=$1 FOR UPDATE', [id]);
+      await this.actor(c, id, currentRole);
+      if (!roles.includes(currentRole))
+        throw new AppError('FORBIDDEN', 'Provider account required', 403);
+      const existing = await c.query('SELECT provider_public_id($1) AS "publicId"', [id]);
+      if (!existing.rows[0]?.publicId)
+        throw new AppError(
+          'PROVIDER_IDENTITY_RECONCILIATION_REQUIRED',
+          'Resolve your public identity before upgrading',
+          409,
+        );
+      // The existing contact and external-identity constraints also prevent a conflicting upgrade.
+      await c.query("UPDATE users SET role='driver_fleet_owner' WHERE id=$1", [id]);
+      await c.query(
+        "INSERT INTO provider_identity_audit(event,account_id,actor_id,details) VALUES('capabilities_upgraded',$1,$1,jsonb_build_object('from',$2::text,'to','driver_fleet_owner'))",
+        [id, currentRole],
+      );
+      return { role: 'driver_fleet_owner' as const, publicId: existing.rows[0].publicId as string };
+    });
+  }
   async fleetReport(id: string, role: string, month: string) {
     return new FleetFinancialReportRepository(this.pool).report(id, role, month);
   }
@@ -210,7 +234,7 @@ export class RoleEnrolmentRepository {
       ).rows;
     });
   }
-  async addDriver(owner: string, role: string, email: string, driverUserId?: string) {
+  async addDriver(owner: string, role: string, contact: string, driverUserId?: string) {
     return this.transaction(async (c) => {
       await this.actor(c, owner, role);
       if (!['fleet_owner', 'driver_fleet_owner'].includes(role))
@@ -229,8 +253,12 @@ export class RoleEnrolmentRepository {
         );
       const matches = (
         await c.query(
-          "SELECT id,role FROM users WHERE LOWER(email)=LOWER($1) AND role IN ('driver','driver_fleet_owner') AND status='active' AND deleted_at IS NULL AND ($2::uuid IS NULL OR id=$2) FOR SHARE",
-          [email, driverUserId ?? null],
+          "SELECT id,role FROM users WHERE (($1::text IS NOT NULL AND LOWER(email)=LOWER($1)) OR ($3::text IS NOT NULL AND ltrim(btrim(phone),'+')=ltrim($3,'+'))) AND role IN ('driver','driver_fleet_owner') AND status='active' AND deleted_at IS NULL AND ($2::uuid IS NULL OR id=$2) FOR SHARE",
+          [
+            contact.includes('@') ? contact : null,
+            driverUserId ?? null,
+            contact.includes('@') ? null : contact,
+          ],
         )
       ).rows;
       if (matches.length > 1)

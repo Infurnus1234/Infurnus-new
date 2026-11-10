@@ -16,7 +16,7 @@ class CurrencyFormatter {
     decimalDigits: 2,
   );
 
-  /// Formats a rupee amount with Indian numbering system: e.g. ₹1,23,456.78
+  /// Formats a rupee amount with Indian numbering system: e.g. ₹1,500.00
   static String format(num? amount, {bool showSymbol = true}) {
     if (amount == null || amount.isNaN) {
       return showSymbol ? '₹0.00' : '0.00';
@@ -45,4 +45,10 @@ class CurrencyFormatter {
     if (paise == null || paise <= 0) return 0.0;
     return paise / 100.0;
   }
+}
+
+/// Presentation only: finalized backend integers lose redundant decimals.
+/// Fractional historical records/components retain their actual value.
+extension RupeeDisplay on num {
+  String get rupeeText => toStringAsFixed(this == truncateToDouble() ? 0 : 2);
 }

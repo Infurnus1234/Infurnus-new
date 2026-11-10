@@ -1,3 +1,5 @@
+import 'package:infurnus/core/utils/currency_formatter.dart';
+
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -5,10 +7,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/services/location_service.dart';
 import '../../../../shared/widgets/route_distance_summary.dart';
+import '../../../../shared/widgets/vehicle_visual_image.dart';
 import '../../../../core/services/geocoding_service.dart';
 import '../../../../core/services/places_autocomplete_service.dart';
 import '../../../../shared/widgets/infurnus_button.dart';
@@ -18,9 +20,12 @@ import '../../data/models/fleet_vehicle_model.dart';
 import '../../data/models/ride_model.dart' as model;
 import '../providers/ride_provider.dart';
 import '../widgets/fare_range_details.dart';
+import '../widgets/ride_contact_action.dart';
+import '../widgets/assigned_driver_summary.dart';
 import '../widgets/waiting_timer_widget.dart';
 import '../providers/ride_use_case_providers.dart';
-import '../../domain/utils/passenger_vehicle_filter.dart';
+import '../../domain/utils/vehicle_visibility.dart';
+import '../widgets/vehicle_presentation_catalog.dart';
 
 // Top-level color constants (shared between _RideBookingScreenState and sub-widgets)
 const Color _kCardElevated = Color(0xFFFFFFFF);
@@ -71,8 +76,13 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
   bool _isSubmittingBooking = false;
   // ignore: unused_field
   bool _isLoadingFleet = true;
+  String? _catalogError;
   List<FleetVehicleModel> _fleetVehicles = [];
   CancelToken _fleetCancelToken = CancelToken();
+  int _pickupSelectionGeneration = 0;
+  int _destinationSelectionGeneration = 0;
+
+  int _durationFieldRevision = 0;
 
   @override
   void initState() {
@@ -83,7 +93,6 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
     _destinationController.text = rideState.destination ?? '';
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _detectCurrentLocation(preserveSelection: true);
       _fetchFleet(rideState.selectedSector);
       if (rideState.pickupCoords != null &&
           rideState.destinationCoords != null) {
@@ -92,75 +101,45 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
     });
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed || !mounted) return;
-    final rideId = ref.read(rideProvider).currentRide?.id;
-    if (rideId != null) {
-      unawaited(ref.read(rideProvider.notifier).getRideDetails(rideId));
-    }
-  }
-
   Future<void> _fetchFleet(String sector) async {
     _fleetCancelToken.cancel();
     _fleetCancelToken = CancelToken();
     final cancelToken = _fleetCancelToken;
-    if (mounted) setState(() => _isLoadingFleet = true);
+    if (mounted) {
+      setState(() {
+        _isLoadingFleet = true;
+        _catalogError = null;
+        _fleetVehicles = [];
+      });
+    }
     try {
       final rawFleet = await ref
           .read(getFleetUseCaseProvider)
           .call(sector: sector);
       if (cancelToken.isCancelled) return;
-      final fleet = sector == 'passenger'
-          ? rawFleet
-                .where(
-                  (v) => !isExcludedPassengerVehicle(v.category, v.displayName),
-                )
-                .toList()
-          : rawFleet;
+      final fleet = rawFleet
+          .where(
+            (v) => isCustomerVehicleVisible(sector, v.category, v.displayName),
+          )
+          .toList();
       if (mounted) {
         setState(() {
           _fleetVehicles = fleet;
           _isLoadingFleet = false;
         });
-        final rideState = ref.read(rideProvider);
-        if (rideState.selectedTier.isEmpty) {
-          final nextTier = fleet.isNotEmpty
-              ? fleet.first.category
-              : (_getVehiclesForSector(sector).isNotEmpty
-                    ? _getVehiclesForSector(sector).first['category'] as String
-                    : 'hatchback');
-          ref.read(rideProvider.notifier).selectTier(nextTier);
-        }
       }
     } on DioException catch (e) {
       if (e.type == DioExceptionType.cancel) return;
       if (mounted) {
         setState(() => _isLoadingFleet = false);
-        debugPrint('Fleet fetch fallback to catalog: $e');
-        final rideState = ref.read(rideProvider);
-        if (rideState.selectedTier.isEmpty) {
-          final catalog = _getVehiclesForSector(sector);
-          if (catalog.isNotEmpty) {
-            ref
-                .read(rideProvider.notifier)
-                .selectTier(catalog.first['category'] as String);
-          }
-        }
+        _catalogError =
+            'Unable to load configured vehicles. Tap Select to retry.';
       }
     } catch (error) {
       if (mounted) {
         setState(() => _isLoadingFleet = false);
-        debugPrint('Fleet fetch fallback to catalog: $error');
-        final rideState = ref.read(rideProvider);
-        if (rideState.selectedTier.isEmpty) {
-          final catalog = _getVehiclesForSector(sector);
-          if (catalog.isNotEmpty) {
-            ref
-                .read(rideProvider.notifier)
-                .selectTier(catalog.first['category'] as String);
-          }
-        }
+        _catalogError =
+            'Unable to load configured vehicles. Tap Select to retry.';
       }
     }
   }
@@ -177,9 +156,11 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
     previousToken?.cancel();
 
     if (isPickup) {
+      _pickupSelectionGeneration++;
       _pickupSearchError = null;
       ref.read(rideProvider.notifier).updatePickupAddress(query);
     } else {
+      _destinationSelectionGeneration++;
       _destinationSearchError = null;
       ref.read(rideProvider.notifier).updateDestinationAddress(query);
     }
@@ -262,6 +243,9 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
     PlaceSuggestion suggestion, {
     required bool isPickup,
   }) async {
+    final selectionGeneration = isPickup
+        ? ++_pickupSelectionGeneration
+        : ++_destinationSelectionGeneration;
     final controller = isPickup ? _pickupController : _destinationController;
     final selectedQuery = controller.text;
     LatLng? resolved;
@@ -291,6 +275,12 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
       return;
     }
 
+    if (selectionGeneration !=
+        (isPickup
+            ? _pickupSelectionGeneration
+            : _destinationSelectionGeneration)) {
+      return;
+    }
     final timer = isPickup
         ? _pickupAutocompleteTimer
         : _destinationAutocompleteTimer;
@@ -393,20 +383,16 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
     );
   }
 
-  Future<void> _detectCurrentLocation({bool preserveSelection = false}) async {
+  Future<void> _detectCurrentLocation() async {
+    final generation = ++_pickupSelectionGeneration;
     try {
-      final currentPickup = _pickupController.text.trim();
-      if (preserveSelection &&
-          currentPickup.isNotEmpty &&
-          currentPickup.toLowerCase() != 'current location') {
-        return;
-      }
-      final pos = await ref.read(locationServiceProvider).getCurrentPosition();
-      if (pos != null && mounted) {
-        if (preserveSelection &&
-            _pickupController.text.trim() != currentPickup) {
-          return;
-        }
+      final pos = await ref
+          .read(locationServiceProvider)
+          .getCurrentPosition(retry: true);
+      if (pos != null && mounted && generation == _pickupSelectionGeneration) {
+        ref
+            .read(rideProvider.notifier)
+            .recordCurrentGps(LatLng(pos.latitude, pos.longitude));
         _pickupController.text = 'Current Location';
         ref
             .read(rideProvider.notifier)
@@ -420,9 +406,14 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
   }
 
   Future<void> _reverseGeocodePickup(LatLng coordinates) async {
-    final address = await ref
-        .read(geocodingServiceProvider)
-        .reverseGeocode(coordinates);
+    String? address;
+    try {
+      address = await ref
+          .read(geocodingServiceProvider)
+          .reverseGeocode(coordinates);
+    } catch (_) {
+      return;
+    }
     if (!mounted || address == null) return;
 
     final pickupCoords = ref.read(rideProvider).pickupCoords;
@@ -457,11 +448,12 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
     if (_isSubmittingBooking) return;
 
     final initialRideState = ref.read(rideProvider);
+    if (_isLoadingFleet) return;
     if (_isUnsupportedVehicle(initialRideState)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Bike, Auto, and E-Rickshaw are not available. Please select a valid passenger vehicle.',
+            'Choose an enabled vehicle from the current service catalog.',
           ),
           backgroundColor: serviceRed,
         ),
@@ -527,6 +519,11 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
   }
 
   String _getFuelNoticeText(RideState state) {
+    if (state.fareEstimate?.vehicleTypeId != null) {
+      return state.rentalDetails?['tripType'] == 'one_way'
+          ? 'One-way distance is included in this fare.'
+          : 'Round-trip distance is included in this fare.';
+    }
     final rentalFuelRate = state.rentalDetails?['fuelRatePerKm'] as num?;
     if (rentalFuelRate != null && rentalFuelRate > 0) {
       return 'Actual distance fuel billed separately @ ₹${rentalFuelRate.toStringAsFixed(0)}/km';
@@ -566,7 +563,9 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                     isService
                         ? 'Trip-Based Service Breakdown'
                         : (isPremium
-                              ? 'Premium Standby Estimate'
+                              ? (estimate?.vehicleTypeId != null
+                                    ? 'Itemized Fare Breakdown'
+                                    : 'Premium Standby Estimate')
                               : 'Itemized Fare Breakdown'),
                     style: const TextStyle(
                       fontSize: 18,
@@ -588,95 +587,95 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
               ] else if (isService) ...[
                 _buildBreakdownRow(
                   'Base Mobilization / Dispatch',
-                  '₹${estimate.baseAmount.toStringAsFixed(2)}',
+                  '₹${estimate.baseAmount.rupeeText}',
                 ),
                 const SizedBox(height: 8),
                 _buildBreakdownRow(
                   'Service & Transit Charge (${estimate.distanceKm.toStringAsFixed(1)} km)',
-                  '₹${estimate.distanceAmount.toStringAsFixed(2)}',
+                  '₹${estimate.distanceAmount.rupeeText}',
                 ),
                 if ((estimate.taxAmount ?? 0) > 0) ...[
                   const SizedBox(height: 8),
                   _buildBreakdownRow(
                     'Taxes & Regulatory Fees (5% GST)',
-                    '₹${estimate.taxAmount!.toStringAsFixed(2)}',
+                    '₹${estimate.taxAmount!.rupeeText}',
                   ),
                 ],
               ] else if (isPremium) ...[
                 _buildBreakdownRow(
                   'Chauffeur Standby Package Base',
-                  '₹${estimate.baseAmount.toStringAsFixed(2)}',
+                  '₹${estimate.baseAmount.rupeeText}',
                 ),
                 const SizedBox(height: 8),
                 _buildBreakdownRow(
                   'Standby Duration Charge (~${estimate.durationMinutes} mins)',
-                  '₹${estimate.timeAmount.toStringAsFixed(2)}',
+                  '₹${estimate.timeAmount.rupeeText}',
                 ),
                 if ((estimate.taxAmount ?? 0) > 0) ...[
                   const SizedBox(height: 8),
                   _buildBreakdownRow(
                     'Taxes & Regulatory Fees (5% GST)',
-                    '₹${estimate.taxAmount!.toStringAsFixed(2)}',
+                    '₹${estimate.taxAmount!.rupeeText}',
                   ),
                 ],
               ] else if (isLogistics) ...[
                 _buildBreakdownRow(
                   'Base Logistics Charge',
-                  '₹${estimate.baseAmount.toStringAsFixed(2)}',
+                  '₹${estimate.baseAmount.rupeeText}',
                 ),
                 const SizedBox(height: 8),
                 _buildBreakdownRow(
                   'Distance Charge (${estimate.distanceKm.toStringAsFixed(1)} km)',
-                  '₹${estimate.distanceAmount.toStringAsFixed(2)}',
+                  '₹${estimate.distanceAmount.rupeeText}',
                 ),
                 if ((estimate.weightAmount ?? 0) > 0) ...[
                   const SizedBox(height: 8),
                   _buildBreakdownRow(
                     'Weight Surcharge',
-                    '₹${estimate.weightAmount!.toStringAsFixed(2)}',
+                    '₹${estimate.weightAmount!.rupeeText}',
                   ),
                 ],
                 if ((estimate.loadingAmount ?? 0) > 0) ...[
                   const SizedBox(height: 8),
                   _buildBreakdownRow(
                     'Loading/Unloading Helper',
-                    '₹${estimate.loadingAmount!.toStringAsFixed(2)}',
+                    '₹${estimate.loadingAmount!.rupeeText}',
                   ),
                 ],
                 if ((estimate.taxAmount ?? 0) > 0) ...[
                   const SizedBox(height: 8),
                   _buildBreakdownRow(
                     'Taxes & Regulatory Fees (5% GST)',
-                    '₹${estimate.taxAmount!.toStringAsFixed(2)}',
+                    '₹${estimate.taxAmount!.rupeeText}',
                   ),
                 ],
               ] else ...[
                 _buildBreakdownRow(
                   'Base Fare',
-                  '₹${estimate.baseAmount.toStringAsFixed(2)}',
+                  '₹${estimate.baseAmount.rupeeText}',
                 ),
                 const SizedBox(height: 8),
                 _buildBreakdownRow(
                   'Distance Charge (${estimate.distanceKm.toStringAsFixed(1)} km)',
-                  '₹${estimate.distanceAmount.toStringAsFixed(2)}',
+                  '₹${estimate.distanceAmount.rupeeText}',
                 ),
                 const SizedBox(height: 8),
                 _buildBreakdownRow(
                   'Time Charge (~${estimate.durationMinutes} mins)',
-                  '₹${estimate.timeAmount.toStringAsFixed(2)}',
+                  '₹${estimate.timeAmount.rupeeText}',
                 ),
                 if ((estimate.waitingAmount ?? 0) > 0) ...[
                   const SizedBox(height: 8),
                   _buildBreakdownRow(
                     'Waiting Charge (>3 min)',
-                    '₹${estimate.waitingAmount!.toStringAsFixed(2)}',
+                    '₹${estimate.waitingAmount!.rupeeText}',
                   ),
                 ],
                 if ((estimate.taxAmount ?? 0) > 0) ...[
                   const SizedBox(height: 8),
                   _buildBreakdownRow(
                     'Taxes & Regulatory Fees (5% GST)',
-                    '₹${estimate.taxAmount!.toStringAsFixed(2)}',
+                    '₹${estimate.taxAmount!.rupeeText}',
                   ),
                 ],
               ],
@@ -801,6 +800,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
           children: [
             // 1. Google Map
             InfurnusMap(
+              rideStatus: rideState.currentRide?.status.name,
               bottomOverlayHeight: constraints.maxHeight * .55,
               pickup: pickupLatLng,
               destination: destinationLatLng,
@@ -1011,6 +1011,26 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
   }
 
   Widget _buildPanelContent(RideState rideState) {
+    final panel = _buildRidePhaseContent(rideState);
+    if (rideState.status == RideStatus.matched ||
+        rideState.currentRide?.bookingId == null) {
+      return panel;
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Booking ID: ${rideState.currentRide!.bookingId}',
+          style: const TextStyle(color: textGray, fontSize: 12),
+        ),
+        const SizedBox(height: 12),
+        panel,
+      ],
+    );
+  }
+
+  Widget _buildRidePhaseContent(RideState rideState) {
     switch (rideState.status) {
       case RideStatus.initial:
       case RideStatus.error:
@@ -1070,6 +1090,111 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
         const SizedBox(height: 14),
 
         // Sector-specific options
+        if (state.selectedSector == 'premium') ...[
+          DropdownButtonFormField<String>(
+            isExpanded: true,
+            itemHeight: null,
+            initialValue:
+                state.rentalDetails?['tripType'] as String? ?? 'round_trip',
+            decoration: const InputDecoration(labelText: 'Journey type'),
+            items: const [
+              DropdownMenuItem(value: 'one_way', child: Text('One-way')),
+              DropdownMenuItem(value: 'round_trip', child: Text('Round trip')),
+            ],
+            onChanged: (tripType) {
+              if (tripType != null) {
+                ref.read(rideProvider.notifier).setRentalDetails({
+                  ...?state.rentalDetails,
+                  'tripType': tripType,
+                });
+              }
+            },
+          ),
+          const SizedBox(height: 12),
+        ],
+        if (['premium', 'rental'].contains(state.selectedSector)) ...[
+          DropdownButtonFormField<int>(
+            isExpanded: true,
+            itemHeight: null,
+            key: ValueKey(
+              'duration:${state.selectedSector}:${state.rentalDetails?['hours']}:$_durationFieldRevision',
+            ),
+            initialValue:
+                state.selectedSector == 'rental' &&
+                    ((state.rentalDetails?['hours'] as num?) ?? 1) > 12
+                ? 13
+                : (state.rentalDetails?['hours'] as num?)?.toInt() ??
+                      (state.selectedTier == 'thar' ? 6 : 1),
+            decoration: const InputDecoration(labelText: 'Booking duration'),
+            items: [
+              for (final hours in List.generate(
+                state.selectedSector == 'premium' ? 24 : 13,
+                (index) => index + 1,
+              ))
+                DropdownMenuItem(
+                  value: hours,
+                  child: Text(
+                    hours == 13 && state.selectedSector == 'rental'
+                        ? '12+ Hours${((state.rentalDetails?['hours'] as num?) ?? 1) > 12 ? ' (${state.rentalDetails?['hours']} hours)' : ''}'
+                        : '$hours hours',
+                  ),
+                ),
+            ],
+            onChanged: (hours) async {
+              if (hours == 13 && state.selectedSector == 'rental') {
+                final form = GlobalKey<FormState>();
+                int? extendedHours;
+                hours = await showDialog<int>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Rental duration'),
+                    content: Form(
+                      key: form,
+                      child: TextFormField(
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Hours (13 or more)',
+                        ),
+                        validator: (value) {
+                          final parsed = int.tryParse(value?.trim() ?? '');
+                          return parsed == null || parsed < 13
+                              ? 'Enter a whole number of at least 13 hours'
+                              : null;
+                        },
+                        onSaved: (value) =>
+                            extendedHours = int.parse(value!.trim()),
+                      ),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          if (!form.currentState!.validate()) return;
+                          form.currentState!.save();
+                          Navigator.of(context).pop(extendedHours);
+                        },
+                        child: const Text('Apply'),
+                      ),
+                    ],
+                  ),
+                );
+                if (hours == null && mounted) {
+                  setState(() => _durationFieldRevision++);
+                }
+              }
+              if (hours != null && mounted) {
+                ref.read(rideProvider.notifier).setRentalDetails({
+                  ...?state.rentalDetails,
+                  'hours': hours,
+                });
+              }
+            },
+          ),
+          const SizedBox(height: 12),
+        ],
         if (state.selectedSector == 'service') ...[
           Container(
             padding: const EdgeInsets.all(12),
@@ -1085,12 +1210,14 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                   children: [
                     Icon(Icons.emergency_rounded, color: serviceRed, size: 18),
                     SizedBox(width: 8),
-                    Text(
-                      'Emergency & Special Dispatch',
-                      style: TextStyle(
-                        color: serviceRed,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
+                    Expanded(
+                      child: Text(
+                        'Emergency & Special Dispatch',
+                        style: TextStyle(
+                          color: serviceRed,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
                   ],
@@ -1138,9 +1265,13 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Chauffeur Standby Package',
-                        style: TextStyle(
+                      Text(
+                        state.fareEstimate?.vehicleTypeId != null
+                            ? (state.rentalDetails?['tripType'] == 'one_way'
+                                  ? 'One-way booking'
+                                  : 'Round-trip booking')
+                            : 'Chauffeur Standby Package',
+                        style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
                           color: goldAccent,
@@ -1248,7 +1379,9 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
         const SizedBox(height: 16),
 
         // Payment Method & Coupon Row
-        Row(
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
           children: [
             // Interactive Payment method selector
             GestureDetector(
@@ -1264,6 +1397,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                   border: Border.all(color: const Color(0xFFE5E7EB)),
                 ),
                 child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
                       _getPaymentMethodIcon(_selectedPaymentMethod),
@@ -1271,12 +1405,14 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                       color: _getPaymentMethodColor(_selectedPaymentMethod),
                     ),
                     const SizedBox(width: 6),
-                    Text(
-                      _getPaymentMethodLabel(_selectedPaymentMethod),
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF111827),
+                    Flexible(
+                      child: Text(
+                        _getPaymentMethodLabel(_selectedPaymentMethod),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF111827),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 4),
@@ -1299,6 +1435,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                 border: Border.all(color: const Color(0xFFE5E7EB)),
               ),
               child: const Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
                     Icons.local_offer_outlined,
@@ -1306,12 +1443,14 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                     color: Color(0xFF16A34A),
                   ),
                   SizedBox(width: 6),
-                  Text(
-                    'Apply Coupon',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF111827),
+                  Flexible(
+                    child: Text(
+                      'Apply Coupon',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF111827),
+                      ),
                     ),
                   ),
                 ],
@@ -1451,183 +1590,45 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
     );
   }
 
-  bool _isTierMatching(String selectedTier, String category, int index) {
-    if (selectedTier.isEmpty) return index == 0;
-    final s = selectedTier.toLowerCase().trim();
-    final c = category.toLowerCase().trim();
-    if (s == c) return true;
-    if (s == 'innova crysta' && c == 'innova') return true;
-    if (s == 'force traveller' &&
-        (c == 'traveller' || c == 'force_traveller')) {
-      return true;
-    }
-    if ((s == '207 cargo' || s == '207 heavy' || s == 'cargo_207_heavy') &&
-        (c == 'cargo_207' || c == 'cargo_207_heavy')) {
-      return true;
-    }
-    if ((s == '407 cargo' || s == 'tata_407') &&
-        (c == 'cargo_407' || c == 'tata_407')) {
-      return true;
-    }
-    if ((s == 'piaggio ape' || s == 'three_wheeler') &&
-        (c == 'piaggio_ape' || c == 'three_wheeler')) {
-      return true;
-    }
-    if ((s == 'tata magic' || s == 'mini_truck') &&
-        (c == 'tata_magic' || c == 'mini_truck')) {
-      return true;
-    }
-    return false;
-  }
+  bool _isTierMatching(String selectedTier, String category, int index) =>
+      selectedTier == category;
 
-  List<Map<String, dynamic>> _getVehiclesForSector(String sector) {
-    switch (sector.toLowerCase()) {
-      case 'logistics':
-        return [
-          {
-            'name': '3-Wheeler (Goods)',
-            'category': 'piaggio_ape',
-            'capacity': 'Up to 500 kg',
-            'icon': Icons.electric_rickshaw_rounded,
-            'image': 'assets/images/piaggio_ape_yellow.png',
-          },
-          {
-            'name': 'Tata Magic',
-            'category': 'tata_magic',
-            'capacity': 'Up to 750 kg',
-            'icon': Icons.local_shipping_rounded,
-            'image': 'assets/images/tata_magic_cream.png',
-          },
-          {
-            'name': '207 Cargo',
-            'category': 'cargo_207',
-            'capacity': 'Up to 1500 kg',
-            'icon': Icons.local_shipping_rounded,
-            'image': 'assets/images/cargo_207_heavy.png',
-          },
-          {
-            'name': '407 Cargo',
-            'category': 'cargo_407',
-            'capacity': 'Up to 2500 kg',
-            'icon': Icons.local_shipping_rounded,
-            'image': 'assets/images/tata_407_beige.png',
-          },
-        ];
-      case 'service':
-        return [
-          {
-            'name': 'Ambulance',
-            'category': 'ambulance',
-            'capacity': 'Emergency',
-            'icon': Icons.medical_services_rounded,
-            'image': 'assets/images/ambulance_van.png',
-          },
-          {
-            'name': 'Towing Van',
-            'category': 'towing',
-            'capacity': 'Breakdown',
-            'icon': Icons.car_repair_rounded,
-            'image': 'assets/images/towing_van.jpg',
-          },
-          {
-            'name': 'JCB Excavator',
-            'category': 'jcb',
-            'capacity': 'Construction',
-            'icon': Icons.construction_rounded,
-            'image': 'assets/images/jcb_excavator.jpg',
-          },
-          {
-            'name': 'Crane',
-            'category': 'crane',
-            'capacity': 'Heavy Lift',
-            'icon': Icons.precision_manufacturing_rounded,
-            'image': 'assets/images/crane_truck.png',
-          },
-        ];
-      case 'premium':
-      case 'rental':
-      case 'rentals':
-        return [
-          {
-            'name': 'Scorpio N',
-            'category': 'scorpio',
-            'capacity': 'Rugged SUV',
-            'icon': Icons.directions_car_filled_rounded,
-            'image': 'assets/images/scorpio_n_white.png',
-          },
-          {
-            'name': 'Mahindra Thar',
-            'category': 'thar',
-            'capacity': 'Off-road 4x4',
-            'icon': Icons.terrain_rounded,
-            'image': 'assets/images/thar_visual.webp',
-          },
-          {
-            'name': 'Innova Crysta',
-            'category': 'innova',
-            'capacity': 'Executive 7S',
-            'icon': Icons.airport_shuttle_rounded,
-            'image': 'assets/images/innova_crysta.jpg',
-          },
-          {
-            'name': 'Force Urbania',
-            'category': 'traveller',
-            'capacity': 'Executive Van',
-            'icon': Icons.airport_shuttle_rounded,
-            'image': 'assets/images/force_urbania.jpg',
-          },
-        ];
-      case 'passenger':
-      default:
-        return [
-          {
-            'name': 'Hatchback',
-            'category': 'hatchback',
-            'capacity': '4 seats',
-            'icon': Icons.directions_car_rounded,
-            'image': 'assets/images/hatchback.jpg',
-          },
-          {
-            'name': 'Sedan',
-            'category': 'sedan',
-            'capacity': '4 seats',
-            'icon': Icons.directions_car_rounded,
-            'image': 'assets/images/sedan.jpg',
-          },
-          {
-            'name': 'Innova Crysta',
-            'category': 'innova',
-            'capacity': '6-7 seats',
-            'icon': Icons.directions_car_filled_rounded,
-            'image': 'assets/images/innova_crysta.jpg',
-          },
-          {
-            'name': 'Winger',
-            'category': 'winger',
-            'capacity': '9-12 seats',
-            'icon': Icons.directions_bus_rounded,
-            'image': 'assets/images/winger_tata.jpg',
-          },
-          {
-            'name': 'Force Traveller',
-            'category': 'traveller',
-            'capacity': '12 seats',
-            'icon': Icons.airport_shuttle_rounded,
-            'image': 'assets/images/force_urbania.jpg',
-          },
-        ];
-    }
-  }
+  List<Map<String, dynamic>> _getVehiclesForSector(String sector) =>
+      customerVehiclePresentation(sector, _fleetVehicles)
+          .map(
+            (item) => <String, dynamic>{
+              ...item,
+              'icon': VehicleVisualImage.getFallbackIcon(
+                item['name'],
+                item['category'],
+              ),
+            },
+          )
+          .toList();
 
-  bool _isUnsupportedVehicle(RideState state) {
-    if (state.selectedSector != 'passenger' &&
-        state.selectedSector.isNotEmpty) {
-      return false;
-    }
-    return isExcludedPassengerVehicle(state.selectedTier);
-  }
+  bool _isUnsupportedVehicle(RideState state) =>
+      _isLoadingFleet ||
+      _catalogError != null ||
+      !_fleetVehicles.any(
+        (vehicle) =>
+            vehicle.catalogVisible &&
+            vehicle.sector == state.selectedSector &&
+            vehicle.category == state.selectedTier,
+      );
 
-  void _showVehicleSelectionBottomSheet(RideState state) {
+  Future<void> _showVehicleSelectionBottomSheet(RideState state) async {
+    if (state.selectedSector == 'passenger' && _catalogError != null) {
+      await _fetchFleet(state.selectedSector);
+    }
+    if (!mounted) return;
+    if (state.selectedSector == 'passenger' && _isLoadingFleet) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Loading configured vehicles. Please try again.'),
+        ),
+      );
+      return;
+    }
     final vehicles = _getVehiclesForSector(state.selectedSector);
     showModalBottomSheet(
       context: context,
@@ -1673,6 +1674,13 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                   ],
                 ),
                 const SizedBox(height: 8),
+                if (vehicles.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      _catalogError ?? 'No enabled vehicles with configured pricing are available for this service.',
+                    ),
+                  ),
                 ConstrainedBox(
                   constraints: BoxConstraints(
                     maxHeight: MediaQuery.of(context).size.height * 0.5,
@@ -1780,6 +1788,34 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
 
   /// Compact chip showing which vehicle/service the customer already selected
   /// on the dashboard — no sector tabs, no full catalogue repeated here.
+  Map<String, dynamic> _selectedVehicleData(RideState state) {
+    final historical = _getVehiclesForSector(state.selectedSector)
+        .where((v) => v['category'] == state.selectedTier)
+        .firstOrNull;
+    if (historical != null) return historical;
+    final configured = _fleetVehicles
+        .where(
+          (v) =>
+              v.sector == state.selectedSector &&
+              v.category == state.selectedTier,
+        )
+        .firstOrNull;
+    if (configured == null) return {};
+    return {
+      'name': configured.displayName,
+      'category': configured.category,
+      'capacity': 'Availability checked near pickup',
+      'icon': VehicleVisualImage.getFallbackIcon(
+        configured.displayName,
+        configured.category,
+      ),
+      'image': VehicleVisualImage.getAssetPath(
+        configured.displayName,
+        configured.category,
+      ),
+    };
+  }
+
   Widget _buildSelectedVehicleChip(RideState state) {
     if (_isUnsupportedVehicle(state)) {
       return InkWell(
@@ -1816,7 +1852,8 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                       ),
                     ),
                     Text(
-                      'Bike, Auto & E-Rickshaw are excluded. Tap to choose a cab.',
+                      _catalogError ??
+                          'Choose an enabled vehicle for this service.',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.red.shade700,
@@ -1849,20 +1886,16 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
       );
     }
 
-    final vehicles = _getVehiclesForSector(state.selectedSector);
-    final selected = vehicles.firstWhere(
-      (v) => _isTierMatching(state.selectedTier, v['category'] as String, 0),
-      orElse: () => vehicles.isNotEmpty ? vehicles.first : <String, dynamic>{},
-    );
-
+    final selected = _selectedVehicleData(state);
     if (selected.isEmpty) return const SizedBox.shrink();
 
     final sectorLabel =
         {
           'passenger': 'Rides',
+          'rental': 'Rental',
           'logistics': 'Logistics',
           'service': 'Emergency',
-          'premium': 'Rentals',
+          'premium': 'Premium',
         }[state.selectedSector] ??
         'Ride';
 
@@ -1918,12 +1951,14 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                 children: [
                   Row(
                     children: [
-                      Text(
-                        selected['name'] as String,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF111827),
+                      Expanded(
+                        child: Text(
+                          selected['name'] as String,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF111827),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 6),
@@ -1945,34 +1980,39 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                 ],
               ),
             ),
-            // Fare / capacity badge
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: state.fareEstimate != null
-                    ? const Color(0xFF16A34A)
-                    : const Color(0xFFE5E7EB),
-                borderRadius: BorderRadius.circular(20),
+            Flexible(
+              child: // Fare / capacity badge
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: state.fareEstimate != null
+                      ? const Color(0xFF16A34A)
+                      : const Color(0xFFE5E7EB),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: state.isEstimatingFare
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFF16A34A),
+                        ),
+                      )
+                    : Text(
+                        fareBadge,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: state.fareEstimate != null
+                              ? Colors.white
+                              : const Color(0xFF374151),
+                        ),
+                      ),
               ),
-              child: state.isEstimatingFare
-                  ? const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Color(0xFF16A34A),
-                      ),
-                    )
-                  : Text(
-                      fareBadge,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: state.fareEstimate != null
-                            ? Colors.white
-                            : const Color(0xFF374151),
-                      ),
-                    ),
             ),
           ],
         ),
@@ -1981,6 +2021,12 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
   }
 
   Widget _buildConfirmButton(RideState state) {
+    if (_isLoadingFleet) {
+      return const SizedBox(
+        height: 52,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
     if (_isUnsupportedVehicle(state)) {
       return SizedBox(
         width: double.infinity,
@@ -1995,9 +2041,11 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
             ),
           ),
           icon: const Icon(Icons.directions_car_rounded, size: 20),
-          label: const Text(
-            'Select a Valid Passenger Vehicle',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+          label: Text(
+            state.selectedSector == 'passenger'
+                ? 'Select a Valid Passenger Vehicle'
+                : 'Select a Vehicle',
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
           ),
           onPressed: () => _showVehicleSelectionBottomSheet(state),
         ),
@@ -2010,12 +2058,8 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
         _pickupController.text.trim().isNotEmpty &&
         _destinationController.text.trim().isNotEmpty;
 
-    final vehicles = _getVehiclesForSector(state.selectedSector);
-    final selectedVehicle = vehicles.firstWhere(
-      (v) => v['category'] == state.selectedTier,
-      orElse: () => vehicles.isNotEmpty ? vehicles.first : {'name': 'Ride'},
-    );
-    final vehicleName = selectedVehicle['name'] as String;
+    final selectedVehicle = _selectedVehicleData(state);
+    final vehicleName = selectedVehicle['name'] as String? ?? 'Ride';
 
     if (!hasLocations) {
       return SizedBox(
@@ -2104,7 +2148,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
 
     final fareText =
         state.fareEstimate?.displayFare ??
-        (state.fare != null ? '₹${state.fare!.toStringAsFixed(2)}' : '');
+        (state.fare != null ? '₹${state.fare!.rupeeText}' : '');
     final buttonTitle = fareText.isNotEmpty
         ? 'Book $vehicleName • $fareText'
         : 'Book $vehicleName';
@@ -2123,7 +2167,10 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
             borderRadius: BorderRadius.circular(26),
           ),
         ),
-        onPressed: _isSubmittingBooking ? null : _handleBooking,
+        onPressed:
+            _isSubmittingBooking || state.fareEstimate?.bookingAmount == null
+            ? null
+            : _handleBooking,
         child: _isSubmittingBooking
             ? const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -2356,7 +2403,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
         ),
         const SizedBox(height: 6),
         Text(
-          'Matching in ${state.selectedSector.toUpperCase()} sector • Fare ₹${state.fare?.toStringAsFixed(2) ?? "---"}',
+          'Matching in ${state.selectedSector.toUpperCase()} sector • Fare ₹${state.fare?.rupeeText ?? "---"}',
           style: const TextStyle(color: textGray, fontSize: 13),
         ),
         const SizedBox(height: 24),
@@ -2371,228 +2418,22 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
   // --- Step 3: Driver Assigned & Arriving ---
   Widget _buildDriverAssignedPanel(RideState state, String title) {
     final ride = state.currentRide;
-    final driver = ride?.driverDetails;
-    final vehicle = ride?.vehicleDetails;
-    final driverPhone = driver?.phone?.trim();
-    final hasDriverPhone = driverPhone != null && driverPhone.isNotEmpty;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: textWhite,
-                  ),
-                ),
-                const Text(
-                  'ETA: ~3 mins away',
-                  style: TextStyle(
-                    color: brandGreen,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: brandGreen.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: const Text(
-                'MATCHED',
-                style: TextStyle(
-                  color: brandGreen,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 11,
-                ),
-              ),
-            ),
-          ],
-        ),
+        DriverMatchedHeader(title: title),
         const SizedBox(height: 16),
-
-        // Driver Card
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: cardElevated,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: borderCard),
-          ),
-          child: Row(
-            children: [
-              const CircleAvatar(
-                radius: 26,
-                backgroundColor: Color(0xFF1A1A1A),
-                child: Icon(Icons.person_rounded, color: textWhite, size: 28),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      driver?.name.isNotEmpty == true
-                          ? driver!.name
-                          : (state.driverName ??
-                                'Matching driver details from fleet server...'),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: textWhite,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        if (driver?.rating != null) ...[
-                          const Icon(
-                            Icons.star_rounded,
-                            color: goldAccent,
-                            size: 14,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${driver!.rating!.toStringAsFixed(1)} • Verified Driver',
-                            style: const TextStyle(
-                              color: textGray,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ] else ...[
-                          const Icon(
-                            Icons.verified_rounded,
-                            color: brandGreen,
-                            size: 14,
-                          ),
-                          const SizedBox(width: 4),
-                          const Text(
-                            'Verified Driver',
-                            style: TextStyle(color: textGray, fontSize: 12),
-                          ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      vehicle != null && vehicle.make.isNotEmpty
-                          ? '${vehicle.make} ${vehicle.model} • ${vehicle.plateNumber}'
-                          : (state.vehicleInfo ??
-                                'Vehicle details pending assignment from fleet...'),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                        color: textWhite,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: Icon(
-                      Icons.phone_rounded,
-                      color: hasDriverPhone
-                          ? brandGreen
-                          : textGray.withValues(alpha: 0.4),
-                    ),
-                    tooltip: hasDriverPhone ? 'Call driver' : 'A provider must be assigned to an active booking before you can call.',
-                    onPressed: hasDriverPhone
-                        ? () async {
-                            final uri = Uri.parse('tel:$driverPhone');
-                            try {
-                              final launched = await launchUrl(uri);
-                              if (!mounted) return;
-                              if (!launched) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Could not open the dialer for this number.',
-                                    ),
-                                  ),
-                                );
-                              }
-                            } catch (_) {
-                              if (!mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Could not open the dialer for this number.',
-                                  ),
-                                ),
-                              );
-                            }
-                          }
-                        : null,
-                  ),
-                  if (!hasDriverPhone)
-                    const Text(
-                      'Call unavailable\nuntil assigned',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: textGray,
-                        fontSize: 9,
-                        height: 1.1,
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
+        AssignedDriverSummary(
+          ride: ride,
+          fallbackName: state.driverName,
+          fallbackVehicle: state.vehicleInfo,
+          onCall: () => callAssignedRideContact(context, ref),
         ),
         if (ride?.pin != null && ride?.pinVerified != true) ...[
           const SizedBox(height: 12),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: cardElevated,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: borderCard),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Pickup PIN (share with driver):',
-                  style: TextStyle(color: textGray, fontSize: 13),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: brandGreen,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    ride!.pin!,
-                    style: const TextStyle(
-                      color: Colors.black,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 16,
-                      letterSpacing: 2,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          RidePickupPin(pin: ride!.pin!),
         ],
         // ── Logistics 40% Upfront Payment Card ─────────────────────────────────
         if (ride != null && ride.isLogistics && !ride.upfrontPaid) ...[
@@ -2706,9 +2547,11 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Share PIN with Driver:',
-                style: TextStyle(color: textGray, fontSize: 13),
+              const Expanded(
+                child: Text(
+                  'Share PIN with Driver:',
+                  style: TextStyle(color: textGray, fontSize: 13),
+                ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(
@@ -2748,19 +2591,23 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Row(
-              children: [
-                Icon(Icons.navigation_rounded, color: brandGreen, size: 20),
-                SizedBox(width: 8),
-                Text(
-                  'Trip in Progress',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: textWhite,
+            const Expanded(
+              child: Row(
+                children: [
+                  Icon(Icons.navigation_rounded, color: brandGreen, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Trip in Progress',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: textWhite,
+                      ),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -2843,7 +2690,17 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
   Widget _buildRideCompletedPanel(RideState state) {
     final ride = state.currentRide;
     final fare = ride?.finalFare ?? ride?.fareEstimate ?? state.fare ?? 0.0;
-    final isPaid = state.paymentStatus == 'paid';
+    final plan = ride?.logisticsPayment;
+    final isLogistics = ride?.isLogistics == true;
+    final balancePaise =
+        (plan?['outstandingPaise'] ?? plan?['finalPaise']) as num?;
+    final payable = isLogistics
+        ? (balancePaise != null
+              ? balancePaise / 100
+              : (plan?['remainingAmount'] as num?)?.toDouble())
+        : fare;
+    final isPaid =
+        state.paymentStatus == 'paid' || (isLogistics && payable == 0);
     final isPremium = ride?.sector == 'premium';
 
     return Column(
@@ -2920,7 +2777,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                 _buildBreakdownRow(
                   'Booking Estimate',
                   ride?.fareEstimate != null
-                      ? '₹${ride!.fareEstimate!.toStringAsFixed(2)}'
+                      ? '₹${ride!.fareEstimate!.rupeeText}'
                       : '--',
                 ),
                 const SizedBox(height: 6),
@@ -2931,50 +2788,54 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                 const SizedBox(height: 6),
                 _buildBreakdownRow(
                   'Actual Fuel Cost',
-                  '₹${ride?.actualFuelCost?.toStringAsFixed(2) ?? "0.00"}',
+                  '₹${ride?.actualFuelCost?.rupeeText ?? "0"}',
                 ),
                 const Divider(height: 16, color: borderCard),
               ],
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        isPremium
-                            ? 'Authoritative Final Fare'
-                            : 'Total Trip Fare',
-                        style: const TextStyle(color: textGray, fontSize: 12),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '₹${fare.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                          color: brandGreen,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isPremium
+                              ? 'Authoritative Final Fare'
+                              : 'Total Trip Fare',
+                          style: const TextStyle(color: textGray, fontSize: 12),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 4),
+                        Text(
+                          '₹${fare.rupeeText}',
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            color: brandGreen,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isPaid
-                          ? brandGreen.withValues(alpha: 0.15)
-                          : const Color(0xFF3A290A),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      isPaid ? 'PAID' : 'PAYMENT DUE',
-                      style: TextStyle(
-                        color: isPaid ? brandGreen : goldAccent,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 11,
+                  Flexible(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isPaid
+                            ? brandGreen.withValues(alpha: 0.15)
+                            : const Color(0xFF3A290A),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        isPaid ? 'PAID' : 'PAYMENT DUE',
+                        style: TextStyle(
+                          color: isPaid ? brandGreen : goldAccent,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                        ),
                       ),
                     ),
                   ),
@@ -3033,27 +2894,33 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
 
                 const SizedBox(height: 14),
                 InfurnusButton(
-                  text: 'Pay ₹${fare.toStringAsFixed(2)}',
+                  text: payable == null
+                      ? 'Final balance unavailable'
+                      : 'Pay ₹${payable.rupeeText}',
                   isLoading: _isProcessingPayment,
-                  onPressed: () async {
-                    setState(() => _isProcessingPayment = true);
-                    final success = await ref
-                        .read(rideProvider.notifier)
-                        .initiateTripPayment(
-                          amount: fare,
-                          paymentMethod: _selectedPaymentMethod,
-                        );
-                    if (mounted) {
-                      setState(() => _isProcessingPayment = false);
-                      if (success) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Payment processed successfully!'),
-                          ),
-                        );
-                      }
-                    }
-                  },
+                  onPressed: payable == null || payable <= 0
+                      ? null
+                      : () async {
+                          setState(() => _isProcessingPayment = true);
+                          final success = await ref
+                              .read(rideProvider.notifier)
+                              .initiateTripPayment(
+                                amount: payable,
+                                paymentMethod: _selectedPaymentMethod,
+                              );
+                          if (mounted) {
+                            setState(() => _isProcessingPayment = false);
+                            if (success) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Payment processed successfully!',
+                                  ),
+                                ),
+                              );
+                            }
+                          }
+                        },
                 ),
               ],
             ],
@@ -3353,8 +3220,9 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                 ]
               : [],
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
           children: [
             Icon(icon, size: 16, color: isSelected ? Colors.white : textGray),
             const SizedBox(width: 6),
@@ -3484,7 +3352,10 @@ class _LogisticsUpfrontCardState extends ConsumerState<_LogisticsUpfrontCard> {
   @override
   Widget build(BuildContext context) {
     final ride = widget.ride;
-    final totalFare = ride.fareEstimate ?? 0.0;
+    final planTotalPaise = ride.logisticsPayment?['totalPaise'] as num?;
+    final totalFare = planTotalPaise == null
+        ? ride.displayFare
+        : planTotalPaise / 100;
     final upfrontAmt = ride.upfrontAmount;
     final status = ride.upfrontPaymentStatus;
 
@@ -3497,46 +3368,52 @@ class _LogisticsUpfrontCardState extends ConsumerState<_LogisticsUpfrontCard> {
         border: Border.all(color: _kBrandGreen.withValues(alpha: 0.3)),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Row(
             children: [
               Icon(Icons.local_shipping_rounded, color: _kBrandGreen, size: 16),
               SizedBox(width: 6),
-              Text(
-                'Logistics \u2013 40% Upfront Payment Required',
-                style: TextStyle(
-                  color: _kTextWhite,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
+              Expanded(
+                child: Text(
+                  'Logistics \u2013 40% Upfront Payment Required',
+                  style: TextStyle(
+                    color: _kTextWhite,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            spacing: 8,
+            runSpacing: 4,
             children: [
               const Text(
                 'Total Fare',
                 style: TextStyle(color: _kTextGray, fontSize: 12),
               ),
               Text(
-                '\u20B9${totalFare.toStringAsFixed(2)}',
+                '\u20B9${totalFare.rupeeText}',
                 style: const TextStyle(color: _kTextWhite, fontSize: 12),
               ),
             ],
           ),
           const SizedBox(height: 4),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            spacing: 8,
+            runSpacing: 4,
             children: [
               const Text(
                 'Pay Now (40%)',
                 style: TextStyle(color: _kTextGray, fontSize: 12),
               ),
               Text(
-                '\u20B9${upfrontAmt.toStringAsFixed(2)}',
+                '\u20B9${upfrontAmt.rupeeText}',
                 style: const TextStyle(
                   color: _kBrandGreen,
                   fontWeight: FontWeight.bold,
@@ -3546,8 +3423,10 @@ class _LogisticsUpfrontCardState extends ConsumerState<_LogisticsUpfrontCard> {
             ],
           ),
           const SizedBox(height: 4),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            spacing: 8,
+            runSpacing: 4,
             children: [
               const Text(
                 'Status',
@@ -3586,8 +3465,8 @@ class _LogisticsUpfrontCardState extends ConsumerState<_LogisticsUpfrontCard> {
                   )
                 : InfurnusButton(
                     text: status == 'FAILED'
-                        ? 'Retry Payment (\u20B9${upfrontAmt.toStringAsFixed(2)})'
-                        : 'Pay \u20B9${upfrontAmt.toStringAsFixed(2)} Now',
+                        ? 'Retry Payment (\u20B9${upfrontAmt.rupeeText})'
+                        : 'Pay \u20B9${upfrontAmt.rupeeText} Now',
                     onPressed: _pay,
                   ),
           ),

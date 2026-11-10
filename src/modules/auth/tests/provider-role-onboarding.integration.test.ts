@@ -73,20 +73,26 @@ afterAll(async () => {
   for (const id of pending) await pool.query('DELETE FROM pending_signups WHERE id=$1', [id]);
 });
 describe('Provider role sign-in and single-page licence enrolment', () => {
-  it.each(['driver', 'driver_fleet_owner', 'fleet_owner'])(
-    '%s preserves role and credentials without collecting licence twice',
-    async (role) => {
+  it.each(
+    ['driver', 'driver_fleet_owner', 'fleet_owner'].flatMap((role) =>
+      ['email', 'phone'].map((channel) => ({ role, channel })),
+    ),
+  )(
+    '$role $channel supports passwordless registration and sign-in without collecting licence twice',
+    async ({ role, channel }) => {
       const email = `role-${randomUUID()}@example.com`;
+      const contact =
+        channel === 'email'
+          ? email
+          : '+91' + randomUUID().replace(/\D/g, '').padEnd(10, '1').slice(0, 10);
       const payload = {
         firstName: 'Role',
         lastName: 'Fixture',
-        email,
+        [channel]: contact,
         role,
         ...(role !== 'driver'
           ? {
               businessName: 'Fixture Fleet',
-              password: 'FixturePassword123!',
-              confirmPassword: 'FixturePassword123!',
             }
           : {}),
         ...(role !== 'fleet_owner' ? { onboardingLicencePending: true } : {}),
@@ -113,11 +119,11 @@ describe('Provider role sign-in and single-page licence enrolment', () => {
       if (role !== 'driver')
         await request(app)
           .post('/auth/login')
-          .send({ email, password: 'InfurnusOTPLogin@123' })
-          .expect(401);
+          .send({ [channel]: contact, role, password: 'unused' })
+          .expect(400);
       const login = await request(app)
         .post('/auth/login')
-        .send({ email, ...(role !== 'driver' ? { password: 'FixturePassword123!' } : {}) })
+        .send({ [channel]: contact, role, driverFlow: true })
         .expect(200);
       const session = await request(app)
         .post('/auth/login/verify')

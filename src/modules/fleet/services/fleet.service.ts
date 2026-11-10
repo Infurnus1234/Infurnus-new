@@ -53,7 +53,7 @@ export class FleetService {
     ownerId: string,
     vehicleId: string,
     driverProfileId?: string,
-  ): Promise<{ code: string; expiresAt: Date }> {
+  ): Promise<{ code: string; expiresAt: Date; permanent?: boolean }> {
     try {
       return await (driverProfileId
         ? this.fleetRepo.generateAssignmentCode(ownerId, vehicleId, driverProfileId)

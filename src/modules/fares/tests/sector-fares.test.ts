@@ -1,3 +1,4 @@
+import { calculateServiceFixture } from './service-fixed.fixture.js';
 import { describe, expect, it } from 'vitest';
 import { FareCalculatorService } from '../services/fare-calculator.service.js';
 import type { FarePricingConfig } from '../types/fare.js';
@@ -33,7 +34,7 @@ describe('INFURNUS 4-Sector Fare Calculations', () => {
       expect(result.distanceAmount).toBe(37500);
       expect(result.timeAmount).toBe(4000);
       expect(result.waitingAmount).toBe(1000);
-      expect(result.grossAmount).toBe(48750);
+      expect(result.grossAmount).toBe(48800);
     });
 
     it('scales fare for Auto (0.7x) and SUV (1.6x)', () => {
@@ -97,79 +98,61 @@ describe('INFURNUS 4-Sector Fare Calculations', () => {
       expect(result.weightAmount).toBe(12500);
       expect(result.loadingAmount).toBe(15000);
       expect(result.taxAmount).toBe(6350);
-      expect(result.grossAmount).toBe(133350);
+      expect(result.grossAmount).toBe(133400);
     });
   });
 
   describe('Sector 3: Service Vehicle', () => {
-    it('calculates Ambulance flat emergency response + distance fare', () => {
-      const result = calculator.calculate({
+    it('calculates Ambulance configured fixed response fare', () => {
+      const result = calculateServiceFixture(calculator, {
         distanceMeters: 10000, // 10 km
         durationSeconds: 900,
         sector: 'service',
         vehicleCategory: 'ambulance',
       });
 
-      // base: 50000 (₹500)
-      // distance: 10 * 2500 = 25000 (₹250)
-      // time: (900 * 200 / 60) = 3000
-      // subtotal: 50000 + 25000 + 3000 = 78000
-      // tax: 78000 * 0.05 = 3900
-      // gross: 81900
       expect(result.baseAmount).toBe(50000);
-      expect(result.distanceAmount).toBe(50000);
-      expect(result.grossAmount).toBe(108150);
+      expect(result.distanceAmount).toBe(0);
+      expect(result.grossAmount).toBe(result.baseAmount);
     });
 
-    it('calculates Towing Hookup + per-km rate', () => {
-      const result = calculator.calculate({
+    it('calculates Towing configured fixed fare', () => {
+      const result = calculateServiceFixture(calculator, {
         distanceMeters: 20000, // 20 km
         durationSeconds: 1800,
         sector: 'service',
         vehicleCategory: 'towing',
       });
 
-      // base: 60000 (₹600)
-      // distance: 20 * 3000 = 60000 (₹600)
-      // time: (1800 * 200 / 60) = 6000
-      // subtotal: 126000
-      // tax: 126000 * 0.05 = 6300
-      // gross: 132300
       expect(result.baseAmount).toBe(60000);
-      expect(result.distanceAmount).toBe(120000);
-      expect(result.grossAmount).toBe(195300);
+      expect(result.distanceAmount).toBe(0);
+      expect(result.grossAmount).toBe(result.baseAmount);
     });
 
-    it('calculates JCB trip-based mobilization + distance fare', () => {
-      const result = calculator.calculate({
+    it('calculates JCB configured fixed mobilization fare', () => {
+      const result = calculateServiceFixture(calculator, {
         distanceMeters: 5000,
         durationSeconds: 7200,
         sector: 'service',
         vehicleCategory: 'jcb',
       });
 
-      // base: 120000 (₹1,200 flat mobilization charge)
-      // distance: (5000 * 4000 / 1000) = 20000 (₹200 distance charge @ ₹40/km)
-      // time: (7200 * 200 / 60) = 24000 (₹240 time charge @ ₹2/min)
-      // subtotal: 120000 + 20000 + 24000 = 164000 (₹1,640)
-      // tax: 164000 * 0.05 = 8200 (5% GST)
-      // gross: 164000 + 8200 = 172200 (₹1,722)
       expect(result.baseAmount).toBe(120000);
-      expect(result.distanceAmount).toBe(40000);
-      expect(result.timeAmount).toBe(24000);
-      expect(result.taxAmount).toBe(9200);
-      expect(result.grossAmount).toBe(193200);
+      expect(result.distanceAmount).toBe(0);
+      expect(result.timeAmount).toBe(0);
+      expect(result.taxAmount).toBeUndefined();
+      expect(result.grossAmount).toBe(result.baseAmount);
     });
 
     it('proves rentalHours cannot manipulate JCB fare (immunity from hourly tampering)', () => {
-      const tripBasedStandard = calculator.calculate({
+      const tripBasedStandard = calculateServiceFixture(calculator, {
         distanceMeters: 5000,
         durationSeconds: 7200,
         sector: 'service',
         vehicleCategory: 'jcb',
       });
 
-      const tamperedWithHours = calculator.calculate({
+      const tamperedWithHours = calculateServiceFixture(calculator, {
         distanceMeters: 5000,
         durationSeconds: 7200,
         sector: 'service',
@@ -178,32 +161,26 @@ describe('INFURNUS 4-Sector Fare Calculations', () => {
       });
 
       expect(tamperedWithHours.baseAmount).toBe(120000);
-      expect(tamperedWithHours.distanceAmount).toBe(40000);
-      expect(tamperedWithHours.grossAmount).toBe(193200);
+      expect(tamperedWithHours.distanceAmount).toBe(0);
+      expect(tamperedWithHours.grossAmount).toBe(tamperedWithHours.baseAmount);
       expect(tamperedWithHours.grossAmount).toBe(tripBasedStandard.grossAmount);
     });
 
-    it('calculates Recovery Vehicle trip-based callout + distance fare', () => {
-      const result = calculator.calculate({
+    it('calculates Recovery Vehicle configured fixed callout fare', () => {
+      const result = calculateServiceFixture(calculator, {
         distanceMeters: 10000, // 10 km
         durationSeconds: 1200, // 20 mins
         sector: 'service',
         vehicleCategory: 'recovery',
       });
 
-      // base: 60000 (₹600 callout)
-      // distance: (10000 * 3000 / 1000) = 30000 (₹300)
-      // time: (1200 * 200 / 60) = 4000 (₹40)
-      // subtotal: 60000 + 30000 + 4000 = 94000
-      // tax: 94000 * 0.05 = 4700
-      // gross: 98700
       expect(result.baseAmount).toBe(60000);
-      expect(result.distanceAmount).toBe(60000);
-      expect(result.timeAmount).toBe(4000);
-      expect(result.taxAmount).toBe(6200);
-      expect(result.grossAmount).toBe(130200);
+      expect(result.distanceAmount).toBe(0);
+      expect(result.timeAmount).toBe(0);
+      expect(result.taxAmount).toBeUndefined();
+      expect(result.grossAmount).toBe(result.baseAmount);
 
-      const aliasResult = calculator.calculate({
+      const aliasResult = calculateServiceFixture(calculator, {
         distanceMeters: 10000,
         durationSeconds: 1200,
         sector: 'service',
@@ -212,27 +189,21 @@ describe('INFURNUS 4-Sector Fare Calculations', () => {
       expect(aliasResult.grossAmount).toBe(result.grossAmount);
     });
 
-    it('calculates Roadside Service Vehicle trip-based dispatch + distance fare', () => {
-      const result = calculator.calculate({
+    it('calculates Roadside Service Vehicle configured fixed dispatch fare', () => {
+      const result = calculateServiceFixture(calculator, {
         distanceMeters: 8000, // 8 km
         durationSeconds: 900, // 15 mins
         sector: 'service',
         vehicleCategory: 'roadside_service',
       });
 
-      // base: 60000 (₹600 dispatch)
-      // distance: (8000 * 3000 / 1000) = 24000 (₹240)
-      // time: (900 * 200 / 60) = 3000 (₹30)
-      // subtotal: 60000 + 24000 + 3000 = 87000
-      // tax: 87000 * 0.05 = 4350
-      // gross: 91350
       expect(result.baseAmount).toBe(60000);
-      expect(result.distanceAmount).toBe(48000);
-      expect(result.timeAmount).toBe(3000);
-      expect(result.taxAmount).toBe(5550);
-      expect(result.grossAmount).toBe(116550);
+      expect(result.distanceAmount).toBe(0);
+      expect(result.timeAmount).toBe(0);
+      expect(result.taxAmount).toBeUndefined();
+      expect(result.grossAmount).toBe(result.baseAmount);
 
-      const aliasResult = calculator.calculate({
+      const aliasResult = calculateServiceFixture(calculator, {
         distanceMeters: 8000,
         durationSeconds: 900,
         sector: 'service',
@@ -245,14 +216,14 @@ describe('INFURNUS 4-Sector Fare Calculations', () => {
       const categories = ['ambulance', 'towing', 'recovery', 'roadside_service'];
 
       for (const cat of categories) {
-        const standard = calculator.calculate({
+        const standard = calculateServiceFixture(calculator, {
           distanceMeters: 10000,
           durationSeconds: 900,
           sector: 'service',
           vehicleCategory: cat,
         });
 
-        const tampered = calculator.calculate({
+        const tampered = calculateServiceFixture(calculator, {
           distanceMeters: 10000,
           durationSeconds: 900,
           sector: 'service',

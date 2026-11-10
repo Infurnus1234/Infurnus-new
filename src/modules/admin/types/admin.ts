@@ -22,6 +22,7 @@ export interface AdminUser {
 }
 
 export interface AdminPartner {
+  ownerName: string | null;
   id: string;
   userId: string;
   businessName: string;

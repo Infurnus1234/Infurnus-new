@@ -1,5 +1,6 @@
 class PartnerModel {
   final String id;
+  final String? publicId;
   final String userId;
   final String businessName;
   final String? businessDescription;
@@ -10,6 +11,7 @@ class PartnerModel {
 
   PartnerModel({
     required this.id,
+    this.publicId,
     required this.userId,
     required this.businessName,
     this.businessDescription,
@@ -22,6 +24,13 @@ class PartnerModel {
   factory PartnerModel.fromJson(Map<String, dynamic> json) {
     return PartnerModel(
       id: json['id'] as String,
+      publicId:
+          json['publicId'] is String &&
+              RegExp(r'^[1-9][0-9]{5,63}$')
+                      .stringMatch(json['publicId'] as String) ==
+                  json['publicId']
+          ? json['publicId'] as String
+          : null,
       userId: json['userId'] as String,
       businessName: json['businessName'] as String,
       businessDescription: json['businessDescription'] as String?,
@@ -34,6 +43,7 @@ class PartnerModel {
 
   Map<String, dynamic> toJson() => {
     'id': id,
+    if (publicId != null) 'publicId': publicId,
     'userId': userId,
     'businessName': businessName,
     'businessDescription': businessDescription,

@@ -50,7 +50,6 @@ void main() {
           locationServiceProvider.overrideWithValue(_DummyLocation()),
         ],
       );
-      addTearDown(container.dispose);
 
       final notifier = container.read(rideProvider.notifier);
       notifier.setRoute(
@@ -90,6 +89,9 @@ void main() {
         find.text('Tata Magic is currently unavailable for booking.'),
         findsOneWidget,
       );
+
+      await tester.pumpWidget(const SizedBox());
+      container.dispose();
     },
   );
 }

@@ -58,6 +58,33 @@ export class PostgresWalletRepository {
     return BigInt(result.rows[0].balance_paise);
   }
 
+  async createTopUpOrder(
+    userId: string,
+    amountPaise: number,
+    idempotencyKey: string,
+    legacyRequestedPaise?: number,
+  ) {
+    const result = await this.pool.query<{ orderId: string; amountPaise: string }>(
+      `INSERT INTO wallet_topup_orders(order_id,user_id,amount_paise,idempotency_key)
+       VALUES ('wallet_' || gen_random_uuid()::text,$1,$2,$3)
+       ON CONFLICT(user_id,idempotency_key) DO UPDATE SET idempotency_key=EXCLUDED.idempotency_key
+       RETURNING order_id AS "orderId",amount_paise::text AS "amountPaise"`,
+      [userId, amountPaise, idempotencyKey],
+    );
+    const order = result.rows[0]!;
+    if (![amountPaise, legacyRequestedPaise].includes(Number(order.amountPaise)))
+      throw new AppError('IDEMPOTENCY_CONFLICT', 'Top-up amount changed for the same request', 409);
+    return order;
+  }
+
+  async findTopUpOrder(userId: string, orderId: string) {
+    const result = await this.pool.query<{ orderId: string; amountPaise: string }>(
+      `SELECT order_id AS "orderId",amount_paise::text AS "amountPaise" FROM wallet_topup_orders WHERE order_id=$1 AND user_id=$2`,
+      [orderId, userId],
+    );
+    return result.rows[0];
+  }
+
   async getWallet(userId: string): Promise<WalletSummary> {
     await this.pool.query(
       `INSERT INTO user_wallets(user_id, balance_paise, currency, is_active, updated_at)
@@ -122,7 +149,7 @@ export class PostgresWalletRepository {
     const totalCount = Number(countResult.rows[0]?.count ?? '0');
 
     const query = `
-      SELECT 
+      SELECT
         id,
         amount_paise::text as amount_paise,
         balance_after_paise::text as balance_after_paise,
@@ -190,6 +217,7 @@ export class PostgresWalletRepository {
     }
 
     return withTransaction(async (client) => {
+      const currentBalance = await this.lockUserWallet(client, userId);
       // 1. Idempotency Check
       const existing = await client.query<{
         id: string;
@@ -202,14 +230,21 @@ export class PostgresWalletRepository {
         created_at: Date;
       }>(
         `SELECT id, amount_paise::text, balance_after_paise::text, status, reference, description, payment_method, created_at
-         FROM user_wallet_entries 
+         FROM user_wallet_entries
          WHERE user_id = $1 AND idempotency_key = $2`,
         [userId, idempotencyKey],
       );
 
       if (existing.rows[0]) {
         const e = existing.rows[0];
-        const w = await this.getWallet(userId);
+        const w: WalletSummary = {
+          userId,
+          balancePaise: Number(currentBalance),
+          balance: Number(currentBalance) / 100,
+          currency: 'INR',
+          isActive: true,
+          activityCount: 0,
+        };
         return {
           wallet: w,
           entry: {
@@ -229,12 +264,11 @@ export class PostgresWalletRepository {
       }
 
       // 2. Lock and Update
-      const currentBalance = await this.lockUserWallet(client, userId);
       const nextBalance = currentBalance + BigInt(amountPaise);
 
       await client.query(
-        `UPDATE user_wallets 
-         SET balance_paise = $2, updated_at = NOW() 
+        `UPDATE user_wallets
+         SET balance_paise = $2, updated_at = NOW()
          WHERE user_id = $1`,
         [userId, nextBalance.toString()],
       );
@@ -244,7 +278,7 @@ export class PostgresWalletRepository {
         created_at: Date;
       }>(
         `INSERT INTO user_wallet_entries(
-           user_id, amount_paise, balance_after_paise, entry_type, 
+           user_id, amount_paise, balance_after_paise, entry_type,
            reference, description, payment_method, status, idempotency_key
          ) VALUES ($1, $2, $3, 'TOPUP', $4, $5, $6, 'COMPLETED', $7)
          RETURNING id, created_at`,
@@ -305,112 +339,103 @@ export class PostgresWalletRepository {
       throw new AppError('INVALID_AMOUNT', 'Payment amount must be greater than zero', 400);
     }
 
+    // Wallet-to-wallet transfers require an existing recipient. External UPI
+    // settlement must use a configured payout provider, never just a local debit.
+    if (target.type === 'order')
+      throw new AppError(
+        'BOOKING_CHECKOUT_REQUIRED',
+        'Pay this booking through its booking checkout',
+        409,
+      );
+    if (
+      !['driver', 'merchant'].includes(target.type) ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(target.id)
+    )
+      throw new AppError(
+        'EXTERNAL_TRANSFER_UNAVAILABLE',
+        'External wallet transfers are not configured',
+        503,
+      );
+    const recipient = (
+      await this.pool.query<{ id: string }>(
+        `SELECT u.id FROM users u LEFT JOIN driver_profiles dp ON dp.user_id=u.id
+       WHERE (u.id=$1 OR ($2='driver' AND dp.id=$1)) AND u.status='active' LIMIT 1`,
+        [target.id, target.type],
+      )
+    ).rows[0];
+    if (!recipient) throw new AppError('RECIPIENT_NOT_FOUND', 'Recipient account not found', 404);
+    if (recipient.id === senderId)
+      throw new AppError('INVALID_RECIPIENT', 'Choose a different recipient', 400);
     return withTransaction(async (client) => {
-      // 1. Idempotency Check
-      const existing = await client.query<{
-        id: string;
-        balance_after_paise: string;
-        status: string;
-        reference: string;
-      }>(
-        `SELECT id, balance_after_paise::text, status, reference 
-         FROM user_wallet_entries 
-         WHERE user_id = $1 AND idempotency_key = $2`,
-        [senderId, idempotencyKey],
-      );
-
-      if (existing.rows[0]) {
-        const row = existing.rows[0];
-        const afterPaise = Number(row.balance_after_paise);
+      // Stable lock order prevents opposite-direction transfers from deadlocking.
+      const balances = new Map<string, bigint>();
+      for (const id of [senderId, recipient.id].sort())
+        balances.set(id, await this.lockUserWallet(client, id));
+      const existing = (
+        await client.query<{
+          id: string;
+          balance_after_paise: string;
+          reference: string;
+          status: string;
+        }>(
+          `SELECT id,balance_after_paise::text,reference,status FROM user_wallet_entries WHERE user_id=$1 AND idempotency_key=$2`,
+          [senderId, idempotencyKey],
+        )
+      ).rows[0];
+      if (existing)
         return {
-          transactionId: row.id,
-          status: row.status,
-          balanceAfter: afterPaise / 100.0,
-          balanceAfterPaise: afterPaise,
-          reference: row.reference,
+          transactionId: existing.id,
+          status: existing.status,
+          balanceAfter: Number(existing.balance_after_paise) / 100,
+          balanceAfterPaise: Number(existing.balance_after_paise),
+          reference: existing.reference,
         };
-      }
-
-      // 2. Lock Sender Wallet
-      const currentBalance = await this.lockUserWallet(client, senderId);
-      if (currentBalance < BigInt(amountPaise)) {
-        throw new AppError(
-          'INSUFFICIENT_BALANCE',
-          `Insufficient wallet balance. Available: ₹${(Number(currentBalance) / 100).toFixed(2)}, required: ₹${(amountPaise / 100).toFixed(2)}`,
-          400,
-        );
-      }
-
-      const nextBalance = currentBalance - BigInt(amountPaise);
+      const current = balances.get(senderId)!;
+      if (current < BigInt(amountPaise))
+        throw new AppError('INSUFFICIENT_BALANCE', 'Insufficient wallet balance', 400);
+      const next = current - BigInt(amountPaise);
+      const recipientNext = balances.get(recipient.id)! + BigInt(amountPaise);
       await client.query(
-        `UPDATE user_wallets 
-         SET balance_paise = $2, updated_at = NOW() 
-         WHERE user_id = $1`,
-        [senderId, nextBalance.toString()],
+        'UPDATE user_wallets SET balance_paise=$2,updated_at=NOW() WHERE user_id=$1',
+        [senderId, next.toString()],
       );
-
-      const ref = `WLT_PAY_${Date.now()}_${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
-      const desc =
-        note && note.trim().length > 0
-          ? `Payment to ${target.name || target.id}: ${note.trim()}`
-          : `Payment to ${target.name || target.id}`;
-
-      const entryResult = await client.query<{ id: string; created_at: Date }>(
-        `INSERT INTO user_wallet_entries(
-           user_id, amount_paise, balance_after_paise, entry_type,
-           reference, description, payment_method, status, idempotency_key, metadata
-         ) VALUES ($1, $2, $3, 'DEBIT_PAYMENT', $4, $5, 'WALLET', 'COMPLETED', $6, $7)
-         RETURNING id`,
+      await client.query(
+        'UPDATE user_wallets SET balance_paise=$2,updated_at=NOW() WHERE user_id=$1',
+        [recipient.id, recipientNext.toString()],
+      );
+      const entry = (
+        await client.query<{ id: string }>(
+          `INSERT INTO user_wallet_entries(user_id,amount_paise,balance_after_paise,entry_type,reference,description,payment_method,status,idempotency_key,metadata)
+         VALUES ($1,$2,$3,'DEBIT_PAYMENT',$4,$5,'WALLET','COMPLETED',$6,$7) RETURNING id`,
+          [
+            senderId,
+            (-amountPaise).toString(),
+            next.toString(),
+            idempotencyKey,
+            note || 'Wallet transfer',
+            idempotencyKey,
+            JSON.stringify({ recipientId: recipient.id }),
+          ],
+        )
+      ).rows[0]!;
+      await client.query(
+        `INSERT INTO user_wallet_entries(user_id,amount_paise,balance_after_paise,entry_type,reference,description,payment_method,status,idempotency_key,metadata)
+         VALUES ($1,$2,$3,'PEER_TRANSFER',$4,'Wallet transfer received','WALLET','COMPLETED',$5,$6)`,
         [
-          senderId,
-          (-amountPaise).toString(),
-          nextBalance.toString(),
-          ref,
-          desc,
-          idempotencyKey,
-          JSON.stringify({ targetType: target.type, targetId: target.id, orderId: target.orderId }),
+          recipient.id,
+          amountPaise.toString(),
+          recipientNext.toString(),
+          entry.id,
+          'credit:' + entry.id,
+          JSON.stringify({ senderId }),
         ],
       );
-
-      // If target is a driver/merchant user account, credit them atomically
-      const isTargetUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        target.id,
-      );
-      if (isTargetUuid) {
-        try {
-          const recipientBalance = await this.lockUserWallet(client, target.id);
-          const recipientNext = recipientBalance + BigInt(amountPaise);
-          await client.query(
-            `UPDATE user_wallets SET balance_paise = $2, updated_at = NOW() WHERE user_id = $1`,
-            [target.id, recipientNext.toString()],
-          );
-          await client.query(
-            `INSERT INTO user_wallet_entries(
-               user_id, amount_paise, balance_after_paise, entry_type,
-               reference, description, payment_method, status, idempotency_key, metadata
-             ) VALUES ($1, $2, $3, 'PEER_TRANSFER', $4, $5, 'WALLET', 'COMPLETED', $6, $7)`,
-            [
-              target.id,
-              amountPaise.toString(),
-              recipientNext.toString(),
-              ref,
-              `Received payment from customer`,
-              `cred_${idempotencyKey}`,
-              JSON.stringify({ senderId }),
-            ],
-          );
-        } catch {
-          // If recipient user table has constraint or target is external UPI, proceed safely
-        }
-      }
-
-      const totalAfter = Number(nextBalance);
       return {
-        transactionId: entryResult.rows[0]!.id,
+        transactionId: entry.id,
         status: 'COMPLETED',
-        balanceAfter: totalAfter / 100.0,
-        balanceAfterPaise: totalAfter,
-        reference: ref,
+        balanceAfter: Number(next) / 100,
+        balanceAfterPaise: Number(next),
+        reference: idempotencyKey,
       };
     });
   }
@@ -439,10 +464,10 @@ export class PostgresWalletRepository {
       );
       if (isUuid) {
         const driverRes = await this.pool.query<{ name: string }>(
-          `SELECT u.name 
-           FROM users u 
-           JOIN driver_profiles dp ON dp.user_id = u.id 
-           WHERE dp.id = $1 OR u.id = $1 
+          `SELECT concat_ws(' ',u.first_name,u.last_name) AS name
+           FROM users u
+           JOIN driver_profiles dp ON dp.user_id = u.id
+           WHERE dp.id = $1 OR u.id = $1
            LIMIT 1`,
           [cleanId],
         );
@@ -458,8 +483,8 @@ export class PostgresWalletRepository {
       return {
         targetId: cleanId,
         targetType: 'driver',
-        displayName: 'INFURNUS Partner Driver',
-        isVerified: true,
+        displayName: 'Unknown driver',
+        isVerified: false,
       };
     }
 
@@ -495,7 +520,7 @@ export class PostgresWalletRepository {
         targetId: cleanId,
         targetType: 'order',
         displayName: `Order #${cleanId.substring(0, 8)}`,
-        isVerified: true,
+        isVerified: false,
       };
     }
 
@@ -504,7 +529,7 @@ export class PostgresWalletRepository {
       targetId: cleanId,
       targetType: 'merchant',
       displayName: `Merchant: ${cleanId.toUpperCase()}`,
-      isVerified: true,
+      isVerified: false,
     };
   }
 }

@@ -20,6 +20,7 @@ import type { RideRepository } from '../../modules/rides/repositories/ride.repos
 import type { RideService } from '../../modules/rides/services/ride.service.js';
 import type { RouteRecalculationService } from '../../modules/rides/services/route-recalculation.service.js';
 import type { Ride } from '../../modules/rides/types/ride.js';
+import { privateBookingPayload } from '../../modules/rides/utils/booking-contact.js';
 import { sanitizeRideForDriver } from '../../modules/rides/utils/ride-sanitizer.js';
 import type { MatchingService } from '../../modules/rides/services/matching.service.js';
 import { RideDispatchService } from '../../modules/rides/services/ride-dispatch.service.js';
@@ -35,6 +36,7 @@ export interface RideSocketDependencies {
   dispatchResponseTimeoutMs?: number;
   authorizeAccount?: (userId: string, role: string) => Promise<void>;
   notifyRideOffer?: (userId: string, ride: Ride, expiresAt: Date) => Promise<void>;
+  canPushRideOffer?: (userId: string) => Promise<boolean>;
   notifyRideUpdate?: (ride: Ride, type: NotificationType) => Promise<void>;
 }
 
@@ -145,7 +147,9 @@ export function createSocketServer(
                   socket.leave(rideRoom(ride.id));
                   return;
                 }
-                const safe = { ...payload, ride: sanitizeRideForDriver(ride) };
+                const prepared =
+                  (await rideDependencies.rideService.prepareDriverRide?.(ride)) ?? ride;
+                const safe = { ...payload, ride: sanitizeRideForDriver(prepared) };
                 for (const key of ['pin', 'billing', 'finalFare', 'fareEstimate', 'actualFuelCost'])
                   delete (safe as Record<string, unknown>)[key];
                 socket.emit(event, safe);
@@ -173,7 +177,7 @@ export function createSocketServer(
                     /* ignore pin-enrichment errors */
                   }
                 }
-                socket.emit(event, customerPayload);
+                socket.emit(event, privateBookingPayload(customerPayload));
               }
             }),
           );
@@ -184,8 +188,21 @@ export function createSocketServer(
       ? new RideDispatchService(
           rideDependencies.rideRepository,
           rideDependencies.matchingService,
-          (candidate, ride, expiresAt) => {
-            io.to(driverUserRoom(candidate.userId)).emit('ride:incoming', {
+          async (candidate, ride, expiresAt) => {
+            const room = driverUserRoom(candidate.userId);
+            if (rideDependencies.canPushRideOffer && (await io.in(room).allSockets()).size === 0) {
+              if (
+                !rideDependencies.notifyRideOffer ||
+                !(await rideDependencies.canPushRideOffer(candidate.userId))
+              ) {
+                // The dispatch coordinator releases this offer and tries another driver.
+                throw new Error('No connected driver or registered push destination');
+              }
+              await rideDependencies.notifyRideOffer(candidate.userId, ride, expiresAt);
+              return;
+            }
+            ride = (await rideDependencies.rideService.prepareDriverRide?.(ride)) ?? ride;
+            io.to(room).emit('ride:incoming', {
               ride: sanitizeRideForDriver({ ...ride, dispatchExpiresAt: expiresAt }),
               expiresAt: expiresAt.toISOString(),
             });
@@ -457,10 +474,13 @@ export function createSocketServer(
           current.userLocation?.timestamp !== event.location.timestamp
         )
           return;
-        io.to(rideRoom(event.rideId)).emit('ride:user_location_updated', {
-          rideId: event.rideId,
-          location: event.location,
-        });
+        const payload = { rideId: event.rideId, location: event.location };
+        if (current.ride.sector === 'logistics' && current.ride.pinVerified !== true) {
+          const recipients = await io.in(rideRoom(event.rideId)).fetchSockets();
+          for (const recipient of recipients)
+            if (recipient.data.auth?.userId === current.ride.customerId)
+              recipient.emit('ride:user_location_updated', payload);
+        } else io.to(rideRoom(event.rideId)).emit('ride:user_location_updated', payload);
       })()
         .catch(() => console.warn(JSON.stringify({ event: 'user_map_processing_failed' })))
         .finally(() => {

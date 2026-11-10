@@ -1,3 +1,4 @@
+import { bookingInventorySector } from '../../vehicles/services/rental-inventory.js';
 import { serviceArea, type ServiceAreaGate } from '../../maps/service-area.js';
 import { env } from '../../../config/env.js';
 import { rideEvents } from '../events/ride.events.js';
@@ -144,7 +145,7 @@ export class RideDispatchService {
           ? await this.matching.findDispatchDrivers(current, radius)
           : await this.matching.findRankedDrivers(
               ride.pickup,
-              ride.sector ?? 'passenger',
+              bookingInventorySector(ride.sector ?? 'passenger'),
               ride.vehicleCategory ?? undefined,
             );
         let offeredAny = false;

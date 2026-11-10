@@ -7,6 +7,7 @@ export interface SupportTicket {
   subject: string;
   message: string;
   status: 'OPEN' | 'UNDER_REVIEW' | 'RESOLVED' | 'CLOSED';
+  version?: number;
   createdAt: Date;
   updatedAt: Date;
 }

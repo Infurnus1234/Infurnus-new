@@ -1,3 +1,6 @@
+import '../providers/booking_catalog_provider.dart';
+import '../widgets/vehicle_presentation_catalog.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -16,59 +19,29 @@ class _SpecialtyEmergencyScreenState
     extends ConsumerState<SpecialtyEmergencyScreen> {
   String _selectedFilter = 'All';
 
-  final List<String> _filters = ['All', 'Emergency', 'Construction', 'Support'];
-
-  final List<Map<String, dynamic>> _vehicles = [
-    {
-      'title': 'Ambulance',
-      'category': 'ambulance',
-      'filter': 'Emergency',
-      'subtitle': 'Patient + Medical Triage • Trip-Based',
-      'image': 'assets/images/ambulance_clean.jpg',
-      'fallbackIcon': Icons.medical_services_rounded,
-    },
-    {
-      'title': 'Towing Van',
-      'category': 'towing',
-      'filter': 'Emergency',
-      'subtitle': 'Breakdown Assistance • Trip-Based',
-      'image': 'assets/images/flatbed_towing_truck.png',
-      'fallbackIcon': Icons.car_repair_rounded,
-    },
-    {
-      'title': 'JCB / Excavator',
-      'category': 'jcb',
-      'filter': 'Construction',
-      'subtitle': 'Specialty Excavation • Trip-Based',
-      'image': 'assets/images/jcb_excavator.jpg',
-      'fallbackIcon': Icons.construction_rounded,
-    },
-    {
-      'title': 'Crane',
-      'category': 'crane',
-      'filter': 'Construction',
-      'subtitle': 'Heavy Lifting • Trip-Based',
-      'image': 'assets/images/crane_truck.png',
-      'fallbackIcon': Icons.precision_manufacturing_rounded,
-    },
-    {
-      'title': 'Roadside Assist',
-      'category': 'roadside_assist',
-      'filter': 'Support',
-      'subtitle': 'Tire / Battery Support • Trip-Based',
-      'image': 'assets/images/flatbed_towing_truck.png',
-      'fallbackIcon': Icons.home_repair_service_rounded,
-    },
-  ];
+  final List<String> _filters = ['All', 'Emergency', 'Construction'];
 
   @override
   Widget build(BuildContext context) {
+    final vehicles =
+        customerVehiclePresentation(
+              'service',
+              ref.watch(bookingCatalogProvider('service')).value ?? [],
+            )
+            .map(
+              (item) => <String, dynamic>{
+                ...item,
+                'title': item['name']!,
+                'fallbackIcon': Icons.directions_car_rounded,
+              },
+            )
+            .toList();
     final filtered = _selectedFilter == 'All'
-        ? _vehicles
-        : _vehicles.where((v) => v['filter'] == _selectedFilter).toList();
+        ? vehicles
+        : vehicles.where((v) => v['filter'] == _selectedFilter).toList();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,

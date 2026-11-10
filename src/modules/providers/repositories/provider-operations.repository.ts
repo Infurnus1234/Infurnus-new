@@ -1,5 +1,8 @@
+import { newestFirstSql } from '../../../common/utils/chronological-order.js';
+import { assignFirstOwnerVehicle } from './default-owner-vehicle.js';
 import { paidRideRevenueSql } from '../../fleet/repositories/fleet-revenue.repository.js';
 import { ManagedDriverRepository } from './managed-driver.repository.js';
+import { submitFleetApprovals } from './fleet-approval-submission.js';
 import { RoleEnrolmentRepository } from './role-enrolment.repository.js';
 import { env } from '../../../config/env.js';
 import type { Pool, PoolClient } from 'pg';
@@ -63,12 +66,31 @@ export class PostgresProviderOperationsRepository {
           `SELECT r.id,r.requester_id,r.requester_role,r.fleet_id,r.request_type,r.target_type,r.target_id,r.status,r.submitted_at,
            ${approvalIdentityFields},${approvalReviewPermission('$2')}
            FROM provider_approval_requests r ${approvalIdentityJoins}
-           WHERE ($1::text='ALL' OR r.status=$1)
-           ORDER BY CASE WHEN $1='PENDING' THEN r.submitted_at END ASC,
-             CASE WHEN $1='PENDING' THEN r.id END ASC,r.submitted_at DESC,r.id DESC LIMIT 100`,
+           WHERE ($1::text='ALL' OR r.status=$1) AND r.admin_deleted_at IS NULL
+           ORDER BY ${newestFirstSql('r.submitted_at', 'r.id')} LIMIT 100`,
           [status, actorId],
         )
       ).rows;
+    } finally {
+      client.release();
+    }
+  }
+
+  async requestPage(
+    actorId: string,
+    status: string,
+    options: { kind: 'driver' | 'vehicle'; page: number; pageSize: number; search: string },
+  ) {
+    const client = await this.pool.connect();
+    try {
+      await this.authorizeReviewer(client, actorId);
+      const items = await groupedApprovals(client, actorId, status, options);
+      return {
+        items,
+        total: items[0]?.total_count ?? 0,
+        page: options.page,
+        pageSize: options.pageSize,
+      };
     } finally {
       client.release();
     }
@@ -650,6 +672,7 @@ export class PostgresProviderOperationsRepository {
         `UPDATE provider_approval_requests SET status=$2,reviewer_id=$3,reviewer_role=$4,reviewed_at=NOW(),rejection_reason=$5,updated_at=NOW() WHERE id=$1`,
         [id, input.status, actorId, reviewerRole, approved ? null : input.reason],
       );
+      if (approved && owner) await assignFirstOwnerVehicle(client, owner);
       if (!existingClient) await client.query('COMMIT');
       return { id, status: input.status };
     } catch (error) {
@@ -920,6 +943,7 @@ export class PostgresProviderOperationsRepository {
           input.nextServiceDate ?? null,
         ],
       );
+      if (input.operationalStatus === 'ACTIVE') await assignFirstOwnerVehicle(client, userId);
       await client.query('COMMIT');
       return updated.rows[0];
     } catch (error) {
@@ -1208,6 +1232,10 @@ export class PostgresProviderOperationsRepository {
     ).rows;
   }
 
+  async submitFleetApprovals(userId: string, role: string) {
+    return submitFleetApprovals(this.pool, userId, role);
+  }
+
   async requestApproval(
     userId: string,
     role: string,
@@ -1403,7 +1431,7 @@ export class PostgresProviderOperationsRepository {
     await this.driverAccess(userId, role, profileId);
     return (
       await this.pool.query(
-        `SELECT dp.id,dp.user_id AS "userId",u.first_name AS "firstName",u.last_name AS "lastName",u.phone,u.email,
+        `SELECT provider_public_id(dp.user_id) AS "publicId",dp.id,dp.user_id AS "userId",u.first_name AS "firstName",u.last_name AS "lastName",u.phone,u.email,
        dp.license_number AS "licenseNumber",dp.license_expiry AS "licenseExpiry",dp.verification_status AS "verificationStatus",dp.availability_status AS availability,
        dp.city,dp.state,dp.pin_code AS "postalCode",dp.emergency_contact_name AS "emergencyContactName",dp.emergency_contact_phone AS "emergencyContactPhone",
        dp.emergency_contact_relationship AS "emergencyContactRelationship",dp.active_vehicle_id AS "vehicleId"

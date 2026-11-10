@@ -33,7 +33,10 @@ function setup() {
   return {
     provider,
     persist,
-    service: new RouteRecalculationService(provider, () => now, mapConfig),
+    service: new RouteRecalculationService(provider, () => now, {
+      ...mapConfig,
+      offRouteSustainMs: 0,
+    }),
     get: () => saved,
     time: (v: number) => {
       now = v;
@@ -41,6 +44,41 @@ function setup() {
   };
 }
 const off = (meters: number) => ({ latitude: meters / 111195, longitude: 0.005 });
+it('one-second GPS progress makes zero route calls; sustained deviation makes one', async () => {
+  const s = setup();
+  let now = 20000;
+  const service = new RouteRecalculationService(s.provider, () => now, {
+    ...mapConfig,
+    offRouteSustainMs: 8000,
+  });
+  for (let i = 1; i <= 60; i++) {
+    now += 1000;
+    await service.process(
+      'one-second',
+      s.get(),
+      { latitude: 0, longitude: i * 0.0001 },
+      destination,
+      'destination',
+      s.persist,
+      now,
+    );
+  }
+  expect(s.provider.calculateRoute).not.toHaveBeenCalled();
+  now += 1000;
+  await service.process('one-second', s.get(), off(80), destination, 'destination', s.persist, now);
+  expect(s.provider.calculateRoute).not.toHaveBeenCalled();
+  now += 9000;
+  await service.process(
+    'one-second',
+    s.get(),
+    off(110),
+    destination,
+    'destination',
+    s.persist,
+    now,
+  );
+  expect(s.provider.calculateRoute).toHaveBeenCalledTimes(1);
+});
 describe('route-aware navigation', () => {
   it('initializes and stores a route', async () => {
     const s = setup();

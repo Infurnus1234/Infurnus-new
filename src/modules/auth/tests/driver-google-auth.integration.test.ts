@@ -217,13 +217,13 @@ describe('Driver Google identity, onboarding and role boundaries', () => {
       const mismatch = await request(app)
         .post('/auth/google')
         .send({ ...body, providerRole: otherRole });
-      expect(mismatch.status).toBe(200);
-      expect(mismatch.body.data.userId).not.toBe(id);
-      expect((await verifyAccessToken(mismatch.body.data.accessToken)).role).toBe(otherRole);
+      expect(mismatch.status).toBe(409);
+      expect(mismatch.body.error.code).toBe('PROVIDER_IDENTITY_RECONCILIATION_REQUIRED');
+      expect(signup.body.data.publicId).toMatch(/^[1-9][0-9]{5}$/);
       expect((await pool.query('SELECT role FROM users WHERE id=$1', [id])).rows[0].role).toBe(
         providerRole,
       );
-      expect((await pool.query('SELECT id FROM users WHERE email=$1', [email])).rowCount).toBe(2);
+      expect((await pool.query('SELECT id FROM users WHERE email=$1', [email])).rowCount).toBe(1);
     },
   );
   it('preserves customer Google authentication without provider intent', async () => {

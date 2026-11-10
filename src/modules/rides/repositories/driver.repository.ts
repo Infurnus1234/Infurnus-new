@@ -1,3 +1,6 @@
+import { serviceEligibilitySql } from './service-eligibility.js';
+import type { PremiumCityAreas } from '../../maps/premium-city-areas.js';
+import type { LiveLocationCache } from './live-location.cache.js';
 import { cityCoverageSql } from '../../maps/city-radius.js';
 import { driverEligibilitySql, driverOperationalEligibilitySql } from './driver-eligibility.js';
 import { AppError } from '../../../common/errors/app-error.js';
@@ -11,6 +14,15 @@ import type {
   DriverProfile,
 } from '../types/driver.js';
 import type { UpsertDriverProfileInput } from '../schemas/driver.schemas.js';
+
+export interface AssignedVehicleOwner {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  businessName: string | null;
+  businessType: string | null;
+}
 
 export interface AssignmentCodePreview {
   code: string;
@@ -64,6 +76,7 @@ export interface DriverRepository {
     verificationStatus?: string;
     operationalStatus?: string;
     isActive?: boolean;
+    owner?: AssignedVehicleOwner | null;
     photoStorage?:
       import('../../partners/types/partner-document.js').PartnerDocumentStorageMetadata | null;
   } | null>;
@@ -78,8 +91,10 @@ export interface DriverRepository {
     vehicleCategory?: string,
     dispatch?: {
       rideId: string;
+      customerId?: string | undefined;
       radiusMeters: number | null;
       boundaryGeoJson?: string | undefined;
+      cityId?: string | undefined;
     },
   ): Promise<DriverCandidate[]>;
 
@@ -118,6 +133,7 @@ export interface DriverRepository {
     verificationStatus?: string;
     operationalStatus?: string;
     isActive?: boolean;
+    owner?: AssignedVehicleOwner | null;
     photoStorage?:
       import('../../partners/types/partner-document.js').PartnerDocumentStorageMetadata | null;
   } | null>;
@@ -126,12 +142,14 @@ export interface DriverRepository {
 const driverProjection = `
   id,
   user_id AS "userId",
+  provider_public_id(user_id) AS "publicId",
   license_number AS "licenseNumber",
   license_expiry::text AS "licenseExpiry",
   verification_status AS "verificationStatus",
   verified_by AS "verifiedBy",verified_at AS "verifiedAt",
   rejection_reason AS "rejectionReason",
   availability_status AS "availabilityStatus",
+  online_preference AS "onlinePreference",
   dob::text AS "dob",
   gender,
   address,
@@ -245,7 +263,12 @@ export async function saveDriverProfile(
 }
 
 export class PostgresDriverRepository implements DriverRepository {
-  constructor(private readonly pool: Pool) {}
+  trackingCache?: LiveLocationCache;
+  private readonly hydratedTracking = new Set<string>();
+  constructor(
+    private readonly pool: Pool,
+    private readonly serviceCities?: Pick<PremiumCityAreas, 'cities'>,
+  ) {}
 
   async findProfileIdByUserId(userId: string): Promise<string | null> {
     const result = await this.pool.query<{ id: string }>(
@@ -325,7 +348,12 @@ export class PostgresDriverRepository implements DriverRepository {
   async updateAvailability(profileId: string, status: DriverAvailabilityStatus): Promise<boolean> {
     const result = await this.pool.query(
       `UPDATE driver_profiles
-       SET availability_status = $2::driver_availability_status
+       SET online_preference = ($2::text = 'available'),
+           availability_status = CASE
+             WHEN $2::text = 'unavailable' AND availability_status = 'busy'
+               THEN availability_status
+             ELSE $2::driver_availability_status
+           END
        WHERE id = $1
          AND user_id IS NOT NULL
          AND EXISTS(SELECT 1 FROM users u WHERE u.id=user_id AND u.status='active' AND u.deleted_at IS NULL AND u.role IN ('driver','driver_fleet_owner'))
@@ -333,7 +361,9 @@ export class PostgresDriverRepository implements DriverRepository {
            SELECT 1 FROM driver_profiles dp JOIN users u ON u.id=dp.user_id
            JOIN vehicles v ON v.id=dp.active_vehicle_id
            WHERE dp.id=driver_profiles.id AND ${driverOperationalEligibilitySql()}))
-         AND NOT EXISTS (SELECT 1 FROM rides WHERE assigned_driver_id=driver_profiles.id AND status NOT IN ('completed','cancelled'))
+         AND ($2::text = 'unavailable' OR NOT EXISTS (
+           SELECT 1 FROM rides WHERE assigned_driver_id=driver_profiles.id AND status NOT IN ('completed','cancelled')
+         ))
        RETURNING id`,
       [profileId, status],
     );
@@ -361,10 +391,11 @@ export class PostgresDriverRepository implements DriverRepository {
 
     const result = await executor.query(
       `UPDATE driver_profiles
-       SET availability_status = CASE WHEN availability_status='busy' AND last_location_at>=NOW()-(${env.DRIVER_LOCATION_STALE_SECONDS}*INTERVAL '1 second')
+       SET availability_status = CASE WHEN availability_status='busy' AND online_preference AND last_location_at>=NOW()-(${env.DRIVER_LOCATION_STALE_SECONDS}*INTERVAL '1 second')
              AND EXISTS(SELECT 1 FROM driver_profiles dp JOIN users u ON u.id=dp.user_id JOIN vehicles v ON v.id=dp.active_vehicle_id
                WHERE dp.id=driver_profiles.id AND ${driverOperationalEligibilitySql()})
              THEN 'available'::driver_availability_status
+             WHEN availability_status='busy' AND online_preference THEN 'stale'::driver_availability_status
              WHEN availability_status='busy' THEN 'unavailable'::driver_availability_status ELSE availability_status END
        WHERE id = $1
          AND availability_status IN ('busy','stale')
@@ -377,10 +408,51 @@ export class PostgresDriverRepository implements DriverRepository {
   }
 
   async updateLocation(profileId: string, location: DriverLocation): Promise<boolean> {
+    const seeded = await this.trackingCache
+      ?.seed(
+        profileId,
+        async () => {
+          const stored = await this.pool.query(
+            `SELECT ST_Y(last_location::geometry) AS latitude,
+        ST_X(last_location::geometry) AS longitude, last_location_at AS "recordedAt",
+        location_accuracy AS accuracy FROM driver_profiles WHERE id=$1`,
+            [profileId],
+          );
+          const row = stored.rows[0];
+          return row?.recordedAt && row.latitude != null
+            ? {
+                latitude: Number(row.latitude),
+                longitude: Number(row.longitude),
+                recordedAt: new Date(row.recordedAt),
+                accuracy: Number(row.accuracy ?? 0),
+              }
+            : null;
+        },
+        !this.hydratedTracking.has(profileId),
+      )
+      .catch(() => false);
+    if (seeded) {
+      if (this.hydratedTracking.size >= 1000) this.hydratedTracking.clear();
+      this.hydratedTracking.add(profileId);
+    }
+    const accepted = await this.trackingCache?.accept(profileId, location);
+    if (accepted == null) this.hydratedTracking.delete(profileId);
+    if (accepted === -2) {
+      throw new AppError(
+        'DRIVER_LOCATION_IMPLAUSIBLE',
+        'Location change is too large for the elapsed time. Check your GPS source and try again with a consistent position.',
+        409,
+      );
+    }
+    if (accepted != null && accepted <= 0) return false;
+    if (accepted === 1) return true;
+
     const executor: Pool | PoolClient = this.pool;
 
-    const result = await executor.query(
-      `UPDATE driver_profiles
+    let result;
+    try {
+      result = await executor.query(
+        `UPDATE driver_profiles
        SET last_location =
              ST_SetSRID(
                ST_MakePoint($2, $3),
@@ -391,7 +463,7 @@ export class PostgresDriverRepository implements DriverRepository {
            location_heading = $6,
            location_accuracy = $7,
            availability_status = CASE
-             WHEN availability_status = 'stale'
+             WHEN online_preference AND availability_status IN ('stale', 'unavailable')
                   AND EXISTS(SELECT 1 FROM driver_profiles dp JOIN users u ON u.id=dp.user_id JOIN vehicles v ON v.id=dp.active_vehicle_id
                     WHERE dp.id=driver_profiles.id AND ${driverOperationalEligibilitySql()})
                   AND NOT EXISTS (
@@ -411,18 +483,29 @@ export class PostgresDriverRepository implements DriverRepository {
            last_location_at IS NULL
            OR last_location_at < $4
          )
+         AND (last_location_at IS NULL OR (
+           last_location_at <= $4::timestamptz - INTERVAL '0.5 seconds'
+           AND (last_location IS NULL OR ST_Distance(last_location,
+             ST_SetSRID(ST_MakePoint($2,$3),4326)::geography) <=
+             EXTRACT(EPOCH FROM ($4::timestamptz-last_location_at))*75 + COALESCE($7,0) + COALESCE(location_accuracy,0) + 50)
+         ))
        RETURNING id`,
-      [
-        profileId,
-        location.longitude,
-        location.latitude,
-        location.recordedAt,
-        location.speed ?? null,
-        location.heading ?? null,
-        location.accuracy ?? null,
-      ],
-    );
-
+        [
+          profileId,
+          location.longitude,
+          location.latitude,
+          location.recordedAt,
+          location.speed ?? null,
+          location.heading ?? null,
+          location.accuracy ?? null,
+        ],
+      );
+    } catch (error) {
+      await this.trackingCache?.rejectPersistence(profileId, location.recordedAt);
+      throw error;
+    }
+    if (result.rowCount !== 1)
+      await this.trackingCache?.rejectPersistence(profileId, location.recordedAt);
     return result.rowCount === 1;
   }
 
@@ -431,9 +514,11 @@ export class PostgresDriverRepository implements DriverRepository {
       `UPDATE driver_profiles
        SET availability_status = 'stale'
        WHERE id = $1
-         AND availability_status IN (
-           'available',
-           'busy'
+         AND availability_status = 'available'
+         AND NOT EXISTS (
+           SELECT 1 FROM rides r
+           WHERE r.assigned_driver_id = driver_profiles.id
+             AND r.status IN ('driver_assigned','driver_arriving','driver_arrived','in_progress')
          )
        RETURNING id`,
       [profileId],
@@ -448,6 +533,7 @@ export class PostgresDriverRepository implements DriverRepository {
     verificationStatus?: string;
     operationalStatus?: string;
     isActive?: boolean;
+    owner?: AssignedVehicleOwner | null;
     photoStorage?:
       import('../../partners/types/partner-document.js').PartnerDocumentStorageMetadata | null;
   } | null> {
@@ -493,8 +579,10 @@ export class PostgresDriverRepository implements DriverRepository {
     vehicleCategory?: string,
     dispatch?: {
       rideId: string;
+      customerId?: string | undefined;
       radiusMeters: number | null;
       boundaryGeoJson?: string | undefined;
+      cityId?: string | undefined;
     },
   ): Promise<DriverCandidate[]> {
     return this.queryNearby(
@@ -543,21 +631,37 @@ export class PostgresDriverRepository implements DriverRepository {
     countOnly = false,
     dispatch?: {
       rideId: string;
+      customerId?: string | undefined;
       radiusMeters: number | null;
       boundaryGeoJson?: string | undefined;
+      cityId?: string | undefined;
     },
   ): Promise<(DriverCandidate & { count?: number })[]> {
     validateCoordinates({ latitude, longitude });
+    if (sector === 'premium') radiusMeters = 25000;
     if (
       !Number.isFinite(radiusMeters) ||
       radiusMeters <= 0 ||
-      radiusMeters > (dispatch ? 20000 : env.MAP_DRIVER_RADII_METERS.at(-1)!)
+      radiusMeters >
+        (sector === 'premium'
+          ? 25000
+          : sector === 'service'
+            ? 200000
+            : dispatch
+              ? 20000
+              : env.MAP_DRIVER_RADII_METERS.at(-1)!)
     )
       throw new AppError('MAP_INPUT_INVALID', 'Driver radius exceeds the configured maximum', 400);
     if (!Number.isInteger(limit) || limit < 1 || limit > env.MAX_DRIVER_MATCH_CANDIDATES)
       throw new AppError(
         'MAP_INPUT_INVALID',
         'Driver candidate limit exceeds the configured maximum',
+        400,
+      );
+    if (sector === 'service' && !vehicleCategory)
+      throw new AppError(
+        'MAP_INPUT_INVALID',
+        'Choose a service type before checking nearby vehicles.',
         400,
       );
     const values: unknown[] = [longitude, latitude, radiusMeters, staleBefore, limit];
@@ -567,17 +671,31 @@ export class PostgresDriverRepository implements DriverRepository {
     conditions.push('$3::float8 > 0');
     if (dispatch) {
       values.push(dispatch.rideId);
-      customerExpression = `(SELECT scoped_ride.customer_id FROM rides scoped_ride WHERE scoped_ride.id=$${values.length}::uuid)`;
+      const rideParameter = values.length;
+      if (dispatch.customerId) {
+        values.push(dispatch.customerId);
+        customerExpression = `$${values.length}::uuid`;
+        conditions.push(`${customerExpression} IS NOT NULL`);
+      } else {
+        customerExpression = `(SELECT scoped_ride.customer_id FROM rides scoped_ride WHERE scoped_ride.id=$${rideParameter}::uuid)`;
+      }
       conditions.push(
-        `NOT EXISTS (SELECT 1 FROM ride_dispatch_attempts previous WHERE previous.ride_id=$${values.length} AND previous.driver_profile_id=dp.id)`,
+        `NOT EXISTS (SELECT 1 FROM ride_dispatch_attempts previous WHERE previous.ride_id=$${rideParameter} AND previous.driver_profile_id=dp.id)`,
       );
-      if (dispatch.boundaryGeoJson) {
+      if (dispatch.boundaryGeoJson && sector !== 'premium') {
         values.push(dispatch.boundaryGeoJson);
         conditions.push(cityCoverageSql(`$${values.length}`, 'dp.last_location::geometry'));
       }
     }
 
     conditions.unshift(driverEligibilitySql('$4', undefined, customerExpression));
+    if (sector === 'service')
+      conditions.push(
+        serviceEligibilitySql(
+          'ST_SetSRID(ST_MakePoint($1,$2),4326)::geography',
+          this.serviceCities,
+        ),
+      );
 
     if (sector) {
       values.push(sector);
@@ -588,6 +706,13 @@ export class PostgresDriverRepository implements DriverRepository {
       values.push(vehicleCategory);
       conditions.push(`v.category = $${values.length}`);
     }
+
+    const radiusExpression =
+      sector === 'premium'
+        ? '25000'
+        : sector === 'service'
+          ? `(SELECT LEAST(service_radius_meters,25000)::float8 FROM vehicle_types WHERE sector='service' AND code=$${values.length} AND active AND service_fixed_fare_paise IS NOT NULL)`
+          : '$3';
 
     const fallbackVehicleConditions = [
       'v2.driver_profile_id = dp.id',
@@ -648,9 +773,9 @@ export class PostgresDriverRepository implements DriverRepository {
          ) active_rides ON TRUE
          WHERE ${conditions.join('\nAND ')}
            AND COALESCE(active_rides.count, 0) = 0
-           ${dispatch?.radiusMeters === null ? '' : 'AND ST_DWithin('}
+           ${sector !== 'premium' && sector !== 'service' && dispatch?.radiusMeters === null ? '' : 'AND ST_DWithin('}
            ${
-             dispatch?.radiusMeters === null
+             sector !== 'premium' && sector !== 'service' && dispatch?.radiusMeters === null
                ? ''
                : `
              dp.last_location,
@@ -658,7 +783,7 @@ export class PostgresDriverRepository implements DriverRepository {
                ST_MakePoint($1, $2),
                4326
              )::geography,
-             $3 + 0.000001
+             ${radiusExpression} + 0.000001
            )`
            }
          ${countOnly ? '' : 'ORDER BY "distanceMeters" ASC, dp.id ASC'}
@@ -699,8 +824,8 @@ export class PostgresDriverRepository implements DriverRepository {
            ON p.user_id = u.id
          WHERE dac.code = $1
            AND ($2::uuid IS NULL OR EXISTS(SELECT 1 FROM driver_profiles caller JOIN partner_drivers pd ON pd.driver_profile_id=caller.id JOIN partners owner ON owner.id=pd.partner_id WHERE caller.user_id=$2 AND pd.status='ACTIVE' AND owner.user_id=dac.fleet_owner_id AND (dac.intended_driver_profile_id IS NULL OR dac.intended_driver_profile_id=caller.id)))
-           AND ((dac.status = 'ACTIVE' AND v.driver_profile_id IS NULL) OR (dac.status='CLAIMED' AND dac.driver_id=$2 AND EXISTS(SELECT 1 FROM driver_profiles current_driver WHERE current_driver.user_id=$2 AND current_driver.id=v.driver_profile_id AND current_driver.active_vehicle_id=v.id)))
-           AND dac.expires_at > NOW()
+           AND (((dac.status='ACTIVE' OR dac.code=v.joining_code) AND v.driver_profile_id IS NULL) OR ((dac.status='CLAIMED' OR dac.code=v.joining_code) AND EXISTS(SELECT 1 FROM driver_profiles current_driver WHERE current_driver.user_id=$2 AND current_driver.id=v.driver_profile_id AND current_driver.active_vehicle_id=v.id)))
+           AND (dac.code=v.joining_code OR dac.expires_at > NOW())
            AND v.is_active = TRUE
            AND v.verification_status = 'approved'
 `,
@@ -746,19 +871,22 @@ export class PostgresDriverRepository implements DriverRepository {
         fleetOwnerId: string;
         status: string;
         expiresAt: Date;
+        permanent: boolean;
         intendedDriverProfileId: string | null;
         claimedDriverId: string | null;
       }>(
         `SELECT
-           vehicle_id AS "vehicleId",
-           fleet_owner_id AS "fleetOwnerId",
-           driver_id AS "claimedDriverId",
-           status,
-           expires_at AS "expiresAt",
-           intended_driver_profile_id AS "intendedDriverProfileId"
-         FROM driver_assignment_codes
-         WHERE code = $1 AND expires_at>NOW()
-         FOR UPDATE`,
+           dac.vehicle_id AS "vehicleId",
+           dac.fleet_owner_id AS "fleetOwnerId",
+           CASE WHEN dac.code=v.joining_code THEN assigned.user_id ELSE dac.driver_id END AS "claimedDriverId",
+           CASE WHEN dac.code=v.joining_code THEN CASE WHEN v.driver_profile_id IS NULL THEN 'ACTIVE' ELSE 'CLAIMED' END ELSE dac.status END AS status,
+           dac.expires_at AS "expiresAt",
+           dac.code=v.joining_code AS permanent,
+           dac.intended_driver_profile_id AS "intendedDriverProfileId"
+         FROM driver_assignment_codes dac JOIN vehicles v ON v.id=dac.vehicle_id
+         LEFT JOIN driver_profiles assigned ON assigned.id=v.driver_profile_id
+         WHERE dac.code=$1 AND (dac.code=v.joining_code OR dac.expires_at>NOW())
+         FOR UPDATE OF dac`,
         [code],
       );
 
@@ -770,7 +898,7 @@ export class PostgresDriverRepository implements DriverRepository {
         (assignmentCode.status === 'CLAIMED' && assignmentCode.claimedDriverId !== driverUserId) ||
         (assignmentCode.intendedDriverProfileId != null &&
           assignmentCode.intendedDriverProfileId !== driverProfileId) ||
-        assignmentCode.expiresAt <= new Date()
+        (!assignmentCode.permanent && assignmentCode.expiresAt <= new Date())
       ) {
         throw new Error('ASSIGNMENT_CODE_INVALID');
       }
@@ -932,8 +1060,8 @@ export class PostgresDriverRepository implements DriverRepository {
              status = 'CLAIMED',
              updated_at = NOW()
          WHERE code = $2
-           AND status = 'ACTIVE'`,
-        [driverUserId, code],
+           AND (status = 'ACTIVE' OR code=(SELECT joining_code FROM vehicles WHERE id=$3))`,
+        [driverUserId, code, assignmentCode.vehicleId],
       );
 
       await client.query(
@@ -1025,6 +1153,7 @@ export class PostgresDriverRepository implements DriverRepository {
     verificationStatus?: string;
     operationalStatus?: string;
     isActive?: boolean;
+    owner?: AssignedVehicleOwner | null;
     photoStorage?:
       import('../../partners/types/partner-document.js').PartnerDocumentStorageMetadata | null;
   } | null> {
@@ -1047,6 +1176,9 @@ export class PostgresDriverRepository implements DriverRepository {
          v.category,
          v.verification_status AS "verificationStatus",
          v.operational_status AS "operationalStatus", v.is_active AS "isActive",
+         jsonb_build_object('id',owner.id,'name',concat_ws(' ',owner.first_name,owner.last_name),
+           'phone',owner.phone,'email',owner.email,'businessName',fleet.business_name,
+           'businessType',fleet.business_type) AS owner,
          (SELECT d.metadata->'storage' FROM partner_documents d
            JOIN partners p ON p.id=d.partner_id AND p.user_id=v.owner_id
            WHERE d.vehicle_id=v.id AND d.document_type='OTHER'
@@ -1058,7 +1190,12 @@ export class PostgresDriverRepository implements DriverRepository {
        JOIN driver_profiles dp
          ON dp.active_vehicle_id = v.id
         AND v.driver_profile_id = dp.id
-       WHERE dp.id = $1
+       JOIN users owner ON owner.id=v.owner_id AND owner.status='active' AND owner.deleted_at IS NULL
+       LEFT JOIN partners fleet ON fleet.user_id=owner.id
+       WHERE dp.id = $1 AND v.is_active AND v.verification_status='approved'
+         AND (owner.id=dp.user_id OR EXISTS(SELECT 1 FROM partner_drivers pd
+           WHERE pd.partner_id=fleet.id AND pd.driver_profile_id=dp.id AND pd.status='ACTIVE'
+             AND fleet.approval_status='approved'))
        LIMIT 1`,
       [driverProfileId],
     );

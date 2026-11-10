@@ -3,10 +3,12 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../utils/polyline_decoder.dart';
+import '../../shared/widgets/map_camera_queue.dart';
 
 abstract class MapService {
   void onMapCreated(GoogleMapController controller);
   void dispose();
+  void cancelCamera();
 
   Future<void> animateToLocation(LatLng position, {double zoom = 15.0});
   Future<void> fitBounds(List<LatLng> points, {double padding = 50.0});
@@ -31,23 +33,29 @@ abstract class MapService {
 
 class GoogleMapServiceImpl implements MapService {
   GoogleMapController? _controller;
+  final _camera = MapCameraQueue();
+  String? _encoded;
+  List<LatLng> _points = const [];
 
   @override
   void onMapCreated(GoogleMapController controller) {
     _controller = controller;
+    _camera.controller = controller;
   }
+
+  @override
+  void cancelCamera() => _camera.cancel();
 
   @override
   void dispose() {
     // GoogleMap owns/disposes its platform controller.
+    _camera.dispose();
     _controller = null;
   }
 
   @override
   Future<void> animateToLocation(LatLng position, {double zoom = 15.0}) async {
-    await _controller?.animateCamera(
-      CameraUpdate.newLatLngZoom(position, zoom),
-    );
+    _camera.move(CameraUpdate.newLatLngZoom(position, zoom));
   }
 
   @override
@@ -55,9 +63,7 @@ class GoogleMapServiceImpl implements MapService {
     if (points.isEmpty || _controller == null) return;
 
     final bounds = boundsFromLatLngList(points);
-    await _controller?.animateCamera(
-      CameraUpdate.newLatLngBounds(bounds, padding),
-    );
+    _camera.move(CameraUpdate.newLatLngBounds(bounds, padding));
   }
 
   @override
@@ -85,7 +91,11 @@ class GoogleMapServiceImpl implements MapService {
     Color color = Colors.blue,
     int width = 5,
   }) {
-    final points = PolylineDecoder.decode(encodedPolyline);
+    if (_encoded != encodedPolyline) {
+      _points = PolylineDecoder.decode(encodedPolyline);
+      _encoded = encodedPolyline;
+    }
+    final points = _points;
     if (points.isEmpty) return null;
 
     return Polyline(

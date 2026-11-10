@@ -139,7 +139,7 @@ export class PostgresDriverDocumentRepository implements DriverDocumentRepositor
            SELECT 1 FROM fleet_managed_driver_accounts m JOIN partners p ON p.id=m.partner_id JOIN users actor ON actor.id=p.user_id
            WHERE m.driver_user_id=dp.user_id AND m.status='ACTIVE' AND actor.id=$2
            AND actor.role IN ('fleet_owner','driver_fleet_owner') AND actor.status='active' AND actor.deleted_at IS NULL
-           AND p.approval_status='approved')) FOR UPDATE OF dp`,
+           )) FOR UPDATE OF dp`,
         [input.driverProfileId, input.uploadedBy],
       );
       if (!owner.rowCount) throw new Error('Driver document upload is not authorized');

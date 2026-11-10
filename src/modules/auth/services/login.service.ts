@@ -54,6 +54,13 @@ export class LoginService {
     input: LoginInput,
     adminOnly = false,
   ): Promise<LoginChallengeResult | PasswordLoginResult> {
+    if (
+      input.driverFlow &&
+      (adminOnly ||
+        (input.role && !['driver', 'fleet_owner', 'driver_fleet_owner'].includes(input.role)))
+    ) {
+      throw new AppError('FORBIDDEN', 'Select a Driver or Fleet account for the Driver App', 403);
+    }
     // --------------------------------------------------------
     // Determine supplied identifiers
     //
@@ -109,9 +116,11 @@ export class LoginService {
     // --------------------------------------------------------
 
     if (email) {
-      identity = await (input.role
-        ? this.repository.findByEmail(email, input.role)
-        : this.repository.findByEmail(email));
+      identity = await (input.driverFlow
+        ? this.repository.findByEmail(email, input.role, true)
+        : input.role
+          ? this.repository.findByEmail(email, input.role)
+          : this.repository.findByEmail(email));
 
       // ------------------------------------------------------
       // If both email and phone are supplied, make sure they
@@ -119,9 +128,11 @@ export class LoginService {
       // ------------------------------------------------------
 
       if (identity && phone) {
-        const phoneIdentity = await (input.role
-          ? this.repository.findByPhone(phone, input.role)
-          : this.repository.findByPhone(phone));
+        const phoneIdentity = await (input.driverFlow
+          ? this.repository.findByPhone(phone, input.role, true)
+          : input.role
+            ? this.repository.findByPhone(phone, input.role)
+            : this.repository.findByPhone(phone));
 
         if (!phoneIdentity || phoneIdentity.id !== identity.id) {
           throw new AppError('INVALID_CREDENTIALS', 'Invalid email/phone or password', 401);
@@ -134,9 +145,11 @@ export class LoginService {
     // --------------------------------------------------------
 
     if (!email) {
-      identity = await (input.role
-        ? this.repository.findByPhone(phone!, input.role)
-        : this.repository.findByPhone(phone!));
+      identity = await (input.driverFlow
+        ? this.repository.findByPhone(phone!, input.role, true)
+        : input.role
+          ? this.repository.findByPhone(phone!, input.role)
+          : this.repository.findByPhone(phone!));
     }
 
     // --------------------------------------------------------
@@ -144,6 +157,8 @@ export class LoginService {
     // --------------------------------------------------------
 
     if (!identity && !adminOnly) {
+      if (input.password !== undefined)
+        throw new AppError('PASSWORD_LOGIN_NOT_ALLOWED', 'Use phone or email OTP to sign in', 400);
       return { challengeId: randomUUID(), expiresAt: new Date(Date.now() + 10 * 60_000) };
     }
     if (!identity) {
@@ -162,14 +177,26 @@ export class LoginService {
     // Password Verification
     // ========================================================
 
-    const passwordless = identity.role === 'customer' || identity.role === 'driver';
+    if (adminOnly && !isPasswordOnlyAdmin(identity.role)) {
+      throw new AppError(
+        'ADMIN_ACCESS_REQUIRED',
+        'An active administrative account is required',
+        403,
+      );
+    }
+    const passwordless = !isPasswordOnlyAdmin(identity.role);
+    if (passwordless && input.password !== undefined) {
+      throw new AppError('PASSWORD_LOGIN_NOT_ALLOWED', 'Use phone or email OTP to sign in', 400);
+    }
+    const unverifiedContact = phone
+      ? identity.phoneVerified === false
+      : identity.emailVerified === false;
+    const provisionedContactEligible = phone
+      ? identity.provisionedPhoneEligible === true
+      : identity.provisionedEmailEligible === true;
     // Legacy secondary contacts were stored before their ownership was proven.
     // Refuse these identifiers instead of granting access to an unrelated account.
-    if (
-      passwordless &&
-      ((phone && identity.phoneVerified === false) ||
-        (!phone && email && identity.emailVerified === false))
-    ) {
+    if (passwordless && unverifiedContact && !provisionedContactEligible) {
       return { challengeId: randomUUID(), expiresAt: new Date(Date.now() + 10 * 60_000) };
     }
     const validPassword =
@@ -189,13 +216,6 @@ export class LoginService {
       throw new AppError('ACCOUNT_LOCKED', 'Account is temporarily locked', 401);
     }
 
-    if (adminOnly && !isPasswordOnlyAdmin(identity.role)) {
-      throw new AppError(
-        'ADMIN_ACCESS_REQUIRED',
-        'An active administrative account is required',
-        403,
-      );
-    }
     if (isPasswordOnlyAdmin(identity.role)) {
       return { userId: identity.id, role: identity.role };
     }
@@ -331,6 +351,9 @@ export class LoginService {
       expiresAt,
 
       lastOtpSentAt: new Date(now),
+      ...(unverifiedContact && provisionedContactEligible
+        ? { provisionedContactValue: phone ? identity.phone! : identity.email! }
+        : {}),
     });
 
     // ========================================================

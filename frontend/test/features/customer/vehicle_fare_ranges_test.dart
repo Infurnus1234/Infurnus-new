@@ -50,7 +50,7 @@ Map<String, dynamic> range({bool open = false, bool quote = false}) => {
 
 class NoLocation extends LocationService {
   @override
-  Future<Position?> getCurrentPosition() async => null;
+  Future<Position?> getCurrentPosition({bool retry = false}) async => null;
 }
 
 class ConnectedSocket extends SocketService {
@@ -112,6 +112,18 @@ class RecordingRepository implements RideRepository {
   }
 }
 
+class RepricingRepository extends RecordingRepository {
+  @override
+  Future<ride.RideModel> createRide(Map<String, dynamic> data) async {
+    creates++;
+    estimate = FareEstimateModel.fromJson({
+      ...range(quote: true),
+      'bookingFare': fixed(2600),
+    });
+    throw FareFailure('FARE_QUOTE_CHANGED', 'Pricing changed.');
+  }
+}
+
 class FailingDataSource implements RideRemoteDataSource {
   final String code;
   FailingDataSource(this.code);
@@ -147,6 +159,41 @@ class MalformedDataSource extends FailingDataSource {
 }
 
 void main() {
+  test(
+    'a stale quote refreshes the fare but never auto-submits a changed price',
+    () async {
+      final repository = RepricingRepository()
+        ..estimate = FareEstimateModel.fromJson(range(quote: true));
+      final socket = ConnectedSocket();
+      final container = ProviderContainer(
+        overrides: [
+          rideRepositoryProvider.overrideWithValue(repository),
+          socketServiceProvider.overrideWithValue(socket),
+        ],
+      );
+      addTearDown(() {
+        container.dispose();
+        socket.dispose();
+      });
+      final notifier = container.read(rideProvider.notifier);
+      notifier.setRoute(
+        'A',
+        'B',
+        pickupCoords: const LatLng(12, 77),
+        destCoords: const LatLng(13, 78),
+        vehicleCategory: 'sedan',
+      );
+      await notifier.estimateRouteFare();
+      await notifier.requestRide();
+      expect(repository.creates, 1);
+      expect(container.read(rideProvider).fareEstimate!.bookingAmount, 26);
+      expect(
+        container.read(rideProvider).errorMessage,
+        contains('confirming again'),
+      );
+      expect(container.read(rideProvider).currentRide, isNull);
+    },
+  );
   test('malformed backend fare is a professional retry error, never availability or zero', () async {
     final repository = RideRepositoryImpl(MalformedDataSource());
     await expectLater(
@@ -234,7 +281,6 @@ void main() {
           locationServiceProvider.overrideWithValue(NoLocation()),
         ],
       );
-      addTearDown(container.dispose);
       final notifier = container.read(rideProvider.notifier);
       notifier.setRoute(
         'Warehouse',
@@ -263,6 +309,8 @@ void main() {
       expect(button.onPressed, isNotNull);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
+      container.dispose();
+      await tester.pump();
     },
   );
   test(
@@ -284,7 +332,7 @@ void main() {
         'maximum': null,
       };
       final estimate = FareEstimateModel.fromJson(json);
-      expect(estimate.displayFare, '₹840.00+');
+      expect(estimate.displayFare, '₹840+');
       expect(estimate.pricingDescription, 'Base ₹775.00+; ₹25.00–₹30.00/km');
       expect(estimate.bookingAmount, isNull);
     },
@@ -351,25 +399,22 @@ void main() {
     final estimate = FareEstimateModel.fromJson(fixed(2000));
     expect(estimate.grossAmount, 20);
     expect(estimate.bookingAmount, 20);
-    expect(estimate.displayFare, '₹20.00');
+    expect(estimate.displayFare, '₹20');
   });
   test('parses and displays a bounded range without a booking amount', () {
     final estimate = FareEstimateModel.fromJson(range());
-    expect(estimate.displayFare, '₹20.00–₹28.00');
+    expect(estimate.displayFare, '₹20–₹28');
     expect(estimate.bookingAmount, isNull);
     expect(estimate.bookable, isFalse);
     expect(estimate.pricingDescription, contains('₹5.00–₹8.00/km'));
   });
   test('preserves open upper bound', () {
-    expect(
-      FareEstimateModel.fromJson(range(open: true)).displayFare,
-      '₹20.00+',
-    );
+    expect(FareEstimateModel.fromJson(range(open: true)).displayFare, '₹20+');
   });
   test('uses explicit booking quote rather than either range bound', () {
     final estimate = FareEstimateModel.fromJson(range(quote: true));
     expect(estimate.bookingAmount, 24);
-    expect(estimate.displayFare, '₹20.00–₹28.00');
+    expect(estimate.displayFare, '₹20–₹28');
   });
   test('FTL information cannot become a booking amount', () {
     final estimate = FareEstimateModel.fromJson({

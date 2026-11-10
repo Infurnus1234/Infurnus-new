@@ -229,9 +229,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
 
                   const SizedBox(height: 12),
 
-                  // 3. Tagline: "Move. Haul. Rise."
+                  // 3. Tagline: "Move. Haul. Ride."
                   const Text(
-                    'Move.  Haul.  Rise.',
+                    'Move. Haul. Ride.',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 13,

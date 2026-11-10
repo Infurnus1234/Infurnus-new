@@ -27,6 +27,17 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
   static const Color brandGreen = Color(0xFF10B981);
   static const Color darkGreen = Color(0xFF065F46);
 
+  static final _sectionMarker = RegExp(r'^\d+\.\s+(?=[A-Za-z])');
+  static final _subsectionMarker = RegExp(r'^\d+(?:\.\d+)+\s+');
+  static final _bulletMarker = RegExp(r'^(?:[-•]|\d+\.)\s+');
+
+  static const _privacyBodyStyle = TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.normal,
+    color: textGray,
+    height: 1.5,
+  );
+
   final ScrollController _scrollController = ScrollController();
 
   @override
@@ -40,7 +51,9 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
     final isPrivacy = widget.title.toLowerCase().contains('privacy');
     final isTerms = widget.title.toLowerCase().contains('term');
 
-    final sections = _parseSections(widget.content);
+    final sections = _parseSections(widget.content, isPrivacy: isPrivacy);
+
+    Widget fitLabel(Text label) => isPrivacy ? Flexible(child: label) : label;
 
     return Scaffold(
       backgroundColor: mainBg,
@@ -123,13 +136,15 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
                         ),
                       ),
                       const SizedBox(width: 10),
-                      const Text(
-                        'INFURNUS LOGISTICS TECHNOLOGIES',
-                        style: TextStyle(
-                          color: Color(0xFFA7F3D0),
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.6,
+                      fitLabel(
+                        const Text(
+                          'INFURNUS LOGISTICS TECHNOLOGIES',
+                          style: TextStyle(
+                            color: Color(0xFFA7F3D0),
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.6,
+                          ),
                         ),
                       ),
                     ],
@@ -156,16 +171,19 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
                       _buildHeaderBadge(
                         Icons.update_rounded,
                         'Last Updated: October 2026',
+                        wrapLabel: isPrivacy,
                       ),
                       _buildHeaderBadge(
                         Icons.verified_rounded,
                         isPrivacy
                             ? 'DPDP Act, 2023 Compliant'
                             : 'IT Act, 2000 & Contract Act',
+                        wrapLabel: isPrivacy,
                       ),
                       _buildHeaderBadge(
                         Icons.numbers_rounded,
                         'v2.4 • Effective',
+                        wrapLabel: isPrivacy,
                       ),
                     ],
                   ),
@@ -175,7 +193,9 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
             const SizedBox(height: 18),
 
             // 2. Sections Container
-            ...sections.map((sec) => _buildSectionCard(sec)),
+            ...sections.map(
+              (sec) => _buildSectionCard(sec, isPrivacy: isPrivacy),
+            ),
 
             // 3. Grievance Officer Card
             Container(
@@ -190,32 +210,36 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Row(
+                  Row(
                     children: [
-                      Icon(
+                      const Icon(
                         Icons.support_agent_rounded,
                         color: darkGreen,
                         size: 22,
                       ),
-                      SizedBox(width: 8),
-                      Text(
-                        'Statutory Grievance Redressal',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: darkGreen,
+                      const SizedBox(width: 8),
+                      fitLabel(
+                        const Text(
+                          'Statutory Grievance Redressal',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: darkGreen,
+                          ),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  const Text(
+                  Text(
                     'For any questions, privacy requests, or grievances under the DPDP Act 2023 or IT Rules 2021, contact our dedicated Grievance Officer:',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: textGray,
-                      height: 1.4,
-                    ),
+                    style: isPrivacy
+                        ? _privacyBodyStyle
+                        : const TextStyle(
+                            fontSize: 12,
+                            color: textGray,
+                            height: 1.4,
+                          ),
                   ),
                   const SizedBox(height: 10),
                   _buildGrievanceRow('Officer', 'Legal Compliance Officer'),
@@ -255,7 +279,19 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
     );
   }
 
-  Widget _buildHeaderBadge(IconData icon, String text) {
+  Widget _buildHeaderBadge(
+    IconData icon,
+    String text, {
+    required bool wrapLabel,
+  }) {
+    final label = Text(
+      text,
+      style: const TextStyle(
+        fontSize: 10,
+        color: Colors.white,
+        fontWeight: FontWeight.w600,
+      ),
+    );
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
@@ -267,20 +303,13 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
         children: [
           Icon(icon, size: 12, color: const Color(0xFFA7F3D0)),
           const SizedBox(width: 5),
-          Text(
-            text,
-            style: const TextStyle(
-              fontSize: 10,
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          if (wrapLabel) Flexible(child: label) else label,
         ],
       ),
     );
   }
 
-  Widget _buildSectionCard(_LegalSection section) {
+  Widget _buildSectionCard(_LegalSection section, {required bool isPrivacy}) {
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 14),
@@ -328,10 +357,24 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
             const SizedBox(height: 10),
           ],
           ...section.paragraphs.map((p) {
-            final isBullet =
-                p.trim().startsWith('-') ||
-                p.trim().startsWith('•') ||
-                RegExp(r'^\d+\.').hasMatch(p.trim());
+            if (isPrivacy && _subsectionMarker.hasMatch(p)) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  p,
+                  style: _privacyBodyStyle.copyWith(
+                    color: textBlack,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              );
+            }
+
+            final isBullet = isPrivacy
+                ? _bulletMarker.hasMatch(p)
+                : p.trim().startsWith('-') ||
+                      p.trim().startsWith('•') ||
+                      RegExp(r'^\d+\.').hasMatch(p.trim());
 
             if (isBullet) {
               return Padding(
@@ -349,12 +392,17 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
                     ),
                     Expanded(
                       child: Text(
-                        p.replaceFirst(RegExp(r'^[-•\d+\.]\s*'), ''),
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: textBlack,
-                          height: 1.45,
+                        p.replaceFirst(
+                          isPrivacy ? _bulletMarker : RegExp(r'^[-•\d+\.]\s*'),
+                          '',
                         ),
+                        style: isPrivacy
+                            ? _privacyBodyStyle.copyWith(color: textBlack)
+                            : const TextStyle(
+                                fontSize: 13,
+                                color: textBlack,
+                                height: 1.45,
+                              ),
                       ),
                     ),
                   ],
@@ -366,11 +414,13 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
               padding: const EdgeInsets.only(bottom: 8),
               child: Text(
                 p,
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: textGray,
-                  height: 1.5,
-                ),
+                style: isPrivacy
+                    ? _privacyBodyStyle
+                    : const TextStyle(
+                        fontSize: 13,
+                        color: textGray,
+                        height: 1.5,
+                      ),
               ),
             );
           }),
@@ -411,15 +461,21 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
     );
   }
 
-  List<_LegalSection> _parseSections(String raw) {
+  List<_LegalSection> _parseSections(String raw, {required bool isPrivacy}) {
     final lines = raw.split('\n');
     final List<_LegalSection> list = [];
     String currentHeading = '';
     List<String> currentParagraphs = [];
 
-    for (var line in lines) {
+    var sectionNumber = 0;
+    var subsectionNumber = 0;
+    var startsBlock = true;
+    for (final line in lines) {
       final trimmed = line.trim();
-      if (trimmed.isEmpty) continue;
+      if (trimmed.isEmpty) {
+        startsBlock = true;
+        continue;
+      }
 
       // Skip document title headers at the very start
       if (trimmed == 'PRIVACY POLICY' ||
@@ -430,16 +486,30 @@ class _LegalDocumentScreenState extends State<LegalDocumentScreen> {
         continue;
       }
 
-      // Detect numbered headings: "1. Introduction", "2. Data We Collect"
-      if (RegExp(r'^\d+\.\s+[A-Za-z]').hasMatch(trimmed)) {
+      // The Privacy Policy separates main sections with blank lines. Numbered
+      // list entries inside a section follow their lead-in or the prior item.
+      if (_sectionMarker.hasMatch(trimmed) && (!isPrivacy || startsBlock)) {
         if (currentHeading.isNotEmpty || currentParagraphs.isNotEmpty) {
           list.add(_LegalSection(currentHeading, currentParagraphs));
           currentParagraphs = [];
         }
-        currentHeading = trimmed;
+        sectionNumber++;
+        subsectionNumber = 0;
+        currentHeading = isPrivacy
+            ? '$sectionNumber. ${trimmed.replaceFirst(_sectionMarker, '')}'
+            : trimmed;
+      } else if (isPrivacy &&
+          sectionNumber > 0 &&
+          _subsectionMarker.hasMatch(trimmed)) {
+        subsectionNumber++;
+        currentParagraphs.add(
+          '$sectionNumber.$subsectionNumber '
+          '${trimmed.replaceFirst(_subsectionMarker, '')}',
+        );
       } else {
         currentParagraphs.add(trimmed);
       }
+      startsBlock = false;
     }
 
     if (currentHeading.isNotEmpty || currentParagraphs.isNotEmpty) {

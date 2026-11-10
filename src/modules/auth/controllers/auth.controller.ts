@@ -1,3 +1,4 @@
+import { pool as publicIdentityPool } from '../../../infrastructure/database/postgres.js';
 import { GoogleAuthService } from '../services/google-auth.service.js';
 import { randomUUID } from 'node:crypto';
 import { googleAuthSchema, googleLinkSchema } from '../schemas/auth.schemas.js';
@@ -312,6 +313,7 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
       const input = loginSchema.parse(req.body);
 
       const credentials = {
+        ...(input.driverFlow !== undefined ? { driverFlow: input.driverFlow } : {}),
         ...(input.role !== undefined ? { role: input.role } : {}),
         ...(input.email !== undefined ? { email: input.email } : {}),
 
@@ -686,7 +688,19 @@ export function createAuthHandlers(dependencies: AuthControllerDependencies) {
     setCsrfTokenCookie(res, csrfToken);
     res.status(200).json({
       success: true,
-      data: { userId, accessToken, expiresAt: refreshToken.expiresAt, csrfToken },
+      data: {
+        userId,
+        accessToken,
+        expiresAt: refreshToken.expiresAt,
+        csrfToken,
+        ...(['driver', 'fleet_owner', 'driver_fleet_owner'].includes(role)
+          ? {
+              publicId:
+                (await publicIdentityPool.query('SELECT provider_public_id($1) AS id', [userId]))
+                  .rows[0]?.id ?? null,
+            }
+          : {}),
+      },
     });
   }
 

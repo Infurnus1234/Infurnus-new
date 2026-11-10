@@ -10,10 +10,6 @@ void main() {
         'assets/images/hatchback_clean.jpg',
       );
       expect(
-        VehicleVisualImage.getAssetPath('Mini Cab', 'rides'),
-        'assets/images/hatchback_clean.jpg',
-      );
-      expect(
         VehicleVisualImage.getAssetPath('Baleno', 'rides'),
         'assets/images/hatchback_clean.jpg',
       );
@@ -45,10 +41,6 @@ void main() {
 
     test('Logistics exact mappings', () {
       expect(
-        VehicleVisualImage.getAssetPath('3-Wheeler (Goods)', 'logistics'),
-        'assets/images/piaggio_ape_yellow.png',
-      );
-      expect(
         VehicleVisualImage.getAssetPath('Tata Magic', 'logistics'),
         'assets/images/tata_magic_cream.png',
       );
@@ -62,11 +54,11 @@ void main() {
       );
       expect(
         VehicleVisualImage.getAssetPath('407 Cargo', 'logistics'),
-        'assets/images/tata_407_beige.png',
+        'assets/images/cargo_407.jpg',
       );
       expect(
         VehicleVisualImage.getAssetPath('Mini Truck', 'logistics'),
-        'assets/images/tata_magic_cream.png',
+        'assets/images/mini_truck.jpg',
       );
       expect(
         VehicleVisualImage.getAssetPath('E-Rickshaw', 'logistics'),
@@ -116,7 +108,7 @@ void main() {
       );
       expect(
         VehicleVisualImage.getAssetPath('Force Traveller', 'rides'),
-        'assets/images/force_urbania.jpg',
+        'assets/images/force_traveller_clean.jpg',
       );
       expect(
         VehicleVisualImage.getAssetPath('Mahindra Thar', 'suv'),
@@ -132,7 +124,7 @@ void main() {
       expect(
         VehicleCategoryConfig.getConfig(VehicleCategoryType.rides)
             .assetImagePath,
-        'assets/images/sedan.jpg',
+        'assets/images/hatchback_clean.jpg',
       );
       expect(
         VehicleCategoryConfig.getConfig(VehicleCategoryType.logistics)

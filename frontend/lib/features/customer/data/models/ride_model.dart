@@ -47,7 +47,7 @@ class DriverDetails {
     return DriverDetails(
       id: (json['id'] as String?) ?? '',
       name: (json['name'] as String?) ?? '',
-      phone: json['phone'] as String?,
+      phone: null,
       rating: (json['rating'] as num?)?.toDouble(),
       photoUrl: json['photoUrl'] as String?,
     );
@@ -79,6 +79,8 @@ class VehicleDetails {
 
 class RideModel {
   final String id;
+  final String? bookingId;
+  final String? callingNumber;
   final String customerId;
   final String? assignedDriverId;
   final String? assignedVehicleId;
@@ -88,6 +90,8 @@ class RideModel {
   final String? destinationAddress;
   final double? fareEstimate;
   final double? finalFare;
+  final String? bookingVehicleTypeId;
+  final String? bookingPricingVersion;
   final int? actualDistanceMeters;
   final double? actualFuelCost;
   final String? sector;
@@ -117,14 +121,14 @@ class RideModel {
   bool get isLogistics => sector == 'logistics';
   bool get upfrontPaid => upfrontPaymentStatus == 'PAID_VERIFIED';
   double get upfrontAmount {
-    final fromBackend = (logisticsPayment?['upfrontAmount'] as num?)
-        ?.toDouble();
-    if (fromBackend != null) return fromBackend;
-    final fare = fareEstimate ?? 0.0;
-    return (fare * 0.4 * 100).roundToDouble() / 100;
+    final direct = logisticsPayment?['upfrontAmount'] as num?;
+    if (direct != null) return direct.toDouble();
+    return ((logisticsPayment?['upfrontPaise'] as num?)?.toDouble() ?? 0) / 100;
   }
 
   RideModel({
+    this.bookingId,
+    this.callingNumber,
     required this.id,
     required this.customerId,
     this.assignedDriverId,
@@ -135,6 +139,8 @@ class RideModel {
     this.destinationAddress,
     this.fareEstimate,
     this.finalFare,
+    this.bookingVehicleTypeId,
+    this.bookingPricingVersion,
     this.paymentStatus,
     this.upfrontPaymentStatus,
     this.logisticsPayment,
@@ -190,6 +196,8 @@ class RideModel {
   }) {
     return RideModel(
       id: id ?? this.id,
+      bookingId: bookingId,
+      callingNumber: callingNumber,
       customerId: customerId ?? this.customerId,
       assignedDriverId: assignedDriverId ?? this.assignedDriverId,
       assignedVehicleId: assignedVehicleId ?? this.assignedVehicleId,
@@ -224,6 +232,8 @@ class RideModel {
   factory RideModel.fromJson(Map<String, dynamic> json) {
     return RideModel(
       id: json['id'] as String,
+      bookingId: json['bookingId'] as String?,
+      callingNumber: json['callingNumber'] as String?,
       customerId: json['customerId'] as String,
       assignedDriverId: json['assignedDriverId'] as String?,
       assignedVehicleId: json['assignedVehicleId'] as String?,
@@ -247,6 +257,8 @@ class RideModel {
           : null,
       sector: json['sector'] as String?,
       vehicleCategory: json['vehicleCategory'] as String?,
+      bookingVehicleTypeId: json['bookingVehicleTypeId'] as String?,
+      bookingPricingVersion: json['bookingPricingVersion'] as String?,
       goods: json['goods'] != null
           ? Map<String, dynamic>.from(json['goods'] as Map)
           : null,

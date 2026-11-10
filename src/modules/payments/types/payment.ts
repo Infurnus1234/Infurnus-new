@@ -1,6 +1,12 @@
 export type PaymentStatus = 'INITIATED' | 'AUTHORIZED' | 'CAPTURED' | 'REFUNDED' | 'FAILED';
 
 export interface Payment {
+  refundedAmount?: number;
+  refundPending?: boolean;
+  paymentStage?: 'upfront' | 'final' | null;
+  customerClaimedAt?: Date | null;
+  cashConfirmedBy?: string | null;
+  cashConfirmedAt?: Date | null;
   id: string;
   userId: string;
   rideId: string | null;
@@ -36,6 +42,8 @@ export interface InitiatePaymentData {
 }
 
 export interface CapturePaymentData {
+  verifiedOnline?: boolean;
+  cashConfirmedBy?: string;
   paymentId: string;
   providerPaymentId?: string | undefined;
 }

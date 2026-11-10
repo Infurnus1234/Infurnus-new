@@ -789,7 +789,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
                                       content: Text(
-                                        'Top-up of ${CurrencyFormatter.format(amt)} successful! Wallet updated.',
+                                        'Top-up of ${CurrencyFormatter.format(ref.read(walletProvider.notifier).lastTopUpAmount)} successful! Wallet updated.',
                                       ),
                                       backgroundColor: darkGreen,
                                     ),

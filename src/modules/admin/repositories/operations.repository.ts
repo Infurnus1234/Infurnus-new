@@ -1,3 +1,5 @@
+import { newestFirstSql } from '../../../common/utils/chronological-order.js';
+import { PostgresSupportRepository } from '../../support/repositories/support.repository.js';
 import { reportingDatePredicates } from './reporting-dates.js';
 import type { Pool } from 'pg';
 import { z } from 'zod';
@@ -34,10 +36,9 @@ export const operationSources = {
   },
   rides: {
     table: 'rides',
-    columns:
-      'id, customer_id, assigned_driver_id, assigned_vehicle_id, sector, vehicle_category, status, pickup_address, destination_address, fare_estimate, final_fare, actual_distance_meters, created_at, updated_at',
+    columns: `id, booking_id, customer_id, assigned_driver_id, assigned_vehicle_id, sector, vehicle_category, status, pickup_address, destination_address, fare_estimate, final_fare, actual_distance_meters, cancellation_reason, created_at, updated_at, completed_at, cancelled_at, ST_Y(pickup_location::geometry) AS pickup_latitude, ST_X(pickup_location::geometry) AS pickup_longitude, route_metadata->'bookingFareSnapshot'->>'pricingVersion' AS pricing_version`,
     status: 'status',
-    search: 'id::text',
+    search: "concat_ws(' ',booking_id,id::text)",
     statuses: [
       'requested',
       'searching',
@@ -160,6 +161,7 @@ export const operationQuerySchema = z
     pageSize: z.coerce.number().int().min(1).max(100).default(25),
     search: z.string().trim().min(1).max(150).optional(),
     recordId: z.string().uuid().optional(),
+    sector: z.enum(['passenger', 'logistics', 'premium', 'service', 'rental']).optional(),
     status: z.string().max(40).optional(),
     from: z.string().date().optional(),
     to: z.string().date().optional(),
@@ -173,6 +175,26 @@ export class AdminOperationsRepository {
   authorize(userId: string, role: string) {
     return new PostgresProviderOperationsRepository(this.pool).authorize(userId, role);
   }
+  async bookingReference(bookingId: string) {
+    // Expiry is checked at read time; cleanup timing cannot return a stale allocation.
+    const result = await this.pool.query(
+      `SELECT r.id AS "rideId", a.booking_id AS "bookingId",
+      r.sector, r.created_at AS "createdAt", r.status, r.pickup_address AS "pickupAddress",
+      r.destination_address AS "destinationAddress", r.vehicle_category AS "vehicleCategory",
+      r.route_metadata->'rentalDetails'->'hours' AS "bookingHours",
+      COALESCE(r.final_fare,r.fare_estimate) AS amount,
+      (SELECT status::text FROM payments WHERE ride_id=r.id ORDER BY created_at DESC LIMIT 1) AS "paymentStatus",
+      jsonb_build_object('id',cu.id,'name',concat_ws(' ',cu.first_name,cu.last_name),'phone',cu.phone) AS customer,
+      CASE WHEN du.id IS NOT NULL THEN jsonb_build_object('id',du.id,'name',concat_ws(' ',du.first_name,du.last_name),'phone',du.phone) END AS driver,
+      CASE WHEN v.id IS NOT NULL THEN jsonb_build_object('id',v.id,'make',v.make,'model',v.model,'plateNumber',v.plate_number) END AS vehicle
+      FROM booking_id_allocations a JOIN rides r ON r.id=a.ride_id
+      JOIN users cu ON cu.id=r.customer_id LEFT JOIN driver_profiles dp ON dp.id=r.assigned_driver_id
+      LEFT JOIN users du ON du.id=dp.user_id LEFT JOIN vehicles v ON v.id=r.assigned_vehicle_id
+      WHERE a.booking_id=$1 AND a.released_at IS NULL AND (a.expires_at IS NULL OR a.expires_at>clock_timestamp())`,
+      [bookingId],
+    );
+    return result.rows[0] ?? null;
+  }
   manageCoupon(actorId: string, input: unknown, id?: string) {
     return new PostgresCouponRepository(this.pool).manageByAdmin(
       actorId,
@@ -180,39 +202,33 @@ export class AdminOperationsRepository {
       id,
     );
   }
-  async updateSupportStatus(id: string, input: unknown) {
-    const update = z
-      .object({
-        status: z.enum(['OPEN', 'UNDER_REVIEW', 'RESOLVED', 'CLOSED']),
-        expectedVersion: z.number().int().positive(),
-      })
-      .strict()
-      .parse(input);
-    const result = await this.pool.query(
-      'UPDATE support_tickets SET status=$2,version=version+1,updated_at=NOW() WHERE id=$1 AND version=$3 RETURNING id,ticket_number,user_id,role,category,subject,message,status,version,created_at,updated_at',
-      [id, update.status, update.expectedVersion],
-    );
-    if (!result.rows[0])
-      throw new AppError(
-        'TICKET_UPDATE_CONFLICT',
-        'Ticket is unavailable or has changed; refresh before updating',
-        409,
-      );
-    return result.rows[0];
+  async updateSupportStatus(id: string, input: unknown, actorId?: string) {
+    return new PostgresSupportRepository(this.pool).updateStatus(id, input, actorId);
   }
   async list(module: OperationModule, query: OperationQuery) {
     const source = operationSources[module];
     const values: unknown[] = [];
     const predicates: string[] = [];
+    if (module === 'support' || module === 'notifications')
+      predicates.push('admin_deleted_at IS NULL');
     const add = (value: unknown) => {
       values.push(value);
       return '$' + values.length;
     };
+    if (query.sector) {
+      if (module !== 'rides')
+        throw new AppError(
+          'INVALID_FILTER',
+          'Sector filtering is only available for ride bookings.',
+          400,
+        );
+      predicates.push(`sector = ${add(query.sector)}`);
+    }
     if (query.recordId)
       predicates.push(`${module === 'wallets' ? 'user_id' : 'id'} = ${add(query.recordId)}::uuid`);
     if (query.search)
       predicates.push(
-        `${source.search} ILIKE ${add('%' + query.search.replace(/[\\%_]/g, '\\$&') + '%')}`,
+        `${module === 'support' ? "concat_ws(' ',ticket_number,subject,message)" : source.search} ILIKE ${add('%' + query.search.replace(/[\\%_]/g, '\\$&') + '%')}`,
       );
     if (query.status) {
       if (!source.status || !(source.statuses as readonly string[]).includes(query.status))
@@ -232,9 +248,9 @@ export class AdminOperationsRepository {
     // A single statement gives count and rows the same MVCC snapshot, including empty pages.
     const result = await this.pool.query<{ items: Record<string, unknown>[]; total: number }>(
       `WITH filtered AS (SELECT ${source.columns} FROM ${source.table}${where}),
-       page AS (SELECT * FROM filtered ORDER BY created_at DESC, id DESC LIMIT $${values.length + 1} OFFSET $${values.length + 2}),
+       page AS (SELECT * FROM filtered ORDER BY ${newestFirstSql()} LIMIT $${values.length + 1} OFFSET $${values.length + 2}),
        visible AS (${visible})
-       SELECT COALESCE((SELECT jsonb_agg(visible ORDER BY created_at DESC,id DESC) FROM visible),'[]'::jsonb) AS items,
+       SELECT COALESCE((SELECT jsonb_agg(visible ORDER BY ${newestFirstSql()}) FROM visible),'[]'::jsonb) AS items,
        (SELECT COUNT(*)::int FROM filtered) AS total`,
       [...values, query.pageSize, (query.page - 1) * query.pageSize],
     );

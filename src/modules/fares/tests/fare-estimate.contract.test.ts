@@ -1,3 +1,4 @@
+import { calculateServiceFixture } from './service-fixed.fixture.js';
 import { describe, expect, it } from 'vitest';
 import { fareEstimateSchema } from '../../rides/schemas/ride.schemas.js';
 import { FareCalculatorService } from '../services/fare-calculator.service.js';
@@ -106,28 +107,27 @@ describe('BUG-P3-01 & BUG-P3-03 & BUG-P3-05: Fare Estimate Parity & Contract Tes
 
   describe('BUG-P3-03: Towing Canonical Category Pricing', () => {
     it('canonical "towing" category receives specialized towing pricing', () => {
-      const result = calculator.calculate({
+      const result = calculateServiceFixture(calculator, {
         distanceMeters: 10000,
         durationSeconds: 900,
         sector: 'service',
         vehicleCategory: 'towing',
       });
 
-      // Towing base is ₹600 (60000 paise) + ₹30/km (3000 paise/km)
       expect(result.baseAmount).toBe(60000);
-      expect(result.distanceAmount).toBe(60000);
-      expect(result.grossAmount).toBe(129150); // (60000 base + 30000 dist + 3000 time) * 1.05 GST = 97650
+      expect(result.distanceAmount).toBe(0);
+      expect(result.grossAmount).toBe(result.baseAmount); // (60000 base + 30000 dist + 3000 time) * 1.05 GST = 97650
     });
 
     it('alias "towing_van" receives identical pricing to canonical "towing"', () => {
-      const canonicalResult = calculator.calculate({
+      const canonicalResult = calculateServiceFixture(calculator, {
         distanceMeters: 15000,
         durationSeconds: 1200,
         sector: 'service',
         vehicleCategory: 'towing',
       });
 
-      const aliasResult = calculator.calculate({
+      const aliasResult = calculateServiceFixture(calculator, {
         distanceMeters: 15000,
         durationSeconds: 1200,
         sector: 'service',

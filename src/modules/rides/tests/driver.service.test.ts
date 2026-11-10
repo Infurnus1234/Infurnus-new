@@ -101,21 +101,13 @@ describe('DriverService', () => {
     });
   });
 
-  it('rejects a busy driver going unavailable', async () => {
-    const service = new DriverService(
-      repository({
-        getAvailability: vi.fn().mockResolvedValue('busy'),
-      }),
-      () => now,
-    );
-
-    await expect(
-      service.updateAvailability(userId, {
-        status: 'unavailable',
-      }),
-    ).rejects.toMatchObject({
-      code: 'DRIVER_AVAILABILITY_CONFLICT',
+  it('allows a busy driver to save an offline preference', async () => {
+    const repo = repository({
+      getAvailability: vi.fn().mockResolvedValue('busy'),
     });
+    const service = new DriverService(repo, () => now);
+    await service.updateAvailability(userId, { status: 'unavailable' });
+    expect(repo.updateAvailability).toHaveBeenCalledWith(profileId, 'unavailable');
   });
 
   it('accepts a current location update', async () => {
@@ -158,6 +150,31 @@ describe('DriverService', () => {
       longitude: 77.5,
       recordedAt: olderTime,
     });
+  });
+
+  it('normalizes small phone clock skew without storing a future location', async () => {
+    const repo = repository();
+    await new DriverService(repo, () => now).updateLocation(userId, {
+      latitude: 12.9,
+      longitude: 77.5,
+      timestamp: new Date(now.getTime() + 1500),
+    });
+    expect(repo.updateLocation).toHaveBeenCalledWith(
+      profileId,
+      expect.objectContaining({ recordedAt: now }),
+    );
+  });
+
+  it('rejects clock skew beyond the bounded tolerance before persisting', async () => {
+    const repo = repository();
+    await expect(
+      new DriverService(repo, () => now).updateLocation(userId, {
+        latitude: 12.9,
+        longitude: 77.5,
+        timestamp: new Date(now.getTime() + 2001),
+      }),
+    ).rejects.toMatchObject({ code: 'DRIVER_LOCATION_FUTURE' });
+    expect(repo.updateLocation).not.toHaveBeenCalled();
   });
 
   it('rejects a future location update', async () => {

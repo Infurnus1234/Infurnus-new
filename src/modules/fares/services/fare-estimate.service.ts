@@ -1,3 +1,6 @@
+import { bookingInventorySector } from '../../vehicles/services/rental-inventory.js';
+import { usesFixedHourlyFare } from '../../vehicles/services/hourly-pricing.js';
+import { serviceArea } from '../../maps/service-area.js';
 import { demandProvenance } from './demand-pricing.js';
 import { VEHICLE_PRICING_ALIASES } from '../config/fare.config.js';
 import type { VehicleRepository } from '../../vehicles/repositories/vehicle.repository.js';
@@ -40,6 +43,8 @@ export class FareEstimateService {
       weightKg?: number | undefined;
       hasLoadingAssistance?: boolean | undefined;
       rentalHours?: number | undefined;
+      bookingHours?: number | undefined;
+      tripType?: 'one_way' | 'round_trip' | undefined;
       fuelRatePerKm?: number | undefined;
       fallbackConfig?: FallbackRouteConfig | undefined;
       pricingMode?: 'vehicle_range';
@@ -59,6 +64,21 @@ export class FareEstimateService {
           400,
         );
       }
+    }
+    if (options?.sector === 'service') {
+      await serviceArea.assertSupported([origin, destination]);
+      const configured = await this.resolveConfiguration(options);
+      if (!configured)
+        throw new AppError(
+          'SERVICE_CONFIGURATION_UNAVAILABLE',
+          'Select a service with an active fixed fare.',
+          422,
+        );
+      // Navigation uses the existing trip-map infrastructure, separately from this fixed price.
+      return this.fareCalculator.calculateEstimate(
+        { distanceMeters: 0, durationSeconds: 0, currency: 'INR', ...options },
+        configured,
+      );
     }
     if (options?.pricingMode === 'vehicle_range') await this.resolveConfiguration(options);
     let route;
@@ -160,13 +180,14 @@ export class FareEstimateService {
     sector?: string | undefined;
     vehicleCategory?: string | undefined;
   }) {
-    const code = canonicalVehicleCode(input.sector ?? '', input.vehicleCategory ?? '');
+    const inventorySector = bookingInventorySector(input.sector);
+    const code = canonicalVehicleCode(inventorySector ?? '', input.vehicleCategory ?? '');
     const configured = this.vehicles?.findTypeByCode
-      ? await this.vehicles.findTypeByCode(code, input.sector)
+      ? await this.vehicles.findTypeByCode(code, inventorySector)
       : null;
     // A shared legacy identifier (e.g. passenger/goods bike) keeps its own sector tariff.
-    if (configured && configured.sector === input.sector) {
-      if (!configured.active || configured.sector !== input.sector)
+    if (configured && configured.sector === inventorySector) {
+      if (!configured.active)
         throw new AppError('FARE_CONFIGURATION_MISSING', VEHICLE_UNAVAILABLE_MESSAGE, 422);
       return configured;
     }
@@ -185,7 +206,7 @@ export class FareEstimateService {
     const configured =
       mode === 'vehicle_range' ? await this.resolveConfiguration(input) : undefined;
     let demand;
-    if (configured?.pricingReference?.demandPricing) {
+    if (!usesFixedHourlyFare(input.sector) && configured?.pricingReference?.demandPricing) {
       const settings = configured.pricingReference.demandPricing;
       let sample = null;
       try {

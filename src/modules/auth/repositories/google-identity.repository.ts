@@ -1,3 +1,4 @@
+import { ProviderPublicIdService } from '../../providers/services/provider-public-id.service.js';
 import { signupSchema } from '../schemas/auth.schemas.js';
 import { AppError } from '../../../common/errors/app-error.js';
 import { withTransaction } from '../../../infrastructure/database/postgres.js';
@@ -130,6 +131,8 @@ export class PostgresGoogleIdentityRepository {
           "INSERT INTO auth_external_identities(provider,provider_subject,user_id) VALUES('GOOGLE',$1,$2)",
           [identity.subject, user.id],
         );
+        if (['driver', 'fleet_owner', 'driver_fleet_owner'].includes(user.role))
+          user.publicId = await new ProviderPublicIdService().ensure(client, user.id);
         return user;
       });
     } catch (error) {

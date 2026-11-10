@@ -132,25 +132,6 @@ export const signupSchema = z
     // Password confirmation
     // --------------------------------------------------------
 
-    if (
-      data.password !== data.confirmPassword &&
-      (data.role === 'fleet_owner' || data.role === 'driver_fleet_owner')
-    ) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['confirmPassword'],
-        message: 'Passwords do not match',
-      });
-    }
-
-    // --------------------------------------------------------
-    // Role-specific validation
-    // --------------------------------------------------------
-
-    if ((data.role === 'fleet_owner' || data.role === 'driver_fleet_owner') && !data.password) {
-      ctx.addIssue({ code: 'custom', path: ['password'], message: 'Password is required' });
-    }
-
     const isDriver = data.role === 'driver' || data.role === 'driver_fleet_owner';
 
     const isFleetOwner = data.role === 'fleet_owner' || data.role === 'driver_fleet_owner';
@@ -276,6 +257,7 @@ export const resendSignupOtpSchema = z
 
 export const loginSchema = z
   .object({
+    driverFlow: z.boolean().optional(),
     role: accountRoleSchema.optional(),
     email: emailSchema.optional(),
 
@@ -285,6 +267,17 @@ export const loginSchema = z
   })
   .strict()
   .superRefine((data, ctx) => {
+    if (
+      data.driverFlow &&
+      data.role &&
+      !['driver', 'fleet_owner', 'driver_fleet_owner'].includes(data.role)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['role'],
+        message: 'Select a Driver or Fleet account for the Driver App',
+      });
+    }
     if (!data.email && !data.phone) {
       ctx.addIssue({
         code: 'custom',

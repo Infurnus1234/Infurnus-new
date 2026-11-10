@@ -60,7 +60,12 @@ class RideRemoteDataSourceImpl implements RideRemoteDataSource {
 
   @override
   Future<FareEstimateModel> estimateFare(Map<String, dynamic> data) async {
-    final response = await _dio.post('/fares/estimate', data: data);
+    final response = await _dio.post(
+      data['sector'] == 'service'
+          ? '/rides/service-availability'
+          : '/fares/estimate',
+      data: data,
+    );
     return FareEstimateModel.fromJson(response.data['data']);
   }
 
@@ -109,16 +114,41 @@ class RideRemoteDataSourceImpl implements RideRemoteDataSource {
     String? sector,
     String? category,
   }) async {
-    final response = await _dio.get(
-      '/vehicles/fleet',
-      queryParameters: {
-        if (sector != null) 'sector': sector,
-        if (category != null) 'category': category,
-      },
-    );
-    final List list = response.data['data'] as List;
+    final bookingSector = sector == 'rentals'
+        ? 'rental'
+        : sector ?? 'passenger';
+    final list = <dynamic>[];
+    var offset = 0;
+    for (;;) {
+      final response = await _dio.get(
+        '/vehicles/catalog',
+        queryParameters: {
+          'sector': bookingSector,
+          'limit': 100,
+          if (offset > 0) 'offset': offset,
+        },
+      );
+      final page = response.data['data'] as List;
+      list.addAll(page);
+      if (page.length < 100) break;
+      offset += page.length;
+    }
     return list
-        .map((e) => FleetVehicleModel.fromJson(e as Map<String, dynamic>))
+        .map((e) {
+          final value = Map<String, dynamic>.from(e as Map);
+          if (value['code'] is! String ||
+              (value['code'] as String).trim().isEmpty) {
+            throw const FormatException('Vehicle catalog code is missing');
+          }
+          value['category'] = value['code'];
+          if (bookingSector == 'service') {
+            value['pricing'] = value['serviceFixedFare'];
+            value['range'] =
+                '${((value['serviceRadiusMeters'] as num?) ?? 25000) / 1000} km service radius';
+          }
+          return FleetVehicleModel.fromJson(value);
+        })
+        .where((v) => category == null || v.category == category)
         .toList();
   }
 }

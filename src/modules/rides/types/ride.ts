@@ -61,6 +61,9 @@ export interface LogisticsPaymentDetails {
 
 export interface Ride {
   id: string;
+  bookingId?: string | null;
+  bookingIdExpiresAt?: Date | null;
+  callingNumber?: string;
   customerId: string;
   assignedDriverId: string | null;
   assignedVehicleId: string | null;
@@ -70,15 +73,21 @@ export interface Ride {
   destinationAddress: string | null;
   status: RideStatus;
   dispatchExpiresAt?: Date | null;
+  destinationDistrict?: string | null;
+  /** Internal lookup metadata; excluded from Driver serialization. */
+  destinationDistrictLookup?: import('../services/logistics-destination.js').DistrictLookup | null;
   bookingDistanceMeters?: number | null;
+  bookingDurationSeconds?: number | null;
+  vehicleName?: string | null;
   bookingPricingVersion?: string | null;
+  bookingVehicleTypeId?: string | null;
   fareEstimate?: number | null;
   finalFare?: number | null;
   commissionAmount?: number | null;
   driverEarningAmount?: number | null;
   paymentStatus?: string | null;
   upfrontPaymentStatus?: LogisticsPaymentStatus | null;
-  logisticsPayment?: LogisticsPaymentDetails | null;
+  logisticsPayment?: LogisticsPaymentDetails | Record<string, unknown> | null;
   actualDistanceMeters?: number | null;
   actualFuelCost?: number | null;
   sector?: string | null;

@@ -5,6 +5,10 @@ export const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
 
+    INFURNUS_CALLING_NUMBER: z
+      .string()
+      .regex(/^\+[1-9]\d{7,14}$/)
+      .default('+919153787859'),
     PORT: z.coerce.number().int().positive().default(3000),
     // Local USB testing can bind loopback without changing deployed defaults.
     SERVER_HOST: z.string().trim().min(1).default('0.0.0.0'),
@@ -17,6 +21,8 @@ export const envSchema = z
       .transform((value) => value === true || value === 'true'),
 
     DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+    // Bootstrap/documentation only; activation is shared database configuration.
+    ID_LENGTH: z.coerce.number().int().min(6).max(64).default(6),
     LOCAL_DOCUMENT_STORAGE_ROOT: z.string().min(1).optional(),
     // Operator reference to an approved necessary/lawful masked-identity policy.
     // Absent by default: no Aadhaar collection is authorized.
@@ -177,6 +183,8 @@ export const envSchema = z
     // Driver Matching
     // ============================================================
 
+    DRIVER_LOCATION_CACHE_TTL_SECONDS: z.coerce.number().int().min(30).max(600).default(120),
+    DRIVER_LOCATION_PERSIST_MS: z.coerce.number().int().min(1000).max(15000).default(10000),
     DRIVER_LOCATION_STALE_SECONDS: z.coerce.number().int().positive().default(30),
 
     DRIVER_SEARCH_RADIUS_METERS: z.coerce.number().positive().default(5000),
@@ -206,6 +214,7 @@ export const envSchema = z
     MAP_POPULAR_CACHE_TTL: z.coerce.number().int().min(0).max(86400).default(3600),
     MAP_REVERSE_PRECISION: z.coerce.number().int().min(3).max(6).default(4),
     MAP_MOVEMENT_THRESHOLD_METERS: z.coerce.number().positive().default(10),
+    MAP_OFF_ROUTE_SUSTAIN_MS: z.coerce.number().int().min(0).default(8000),
     MAP_OFF_ROUTE_ENTER_METERS: z.coerce.number().positive().default(60),
     MAP_OFF_ROUTE_EXIT_METERS: z.coerce.number().positive().default(20),
     MAP_MIN_REROUTE_INTERVAL_MS: z.coerce.number().int().min(10000).default(10000),

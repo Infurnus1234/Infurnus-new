@@ -1,6 +1,19 @@
+import { logisticsSplit, wholeRupees } from '../../../common/utils/whole-rupee.js';
+import { bookingInventorySector } from '../../vehicles/services/rental-inventory.js';
+import { bookingRequestFingerprint } from '../services/booking-request.js';
+import { serviceEligibilitySql } from './service-eligibility.js';
+import { logisticsSlab } from '../../vehicles/services/logistics-pricing.js';
+import type { LiveLocationCache } from './live-location.cache.js';
 import { selectDemandRates } from '../../fares/services/demand-pricing.js';
 import type { VehiclePricing } from '../../fares/types/fare.js';
-import { cityCoverageSql } from '../../maps/city-radius.js';
+import {
+  fixedHourlyFare,
+  fixedHourlyPricingFromRow,
+  hourlyBaseFare,
+  hourlyPricingFromRow,
+  requestedBookingHours,
+  usesFixedHourlyFare,
+} from '../../vehicles/services/hourly-pricing.js';
 import { AppError } from '../../../common/errors/app-error.js';
 import type { FareCalculationResult } from '../../fares/types/fare.js';
 import {
@@ -36,6 +49,7 @@ export interface RouteMetadata {
   routeState?: 'ON_ROUTE' | 'OFF_ROUTE';
   etaSeconds?: number;
   deviationMeters?: number;
+  offRouteSince?: number;
   routeVersion?: number;
   lastCalculatedAt: number | null;
   lastOrigin: {
@@ -53,6 +67,16 @@ export interface RouteMetadata {
 }
 
 export interface RideRepository {
+  saveDestinationDistrict?(
+    id: string,
+    destination: import('../providers/map.provider.js').Coordinates,
+    lookup: import('../services/logistics-destination.js').DistrictLookup,
+  ): Promise<boolean>;
+  findByClientRequest?(
+    customerId: string,
+    input: CreateRideInput,
+    queryable?: Pool | PoolClient,
+  ): Promise<Ride | null>;
   getRideMapSnapshot?(
     id: string,
     userId: string,
@@ -155,6 +179,8 @@ export interface RideRepository {
 
 const detailedRideColumns = (tableAlias = 'r') => `
   ${tableAlias}.id,
+  ${tableAlias}.booking_id AS "bookingId",
+  ${tableAlias}.booking_id_expires_at AS "bookingIdExpiresAt",
   ${tableAlias}.customer_id AS "customerId",
   ${tableAlias}.assigned_driver_id AS "assignedDriverId",
   ${tableAlias}.assigned_vehicle_id AS "assignedVehicleId",
@@ -166,6 +192,7 @@ const detailedRideColumns = (tableAlias = 'r') => `
   ${tableAlias}.destination_address AS "destinationAddress",
   ${tableAlias}.status,
   ${tableAlias}.dispatch_expires_at AS "dispatchExpiresAt",
+  CASE WHEN ${tableAlias}.sector='logistics' AND (${tableAlias}.route_metadata->'logisticsDestinationDistrict'->>'latitude')::float8=ST_Y(${tableAlias}.destination_location::geometry) AND (${tableAlias}.route_metadata->'logisticsDestinationDistrict'->>'longitude')::float8=ST_X(${tableAlias}.destination_location::geometry) THEN ${tableAlias}.route_metadata->'logisticsDestinationDistrict' ELSE NULL END AS "destinationDistrictLookup",
   COALESCE(
     ${tableAlias}.fare_estimate,
     (${tableAlias}.route_metadata->>'fareEstimate')::numeric
@@ -173,7 +200,8 @@ const detailedRideColumns = (tableAlias = 'r') => `
   ${tableAlias}.final_fare AS "finalFare",
   ${tableAlias}.commission_amount AS "commissionAmount",
   ${tableAlias}.driver_earning_amount AS "driverEarningAmount",
-  (SELECT status FROM payments WHERE payments.ride_id = ${tableAlias}.id ORDER BY created_at DESC LIMIT 1) AS "paymentStatus",
+  (SELECT jsonb_build_object('currency',lp.currency,'totalPaise',lp.total_paise,'upfrontPaise',lp.upfront_paise,'finalPaise',lp.final_paise,'confirmedPaise',COALESCE((SELECT sum(round(p.amount*100)) FROM payments p WHERE p.ride_id=lp.ride_id AND p.status='CAPTURED'),0),'outstandingPaise',GREATEST(0,lp.total_paise-COALESCE((SELECT sum(round(p.amount*100)) FROM payments p WHERE p.ride_id=lp.ride_id AND p.status='CAPTURED'),0)),'upfrontConfirmed',EXISTS(SELECT 1 FROM payments p WHERE p.ride_id=lp.ride_id AND p.payment_stage='upfront' AND p.status='CAPTURED'),'settlementStatus',CASE WHEN COALESCE((SELECT sum(round(p.amount*100)) FROM payments p WHERE p.ride_id=lp.ride_id AND p.status='CAPTURED'),0)>=lp.total_paise THEN 'settled' ELSE 'outstanding' END) FROM logistics_ride_payment_plans lp WHERE lp.ride_id=${tableAlias}.id) AS "logisticsPayment",
+  COALESCE((SELECT CASE WHEN COALESCE((SELECT sum(round(p.amount*100)) FROM payments p WHERE p.ride_id=lp.ride_id AND p.status='CAPTURED'),0)>=lp.total_paise THEN 'CAPTURED' ELSE 'INITIATED' END FROM logistics_ride_payment_plans lp WHERE lp.ride_id=${tableAlias}.id),(SELECT status::text FROM payments WHERE payments.ride_id = ${tableAlias}.id ORDER BY created_at DESC LIMIT 1)) AS "paymentStatus",
   CASE
     WHEN COALESCE(${tableAlias}.sector, ${tableAlias}.route_metadata->>'sector', 'passenger') != 'logistics' THEN 'NOT_REQUIRED'
     WHEN EXISTS (
@@ -199,6 +227,9 @@ const detailedRideColumns = (tableAlias = 'r') => `
   ) AS "upfrontPaymentId",
   ${tableAlias}.route_metadata->>'bookingDistanceMeters' AS "bookingDistanceMeters",
   ${tableAlias}.route_metadata->'bookingFareSnapshot'->>'pricingVersion' AS "bookingPricingVersion",
+  ${tableAlias}.route_metadata->'bookingFareSnapshot'->'vehicleConfiguration'->>'id' AS "bookingVehicleTypeId",
+  ${tableAlias}.route_metadata->'bookingFareSnapshot'->>'durationSeconds' AS "bookingDurationSeconds",
+  (SELECT vt.name FROM vehicle_types vt WHERE vt.id::text=${tableAlias}.route_metadata->'bookingFareSnapshot'->'vehicleConfiguration'->>'id') AS "vehicleName",
   ${tableAlias}.actual_distance_meters AS "actualDistanceMeters",
   ${tableAlias}.actual_fuel_cost AS "actualFuelCost",
   COALESCE(
@@ -233,7 +264,7 @@ const detailedRideColumns = (tableAlias = 'r') => `
       )
     ELSE NULL
   END AS "driverName",
-  u.phone AS "driverPhone",
+  NULL::text AS "driverPhone",
   (
     SELECT ROUND(AVG(rat.rating)::numeric, 1)
     FROM ratings rat
@@ -293,6 +324,9 @@ function normalizeGoods(raw: unknown): Record<string, unknown> | null {
 function mapRide(row: Record<string, unknown>, forCustomer = false): Ride {
   return {
     id: row.id as string,
+    bookingId: (row.bookingId as string | null) ?? null,
+    bookingIdExpiresAt: (row.bookingIdExpiresAt as Date | null) ?? null,
+    callingNumber: env.INFURNUS_CALLING_NUMBER,
     customerId: row.customerId as string,
 
     assignedDriverId: (row.assignedDriverId as string) || null,
@@ -314,6 +348,14 @@ function mapRide(row: Record<string, unknown>, forCustomer = false): Ride {
     destinationAddress: (row.destinationAddress as string) || null,
 
     status: row.status as Ride['status'],
+    ...(row.sector === 'logistics'
+      ? {
+          destinationDistrictLookup: row.destinationDistrictLookup as
+            import('../services/logistics-destination.js').DistrictLookup | null,
+          destinationDistrict:
+            (row.destinationDistrictLookup as { name?: string } | null)?.name ?? null,
+        }
+      : {}),
     dispatchExpiresAt: (row.dispatchExpiresAt as Date | null) ?? null,
 
     fareEstimate: row.fareEstimate != null ? Number(row.fareEstimate) : null,
@@ -321,7 +363,11 @@ function mapRide(row: Record<string, unknown>, forCustomer = false): Ride {
     bookingDistanceMeters:
       row.bookingDistanceMeters != null ? Number(row.bookingDistanceMeters) : null,
 
+    bookingDurationSeconds:
+      row.bookingDurationSeconds != null ? Number(row.bookingDurationSeconds) : null,
+    vehicleName: (row.vehicleName as string | null) ?? null,
     bookingPricingVersion: (row.bookingPricingVersion as string | null) ?? null,
+    bookingVehicleTypeId: (row.bookingVehicleTypeId as string | null) ?? null,
     finalFare: row.finalFare != null ? Number(row.finalFare) : null,
     commissionAmount: row.commissionAmount != null ? Number(row.commissionAmount) : null,
     driverEarningAmount: row.driverEarningAmount != null ? Number(row.driverEarningAmount) : null,
@@ -330,12 +376,13 @@ function mapRide(row: Record<string, unknown>, forCustomer = false): Ride {
       (row.upfrontPaymentStatus as import('../types/ride.js').LogisticsPaymentStatus | null) ??
       (row.sector === 'logistics' ? 'PENDING' : 'NOT_REQUIRED'),
     logisticsPayment:
-      row.sector === 'logistics'
+      (row.logisticsPayment as Record<string, unknown> | null) ??
+      (row.sector === 'logistics'
         ? (() => {
-            const totalFare =
-              Math.round(Number(row.finalFare ?? row.fareEstimate ?? 0) * 100) / 100;
-            const upfrontAmount = Math.round(totalFare * 0.4 * 100) / 100;
-            const remainingAmount = Math.round((totalFare - upfrontAmount) * 100) / 100;
+            const totalFare = wholeRupees(Number(row.finalFare ?? row.fareEstimate ?? 0));
+            const split = logisticsSplit(totalFare * 100);
+            const upfrontAmount = split.upfrontPaise / 100;
+            const remainingAmount = split.finalPaise / 100;
             const status =
               (row.upfrontPaymentStatus as
                 import('../types/ride.js').LogisticsPaymentStatus | null) ?? 'PENDING';
@@ -350,7 +397,7 @@ function mapRide(row: Record<string, unknown>, forCustomer = false): Ride {
               paymentId: (row.upfrontPaymentId as string) || null,
             };
           })()
-        : null,
+        : null),
     actualDistanceMeters: row.actualDistanceMeters != null ? Number(row.actualDistanceMeters) : 0,
 
     actualFuelCost: row.actualFuelCost != null ? Number(row.actualFuelCost) : null,
@@ -381,7 +428,7 @@ function mapRide(row: Record<string, unknown>, forCustomer = false): Ride {
         ? {
             id: row.assignedDriverId as string,
             name: row.driverName as string,
-            phone: (row.driverPhone as string | null) ?? null,
+            phone: null,
             rating: row.driverRating != null ? Number(row.driverRating) : null,
 
             // Driver profile photo is resolved by
@@ -413,17 +460,46 @@ function mapRide(row: Record<string, unknown>, forCustomer = false): Ride {
 }
 
 export class PostgresRideRepository implements RideRepository {
+  trackingCache?: LiveLocationCache;
   constructor(
     private readonly pool: Pool,
-    private readonly cities: Pick<PremiumCityAreas, 'cities'> = premiumCityAreas,
+    private readonly serviceCities?: Pick<PremiumCityAreas, 'cities'>,
   ) {}
-  private approvedCitiesJson(): string {
-    return JSON.stringify(
-      this.cities.cities.map((city) => ({
-        cityId: city.id,
-        boundary: JSON.parse(city.area.boundaryGeoJson!),
-      })),
+
+  async saveDestinationDistrict(
+    id: string,
+    destination: import('../providers/map.provider.js').Coordinates,
+    lookup: import('../services/logistics-destination.js').DistrictLookup,
+  ): Promise<boolean> {
+    const result = await this.pool.query(
+      `UPDATE rides SET route_metadata=jsonb_set(COALESCE(route_metadata,'{}'::jsonb),'{logisticsDestinationDistrict}',$4::jsonb) WHERE id=$1 AND sector='logistics' AND ST_Y(destination_location::geometry)=$2 AND ST_X(destination_location::geometry)=$3`,
+      [id, destination.latitude, destination.longitude, JSON.stringify(lookup)],
     );
+    return result.rowCount === 1;
+  }
+  async findByClientRequest(
+    customerId: string,
+    input: CreateRideInput,
+    queryable: Pool | PoolClient = this.pool,
+  ): Promise<Ride | null> {
+    if (!input.clientRequestId) return null;
+    const existing = await queryable.query(
+      `SELECT r.id, r.route_metadata->>'clientRequestFingerprint' AS fingerprint FROM rides r WHERE customer_id=$1 AND client_request_id=$2`,
+      [customerId, input.clientRequestId],
+    );
+    const row = existing.rows[0];
+    if (!row) return null;
+    if (row.fingerprint !== bookingRequestFingerprint(input))
+      throw new AppError(
+        'BOOKING_REQUEST_CONFLICT',
+        'This request ID belongs to a different booking. Start a new booking.',
+        409,
+      );
+    const result = await queryable.query(
+      `SELECT ${detailedRideColumns('r')} FROM rides r ${detailedRideJoins('r')} WHERE r.id=$1 AND r.customer_id=$2`,
+      [row.id, customerId],
+    );
+    return result.rows[0] ? mapRide(result.rows[0], true) : null;
   }
 
   async create(
@@ -438,18 +514,35 @@ export class PostgresRideRepository implements RideRepository {
       const client = await this.pool.connect();
       try {
         await client.query('BEGIN');
-        const code = canonicalVehicleCode(input.sector, input.vehicleCategory);
+        if (input.clientRequestId) {
+          await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,648033))', [
+            customerId + ':' + input.clientRequestId,
+          ]);
+          const previous = await this.findByClientRequest(customerId, input, client);
+          if (previous) {
+            await client.query('COMMIT');
+            return previous;
+          }
+        }
+        const inventorySector = bookingInventorySector(input.sector);
+        const code = canonicalVehicleCode(inventorySector ?? '', input.vehicleCategory);
         await client.query('SELECT pg_advisory_xact_lock_shared(hashtextextended($1,648032))', [
           code,
         ]);
         const config = snapshot.vehicleConfiguration;
         const locked = await client.query(
           'SELECT * FROM vehicle_types WHERE code=$1 AND sector=$2 FOR SHARE',
-          [code, input.sector],
+          [code, inventorySector],
         );
         const row = locked.rows[0];
+        if (usesFixedHourlyFare(input.sector) && row?.fixed_hourly_rate_paise == null)
+          throw new AppError(
+            'FARE_CONFIGURATION_MISSING',
+            'A configured hourly rate is required',
+            422,
+          );
         if (!config) {
-          if (row && row.sector === input.sector) {
+          if (row && row.sector === inventorySector) {
             if (!row.active)
               throw new AppError('FARE_CONFIGURATION_MISSING', VEHICLE_UNAVAILABLE_MESSAGE, 422);
             throw new AppError(
@@ -466,23 +559,63 @@ export class PostgresRideRepository implements RideRepository {
           !row ||
           !row.active ||
           row.id !== config.id ||
-          row.sector !== input.sector ||
+          row.sector !== inventorySector ||
           row.code !== config.code ||
-          row.code === 'ftl'
+          (row.code === 'ftl' && !row.logistics_slabs)
         )
           throw new AppError('FARE_CONFIGURATION_MISSING', VEHICLE_UNAVAILABLE_MESSAGE, 422);
+        const fixed = usesFixedHourlyFare(input.sector)
+          ? fixedHourlyFare(fixedHourlyPricingFromRow(row), {
+              ...input,
+              distanceMeters: snapshot.distanceMeters,
+              tripType: input.rentalDetails?.tripType,
+            })
+          : undefined;
+        const hourly = fixed
+          ? null
+          : hourlyBaseFare(
+              {
+                sector: row.sector,
+                baseFare: row.base_fare_paise === null ? null : Number(row.base_fare_paise) / 100,
+                ...hourlyPricingFromRow(row),
+              },
+              requestedBookingHours(input),
+            );
         const reference = row.pricing_reference as VehiclePricing | null;
+        const slab = row.logistics_slabs
+          ? logisticsSlab(row.logistics_slabs, snapshot.distanceMeters)
+          : null;
         const rates =
-          reference?.demandPricing && config.demandPricing
+          (fixed ? { baseFare: fixed.baseFare, distanceRatePerKm: 0 } : null) ??
+          (row.sector === 'service'
+            ? {
+                baseFare:
+                  row.service_fixed_fare_paise == null ? NaN : Number(row.service_fixed_fare_paise),
+                distanceRatePerKm: 0,
+              }
+            : null) ??
+          slab ??
+          (reference?.demandPricing && config.demandPricing
             ? selectDemandRates(reference, config.demandPricing)
             : {
-                baseFare: row.base_fare_paise === null ? NaN : Number(row.base_fare_paise),
+                baseFare:
+                  hourly?.amountPaise ??
+                  (row.base_fare_paise === null ? NaN : Number(row.base_fare_paise)),
                 distanceRatePerKm:
                   row.per_km_rate_paise === null ? NaN : Number(row.per_km_rate_paise),
-              };
+              });
         if (
-          Number(row.version) !== config.version ||
+          (fixed &&
+            (config.pricingModel !== 'fixed_hourly' || fixed.fuelAmount !== snapshot.fuelAmount)) ||
+          (row.sector === 'service' &&
+            (config.pricingModel !== 'service_fixed' ||
+              Number(row.service_radius_meters) !== config.serviceRadiusMeters)) ||
+          slab?.key !== config.logisticsSlab ||
+          Number(input.sector === 'rental' ? row.rental_pricing_version : row.version) !==
+            config.version ||
           rates.baseFare !== config.baseFarePaise ||
+          hourly?.durationBucket !== config.durationBucket ||
+          (fixed?.bookedHours ?? hourly?.bookedHours) !== config.bookedHours ||
           rates.distanceRatePerKm !== config.perKmRatePaise
         )
           throw new AppError(
@@ -529,7 +662,7 @@ export class PostgresRideRepository implements RideRepository {
            vehicle_category,
            fare_estimate,
            pin,
-           route_metadata
+           route_metadata, client_request_id
          )
          VALUES (
            $17::uuid, $18::text, $19::text,
@@ -550,6 +683,7 @@ export class PostgresRideRepository implements RideRepository {
            $8::numeric,
            $14::text,
            jsonb_build_object(
+             'clientRequestFingerprint', $21::text,
              'bookingFareSnapshot',
              $16::jsonb,
              'bookingDistanceMeters',
@@ -572,7 +706,7 @@ export class PostgresRideRepository implements RideRepository {
              null,
              'route',
              null
-           )
+           ), $20::uuid
          )
          RETURNING *
        )
@@ -599,9 +733,18 @@ export class PostgresRideRepository implements RideRepository {
         id,
         sealRidePin(id, pin),
         pinVerifier(id, pin),
+        input.clientRequestId ?? null,
+        input.clientRequestId ? bookingRequestFingerprint(input) : null,
       ],
     );
 
+    if (input.sector === 'logistics') {
+      const refreshed = await queryable.query(
+        `SELECT ${detailedRideColumns('r')} FROM rides r ${detailedRideJoins('r')} WHERE r.id=$1`,
+        [id],
+      );
+      return mapRide(refreshed.rows[0], true);
+    }
     return mapRide(result.rows[0], true);
   }
 
@@ -733,7 +876,7 @@ export class PostgresRideRepository implements RideRepository {
                )
                AND v.is_active = TRUE
                AND v.verification_status = 'approved'
-               AND v.sector = r.sector
+               AND v.sector = (CASE WHEN r.sector='rental' THEN 'passenger' ELSE r.sector END)
                AND v.category = r.vehicle_category
              ORDER BY v.created_at DESC
              LIMIT 1
@@ -756,10 +899,10 @@ export class PostgresRideRepository implements RideRepository {
              SELECT 1 FROM driver_profiles dp JOIN users u ON u.id=dp.user_id
              JOIN vehicles v ON v.driver_profile_id=dp.id
              WHERE dp.id=$2 AND ${driverEligibilitySql("NOW() - ($3::int * INTERVAL '1 second')", 'r.id', 'r.customer_id')}
-               AND (CASE WHEN r.sector='premium' THEN EXISTS(SELECT 1 FROM ride_dispatch_attempts area_offer CROSS JOIN jsonb_array_elements($5::jsonb) approved WHERE area_offer.ride_id=r.id AND area_offer.driver_profile_id=$2 AND area_offer.status='offered' AND area_offer.city_id=approved->>'cityId' AND area_offer.boundary_geojson=approved->'boundary' AND ${cityCoverageSql('area_offer.boundary_geojson', 'r.pickup_location::geometry')} AND ${cityCoverageSql('area_offer.boundary_geojson', 'dp.last_location::geometry')})
-                 WHEN r.sector='service' AND r.vehicle_category='ambulance' THEN TRUE
-                 ELSE ST_DWithin(dp.last_location,r.pickup_location,(CASE WHEN r.sector='passenger' THEN 10000 WHEN r.sector='logistics' OR (r.sector='service' AND r.vehicle_category IN ('towing','towing_van')) THEN 20000 ELSE $4 END)+0.000001) END)
-               AND v.sector=r.sector AND v.category=r.vehicle_category
+               AND (CASE WHEN r.sector='premium' THEN ST_DWithin(dp.last_location,r.pickup_location,25000.000001)
+                 WHEN r.sector='service' THEN ${serviceEligibilitySql(undefined, this.serviceCities)}
+                 ELSE ST_DWithin(dp.last_location,r.pickup_location,(CASE WHEN r.sector IN ('passenger','rental') THEN 10000 WHEN r.sector='logistics' OR (r.sector='service' AND r.vehicle_category IN ('towing','towing_van')) THEN 20000 ELSE $4 END)+0.000001) END)
+               AND v.sector=(CASE WHEN r.sector='rental' THEN 'passenger' ELSE r.sector END) AND v.category=r.vehicle_category
            )
          RETURNING *
        ), accepted_attempt AS (
@@ -781,13 +924,7 @@ export class PostgresRideRepository implements RideRepository {
        SELECT ${detailedRideColumns('u_r')}
        FROM accepted u_r
        ${detailedRideJoins('u_r')}`,
-      [
-        id,
-        driverProfileId,
-        env.DRIVER_LOCATION_STALE_SECONDS,
-        env.MAP_DRIVER_RADII_METERS.at(-1)!,
-        this.approvedCitiesJson(),
-      ],
+      [id, driverProfileId, env.DRIVER_LOCATION_STALE_SECONDS, env.MAP_DRIVER_RADII_METERS.at(-1)!],
     );
 
     return result.rows[0] ? mapRide(result.rows[0], false) : null;
@@ -827,7 +964,7 @@ export class PostgresRideRepository implements RideRepository {
       const leased = await client.query<{ attempt: number }>(
         `UPDATE rides r
          SET dispatch_driver_id = $2,
-             dispatch_expires_at = NOW() + ((CASE WHEN r.sector='premium' THEN 3600000 WHEN r.sector='logistics' THEN 120000 WHEN r.sector='passenger' THEN 25000 WHEN r.sector='service' AND r.vehicle_category IN ('towing','towing_van') THEN 600000 WHEN r.sector='service' AND r.vehicle_category='ambulance' THEN 30000 ELSE $3::int END) * INTERVAL '1 millisecond'),
+             dispatch_expires_at = NOW() + ((CASE WHEN r.sector='premium' THEN 3600000 WHEN r.sector='logistics' THEN 120000 WHEN r.sector IN ('passenger','rental') THEN 25000 WHEN r.sector='service' AND r.vehicle_category IN ('towing','towing_van') THEN 600000 WHEN r.sector='service' AND r.vehicle_category='ambulance' THEN 30000 ELSE $3::int END) * INTERVAL '1 millisecond'),
              dispatch_attempt = dispatch_attempt + 1
          WHERE r.id = $1
            AND r.status = 'searching'
@@ -845,10 +982,10 @@ export class PostgresRideRepository implements RideRepository {
              JOIN vehicles v ON v.driver_profile_id = dp.id
              WHERE dp.id = $2
                AND ${driverEligibilitySql("NOW() - ($4::int * INTERVAL '1 second')", undefined, 'r.customer_id')}
-               AND v.sector=r.sector AND v.category=r.vehicle_category
-               AND (CASE WHEN r.sector='premium' THEN $6::text IS NOT NULL AND EXISTS(SELECT 1 FROM jsonb_array_elements($8::jsonb) approved WHERE approved->>'cityId'=$7 AND approved->'boundary'=$6::jsonb AND ${cityCoverageSql('$6', 'r.pickup_location::geometry')} AND ${cityCoverageSql('$6', 'dp.last_location::geometry')})
-                 WHEN r.sector='service' AND r.vehicle_category='ambulance' THEN TRUE
-                 ELSE ST_DWithin(dp.last_location,r.pickup_location,(CASE WHEN r.sector='passenger' THEN 10000 WHEN r.sector='logistics' OR (r.sector='service' AND r.vehicle_category IN ('towing','towing_van')) THEN 20000 ELSE $5 END)+0.000001) END)
+               AND v.sector=(CASE WHEN r.sector='rental' THEN 'passenger' ELSE r.sector END) AND v.category=r.vehicle_category
+               AND (CASE WHEN r.sector='premium' THEN ST_DWithin(dp.last_location,r.pickup_location,25000.000001)
+                 WHEN r.sector='service' THEN ${serviceEligibilitySql(undefined, this.serviceCities)}
+                 ELSE ST_DWithin(dp.last_location,r.pickup_location,(CASE WHEN r.sector IN ('passenger','rental') THEN 10000 WHEN r.sector='logistics' OR (r.sector='service' AND r.vehicle_category IN ('towing','towing_van')) THEN 20000 ELSE $5 END)+0.000001) END)
            )
          RETURNING dispatch_attempt AS attempt`,
         [
@@ -857,9 +994,6 @@ export class PostgresRideRepository implements RideRepository {
           responseTimeoutMs,
           env.DRIVER_LOCATION_STALE_SECONDS,
           env.MAP_DRIVER_RADII_METERS.at(-1)!,
-          city?.boundaryGeoJson ?? null,
-          city?.cityId ?? null,
-          this.approvedCitiesJson(),
         ],
       );
       const attempt = leased.rows[0]?.attempt;
@@ -1068,13 +1202,11 @@ export class PostgresRideRepository implements RideRepository {
                      )
                    )
                  ) * 1.05,
-                 2
+                 0
                )
              ELSE
-               COALESCE(
-                 r.final_fare,
-                 r.fare_estimate
-               )
+               CASE WHEN r.sector='logistics' THEN COALESCE(r.final_fare,r.fare_estimate)
+               ELSE ROUND(COALESCE(r.final_fare,r.fare_estimate),0) END
            END,
            commission_amount = CASE
              WHEN cr.route_metadata->'bookingFareSnapshot'->>'commissionAmount' IS NOT NULL THEN
@@ -1246,17 +1378,12 @@ export class PostgresRideRepository implements RideRepository {
         JOIN vehicles v ON v.id=dp.active_vehicle_id
         WHERE dp.id=r.dispatch_driver_id
         AND ${driverEligibilitySql("NOW()-($2::int*INTERVAL '1 second')", 'r.id', 'r.customer_id')}
-        AND v.sector=r.sector AND v.category=r.vehicle_category
-        AND (r.sector<>'premium' OR EXISTS(
-          SELECT 1 FROM ride_dispatch_attempts area_offer CROSS JOIN jsonb_array_elements($3::jsonb) approved
-          WHERE area_offer.ride_id=r.id AND area_offer.driver_profile_id=dp.id AND area_offer.status='offered'
-          AND area_offer.city_id=approved->>'cityId' AND area_offer.boundary_geojson=approved->'boundary'
-          AND ${cityCoverageSql('area_offer.boundary_geojson', 'r.pickup_location::geometry')}
-          AND ${cityCoverageSql('area_offer.boundary_geojson', 'dp.last_location::geometry')}
-        ))) AS eligible
+        AND v.sector=(CASE WHEN r.sector='rental' THEN 'passenger' ELSE r.sector END) AND v.category=r.vehicle_category
+        AND (r.sector<>'service' OR ${serviceEligibilitySql(undefined, this.serviceCities)})
+        AND (r.sector<>'premium' OR ST_DWithin(dp.last_location,r.pickup_location,25000.000001))) AS eligible
        FROM rides r WHERE r.id=$1 AND r.status='searching' AND r.assigned_driver_id IS NULL
        AND r.dispatch_driver_id IS NOT NULL AND r.dispatch_expires_at>NOW()`,
-      [id, env.DRIVER_LOCATION_STALE_SECONDS, this.approvedCitiesJson()],
+      [id, env.DRIVER_LOCATION_STALE_SECONDS],
     );
     const pending = result.rows[0];
     if (!pending) return null;
@@ -1350,7 +1477,7 @@ export class PostgresRideRepository implements RideRepository {
   ): Promise<RideMapSnapshot | null> {
     const result = await this.pool.query(
       `SELECT ${detailedRideColumns()}, r.route_metadata AS metadata,
-       ST_Y(dp.last_location::geometry) AS "driverLatitude", ST_X(dp.last_location::geometry) AS "driverLongitude", dp.last_location_at AS "driverTimestamp"
+       ST_Y(dp.last_location::geometry) AS "driverLatitude", ST_X(dp.last_location::geometry) AS "driverLongitude", dp.last_location_at AS "driverTimestamp", dp.location_heading AS "driverHeading", dp.location_speed AS "driverSpeed", dp.location_accuracy AS "driverAccuracy"
        FROM rides r ${detailedRideJoins()}
        WHERE r.id=$1 AND (CASE WHEN $3='user' THEN r.customer_id=$2::uuid ELSE dp.user_id=$2::uuid END)`,
       [id, userId, view],
@@ -1358,17 +1485,29 @@ export class PostgresRideRepository implements RideRepository {
     const row = result.rows[0];
     if (!row) return null;
     const metadata = row.metadata;
+    // Authorization is enforced by the SQL above, before accessing transient GPS.
+    const cached = row.assignedDriverId
+      ? await this.trackingCache?.latest(row.assignedDriverId)
+      : null;
+    const latest =
+      cached && Date.parse(cached.timestamp) >= new Date(row.driverTimestamp ?? 0).getTime()
+        ? cached
+        : null;
     return {
       ride: mapRide(row),
       metadata: metadata ?? null,
       driverLocation:
-        row.driverTimestamp && row.driverLatitude != null && row.driverLongitude != null
+        latest ??
+        (row.driverTimestamp && row.driverLatitude != null && row.driverLongitude != null
           ? {
               latitude: Number(row.driverLatitude),
               longitude: Number(row.driverLongitude),
               timestamp: new Date(row.driverTimestamp).toISOString(),
+              heading: row.driverHeading == null ? undefined : Number(row.driverHeading),
+              speed: row.driverSpeed == null ? undefined : Number(row.driverSpeed),
+              accuracy: row.driverAccuracy == null ? undefined : Number(row.driverAccuracy),
             }
-          : null,
+          : null),
       userLocation: metadata?.userLocation ?? null,
     };
   }
@@ -1456,7 +1595,7 @@ export class PostgresRideRepository implements RideRepository {
       `WITH current AS (SELECT id, ${applicable} AS applied FROM rides
        WHERE id=$1 AND status NOT IN ('completed','cancelled') FOR UPDATE)
        UPDATE rides SET route_metadata=COALESCE(route_metadata,'{}'::jsonb) ||
-         CASE WHEN current.applied THEN ($2::jsonb - 'userLocation' - 'bookingDistanceMeters' - 'bookingFareSnapshot' - 'pin' - 'pinVerified' - 'pinFailedAttempts' - 'pinLockedUntil') ELSE '{}'::jsonb END ||
+         CASE WHEN current.applied THEN ($2::jsonb - 'userLocation' - 'bookingDistanceMeters' - 'bookingFareSnapshot' - 'logisticsDestinationDistrict' - 'pin' - 'pinVerified' - 'pinFailedAttempts' - 'pinLockedUntil') ELSE '{}'::jsonb END ||
        jsonb_strip_nulls(jsonb_build_object('lastExternalRequestAt',GREATEST(
          (route_metadata->>'lastExternalRequestAt')::float8,
          ($2::jsonb->>'lastExternalRequestAt')::float8),
@@ -1513,6 +1652,19 @@ export class PostgresRideRepository implements RideRepository {
       else if (ride.assigned_driver_id !== driverProfileId || !eligible) result = 'forbidden';
       else if (ride.status !== 'driver_arrived' || ride.pin_verified === true)
         result = 'invalid_state';
+      else if (
+        (
+          await client.query(
+            `SELECT 1 FROM logistics_ride_payment_plans lp WHERE lp.ride_id=$1 AND NOT EXISTS(SELECT 1 FROM payments p WHERE p.ride_id=lp.ride_id AND p.payment_stage='upfront' AND p.status='CAPTURED')`,
+            [id],
+          )
+        ).rowCount
+      )
+        throw new AppError(
+          'LOGISTICS_UPFRONT_REQUIRED',
+          'Confirm the 40% upfront payment before verifying the pickup PIN',
+          409,
+        );
       else if (
         ride.sector === 'logistics' &&
         !(
@@ -1639,4 +1791,4 @@ export class PostgresRideRepository implements RideRepository {
     return result.rows.map((row) => mapRide(row, false));
   }
 }
-import { premiumCityAreas, type PremiumCityAreas } from '../../maps/premium-city-areas.js';
+import type { PremiumCityAreas } from '../../maps/premium-city-areas.js';

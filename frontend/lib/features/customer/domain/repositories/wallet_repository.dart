@@ -1,6 +1,7 @@
 import '../../data/models/wallet_model.dart';
 
 abstract class WalletRepository {
+  Future<double> quotePayment(double amount);
   Future<WalletModel> getWallet();
 
   Future<({List<WalletTransactionModel> transactions, int totalCount})>

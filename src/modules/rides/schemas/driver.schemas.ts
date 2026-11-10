@@ -13,9 +13,9 @@ export const driverLocationSchema = z
     latitude,
     longitude,
     timestamp: z.coerce.date(),
-    speed: z.number().finite().min(0).optional(),
+    speed: z.number().finite().min(0).max(75).optional(),
     heading: z.number().finite().min(0).max(360).optional(),
-    accuracy: z.number().finite().min(0).optional(),
+    accuracy: z.number().finite().min(0).max(200).optional(),
   })
   .strict();
 

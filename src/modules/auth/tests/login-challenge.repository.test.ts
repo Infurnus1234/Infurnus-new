@@ -135,12 +135,12 @@ describe('PostgresLoginChallengeRepository', () => {
       `
         UPDATE login_challenges
         SET
-          expires_at = $2,
-          provider_expires_at = $2,
+          expires_at = clock_timestamp() - INTERVAL '1 second',
+          provider_expires_at = clock_timestamp() - INTERVAL '1 second',
           updated_at = NOW()
         WHERE id = $1
       `,
-      [challengeId, new Date(Date.now() - 1000)],
+      [challengeId],
     );
   }
 
@@ -149,11 +149,11 @@ describe('PostgresLoginChallengeRepository', () => {
       `
         UPDATE login_challenges
         SET
-          provider_expires_at = $2,
+          provider_expires_at = clock_timestamp() - INTERVAL '1 second',
           updated_at = NOW()
         WHERE id = $1
       `,
-      [challengeId, new Date(Date.now() - 1000)],
+      [challengeId],
     );
   }
 
@@ -249,6 +249,13 @@ describe('PostgresLoginChallengeRepository', () => {
     });
 
     const created = await repository.create(data);
+
+    // The repository enforces cooldown using the database clock. Host/VM clocks
+    // can drift, so establish the boundary using that same clock.
+    await pool.query(
+      "UPDATE login_challenges SET last_otp_sent_at=clock_timestamp()-INTERVAL '61 seconds' WHERE id=$1",
+      [created.id],
+    );
 
     const result = await repository.claimResend(created.id, 60);
 

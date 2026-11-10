@@ -149,6 +149,29 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
       );
       const pending = await managed.submit(f.owner, 'fleet_owner', created.userId);
       expect(
+        (
+          await pool.query(
+            'SELECT requester_id,requester_role,fleet_id FROM provider_approval_requests WHERE id=$1',
+            [pending.id],
+          )
+        ).rows[0],
+      ).toMatchObject({
+        requester_id: f.owner,
+        requester_role: 'fleet_owner',
+        fleet_id: f.partner,
+      });
+      // Search the actual Driver name as displayed by the Admin queue.
+      const namedQueue = await new PostgresProviderOperationsRepository(pool).requestPage(
+        f.admin,
+        'PENDING',
+        { kind: 'driver', page: 1, pageSize: 100, search: 'TEST_SAMPLE Managed' },
+      );
+      expect(namedQueue.items.find((row) => row.id === pending.id)).toMatchObject({
+        driver_name: 'TEST_SAMPLE Managed',
+        fleet_owner_id: f.owner,
+        fleet_owner_name: 'TEST_SAMPLE Fleet',
+      });
+      expect(
         (await managed.detail(f.owner, 'fleet_owner', created.userId)).profile.verificationStatus,
       ).toBe('pending');
       const c = await pool.connect();
