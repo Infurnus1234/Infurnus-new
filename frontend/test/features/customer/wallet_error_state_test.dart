@@ -17,6 +17,10 @@ class MockWalletRepository implements WalletRepository {
   MockWalletRepository({required this.onGetWallet, this.onGetHistory});
 
   @override
+  Future<double> quotePayment(double amount) async =>
+      throw UnimplementedError();
+
+  @override
   Future<WalletModel> getWallet() => onGetWallet();
 
   @override

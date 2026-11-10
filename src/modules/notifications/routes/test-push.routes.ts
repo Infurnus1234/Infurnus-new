@@ -46,7 +46,8 @@ export function createTestPushRouter(): Router {
       const androidChannelId =
         input.audience === 'driver' ? 'infurnus_driver_channel_v2' : 'infurnus_ride_updates_v2';
 
-      if (!env.REDIS_URL) throw new AppError('NOTIFICATION_UNAVAILABLE','Push delivery is unavailable',503);
+      if (!env.REDIS_URL)
+        throw new AppError('NOTIFICATION_UNAVAILABLE', 'Push delivery is unavailable', 503);
       const { NotificationService } = await import('../services/notification.service.js');
       const service = new NotificationService();
       const notificationId = await service.send({
