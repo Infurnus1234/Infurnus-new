@@ -43,8 +43,8 @@ class SupportScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           _buildEmailSupportBanner(context),
-          const SizedBox(height: 16),
-          _buildContactOptions(context),
+          const SizedBox(height: 12),
+          _buildInAppChatCard(context),
         ],
       ),
     );
@@ -147,27 +147,52 @@ class SupportScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildContactOptions(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _contactCard(
-            Icons.chat_outlined,
-            'In-App Chat',
-            'Create ticket',
-            () => context.push('/support-tickets'),
+  Widget _buildInAppChatCard(BuildContext context) {
+    return InfurnusCard(
+      onTap: () => context.push('/support-tickets'),
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.primaryGreen.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.chat_outlined,
+              color: AppColors.primaryGreen,
+              size: 28,
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _contactCard(
-            Icons.mail_rounded,
-            'Send Email',
-            supportEmail,
-            () => _emailSupport(context),
+          const SizedBox(width: 14),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'In-App Chat',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Create and track support tickets with our team',
+                  style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+          const Icon(
+            Icons.arrow_forward_ios_rounded,
+            size: 16,
+            color: Color(0xFF9CA3AF),
+          ),
+        ],
+      ),
     );
   }
 
@@ -193,35 +218,5 @@ class SupportScreen extends StatelessWidget {
       ),
     );
     context.push('/support-tickets');
-  }
-
-  Widget _contactCard(
-    IconData icon,
-    String label,
-    String subtitle,
-    VoidCallback onTap,
-  ) {
-    return InfurnusCard(
-      onTap: onTap,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-      child: Column(
-        children: [
-          Icon(icon, color: AppColors.primaryGreen, size: 28),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            subtitle,
-            style: const TextStyle(fontSize: 10, color: Color(0xFF6B7280)),
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
-    );
   }
 }
