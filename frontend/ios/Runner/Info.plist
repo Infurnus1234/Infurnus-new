@@ -68,9 +68,11 @@
 		</array>
 		<key>UIStatusBarHidden</key>
 		<false/>
-		<!-- Camera permission — required by mobile_scanner for QR scanning -->
+		<!-- Camera permission — required by mobile_scanner and profile photo -->
 		<key>NSCameraUsageDescription</key>
-		<string>INFURNUS needs camera access to scan UPI and driver QR codes for Scan &amp; Pay.</string>
+		<string>INFURNUS needs camera access to scan UPI/QR codes and capture profile photos.</string>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>INFURNUS needs access to your photo library to select a profile photo.</string>
 		<key>LSApplicationQueriesSchemes</key>
 		<array>
 			<string>tel</string>
