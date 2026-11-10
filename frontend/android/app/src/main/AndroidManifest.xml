@@ -81,6 +81,11 @@
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="paytmmp" />
         </intent>
+        <!-- System dialer — required for tel: URIs on Android 11+ -->
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+            <data android:scheme="tel" />
+        </intent>
     </queries>
 </manifest>
 

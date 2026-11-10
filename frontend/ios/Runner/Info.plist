@@ -71,5 +71,9 @@
 		<!-- Camera permission — required by mobile_scanner for QR scanning -->
 		<key>NSCameraUsageDescription</key>
 		<string>INFURNUS needs camera access to scan UPI and driver QR codes for Scan &amp; Pay.</string>
+		<key>LSApplicationQueriesSchemes</key>
+		<array>
+			<string>tel</string>
+		</array>
 	</dict>
 </plist>

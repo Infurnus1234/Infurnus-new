@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/services/location_service.dart';
 import '../../../../shared/widgets/route_distance_summary.dart';
@@ -2372,6 +2373,8 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
     final ride = state.currentRide;
     final driver = ride?.driverDetails;
     final vehicle = ride?.vehicleDetails;
+    final driverPhone = driver?.phone?.trim();
+    final hasDriverPhone = driverPhone != null && driverPhone.isNotEmpty;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -2497,15 +2500,56 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                   ],
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.phone_rounded, color: brandGreen),
-                onPressed: (driver?.phone != null && driver!.phone!.isNotEmpty)
-                    ? () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Calling ${driver.name}...')),
-                        );
-                      }
-                    : null,
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      Icons.phone_rounded,
+                      color: hasDriverPhone
+                          ? brandGreen
+                          : textGray.withValues(alpha: 0.4),
+                    ),
+                    tooltip: hasDriverPhone ? 'Call driver' : 'A provider must be assigned to an active booking before you can call.',
+                    onPressed: hasDriverPhone
+                        ? () async {
+                            final uri = Uri.parse('tel:$driverPhone');
+                            try {
+                              final launched = await launchUrl(uri);
+                              if (!mounted) return;
+                              if (!launched) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Could not open the dialer for this number.',
+                                    ),
+                                  ),
+                                );
+                              }
+                            } catch (_) {
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Could not open the dialer for this number.',
+                                  ),
+                                ),
+                              );
+                            }
+                          }
+                        : null,
+                  ),
+                  if (!hasDriverPhone)
+                    const Text(
+                      'Call unavailable\nuntil assigned',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: textGray,
+                        fontSize: 9,
+                        height: 1.1,
+                      ),
+                    ),
+                ],
               ),
             ],
           ),
