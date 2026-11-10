@@ -11,6 +11,11 @@ export function createFirebasePushSender(
         ['ride.created', 'driver.offer'].includes(job.type) &&
         !!job.data?.rideId &&
         !!job.data?.expiresAt;
+      const offerInvalidation =
+        job.data?.offerInvalidated === 'true' &&
+        ['ride.cancelled', 'ride.accepted'].includes(job.type) &&
+        !!job.data.rideId;
+      const dataOnly = driverOffer || offerInvalidation;
       const lifetime = offerTransportPolicy(job.data?.expiresAt);
       const channelId =
         job.data?.channelId ??
@@ -22,10 +27,10 @@ export function createFirebasePushSender(
 
       const result = await messaging.sendEachForMulticast({
         tokens,
-        ...(driverOffer ? {} : { notification: { title: job.title, body: job.body } }),
+        ...(dataOnly ? {} : { notification: { title: job.title, body: job.body } }),
         data: {
           ...job.data,
-          ...(driverOffer ? { title: job.title, body: job.body } : {}),
+          ...(dataOnly ? { title: job.title, body: job.body } : {}),
           notificationId: job.notificationId,
           type: job.type,
           channelId,
@@ -34,7 +39,7 @@ export function createFirebasePushSender(
           priority: 'high',
           ...(lifetime ? { ttl: lifetime.ttl } : {}),
           collapseKey: job.notificationId,
-          ...(driverOffer
+          ...(dataOnly
             ? {}
             : {
                 notification: {
@@ -49,11 +54,16 @@ export function createFirebasePushSender(
           headers: {
             'apns-collapse-id': job.notificationId,
             ...(lifetime ? { 'apns-expiration': lifetime.apnsExpiration } : {}),
+            ...(offerInvalidation ? { 'apns-push-type': 'background', 'apns-priority': '5' } : {}),
           },
           payload: {
             aps: {
-              ...(driverOffer ? { alert: { title: job.title, body: job.body } } : {}),
-              sound: 'infurnus_alert.wav',
+              ...(offerInvalidation
+                ? { contentAvailable: true }
+                : {
+                    ...(driverOffer ? { alert: { title: job.title, body: job.body } } : {}),
+                    sound: 'infurnus_alert.wav',
+                  }),
             },
           },
         },

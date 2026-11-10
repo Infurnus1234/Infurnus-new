@@ -16,6 +16,7 @@ import type { DemandPricingProvenance } from '../types/fare.js';
 import type { VehicleType } from '../../vehicles/types/vehicle.js';
 import {
   DEFAULT_FARE_PRICING,
+  DISTANCE_FARE_MULTIPLIER,
   VEHICLE_FARE_PRICING,
   canonicalVehicleCode,
   LEGACY_SERVICE_CATEGORIES,
@@ -160,7 +161,7 @@ export class FareCalculatorService {
         if (input.sector !== 'logistics')
           throw new AppError('FARE_CONFIGURATION_MISSING', VEHICLE_UNAVAILABLE_MESSAGE, 422);
         const slab = logisticsSlab(configured.logisticsSlabs, input.distanceMeters);
-        const bookingFare = this.calculateResolved(input, slab, true, 1);
+        const bookingFare = this.calculateResolved(input, slab, true);
         const pricingVersion = 'vehicle-type:' + configured.id + ':v' + configured.version;
         bookingFare.pricingVersion = pricingVersion;
         bookingFare.vehicleConfiguration = {
@@ -184,8 +185,8 @@ export class FareCalculatorService {
           currency: 'INR',
           pricingVersion,
           oneWayDistanceMeters: input.distanceMeters,
-          billableDistanceMeters: input.distanceMeters,
-          distanceMultiplier: 1,
+          billableDistanceMeters: bookingFare.billableDistanceMeters!,
+          distanceMultiplier: DISTANCE_FARE_MULTIPLIER,
           distanceMeters: input.distanceMeters,
           durationSeconds: input.durationSeconds,
           estimatedFare: { minimum: bookingFare, maximum: bookingFare },
@@ -204,12 +205,8 @@ export class FareCalculatorService {
           const pricingVersion = 'vehicle-type:' + configured.id + ':v' + configured.version;
           const common = {
             oneWayDistanceMeters: input.distanceMeters,
-            billableDistanceMeters:
-              input.distanceMeters *
-              (input.sector === 'premium' && input.tripType === 'one_way' ? 1 : 2),
-            distanceMultiplier: (input.sector === 'premium' && input.tripType === 'one_way'
-              ? 1
-              : 2) as 1 | 2,
+            billableDistanceMeters: input.distanceMeters * DISTANCE_FARE_MULTIPLIER,
+            distanceMultiplier: DISTANCE_FARE_MULTIPLIER,
             vehicleCategory: configured.code,
             pricing: tariff,
             currency: 'INR' as const,
@@ -284,7 +281,6 @@ export class FareCalculatorService {
         input,
         { baseFare, distanceRatePerKm, fuelAmount: fixed?.fuelAmount },
         true,
-        fixed?.distanceMultiplier,
       );
       bookingFare.pricingVersion = quoteVersion;
       bookingFare.vehicleConfiguration = {
@@ -316,10 +312,8 @@ export class FareCalculatorService {
         currency: 'INR',
         pricingVersion: quoteVersion,
         oneWayDistanceMeters: input.distanceMeters,
-        billableDistanceMeters:
-          input.distanceMeters *
-          (input.sector === 'premium' && input.tripType === 'one_way' ? 1 : 2),
-        distanceMultiplier: input.sector === 'premium' && input.tripType === 'one_way' ? 1 : 2,
+        billableDistanceMeters: bookingFare.billableDistanceMeters!,
+        distanceMultiplier: DISTANCE_FARE_MULTIPLIER,
         distanceMeters: input.distanceMeters,
         durationSeconds: input.durationSeconds,
         ...(estimatedFare ? { estimatedFare } : {}),
@@ -341,10 +335,8 @@ export class FareCalculatorService {
     if (!tariff) return this.calculate(input);
     const common = {
       oneWayDistanceMeters: input.distanceMeters,
-      billableDistanceMeters:
-        input.distanceMeters * (input.sector === 'premium' && input.tripType === 'one_way' ? 1 : 2),
-      distanceMultiplier: (input.sector === 'premium' && input.tripType === 'one_way' ? 1 : 2) as
-        1 | 2,
+      billableDistanceMeters: input.distanceMeters * DISTANCE_FARE_MULTIPLIER,
+      distanceMultiplier: DISTANCE_FARE_MULTIPLIER,
       vehicleCategory: input.vehicleCategory!,
       pricing: tariff,
       currency: this.pricing.currency,
@@ -451,19 +443,16 @@ export class FareCalculatorService {
     input: FareCalculationInput,
     vehicleRates?: { baseFare: number; distanceRatePerKm: number; fuelAmount?: number | undefined },
     exactConfiguration = false,
-    configuredDistanceMultiplier?: 1 | 2,
+    distanceMultiplier: 1 | 2 = DISTANCE_FARE_MULTIPLIER,
   ): FareCalculationResult {
     this.validateInput(input);
     this.validatePricing();
     if (!vehicleRates) this.validateVehicleFareConfiguration(input);
 
     // Inputs and stored route distances stay one-way. Only billable components use this value.
-    const billableDistanceMeters =
-      input.distanceMeters *
-      (configuredDistanceMultiplier ??
-        (input.sector === 'premium' && input.tripType === 'one_way' ? 1 : 2));
+    const billableDistanceMeters = input.distanceMeters * distanceMultiplier;
     if (!Number.isFinite(billableDistanceMeters))
-      throw new AppError('FARE_INPUT_INVALID', 'Round-trip distance exceeds supported range', 400);
+      throw new AppError('FARE_INPUT_INVALID', 'Fare distance exceeds supported range', 400);
     let baseAmount = vehicleRates?.baseFare ?? this.pricing.baseFare;
     let distanceAmount = vehicleRates
       ? this.roundMoney(
@@ -545,9 +534,7 @@ export class FareCalculatorService {
     const result: FareCalculationResult = {
       oneWayDistanceMeters: input.distanceMeters,
       billableDistanceMeters,
-      distanceMultiplier:
-        configuredDistanceMultiplier ??
-        (input.sector === 'premium' && input.tripType === 'one_way' ? 1 : 2),
+      distanceMultiplier,
       distanceMeters: input.distanceMeters,
       durationSeconds: input.durationSeconds,
       baseAmount,

@@ -709,6 +709,7 @@ function mapType(row: Record<string, unknown>): VehicleType {
     serviceRadiusMeters: Number(row.service_radius_meters ?? 25000),
     ...hourlyPricingFromRow(row),
     logisticsSlabs: (row.logistics_slabs as VehicleType['logisticsSlabs']) ?? null,
+    ...(row.load_capacity_kg == null ? {} : { loadCapacityKg: Number(row.load_capacity_kg) }),
     active: row.active as boolean,
     catalogVisible: row.catalog_visible !== false,
     registrationActive: row.registration_active === true,

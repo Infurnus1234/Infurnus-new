@@ -496,6 +496,25 @@ export class RideService {
         throw new AppError('RIDE_NOT_FOUND', 'Ride not found', 404);
       }
 
+      if (
+        existing.status === 'cancelled' &&
+        existing.cancelledByCustomer &&
+        ['logistics', 'rental', 'premium', 'service'].includes(existing.sector ?? '')
+      ) {
+        return this.hydrateDriverPhoto(existing);
+      }
+
+      if (
+        existing.customerCancellationAllowed === false &&
+        ['driver_assigned', 'driver_arriving', 'driver_arrived'].includes(existing.status)
+      ) {
+        throw new AppError(
+          'RIDE_CANCELLATION_WINDOW_CLOSED',
+          'The 5-minute cancellation window has closed. Contact support if you need help with this booking.',
+          409,
+        );
+      }
+
       throw new AppError(
         'RIDE_CANCELLATION_CONFLICT',
         'Ride cannot be cancelled in its current state',
@@ -503,11 +522,8 @@ export class RideService {
       );
     }
 
-    const hydratedRide = await this.hydrateDriverPhoto(ride);
-
     rideEvents.emit('ride:cancelled', id);
-
-    return hydratedRide;
+    return this.hydrateDriverPhoto(ride);
   }
 
   async acceptRide(driverProfileId: string, id: string) {

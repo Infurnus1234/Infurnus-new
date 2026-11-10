@@ -275,6 +275,13 @@ const detailedRideColumns = (tableAlias = 'r') => `
   v.color AS "vehicleColor",
   v.plate_number AS "vehiclePlateNumber",
   ${tableAlias}.cancellation_reason AS "cancellationReason",
+  ${tableAlias}.cancelled_by_customer AS "cancelledByCustomer",
+  ${tableAlias}.driver_accepted_at AS "driverAcceptedAt",
+  ride_customer_cancellation_deadline(${tableAlias}.sector::text, ${tableAlias}.driver_accepted_at)
+    AS "customerCancellationDeadline",
+  clock_timestamp() AS "cancellationServerTime",
+  ride_customer_cancellation_allowed(${tableAlias}.sector::text, ${tableAlias}.status,
+    ${tableAlias}.driver_accepted_at, clock_timestamp()) AS "customerCancellationAllowed",
   ${tableAlias}.cancelled_at AS "cancelledAt",
   ${tableAlias}.completed_at AS "completedAt",
   ${tableAlias}.created_at AS "createdAt",
@@ -448,6 +455,11 @@ function mapRide(row: Record<string, unknown>, forCustomer = false): Ride {
         : null,
 
     cancellationReason: (row.cancellationReason as string) || null,
+    cancelledByCustomer: row.cancelledByCustomer === true,
+    driverAcceptedAt: (row.driverAcceptedAt as Date | null) ?? null,
+    customerCancellationDeadline: (row.customerCancellationDeadline as Date | null) ?? null,
+    cancellationServerTime: row.cancellationServerTime as Date,
+    customerCancellationAllowed: row.customerCancellationAllowed === true,
 
     cancelledAt: row.cancelledAt ? new Date(row.cancelledAt as string | number | Date) : null,
 
@@ -568,7 +580,6 @@ export class PostgresRideRepository implements RideRepository {
           ? fixedHourlyFare(fixedHourlyPricingFromRow(row), {
               ...input,
               distanceMeters: snapshot.distanceMeters,
-              tripType: input.rentalDetails?.tripType,
             })
           : undefined;
         const hourly = fixed
@@ -812,24 +823,25 @@ export class PostgresRideRepository implements RideRepository {
     client: PoolClient | Pool = this.pool,
   ): Promise<Ride | null> {
     const result = await client.query(
-      `WITH updated AS (
-         UPDATE rides
+      `WITH locked AS MATERIALIZED (
+         SELECT id, sector, status, driver_accepted_at FROM rides
+         WHERE id = $1 AND customer_id = $2 FOR UPDATE
+       ), decision AS MATERIALIZED (
+         SELECT locked.*, clock_timestamp() AS checked_at FROM locked
+       ), updated AS (
+         UPDATE rides r
          SET
            status = 'cancelled',
            cancellation_reason = $3,
-           cancelled_at = NOW(),
+           cancelled_by_customer = true,
+           cancelled_at = decision.checked_at,
            dispatch_driver_id = NULL,
            dispatch_expires_at = NULL
-         WHERE id = $1
-           AND customer_id = $2
-           AND status IN (
-             'requested',
-             'searching',
-             'driver_assigned',
-             'driver_arriving',
-             'driver_arrived'
-           )
-         RETURNING *
+         FROM decision
+         WHERE r.id = decision.id
+           AND ride_customer_cancellation_allowed(decision.sector::text, decision.status,
+             decision.driver_accepted_at, decision.checked_at)
+         RETURNING r.*
        )
        SELECT ${detailedRideColumns('u_r')}
        FROM updated u_r
@@ -882,6 +894,7 @@ export class PostgresRideRepository implements RideRepository {
              LIMIT 1
            ),
            status = 'driver_assigned',
+           driver_accepted_at = clock_timestamp(),
            dispatch_driver_id = NULL,
            dispatch_expires_at = NULL
          WHERE r.id = $1
@@ -907,7 +920,7 @@ export class PostgresRideRepository implements RideRepository {
          RETURNING *
        ), accepted_attempt AS (
          UPDATE ride_dispatch_attempts attempt
-         SET status = 'accepted', responded_at = NOW()
+         SET status = 'accepted', responded_at = updated.driver_accepted_at
          FROM updated
          WHERE attempt.ride_id = updated.id
            AND attempt.driver_profile_id = $2

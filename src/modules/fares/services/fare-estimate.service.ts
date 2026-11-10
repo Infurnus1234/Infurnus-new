@@ -179,6 +179,7 @@ export class FareEstimateService {
   private async resolveConfiguration(input: {
     sector?: string | undefined;
     vehicleCategory?: string | undefined;
+    weightKg?: number | undefined;
   }) {
     const inventorySector = bookingInventorySector(input.sector);
     const code = canonicalVehicleCode(inventorySector ?? '', input.vehicleCategory ?? '');
@@ -189,6 +190,17 @@ export class FareEstimateService {
     if (configured && configured.sector === inventorySector) {
       if (!configured.active)
         throw new AppError('FARE_CONFIGURATION_MISSING', VEHICLE_UNAVAILABLE_MESSAGE, 422);
+      if (
+        input.sector === 'logistics' &&
+        configured.loadCapacityKg !== undefined &&
+        (input.weightKg ?? 0) > configured.loadCapacityKg
+      ) {
+        throw new AppError(
+          'LOGISTICS_CAPACITY_EXCEEDED',
+          `${configured.name} can carry up to ${configured.loadCapacityKg.toLocaleString('en-IN')} kg. Select a vehicle with a higher capacity.`,
+          422,
+        );
+      }
       return configured;
     }
     // Production repository callers never fall back to unpersisted compatibility tariffs.

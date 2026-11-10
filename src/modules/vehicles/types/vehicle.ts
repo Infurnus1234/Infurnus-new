@@ -127,6 +127,7 @@ export interface FixedHourlyPricing {
 
 /** Admin catalog rates use integer paise internally; category is the code on rides/inventory. */
 export interface VehicleType {
+  loadCapacityKg?: number;
   fixedHourlyPricing?: FixedHourlyPricing;
   rentalPricingVersion?: number;
   catalogVisible?: boolean;

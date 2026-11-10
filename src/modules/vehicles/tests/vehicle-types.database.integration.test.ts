@@ -522,7 +522,8 @@ live(
           goods: { weightKg: 100, hasLoadingAssistance: true },
           rentalDetails: { hours: 4, fuelRatePerKm: 999 },
         });
-        expect(ride.fareEstimate).toBe(400);
+        const expectedFare = sector === 'logistics' ? 700 : 400;
+        expect(ride.fareEstimate).toBe(expectedFare);
         expect(
           await rides.offerDispatch(
             ride.id,
@@ -532,7 +533,9 @@ live(
           ),
         ).toBe(true);
         await service.acceptRide(profileId, ride.id);
-        expect((await service.getDriverMap(driverId, ride.id)).fare.bookedAmount).toBe(400);
+        expect((await service.getDriverMap(driverId, ride.id)).fare.bookedAmount).toBe(
+          expectedFare,
+        );
         await rides.transition(ride.id, 'driver_arriving', profileId);
         await rides.transition(ride.id, 'driver_arrived', profileId);
         if (sector === 'logistics') {
@@ -564,8 +567,8 @@ live(
                 : { baseFare: 120, expectedVersion: 1 },
         );
         const complete = await service.completeRide(ride.id, profileId);
-        expect(complete.finalFare).toBe(400);
-        expect(complete.billing).toEqual({ currency: 'INR', finalFare: 400 });
+        expect(complete.finalFare).toBe(expectedFare);
+        expect(complete.billing).toEqual({ currency: 'INR', finalFare: expectedFare });
       },
     );
     it('deactivation blocks new rides; stale quote and changed rate reject atomically', async () => {

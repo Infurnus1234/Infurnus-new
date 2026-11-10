@@ -289,7 +289,16 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
         `INSERT INTO vehicle_types(name,code,sector,base_fare_paise,per_km_rate_paise) VALUES('TEST_ONLY',$1,'passenger',100,100) RETURNING id`,
         [code],
       );
+      const eligibility = (id: string, accessToken: string) =>
+        request(app)
+          .get(`/admin/records/vehicle-types/${id}`)
+          .auth(accessToken, { type: 'bearer' });
+      expect((await eligibility(type.rows[0].id, adminToken)).status).toBe(403);
+      const allowed = await eligibility(type.rows[0].id, ownerToken);
+      expect(allowed.status, allowed.text).toBe(200);
+      expect(allowed.body.data).toEqual({ eligible: true });
       expect((await remove('vehicle-types', type.rows[0].id)).status).toBe(200);
+      expect((await eligibility(type.rows[0].id, ownerToken)).status).toBe(404);
       const existing = await pool.query(`SELECT id,code FROM vehicle_types WHERE code='sedan'`);
       let sedanId = existing.rows[0]?.id;
       if (!sedanId) {
@@ -302,6 +311,12 @@ describe.runIf(process.env.PROVIDER_DB_TESTS === 'true')(
         `INSERT INTO vehicles(make,model,plate_number,category) VALUES('TEST_ONLY','Keep',$1,'sedan')`,
         ['KEEP' + randomUUID().slice(0, 8)],
       );
+      const blocked = await eligibility(sedanId, ownerToken);
+      expect(blocked.status, blocked.text).toBe(200);
+      expect(blocked.body.data).toMatchObject({
+        eligible: false,
+        reason: expect.stringMatching(/blocked/i),
+      });
       expect((await remove('vehicle-types', sedanId)).status).toBe(409);
     });
     it('prevents deletion through an alternate module without the required driver grant', async () => {

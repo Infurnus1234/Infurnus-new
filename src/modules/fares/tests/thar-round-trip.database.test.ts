@@ -37,7 +37,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       [5, 'round_trip', 11500, 2],
       [6, 'round_trip', 12000, 2],
       [7, 'round_trip', 12500, 2],
-      [6, 'one_way', 7500, 1],
+      [6, 'one_way', 12000, 2],
     ] as const)(
       'books %s hours %s and charges configured fuel once',
       async (hours, tripType, expectedFare, multiplier) => {

@@ -21,6 +21,7 @@ import '../../data/models/ride_model.dart' as model;
 import '../providers/ride_provider.dart';
 import '../widgets/fare_range_details.dart';
 import '../widgets/ride_contact_action.dart';
+import '../widgets/ride_cancellation_button.dart';
 import '../widgets/assigned_driver_summary.dart';
 import '../widgets/waiting_timer_widget.dart';
 import '../providers/ride_use_case_providers.dart';
@@ -561,7 +562,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                 children: [
                   Text(
                     isService
-                        ? 'Trip-Based Service Breakdown'
+                        ? 'Service Fare Breakdown'
                         : (isPremium
                               ? (estimate?.vehicleTypeId != null
                                     ? 'Itemized Fare Breakdown'
@@ -2465,8 +2466,17 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
         Row(
           children: [
             Expanded(
-              child: InfurnusOutlinedButton(
-                text: 'Cancel Ride',
+              child: RideCancellationButton(
+                key: ValueKey(ride?.id),
+                remainingSeconds:
+                    const {
+                      'logistics',
+                      'rental',
+                      'premium',
+                      'service',
+                    }.contains(ride?.sector ?? state.selectedSector)
+                    ? () => ride?.cancellationWindow?.remainingSeconds ?? 0
+                    : null,
                 onPressed: () => ref.read(rideProvider.notifier).cancelRide(),
               ),
             ),

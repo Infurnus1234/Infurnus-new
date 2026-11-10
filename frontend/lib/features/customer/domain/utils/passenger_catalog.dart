@@ -5,7 +5,7 @@ const passengerVehicles = <Map<String, String>>[
     'category': 'hatchback',
     'name': 'Hatchback',
     'capacity': '4 seater',
-    'image': 'assets/images/hatchback_clean.jpg',
+    'image': 'assets/images/rental_hatchback.webp',
   },
   {
     'category': 'sedan',

@@ -152,9 +152,8 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           estimateType: 'range',
           currency: 'INR',
           bookable: true,
-          distanceMultiplier: 2,
           oneWayDistanceMeters: 10000,
-          billableDistanceMeters: 20000,
+          distanceMeters: 10000,
           bookingFare: {
             baseAmount: schedule[key]! * 100,
             distanceAmount: 24000,
@@ -167,6 +166,10 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
             },
           },
         });
+        expect(res.body.data).not.toHaveProperty('billableDistanceMeters');
+        expect(res.body.data.bookingFare).not.toHaveProperty('distanceMultiplier');
+        expect(res.body.data.estimatedFare.minimum).not.toHaveProperty('billableDistanceMeters');
+        expect(res.body.data.estimatedFare.maximum).not.toHaveProperty('billableDistanceMeters');
       }
       const old = await estimate(type);
       expect(old.status).toBe(422);
@@ -205,13 +208,10 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       const type = await create('premium', {
         fixedHourlyPricing: { ...fixedHourlyPricing, fuelUnit: 'per_km', fuelRate: 12 },
       });
-      for (const [tripType, multiplier] of [
-        ['one_way', 1],
-        ['round_trip', 2],
-      ] as const) {
+      for (const tripType of ['one_way', 'round_trip'] as const) {
         const res = await estimate(type, { rentalDetails: { hours: 6, tripType } });
         expect(res.status, res.text).toBe(200);
-        expect(res.body.data.bookingFare.grossAmount).toBe(300000 + 12000 * multiplier);
+        expect(res.body.data.bookingFare.grossAmount).toBe(324000);
       }
     });
     it('rejects conflicting Premium durations and ignores stale Premium options on Ride requests', async () => {

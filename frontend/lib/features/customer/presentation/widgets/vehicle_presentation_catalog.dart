@@ -1,3 +1,5 @@
+import 'package:intl/intl.dart';
+
 import '../../data/models/fleet_vehicle_model.dart';
 import '../../domain/utils/vehicle_visibility.dart';
 import '../../../../shared/widgets/vehicle_visual_image.dart';
@@ -22,12 +24,23 @@ List<Map<String, String>> customerVehiclePresentation(
         vehicleDisplayMetadata[sector == 'rental'
             ? 'passenger'
             : sector]?[vehicle.category];
+    final loadCapacity = sector == 'logistics' && vehicle.loadCapacityKg > 0
+        ? 'Up to ${NumberFormat.decimalPattern('en_IN').format(vehicle.loadCapacityKg)} kg'
+        : null;
+    final description = metadata?['subtitle'];
+    final subtitle = [
+      if (loadCapacity != null) loadCapacity,
+      if (description != null) description,
+    ].join(' • ');
     result.add({
       'category': vehicle.category,
       'name': vehicle.displayName,
       'capacity':
-          metadata?['capacity'] ?? metadata?['subtitle'] ?? 'Select pickup',
-      'subtitle': metadata?['subtitle'] ?? 'Select pickup',
+          loadCapacity ??
+          metadata?['capacity'] ??
+          description ??
+          'Select pickup',
+      'subtitle': subtitle.isEmpty ? 'Select pickup' : subtitle,
       'filter': metadata?['filter'] ?? 'Other',
       'filterCategory': metadata?['filterCategory'] ?? 'Luxury',
       'service': metadata?['service'] ?? 'Chauffeur + Fuel',
@@ -57,38 +70,34 @@ const vehicleDisplayMetadata = <String, Map<String, Map<String, String>>>{
   "logistics": {
     "piaggio_ape": {
       "filter": "3-Wheeler",
-      "subtitle": "Up to 700 kg • City delivery",
+      "subtitle": "City delivery",
       "name": "Piaggio Ape",
-      "capacity": "Up to 500 kg",
       "image": "assets/images/piaggio_ape_yellow.png",
     },
     "tata_magic": {
       "filter": "Mini Truck",
-      "subtitle": "Up to 1700 kg • Goods transport",
+      "subtitle": "Goods transport",
       "name": "Tata Magic",
-      "capacity": "Up to 750 kg",
       "image": "assets/images/tata_magic_cream.png",
     },
     "cargo_207": {
       "filter": "Mini Truck",
-      "subtitle": "Up to 2500 kg • Medium cargo",
+      "subtitle": "Medium cargo",
       "name": "Tata 207",
-      "capacity": "Up to 1500 kg",
       "image": "assets/images/cargo_207_heavy.png",
     },
     "tata_407": {
       "filter": "Truck",
-      "subtitle": "Up to 4000 kg • Heavy cargo",
+      "subtitle": "Heavy cargo",
       "name": "Tata 407",
-      "capacity": "Up to 2500 kg",
-      "image": "assets/images/cargo_407.jpg",
+      "image": "assets/images/logistics_tata_407.webp",
     },
   },
   "passenger": {
     "hatchback": {
       "name": "Hatchback",
       "capacity": "4 seater",
-      "image": "assets/images/hatchback_clean.jpg",
+      "image": "assets/images/rental_hatchback.webp",
     },
     "sedan": {
       "name": "Sedan",
@@ -154,19 +163,19 @@ const vehicleDisplayMetadata = <String, Map<String, Map<String, String>>>{
     "ambulance": {
       "title": "Ambulance",
       "filter": "Emergency",
-      "subtitle": "Patient + Medical Triage • Trip-Based",
+      "subtitle": "Patient + Medical Triage",
       "image": "assets/images/ambulance_clean.jpg",
     },
     "towing": {
       "title": "Towing Van",
       "filter": "Emergency",
-      "subtitle": "Breakdown Assistance • Trip-Based",
+      "subtitle": "Breakdown Assistance",
       "image": "assets/images/flatbed_towing_truck.png",
     },
     "jcb": {
       "title": "JCB",
       "filter": "Construction",
-      "subtitle": "Excavation Assistance • Trip-Based",
+      "subtitle": "Excavation Assistance",
       "image": "assets/images/jcb_excavator.jpg",
     },
   },

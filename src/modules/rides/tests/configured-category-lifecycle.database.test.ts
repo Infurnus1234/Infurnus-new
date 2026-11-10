@@ -182,7 +182,11 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       '$sector/$code hours=$hours trip=$tripType hourly=$hourly: rejects unavailable supply, persists exact identity, dispatches once, accepts, completes and pays',
       async ({ sector, code, hours, tripType, hourly }) => {
         routeDistanceMeters =
-          sector === 'premium' ? [50000, 100000, 300000][(hours! - 1) % 3]! : 1000;
+          sector === 'premium'
+            ? [50000, 100000, 300000][(hours! - 1) % 3]!
+            : sector === 'logistics'
+              ? 10025
+              : 1000;
         const inventorySector = sector === 'rental' ? 'passenger' : sector;
         restore = (
           await pool.query('SELECT * FROM vehicle_types WHERE sector=$1 AND code=$2', [
@@ -323,23 +327,35 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           [profile],
         );
         let booked: Ride;
-        if (sector === 'rental') {
-          const { pickup, destination, vehicleCategory, bookingHours } = input;
-          const requestBody = { sector, pickup, destination, vehicleCategory, bookingHours };
+        if (sector === 'rental' || sector === 'logistics') {
+          const requestBody = input;
           const quote = await request(app).post('/fares/estimate').send(requestBody);
           expect(quote.status, quote.text).toBe(200);
           const bookingFare = quote.body.data.bookingFare;
-          const catalog = await request(app).get('/vehicles/catalog').query({ sector: 'rental' });
-          expect(catalog.status, catalog.text).toBe(200);
-          expect(catalog.body.data).toEqual(
-            expect.arrayContaining([
-              expect.objectContaining({
-                id: bookingFare.vehicleConfiguration.id,
-                code,
-                sector: 'rental',
-              }),
-            ]),
-          );
+          if (sector === 'logistics') {
+            expect(quote.body.data.distanceMeters).toBe(10025);
+            expect(quote.body.data).not.toHaveProperty('billableDistanceMeters');
+            expect(bookingFare).toMatchObject({
+              distanceMeters: 10025,
+              baseAmount: 10000,
+              distanceAmount: 20050,
+              grossAmount: 30100,
+              vehicleConfiguration: { logisticsSlab: 'below_15' },
+            });
+            expect(bookingFare).not.toHaveProperty('billableDistanceMeters');
+          } else {
+            const catalog = await request(app).get('/vehicles/catalog').query({ sector: 'rental' });
+            expect(catalog.status, catalog.text).toBe(200);
+            expect(catalog.body.data).toEqual(
+              expect.arrayContaining([
+                expect.objectContaining({
+                  id: bookingFare.vehicleConfiguration.id,
+                  code,
+                  sector: 'rental',
+                }),
+              ]),
+            );
+          }
           const response = await request(app)
             .post('/rides')
             .auth(token, { type: 'bearer' })
@@ -357,6 +373,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           booked = await service.createRide(customer, input);
         }
         expect(booked).toMatchObject({ sector, vehicleCategory: code, status: 'searching' });
+        if (sector === 'logistics') expect(booked.fareEstimate).toBe(301);
         if (hourly) {
           const snapshot = (
             await pool.query(
@@ -405,6 +422,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
             provider: 'cash',
             stage,
           });
+          expect(Number(p.amount)).toBe(stage === 'upfront' ? 120 : 181);
           await logistics.claim(p.id, customer);
           expect((await logistics.confirmCash(p.id, user, 'driver'))?.status).toBe('CAPTURED');
         };

@@ -1,5 +1,7 @@
 import type { FarePricingConfig, VehiclePricing } from '../types/fare.js';
 
+export const DISTANCE_FARE_MULTIPLIER = 2 as const;
+
 /**
  * INFURNUS Fare Pricing â€” v1
  *

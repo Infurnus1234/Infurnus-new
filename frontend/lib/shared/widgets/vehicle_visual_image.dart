@@ -25,6 +25,18 @@ class VehicleVisualImage extends StatelessWidget {
   /// Map vehicle names/categories to correct verified asset paths
   static String? getAssetPath(String? name, String? cat) {
     final key = '${name ?? ''} ${cat ?? ''}'.toLowerCase().trim();
+    final category = cat?.trim().toLowerCase();
+    final label = name?.trim().toLowerCase();
+    if (label == 'hatchback' ||
+        (category == 'hatchback' && label != 'mini cab')) {
+      return 'assets/images/rental_hatchback.webp';
+    }
+    if (category == 'tata_407' ||
+        category == 'cargo_407' ||
+        label == 'tata 407' ||
+        label == '407 cargo') {
+      return 'assets/images/logistics_tata_407.webp';
+    }
 
     if (key.contains('helicopter') || key.contains('mercedes')) {
       return null;

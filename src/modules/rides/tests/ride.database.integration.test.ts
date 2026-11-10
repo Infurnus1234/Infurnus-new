@@ -4,6 +4,7 @@ import {
   type ServiceFixtureSnapshots,
 } from './service-catalog.fixture.js';
 import { execFile } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import { pinVerifier, sealRidePin } from '../repositories/ride-pin.js';
 import { rideEvents } from '../events/ride.events.js';
@@ -554,10 +555,10 @@ describeDatabase('ride PostgreSQL integration', () => {
     );
     await pool.query(
       "UPDATE vehicles SET sector=$2,category=$3,operating_city_id='TEST_ONLY_CITY' WHERE id=$1",
-      [fixture.vehicleId, sector, category],
+      [fixture.vehicleId, sector === 'rental' ? 'passenger' : sector, category],
     );
     // Changing vehicle identity invalidates approval; model the completed re-review.
-    if (sector !== 'passenger') {
+    if (sector !== 'passenger' && sector !== 'rental') {
       const changed = await pool.query(
         'SELECT verification_status, is_active FROM vehicles WHERE id=$1',
         [fixture.vehicleId],
@@ -579,6 +580,160 @@ describeDatabase('ride PostgreSQL integration', () => {
       );
     await service.acceptRide(fixture.driverProfileId, fixture.rideIds[0]!);
   }
+
+  describe.each(['logistics', 'rental', 'premium', 'service'])(
+    '%s cancellation window',
+    (sector) => {
+      it.each([0, 60, 180, 299, 300, 301, 600])(
+        'enforces the customer endpoint at %i seconds after acceptance',
+        async (seconds) => {
+          await prepareMap(sector);
+          const id = fixture.rideIds[0]!;
+          const accepted = (await repository.findById(id))!.driverAcceptedAt!;
+          const original = await pool.query(
+            "SELECT responded_at FROM ride_dispatch_attempts WHERE ride_id=$1 AND status='accepted'",
+            [id],
+          );
+          expect(original.rows[0].responded_at).toEqual(accepted);
+          await service.transitionRide(id, 'driver_arriving', fixture.driverProfileId);
+          await service.transitionRide(id, 'driver_arrived', fixture.driverProfileId);
+          expect((await repository.findById(id))!.driverAcceptedAt).toEqual(accepted);
+
+          const app = express();
+          app.use(express.json());
+          app.use('/rides', createRideRouter(new RideController(service)));
+          app.use(errorMiddleware);
+          const token = await signAccessToken({
+            sub: fixture.customerId,
+            role: 'customer',
+            type: 'access',
+          });
+
+          // Evaluate the production predicate at the exact boundary as well as through HTTP.
+          const exact = await pool.query<{ allowed: boolean }>(
+            `SELECT ride_customer_cancellation_allowed(sector::text, status, driver_accepted_at,
+                    driver_accepted_at + $2 * interval '1 second') AS allowed
+             FROM rides WHERE id=$1`,
+            [id, seconds],
+          );
+          expect(exact.rows[0]!.allowed).toBe(seconds < 300);
+          await pool.query(
+            `UPDATE rides SET driver_accepted_at=clock_timestamp()-$2*interval '1 second'
+           WHERE id=$1`,
+            [id, seconds],
+          );
+          const detail = await request(app)
+            .get('/rides/' + id)
+            .auth(token, { type: 'bearer' });
+          expect(detail.status, detail.text).toBe(200);
+          expect(
+            Date.parse(detail.body.data.customerCancellationDeadline) -
+              Date.parse(detail.body.data.driverAcceptedAt),
+          ).toBe(300000);
+          expect(detail.body.data.customerCancellationAllowed).toBe(seconds < 300);
+          const cancel = await request(app)
+            .post('/rides/' + id + '/cancel')
+            .auth(token, { type: 'bearer' })
+            .set('Date', new Date(0).toUTCString())
+            .send({ reason: 'Customer changed plans' });
+          expect(cancel.status, cancel.text).toBe(seconds < 300 ? 200 : 409);
+          if (seconds >= 300) {
+            expect(cancel.body.error.code).toBe('RIDE_CANCELLATION_WINDOW_CLOSED');
+            expect((await repository.findById(id))?.status).toBe('driver_arrived');
+          } else {
+            expect(cancel.body.data.status).toBe('cancelled');
+            const retry = await request(app)
+              .post('/rides/' + id + '/cancel')
+              .auth(token, { type: 'bearer' })
+              .send({ reason: 'Retried cancellation' });
+            expect(retry.status, retry.text).toBe(200);
+            expect(retry.body.data.cancelledAt).toBe(cancel.body.data.cancelledAt);
+            expect(retry.body.data.cancellationReason).toBe('Customer changed plans');
+          }
+        },
+      );
+    },
+  );
+
+  it('checks expiry after waiting for a concurrent ride update', async () => {
+    await prepareMap('rental');
+    const id = fixture.rideIds[0]!;
+    const locker = await pool.connect();
+    let pending: Promise<unknown> | undefined;
+    try {
+      await locker.query('BEGIN');
+      await locker.query(
+        `UPDATE rides SET status='driver_arriving',
+            driver_accepted_at=clock_timestamp()-interval '299 seconds' WHERE id=$1`,
+        [id],
+      );
+      pending = service
+        .cancelRide(fixture.customerId, id, { reason: 'Race at expiry' })
+        .catch((error: unknown) => error);
+      await new Promise((resolve) => setTimeout(resolve, 1150));
+      await locker.query('COMMIT');
+      await expect(pending).resolves.toMatchObject({ code: 'RIDE_CANCELLATION_WINDOW_CLOSED' });
+      expect((await repository.findById(id))?.status).toBe('driver_arriving');
+    } finally {
+      await locker.query('ROLLBACK');
+      locker.release();
+      await pending;
+    }
+  });
+
+  it('fails closed without a legacy acceptance time and keeps an operational cancellation separate', async () => {
+    await prepareMap('premium');
+    const id = fixture.rideIds[0]!;
+    await pool.query('UPDATE rides SET driver_accepted_at=NULL WHERE id=$1', [id]);
+    await expect(
+      service.cancelRide(fixture.customerId, id, { reason: 'Customer changed plans' }),
+    ).rejects.toMatchObject({ code: 'RIDE_CANCELLATION_WINDOW_CLOSED' });
+    await pool.query(
+      `UPDATE rides SET status='cancelled', cancellation_reason='Operational cancellation',
+         cancelled_at=clock_timestamp() WHERE id=$1`,
+      [id],
+    );
+    expect(await repository.findById(id)).toMatchObject({
+      status: 'cancelled',
+      cancelledByCustomer: false,
+    });
+    await expect(
+      service.cancelRide(fixture.customerId, id, { reason: 'Customer tried again' }),
+    ).rejects.toMatchObject({ code: 'RIDE_CANCELLATION_CONFLICT' });
+  });
+
+  it('backfills an active legacy ride without changing its arrival timestamp', async () => {
+    await prepareMap('service');
+    const id = fixture.rideIds[0]!;
+    await service.transitionRide(id, 'driver_arriving', fixture.driverProfileId);
+    await service.transitionRide(id, 'driver_arrived', fixture.driverProfileId);
+    const accepted = (await repository.findById(id))!;
+    const migration = await readFile(
+      new URL('../../../../migrations/111_customer_ride_cancellation_window.sql', import.meta.url),
+      'utf8',
+    );
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`
+        DROP FUNCTION ride_customer_cancellation_allowed(text, ride_status, timestamptz, timestamptz);
+        DROP FUNCTION ride_customer_cancellation_deadline(text, timestamptz);
+        ALTER TABLE rides DROP COLUMN driver_accepted_at, DROP COLUMN cancelled_by_customer;
+      `);
+      await client.query(migration);
+      const restored = await client.query(
+        'SELECT driver_accepted_at, updated_at FROM rides WHERE id=$1',
+        [id],
+      );
+      expect(restored.rows[0]).toMatchObject({
+        driver_accepted_at: accepted.driverAcceptedAt,
+        updated_at: accepted.updatedAt,
+      });
+    } finally {
+      await client.query('ROLLBACK');
+      client.release();
+    }
+  });
   it.each([
     ['passenger', 106, 8500],
     ['logistics', 1500, 42000],

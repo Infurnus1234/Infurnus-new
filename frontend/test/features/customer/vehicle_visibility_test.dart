@@ -37,7 +37,7 @@ void main() {
     ]);
     expect(items.map((v) => v['category']), ['tata_407', 'cargo_207']);
     expect(items.map((v) => v['name']), ['Admin edited 407', 'Tata 207']);
-    expect(items[0]['image'], 'assets/images/cargo_407.jpg');
+    expect(items[0]['image'], 'assets/images/logistics_tata_407.webp');
     expect(items[1]['image'], 'assets/images/cargo_207_heavy.png');
   });
   test('published unpriced records remain visible while hidden, duplicate and wrong-sector records are excluded', () {

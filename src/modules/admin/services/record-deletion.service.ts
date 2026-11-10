@@ -39,6 +39,8 @@ const permission = {
 } as const;
 const quote = (name: string) => '"' + name.replaceAll('"', '""') + '"';
 const dependencyReason = (table: string) => {
+  if (table === 'vehicle_catalog')
+    return 'the fleet registration catalog: deactivate this category instead';
   if (/document/.test(table))
     return 'protected documents: retain these records and use account deactivation, or an authorized retention workflow';
   if (/wallet|payout|payment|bank|coupon_redemption/.test(table))
@@ -59,6 +61,19 @@ const conflict = (dependencies?: string[]) =>
       : 'A related record changed during deletion. Refresh and retry; retained documents and business history cannot be deleted here. No records were deleted.',
     409,
   );
+
+function requireDeletionPermission(
+  actor: Awaited<ReturnType<AdminManagementService['identity']>>,
+  resource: string,
+) {
+  if (actor.role === 'super_admin') return;
+  if (
+    actor.scoped ||
+    !actor.permissions.includes(resource + '.read') ||
+    !actor.permissions.includes(resource + '.delete')
+  )
+    throw new AppError('FORBIDDEN', 'Deletion is not granted to your Admin account', 403);
+}
 
 export class RecordDeletionService {
   private async cancelLinkedWork(
@@ -156,6 +171,55 @@ export class RecordDeletionService {
     this.access = new AdminManagementService(database);
   }
 
+  async vehicleCategoryEligibility(
+    actorId: string,
+    actorRole: Parameters<AdminManagementService['identity']>[1],
+    id: string,
+  ) {
+    requireDeletionPermission(await this.access.identity(actorId, actorRole), 'pricing');
+    const client = await this.database.connect();
+    try {
+      const row = (await client.query('SELECT sector,code FROM vehicle_types WHERE id=$1', [id]))
+        .rows[0];
+      if (!row) throw new AppError('NOT_FOUND', 'Vehicle category not found', 404);
+      await this.assertCategoryCodesUnreferenced(client, row);
+      await this.assertUnreferenced(client, 'vehicle_types', id);
+      return { eligible: true };
+    } catch (error) {
+      if (error instanceof AppError && error.code === 'DELETE_DEPENDENCY_CONFLICT')
+        return { eligible: false, reason: error.message };
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  private async assertCategoryCodesUnreferenced(
+    client: PoolClient,
+    row: { sector: string; code: string },
+  ) {
+    if (
+      (
+        await client.query(
+          'SELECT 1 FROM fleet_registration_vehicle_types WHERE sector=$1 AND code=$2',
+          [row.sector, row.code],
+        )
+      ).rowCount
+    )
+      throw conflict(['vehicle_catalog']);
+    // Category codes are also persisted in records without foreign keys.
+    const columns = await client.query<{ table: string; column: string }>(
+      `SELECT table_name AS table,column_name AS column FROM information_schema.columns WHERE table_schema='public' AND table_name IN ('vehicles','driver_profiles','rides','rentals','logistics_orders') AND column_name IN ('category','vehicle_type','vehicle_category','vehicle_type_code')`,
+    );
+    for (const column of columns.rows) {
+      const related = await client.query(
+        `SELECT 1 FROM ${quote(column.table)} WHERE ${quote(column.column)}::text=$1 LIMIT 1`,
+        [row.code],
+      );
+      if (related.rowCount) throw conflict([column.table]);
+    }
+  }
+
   // Guard even ON DELETE CASCADE/SET NULL relationships: deleting a master record
   // must never silently erase documents, financial ledgers or operational history.
   private async assertUnreferenced(client: PoolClient, table: string, id: string) {
@@ -246,15 +310,7 @@ export class RecordDeletionService {
       await client.query('BEGIN');
       await client.query(`SELECT id FROM users WHERE id=$1 FOR SHARE`, [actorId]);
       const actor = await this.access.identity(actorId, actorRole);
-      const requirePermission = (resource: string) => {
-        if (actor.role === 'super_admin') return;
-        if (
-          actor.scoped ||
-          !actor.permissions.includes(resource + '.read') ||
-          !actor.permissions.includes(resource + '.delete')
-        )
-          throw new AppError('FORBIDDEN', 'Deletion is not granted to your Admin account', 403);
-      };
+      const requirePermission = (resource: string) => requireDeletionPermission(actor, resource);
       if (module === 'admins' && actor.role !== 'super_admin')
         throw new AppError('FORBIDDEN', 'Super Admin required', 403);
       requirePermission(permission[module]);
@@ -472,28 +528,7 @@ export class RecordDeletionService {
         if (module === 'coupons' && Number(row.usage_count) > 0)
           throw conflict(['coupon_redemptions']);
         if (module === 'vehicles') await this.clearUnreviewedRequest(client, 'vehicle', id);
-        if (module === 'vehicle-types') {
-          const catalog = await client.query(
-            'SELECT 1 FROM fleet_registration_vehicle_types WHERE sector=$1 AND code=$2',
-            [row.sector, row.code],
-          );
-          if (catalog.rowCount)
-            throw conflict(['vehicle_catalog: deactivate this category instead']);
-          // Category codes are also persisted in records without foreign keys.
-          const columns = await client.query<{ table: string; column: string }>(
-            `SELECT table_name AS table,column_name AS column FROM information_schema.columns WHERE table_schema='public' AND table_name IN ('vehicles','driver_profiles','rides','rentals','logistics_orders') AND column_name IN ('category','vehicle_type','vehicle_category','vehicle_type_code')`,
-          );
-          for (const c of columns.rows)
-            if (
-              (
-                await client.query(
-                  `SELECT 1 FROM ${quote(c.table)} WHERE ${quote(c.column)}::text=$1 LIMIT 1`,
-                  [row.code],
-                )
-              ).rowCount
-            )
-              throw conflict([c.table]);
-        }
+        if (module === 'vehicle-types') await this.assertCategoryCodesUnreferenced(client, row);
         if (module === 'vehicles') {
           cancelledRideIds = await this.cancelLinkedWork(client, null, id, reason);
           await client.query('UPDATE vehicles SET is_active=FALSE WHERE id=$1', [id]);

@@ -221,7 +221,7 @@ void main() {
       await tester.tap(find.text('Emergency'));
       await tester.pumpAndSettle();
       expect(find.text('Ambulance'), findsOneWidget);
-      expect(find.text('Towing Van'), findsNothing);
+      expect(find.text('Towing Van'), findsOneWidget);
       expect(find.text('Crane'), findsNothing);
       expect(find.text('JCB'), findsNothing);
       await tester.tap(find.text('Construction'));

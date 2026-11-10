@@ -9,6 +9,18 @@ import {
 export function createRecordDeletionRouter(service: RecordDeletionService) {
   const router = Router();
   router.use(requireAuth, requireRoles('admin', 'super_admin'));
+  router.get('/vehicle-types/:id', async (req, res, next) => {
+    try {
+      const data = await service.vehicleCategoryEligibility(
+        req.auth!.userId,
+        req.auth!.role,
+        z.string().uuid().parse(req.params.id),
+      );
+      res.set('Cache-Control', 'no-store').json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  });
   router.delete('/:module/:id', async (req, res, next) => {
     try {
       const input = z

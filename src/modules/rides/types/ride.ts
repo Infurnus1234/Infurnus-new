@@ -100,6 +100,11 @@ export interface Ride {
   driverDetails?: RideDriverDetails | null;
   vehicleDetails?: RideVehicleDetails | null;
   cancellationReason: string | null;
+  cancelledByCustomer?: boolean;
+  driverAcceptedAt?: Date | null;
+  customerCancellationDeadline?: Date | null;
+  cancellationServerTime?: Date;
+  customerCancellationAllowed?: boolean;
   cancelledAt: Date | null;
   completedAt: Date | null;
   billing?: RideBillingItemization | null;

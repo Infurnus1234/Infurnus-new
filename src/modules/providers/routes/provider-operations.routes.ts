@@ -1,4 +1,8 @@
 import { FleetOwnerOverviewRepository } from '../repositories/fleet-owner-overview.repository.js';
+import {
+  FleetOwnerRequestsRepository,
+  fleetRequestCategories,
+} from '../repositories/fleet-owner-requests.repository.js';
 import { createProviderAccountRouter } from './provider-account.routes.js';
 import { PostgresFleetRepository } from '../../fleet/repositories/fleet.repository.js';
 import { pool } from '../../../infrastructure/database/postgres.js';
@@ -333,6 +337,126 @@ export function createProviderApprovalRouter(repository: PostgresProviderOperati
       keyGenerator: (req) => req.auth!.userId,
     }),
   );
+  const fleetRequests = new FleetOwnerRequestsRepository(pool, repository);
+  const ownerKey = z.union([z.string().regex(/^[1-9][0-9]{5,63}$/), z.string().uuid()]);
+  const page = {
+    limit: z.coerce.number().int().min(1).max(100).default(25),
+    offset: z.coerce.number().int().min(0).max(100000).default(0),
+  };
+  router.get('/fleet-applications/:id/evidence', async (req, res, next) => {
+    try {
+      const id = z.string().uuid().parse(req.params.id);
+      res.json({
+        success: true,
+        data: await fleetRequests.applicationEvidence(req.auth!.userId, id),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+  router.get('/fleet-applications/:id/documents/:documentId/access-url', async (req, res, next) => {
+    try {
+      const query = z
+        .object({ page: z.coerce.number().int().min(1).max(5).optional() })
+        .strict()
+        .parse(req.query);
+      const document = await fleetRequests.applicationDocument(
+        req.auth!.userId,
+        z.string().uuid().parse(req.params.id),
+        z.string().uuid().parse(req.params.documentId),
+        query.page,
+      );
+      const accessUrl = await storageService.getAccessUrl({
+        ...document,
+        options: { expiresIn: 300 },
+      });
+      res.json({ success: true, data: { accessUrl, expiresIn: 300 } });
+    } catch (error) {
+      next(error);
+    }
+  });
+  router.get('/fleet-owners', async (req, res, next) => {
+    try {
+      const query = z
+        .object({ ...page, search: z.string().trim().max(100).default('') })
+        .strict()
+        .parse(req.query);
+      res.json({
+        success: true,
+        data: await fleetRequests.owners(req.auth!.userId, query.search, query.limit, query.offset),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+  router.get('/fleet-owners/:key/requests', async (req, res, next) => {
+    try {
+      const query = z
+        .object({
+          ...page,
+          category: z.enum(['all', ...fleetRequestCategories]).default('all'),
+          status: z
+            .enum(['ALL', 'PENDING', 'APPROVED', 'REJECTED', 'CANCELLED', 'EXPIRED'])
+            .default('ALL'),
+          selectable: z
+            .enum(['true', 'false'])
+            .default('false')
+            .transform((value) => value === 'true'),
+        })
+        .strict()
+        .parse(req.query);
+      res.json({
+        success: true,
+        data: await fleetRequests.requests(req.auth!.userId, ownerKey.parse(req.params.key), query),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+  router.post('/fleet-owners/:key/review', async (req, res, next) => {
+    try {
+      const input = z
+        .object({
+          status: z.enum(['APPROVED', 'REJECTED']),
+          reason: z.string().trim().min(1).max(1000).optional(),
+          items: z
+            .array(
+              z
+                .object({
+                  id: z.string().uuid(),
+                  source: z.enum(['approval', 'application']),
+                  expectedUpdatedAt: z.iso.datetime({ offset: true }),
+                })
+                .strict(),
+            )
+            .min(1)
+            .max(100),
+        })
+        .strict()
+        .refine(
+          (value) => value.status !== 'REJECTED' || !!value.reason,
+          'Rejection reason is required',
+        )
+        .refine(
+          (value) =>
+            new Set(value.items.map(({ id, source }) => source + id)).size === value.items.length,
+          'Duplicate selections',
+        )
+        .parse(req.body);
+      res.json({
+        success: true,
+        data: await fleetRequests.review(
+          req.auth!.userId,
+          ownerKey.parse(req.params.key),
+          input.status,
+          input.reason,
+          input.items,
+        ),
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
   router.get('/fleet-owners/:id/overview', async (req, res, next) => {
     try {
       const query = z

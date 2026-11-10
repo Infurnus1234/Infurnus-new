@@ -1,4 +1,8 @@
 import { FareCalculatorService } from '../../fares/services/fare-calculator.service.js';
+import { FareEstimateService } from '../../fares/services/fare-estimate.service.js';
+import { RideService } from '../../rides/services/ride.service.js';
+import type { VehicleRepository } from '../repositories/vehicle.repository.js';
+import type { RideRepository } from '../../rides/repositories/ride.repository.js';
 import express from 'express';
 import request from 'supertest';
 import { randomUUID } from 'node:crypto';
@@ -79,12 +83,12 @@ describe.skipIf(process.env.PROVIDER_DB_TESTS !== 'true')(
         [adminId, ownerId, customerId],
       ]);
     });
-    it('configures the requested 17 existing identifiers in the requested category order', async () => {
+    it('publishes the existing identifiers, including Towing Van and Crane independently', async () => {
       const expected: Record<string, string[]> = {
         passenger: ['hatchback', 'mini', 'sedan', 'innova'],
         logistics: ['tata_407', 'cargo_207', 'tata_magic', 'piaggio_ape'],
         premium: ['scorpio', 'thar', 'innova', 'mercedes', 'helicopter', 'traveller'],
-        service: ['ambulance', 'crane', 'jcb'],
+        service: ['ambulance', 'crane', 'jcb', 'towing'],
       };
       for (const [sector, codes] of Object.entries(expected)) {
         const configured = await pool.query(
@@ -100,12 +104,104 @@ describe.skipIf(process.env.PROVIDER_DB_TESTS !== 'true')(
         expect(
           published.filter((type) => codes.includes(type.code)).map((type) => type.code),
         ).toEqual(codes);
+        if (sector === 'service') {
+          expect(published.find((type) => type.code === 'towing')).toMatchObject({
+            name: 'Towing Van',
+            active: false,
+            serviceFixedFare: null,
+          });
+          expect(published.find((type) => type.code === 'crane')?.id).not.toBe(
+            published.find((type) => type.code === 'towing')?.id,
+          );
+        }
       }
       const retired = await pool.query(
         "SELECT code FROM vehicle_types WHERE sector='logistics' AND code IN ('three_wheeler','mini_truck','cargo_407') AND catalog_visible",
       );
       expect(retired.rows).toEqual([]);
     });
+
+    it('publishes the approved payload limits by stable Logistics code', async () => {
+      const response = await request(app)
+        .get('/vehicles/catalog?sector=logistics')
+        .auth(customerToken, { type: 'bearer' });
+      expect(response.status, response.text).toBe(200);
+      expect(
+        response.body.data.map((row: { code: string; loadCapacityKg: number }) => [
+          row.code,
+          row.loadCapacityKg,
+        ]),
+      ).toEqual([
+        ['tata_407', 3000],
+        ['cargo_207', 2000],
+        ['tata_magic', 1000],
+        ['piaggio_ape', 750],
+      ]);
+    });
+
+    it.each([
+      ['piaggio_ape', 750],
+      ['tata_magic', 1000],
+      ['cargo_207', 2000],
+      ['tata_407', 3000],
+    ])(
+      'accepts %s at %s kg and rejects overweight estimates and bookings',
+      async (code, weightKg) => {
+        const type = (await vehicles.findTypeByCode(code, 'logistics'))!;
+        expect(type.loadCapacityKg).toBe(weightKg);
+        const fixtureTariff = {
+          ...type,
+          active: true,
+          pricingReference: null,
+          baseFare: null,
+          perKmRate: null,
+          logisticsSlabs: {
+            below_15: { baseFare: 100, perKmRate: 10 },
+            from_15: { baseFare: 120, perKmRate: 12 },
+          },
+        };
+        const estimator = new FareEstimateService(
+          {
+            calculateRoute: async () => ({
+              distanceMeters: 2000,
+              durationSeconds: 600,
+              encodedPolyline: '',
+            }),
+            calculateMatrix: async () => [],
+            geocode: async () => null,
+            places: async () => [],
+          },
+          new FareCalculatorService(),
+          undefined,
+          {
+            findTypeByCode: async () => fixtureTariff,
+          } as unknown as VehicleRepository,
+        );
+        const pickup = { latitude: 25.5941, longitude: 85.1376 };
+        const destination = { latitude: 25.605, longitude: 85.14 };
+        const options = {
+          sector: 'logistics',
+          vehicleCategory: code,
+          pricingMode: 'vehicle_range',
+        } as const;
+        await expect(
+          estimator.estimate(pickup, destination, { ...options, weightKg }),
+        ).resolves.toMatchObject({ bookable: true });
+        await expect(
+          estimator.estimate(pickup, destination, { ...options, weightKg: weightKg + 0.01 }),
+        ).rejects.toMatchObject({ code: 'LOGISTICS_CAPACITY_EXCEEDED' });
+        const rides = new RideService({} as RideRepository, undefined, undefined, estimator);
+        await expect(
+          rides.createRide(customerId, {
+            pickup,
+            destination,
+            sector: 'logistics',
+            vehicleCategory: code,
+            goods: { weightKg: weightKg + 1 },
+          }),
+        ).rejects.toMatchObject({ code: 'LOGISTICS_CAPACITY_EXCEEDED' });
+      },
+    );
 
     it('Admin must explicitly activate future registrations and disabling preserves historical vehicles', async () => {
       const code = 'future_' + randomUUID().replaceAll('-', '').slice(0, 20);
@@ -405,7 +501,12 @@ describe.skipIf(process.env.PROVIDER_DB_TESTS !== 'true')(
               name: v.name,
             }));
           expect(fleet.body.data.sectors).toEqual(['passenger', 'logistics', 'premium', 'service']);
-          expect(fleetOptions).toEqual(customerOptions);
+          // Towing is published to customers while its existing registration policy stays disabled.
+          const expectedFleetOptions =
+            sector === 'service'
+              ? customerOptions.filter((v: { code: string }) => v.code !== 'towing')
+              : customerOptions;
+          expect(fleetOptions).toEqual(expectedFleetOptions);
           expect(customerOptions.some((v: { id: string }) => v.id === type.id)).toBe(visible);
         }
         if (sector === 'premium') {

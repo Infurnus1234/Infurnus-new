@@ -7,7 +7,7 @@ void main() {
     test('Passenger Rides exact mappings', () {
       expect(
         VehicleVisualImage.getAssetPath('Hatchback', 'rides'),
-        'assets/images/hatchback_clean.jpg',
+        'assets/images/rental_hatchback.webp',
       );
       expect(
         VehicleVisualImage.getAssetPath('Baleno', 'rides'),
@@ -54,7 +54,7 @@ void main() {
       );
       expect(
         VehicleVisualImage.getAssetPath('407 Cargo', 'logistics'),
-        'assets/images/cargo_407.jpg',
+        'assets/images/logistics_tata_407.webp',
       );
       expect(
         VehicleVisualImage.getAssetPath('Mini Truck', 'logistics'),

@@ -1,5 +1,6 @@
 import { AppError } from '../../../common/errors/app-error.js';
 import { rupeesToPaise, wholeRupeePaise } from '../../../common/utils/whole-rupee.js';
+import { DISTANCE_FARE_MULTIPLIER } from '../../fares/config/fare.config.js';
 import type { FixedHourlyPricing, VehicleType } from '../types/vehicle.js';
 
 export const HOURLY_FARE_BUCKETS = [
@@ -38,7 +39,6 @@ export function fixedHourlyFare(
   pricing: FixedHourlyPricing | undefined,
   input: Parameters<typeof requestedBookingHours>[0] & {
     distanceMeters: number;
-    tripType?: 'one_way' | 'round_trip' | undefined;
   },
 ) {
   if (
@@ -59,13 +59,11 @@ export function fixedHourlyFare(
     throw new AppError('FARE_DURATION_REQUIRED', 'Select a booking duration', 422);
   const baseFare = rupeesToPaise(pricing.hourlyRate) * bookedHours;
   const fuelRatePaise = rupeesToPaise(pricing.fuelRate);
-  const distanceMultiplier: 1 | 2 =
-    input.sector === 'premium' && input.tripType === 'one_way' ? 1 : 2;
   const fuelAmount =
     pricing.fuelUnit === 'per_hour'
       ? fuelRatePaise * bookedHours
       : pricing.fuelUnit === 'per_km'
-        ? Math.round((fuelRatePaise * input.distanceMeters * distanceMultiplier) / 1000)
+        ? Math.round((fuelRatePaise * input.distanceMeters * DISTANCE_FARE_MULTIPLIER) / 1000)
         : fuelRatePaise;
   const total = baseFare + fuelAmount;
   const maximumFarePaise = 9_999_999_999;
@@ -76,7 +74,7 @@ export function fixedHourlyFare(
   ) {
     throw new AppError('FARE_AMOUNT_UNSUPPORTED', 'The fare exceeds the supported amount', 422);
   }
-  return { baseFare, fuelAmount, bookedHours, distanceMultiplier };
+  return { baseFare, fuelAmount, bookedHours };
 }
 
 /** Legacy aliases may coexist, but cannot describe different booking durations. */

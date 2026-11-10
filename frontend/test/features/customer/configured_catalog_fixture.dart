@@ -33,7 +33,7 @@ class ConfiguredCatalogRepository extends RecordingRepository {
             sector: sector ?? 'rental',
             category: item['code'] as String,
             fuelRatePerKm: 0,
-            loadCapacityKg: 0,
+            loadCapacityKg: item['loadCapacityKg'] as int? ?? 0,
           ),
         )
         .toList();

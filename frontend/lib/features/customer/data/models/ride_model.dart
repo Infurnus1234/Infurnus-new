@@ -77,6 +77,34 @@ class VehicleDetails {
   }
 }
 
+/// A backend clock sample paired with elapsed time on this device.
+class RideCancellationWindow {
+  final DateTime deadline;
+  final Duration _remainingAtReceipt;
+  final Stopwatch _elapsed = Stopwatch()..start();
+
+  RideCancellationWindow._(this.deadline, DateTime serverTime)
+    : _remainingAtReceipt = deadline.difference(serverTime);
+
+  static RideCancellationWindow? fromJson(Map<String, dynamic> json) {
+    final deadline = DateTime.tryParse(
+      json['customerCancellationDeadline'] as String? ?? '',
+    );
+    final serverTime = DateTime.tryParse(
+      json['cancellationServerTime'] as String? ?? '',
+    );
+    if (deadline == null || serverTime == null) return null;
+    return RideCancellationWindow._(deadline, serverTime);
+  }
+
+  Duration get remaining => _remainingAtReceipt - _elapsed.elapsed;
+  int get remainingSeconds =>
+      (remaining.inMicroseconds / Duration.microsecondsPerSecond).ceil().clamp(
+        0,
+        300,
+      );
+}
+
 class RideModel {
   final String id;
   final String? bookingId;
@@ -111,12 +139,26 @@ class RideModel {
   final Map<String, dynamic>?
   logisticsPayment; // {upfrontAmount, remainingAmount, status, ...}
   final String? cancellationReason;
+  final RideCancellationWindow? cancellationWindow;
   final DateTime? cancelledAt;
   final DateTime? completedAt;
   final DateTime createdAt;
   final DateTime updatedAt;
 
   double get displayFare => finalFare ?? fareEstimate ?? 0.0;
+
+  RideModel preserveEarlierCancellationExpiry(RideModel? previous) {
+    final earlier = previous?.cancellationWindow;
+    final incoming = cancellationWindow;
+    if (id == previous?.id &&
+        earlier != null &&
+        incoming != null &&
+        earlier.deadline == incoming.deadline &&
+        earlier.remaining < incoming.remaining) {
+      return copyWith(cancellationWindow: earlier);
+    }
+    return this;
+  }
 
   bool get isLogistics => sector == 'logistics';
   bool get upfrontPaid => upfrontPaymentStatus == 'PAID_VERIFIED';
@@ -157,6 +199,7 @@ class RideModel {
     this.vehicleDetails,
     required this.status,
     this.cancellationReason,
+    this.cancellationWindow,
     this.cancelledAt,
     this.completedAt,
     required this.createdAt,
@@ -189,6 +232,7 @@ class RideModel {
     String? upfrontPaymentStatus,
     Map<String, dynamic>? logisticsPayment,
     String? cancellationReason,
+    RideCancellationWindow? cancellationWindow,
     DateTime? cancelledAt,
     DateTime? completedAt,
     DateTime? createdAt,
@@ -222,6 +266,7 @@ class RideModel {
       upfrontPaymentStatus: upfrontPaymentStatus ?? this.upfrontPaymentStatus,
       logisticsPayment: logisticsPayment ?? this.logisticsPayment,
       cancellationReason: cancellationReason ?? this.cancellationReason,
+      cancellationWindow: cancellationWindow ?? this.cancellationWindow,
       cancelledAt: cancelledAt ?? this.cancelledAt,
       completedAt: completedAt ?? this.completedAt,
       createdAt: createdAt ?? this.createdAt,
@@ -291,6 +336,7 @@ class RideModel {
           ? Map<String, dynamic>.from(json['logisticsPayment'] as Map)
           : null,
       cancellationReason: json['cancellationReason'] as String?,
+      cancellationWindow: RideCancellationWindow.fromJson(json),
       cancelledAt: json['cancelledAt'] != null
           ? DateTime.parse(json['cancelledAt'] as String)
           : null,

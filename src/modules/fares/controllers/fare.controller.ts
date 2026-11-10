@@ -2,6 +2,7 @@ import { requestedBookingHours } from '../../vehicles/services/hourly-pricing.js
 import type { NextFunction, Request, Response } from 'express';
 import { fareEstimateSchema } from '../../rides/schemas/ride.schemas.js';
 import type { FareEstimateService } from '../services/fare-estimate.service.js';
+import { publicFareEstimate } from '../utils/public-fare-estimate.js';
 
 export class FareController {
   constructor(private readonly fareEstimateService: FareEstimateService) {}
@@ -59,7 +60,7 @@ export class FareController {
 
       res.json({
         success: true,
-        data: fare,
+        data: publicFareEstimate(fare),
         message: 'Fare estimated',
       });
     } catch (error) {

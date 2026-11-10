@@ -146,7 +146,7 @@ void main() {
     );
     expect(launched, isNull);
   });
-  test('Three-Wheeler and Mini Cab use the verified existing assets', () {
+  test('Mini Cab and Three-Wheeler retain their images while 407 uses the supplied asset', () {
     expect(
       VehicleVisualImage.getAssetPath('3-Wheeler (Goods)', 'three_wheeler'),
       'assets/images/e_rickshaw_green_white.png',
@@ -157,7 +157,7 @@ void main() {
     );
     expect(
       VehicleVisualImage.getAssetPath('407 Cargo', 'cargo_407'),
-      'assets/images/cargo_407.jpg',
+      'assets/images/logistics_tata_407.webp',
     );
   });
   testWidgets(
@@ -198,7 +198,7 @@ void main() {
           )
           .first;
       for (final entry in [
-        ('service', 'JCB', 3),
+        ('service', 'Towing Van', 4),
         ('premium', 'Helicopter', 6),
       ]) {
         final row = find.byKey(ValueKey('vehicle-row:${entry.$1}'));
@@ -238,7 +238,7 @@ void main() {
       await tester.tap(seeAll);
       await tester.pumpAndSettle();
       expect(find.text('Specialty & Emergency'), findsOneWidget);
-      for (final name in ['Ambulance', 'Crane', 'JCB']) {
+      for (final name in ['Ambulance', 'Crane', 'JCB', 'Towing Van']) {
         expect(find.text(name), findsOneWidget);
       }
       await tester.pumpWidget(const SizedBox.shrink());

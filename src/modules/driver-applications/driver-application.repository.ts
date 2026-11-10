@@ -1,4 +1,5 @@
 import { pool } from '../../infrastructure/database/postgres.js';
+import type { PoolClient } from 'pg';
 
 import type {
   CreateDriverApplicationInput,
@@ -279,8 +280,9 @@ export class PostgresDriverApplicationRepository implements DriverApplicationRep
     id: string,
     review: ReviewDriverApplicationInput,
     reviewerId: string,
+    client: PoolClient | typeof pool = pool,
   ): Promise<DriverApplication | null> {
-    const result = await pool.query<DriverApplication>(
+    const result = await client.query<DriverApplication>(
       `
         UPDATE driver_applications
         SET

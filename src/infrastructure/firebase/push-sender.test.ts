@@ -85,6 +85,24 @@ describe('FCM adapter request contract (mock SDK, no FCM network acceptance)', (
     });
   });
 
+  it('delivers offer invalidation to the background handler without an OS sound or banner', async () => {
+    const sendEachForMulticast = vi.fn().mockResolvedValue({ responses: [{ success: true }] });
+    const sender = createFirebasePushSender({ sendEachForMulticast });
+    await sender.send(['fixture-token'], {
+      notificationId: 'offer-ended',
+      userId: 'driver',
+      title: 'Withdrawn',
+      body: 'Offer ended',
+      type: 'ride.cancelled',
+      data: { rideId: 'ride-123', offerInvalidated: 'true', silentOfferUpdate: 'true' },
+    });
+    const message = sendEachForMulticast.mock.calls[0]![0];
+    expect(message).not.toHaveProperty('notification');
+    expect(message.android).not.toHaveProperty('notification');
+    expect(message.apns.payload.aps).toEqual({ contentAvailable: true });
+    expect(message.data).toMatchObject({ rideId: 'ride-123', silentOfferUpdate: 'true' });
+  });
+
   it('propagates SDK failures to the delivery retry policy without claiming acceptance', async () => {
     const sender = createFirebasePushSender({
       sendEachForMulticast: vi.fn().mockRejectedValue(new Error('fixture outage')),

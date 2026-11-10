@@ -252,7 +252,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       await pool.query('DELETE FROM rides WHERE id=ANY($1::uuid[])', [rideIds]);
       await pool.query('DELETE FROM vehicle_types WHERE id=ANY($1::uuid[])', [typeIds]);
     });
-    it('selects exactly one slab for 2, 5, 10, 14.999, 15 and 20 km with no return-distance multiplier', async () => {
+    it('selects the slab on the outbound route and doubles only the charged distance', async () => {
       const t = await createType();
       for (const meters of [2000, 5000, 10000, 14999, 15000, 20000]) {
         distance = meters;
@@ -265,12 +265,14 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
         const rate = meters < 15000 ? slabs.below_15 : slabs.from_15;
         expect(f.bookingFare?.grossAmount).toBe(
           Math.round(
-            (Math.round(rate.baseFare * 100) + Math.round((meters * rate.perKmRate * 100) / 1000)) /
+            (Math.round(rate.baseFare * 100) +
+              Math.round((2 * meters * rate.perKmRate * 100) / 1000)) /
               100,
           ) * 100,
         );
-        expect(f.bookingFare?.billableDistanceMeters).toBe(meters);
-        expect(f.bookingFare?.distanceMultiplier).toBe(1);
+        expect(f.bookingFare?.distanceMeters).toBe(meters);
+        expect(f.bookingFare?.billableDistanceMeters).toBe(2 * meters);
+        expect(f.bookingFare?.distanceMultiplier).toBe(2);
         expect(f.bookingFare?.logisticsPayment?.upfrontPaise).toBe(
           Math.round((f.bookingFare!.grossAmount * 0.4) / 100) * 100,
         );
@@ -330,17 +332,17 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
         active: false,
       });
       const saved = await rides.findByIdForCustomer(ride.id, customer);
-      expect(Number(saved?.fareEstimate)).toBe(212);
+      expect(Number(saved?.fareEstimate)).toBe(323);
       const sum = await logistics.summary(ride.id, customer, 'customer');
-      expect(sum.totalPaise).toBe(21200);
-      expect(sum.upfrontPaise).toBe(8500);
-      expect(sum.finalPaise).toBe(12700);
+      expect(sum.totalPaise).toBe(32300);
+      expect(sum.upfrontPaise).toBe(12900);
+      expect(sum.finalPaise).toBe(19400);
     });
     it('records customer cash claims without confirming receipt and gates pickup PIN until assigned driver receipt', async () => {
       const ride = await booking();
       const p = await initiate(ride.id);
       expect(p.status, p.text).toBe(201);
-      expect(Number(p.body.data.amount)).toBe(85);
+      expect(Number(p.body.data.amount)).toBe(129);
       expect((await capture(p.body.data.id)).status).toBe(409);
       const claim = await capture(p.body.data.id, customerToken);
       expect(claim.status, claim.text).toBe(200);
@@ -364,7 +366,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       const current = await rides.findByIdForCustomer(ride.id, customer);
       expect(await rides.verifyPinAttempt(ride.id, profile, current!.pin!)).toBe('verified');
       expect((await rides.findById(ride.id))?.status).toBe('in_progress');
-      expect((await logistics.summary(ride.id, customer, 'customer')).outstandingPaise).toBe(12700);
+      expect((await logistics.summary(ride.id, customer, 'customer')).outstandingPaise).toBe(19400);
     });
     it('allows delivery with outstanding final balance and settles only after customer claim and final cash receipt', async () => {
       const ride = await booking();
@@ -383,15 +385,15 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       const final = await initiate(ride.id);
       expect(final.status, final.text).toBe(201);
       expect(final.body.data.paymentStage).toBe('final');
-      expect(Number(final.body.data.amount)).toBe(127);
+      expect(Number(final.body.data.amount)).toBe(194);
       await capture(final.body.data.id, customerToken);
       await capture(final.body.data.id);
       await capture(final.body.data.id);
       summary = await logistics.summary(ride.id, customer, 'customer');
-      expect(summary.confirmedPaise).toBe(21200);
+      expect(summary.confirmedPaise).toBe(32300);
       expect(summary.outstandingPaise).toBe(0);
       expect(summary.settlementStatus).toBe('settled');
-      expect(Number((await rides.findById(ride.id))?.finalFare)).toBe(212);
+      expect(Number((await rides.findById(ride.id))?.finalFare)).toBe(323);
     });
     it('rejects unsupported methods, premature payments, wrong owners and mismatched stage amounts', async () => {
       const ride = await booking();
@@ -443,7 +445,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       const paid = await capture(p.body.data.id, customerToken);
       expect(paid.status, paid.text).toBe(200);
       expect(paid.body.data.providerPaymentId).toBe('verified_' + p.body.data.providerOrderId);
-      expect((await logistics.summary(ride.id, customer, 'customer')).confirmedPaise).toBe(8500);
+      expect((await logistics.summary(ride.id, customer, 'customer')).confirmedPaise).toBe(12900);
       status = 'ACTIVE';
     });
     it('validates signed Cashfree callback identity, currency and amount; duplicate callbacks cannot double count', async () => {
@@ -456,7 +458,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           payment: {
             cf_payment_id: 'webhook_' + p.body.data.id,
             payment_status: 'SUCCESS',
-            payment_amount: 85,
+            payment_amount: 129,
             payment_currency: 'INR',
           },
         },
@@ -487,7 +489,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
         const res = await send(event);
         expect(res.status, res.text).toBe(200);
       }
-      expect((await logistics.summary(ride.id, customer, 'customer')).confirmedPaise).toBe(8500);
+      expect((await logistics.summary(ride.id, customer, 'customer')).confirmedPaise).toBe(12900);
     });
     it('returns only real Logistics plans in the permission-protected Admin ledger and applies filters', async () => {
       const admin = await request(app)

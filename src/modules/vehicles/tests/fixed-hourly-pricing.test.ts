@@ -58,6 +58,26 @@ describe.each(['premium', 'rental'] as const)('%s fixed hourly fare', (sector) =
     });
   });
 
+  it('charges per-kilometre fuel on twice the route distance even for one-way travel', () => {
+    const fare = calculator.calculateEstimate(
+      { ...route, sector, bookingHours: 2, tripType: 'one_way', distanceMeters: 50_000 },
+      {
+        ...type,
+        fixedHourlyPricing: { hourlyRate: 500, fuelRate: 12.34, fuelUnit: 'per_km' },
+      },
+    );
+    expect(fare).toMatchObject({
+      distanceMeters: 50_000,
+      billableDistanceMeters: 100_000,
+      bookingFare: {
+        baseAmount: 100_000,
+        distanceAmount: 0,
+        fuelAmount: 123_400,
+        grossAmount: 223_400,
+      },
+    });
+  });
+
   it('rejects missing, invalid, and cross-category configurations', () => {
     const input = { ...route, sector, bookingHours: 3 };
     expect(() => calculator.calculateEstimate(input, { ...type, code: 'other' })).toThrow(
@@ -87,7 +107,7 @@ it('preserves duration policies and only charges configured kilometre fuel on th
   );
   expect(
     calculator.calculateEstimate({ ...premium, rentalHours: 6, tripType: 'one_way' }, type),
-  ).toMatchObject({ bookingFare: { fuelAmount: 15_234, grossAmount: 255_200 } });
+  ).toMatchObject({ bookingFare: { fuelAmount: 30_467, grossAmount: 270_500 } });
   expect(
     calculator.calculateEstimate({ ...premium, bookingHours: 6, tripType: 'round_trip' }, type),
   ).toMatchObject({ bookingFare: { fuelAmount: 30_467, grossAmount: 270_500 } });

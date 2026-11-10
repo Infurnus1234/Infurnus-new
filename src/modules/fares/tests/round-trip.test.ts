@@ -23,6 +23,50 @@ const vehicle = (sector: VehicleType['sector'], rate: number): VehicleType => ({
   updatedAt: new Date(),
 });
 describe('Backend one-way route / round-trip billing contract', () => {
+  it.each([
+    [10_000, 'below_15', 10_000, 40_000, 50_000],
+    [20_000, 'from_15', 20_000, 48_400, 68_400],
+    [50_000, 'from_15', 20_000, 121_000, 141_000],
+    [10_013, 'below_15', 10_000, 40_052, 50_100],
+  ] as const)(
+    'bills a %i m Logistics route using the %s tariff on the outbound distance',
+    (distanceMeters, logisticsSlab, baseAmount, distanceAmount, grossAmount) => {
+      const input = {
+        sector: 'logistics' as const,
+        vehicleCategory: 'configured_test',
+        durationSeconds: 600,
+        distanceMeters,
+      };
+      const type = {
+        ...vehicle('logistics', 0),
+        baseFare: null,
+        perKmRate: null,
+        logisticsSlabs: {
+          below_15: { baseFare: 100, perKmRate: 20 },
+          from_15: { baseFare: 200, perKmRate: 12.1 },
+        },
+      };
+      const quote = calculator.calculateEstimate(input, type);
+      expect(quote).toMatchObject({
+        distanceMeters,
+        oneWayDistanceMeters: distanceMeters,
+        billableDistanceMeters: distanceMeters * 2,
+        bookingFare: {
+          distanceMeters,
+          baseAmount,
+          distanceAmount,
+          grossAmount,
+          vehicleConfiguration: { logisticsSlab },
+          logisticsPayment: {
+            totalPaise: grossAmount,
+            upfrontPaise: Math.round((grossAmount / 100) * 0.4) * 100,
+            finalPaise: grossAmount - Math.round((grossAmount / 100) * 0.4) * 100,
+          },
+        },
+      });
+      expect(calculator.calculateEstimate(input, type)).toEqual(quote);
+    },
+  );
   it.each(['passenger', 'service', 'premium'] as const)(
     'bills %s twice, preserves base, never mutates route input',
     (sector) => {

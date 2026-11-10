@@ -335,6 +335,41 @@ async function startServer() {
             const service = new NotificationService();
             const nowIso = new Date().toISOString();
 
+            if (type === 'ride.cancelled' || type === 'ride.accepted') {
+              const pendingDrivers = await pool
+                .query<{ user_id: string }>(
+                  `SELECT DISTINCT dp.user_id FROM ride_dispatch_attempts attempt
+                 JOIN driver_profiles dp ON dp.id=attempt.driver_profile_id
+                 WHERE $3='ride.cancelled' AND attempt.ride_id=$1 AND attempt.status='cancelled'
+                   AND attempt.expires_at>clock_timestamp()
+                 UNION SELECT user_id FROM driver_profiles WHERE id=$2`,
+                  [ride.id, ride.assignedDriverId, type],
+                )
+                .catch(() => {
+                  console.warn('Could not resolve cancelled offer recipients');
+                  return { rows: [] };
+                });
+              await Promise.all(
+                pendingDrivers.rows.map(({ user_id }) =>
+                  service
+                    .send({
+                      userId: user_id,
+                      type,
+                      title: 'Ride request withdrawn',
+                      body: 'This ride request is no longer available.',
+                      resourceId: `${ride.id}:offer-ended`,
+                      eventVersion: new Date(ride.updatedAt).getTime(),
+                      data: {
+                        rideId: ride.id,
+                        offerInvalidated: 'true',
+                        silentOfferUpdate: 'true',
+                      },
+                    })
+                    .catch(() => console.warn('Ride offer withdrawal push could not be queued')),
+                ),
+              );
+            }
+
             console.log(
               JSON.stringify({
                 event: 'pin_delivery_trace',

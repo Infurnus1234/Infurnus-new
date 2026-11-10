@@ -72,7 +72,7 @@ export function requiredPermissions(
   const deletion = path.match(
     /^\/admin\/records\/(users|drivers|partners|vehicles|vehicle-types|coupons|support|notifications|approvals|fleet-applications)\/[\da-f-]{36}$/i,
   );
-  if (deletion && method === 'DELETE') {
+  if (deletion && (method === 'DELETE' || (method === 'GET' && deletion[1] === 'vehicle-types'))) {
     const resource =
       deletion[1] === 'vehicle-types'
         ? 'pricing'
@@ -143,6 +143,24 @@ export function requiredPermissions(
     if (method === 'PATCH') return ['vehicles.read', 'vehicles.update'];
     return null;
   }
+  if (/^\/provider-approvals\/fleet-owners\/[^/]+\/review$/.test(path)) {
+    if (method !== 'POST') return null;
+    return [
+      'approvals.read',
+      'approvals.detail',
+      body?.status === 'APPROVED' ? 'approvals.approve' : 'approvals.reject',
+    ];
+  }
+  if (path === '/provider-approvals/fleet-owners')
+    return method === 'GET' ? ['approvals.read'] : null;
+  if (/^\/provider-approvals\/fleet-owners\/[^/]+\/requests$/.test(path))
+    return method === 'GET' ? ['approvals.read', 'approvals.detail'] : null;
+  if (
+    /^\/provider-approvals\/fleet-applications\/[^/]+\/(?:evidence|documents\/[^/]+\/access-url)$/.test(
+      path,
+    )
+  )
+    return method === 'GET' ? ['approvals.read', 'approvals.detail', 'approvals.documents'] : null;
   if (
     /^\/provider-approvals(?:\/[^/]+(?:\/review|\/documents\/[^/]+\/access-url)?)?$/.test(path) ||
     /^\/admin\/drivers\/applications/.test(path) ||

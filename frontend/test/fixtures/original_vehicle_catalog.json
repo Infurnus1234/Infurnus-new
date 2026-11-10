@@ -14,12 +14,17 @@
       {
         "name": "JCB",
         "code": "jcb"
+      },
+      {
+        "name": "Towing Van",
+        "code": "towing"
       }
     ],
     "assets": [
       "assets/images/ambulance_clean.jpg",
       "assets/images/crane_truck.png",
-      "assets/images/jcb_excavator.jpg"
+      "assets/images/jcb_excavator.jpg",
+      "assets/images/flatbed_towing_truck.png"
     ]
   },
   {
@@ -28,26 +33,30 @@
     "vehicles": [
       {
         "name": "Tata 407",
-        "code": "tata_407"
+        "code": "tata_407",
+        "loadCapacityKg": 3000
       },
       {
         "name": "Tata 207",
-        "code": "cargo_207"
+        "code": "cargo_207",
+        "loadCapacityKg": 2000
       },
       {
         "name": "Tata Magic",
-        "code": "tata_magic"
+        "code": "tata_magic",
+        "loadCapacityKg": 1000
       },
       {
         "name": "Piaggio Ape",
-        "code": "piaggio_ape"
+        "code": "piaggio_ape",
+        "loadCapacityKg": 750
       }
     ],
     "assets": [
       "assets/images/piaggio_ape_yellow.png",
       "assets/images/tata_magic_cream.png",
       "assets/images/cargo_207_heavy.png",
-      "assets/images/cargo_407.jpg"
+      "assets/images/logistics_tata_407.webp"
     ]
   },
   {
@@ -107,6 +116,7 @@
       }
     ],
     "assets": [
+      "assets/images/rental_hatchback.webp",
       "assets/images/hatchback_clean.jpg",
       "assets/images/sedan_clean.jpg",
       "assets/images/innova_crysta_clean.jpg"

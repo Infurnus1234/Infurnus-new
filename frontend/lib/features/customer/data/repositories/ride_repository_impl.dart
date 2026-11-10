@@ -74,7 +74,11 @@ class RideRepositoryImpl implements RideRepository {
       final body = e.response?.data;
       final error = body is Map ? body['error'] : null;
       if (error is Map &&
-          error['code'] == 'FARE_CONFIGURATION_MISSING' &&
+          const {
+            'FARE_CONFIGURATION_MISSING',
+            'SERVICE_CONFIGURATION_UNAVAILABLE',
+            'LOGISTICS_CAPACITY_EXCEEDED',
+          }.contains(error['code']) &&
           error['message'] is String &&
           (error['message'] as String).isNotEmpty) {
         return FareEstimateModel.unavailable(error['message'].toString());

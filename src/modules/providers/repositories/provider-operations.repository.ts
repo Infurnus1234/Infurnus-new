@@ -31,7 +31,7 @@ export class PostgresProviderOperationsRepository {
     this.managedDrivers = new ManagedDriverRepository(pool);
   }
 
-  private async authorizeReviewer(client: import('pg').PoolClient, actorId: string) {
+  async authorizeReviewer(client: PoolClient, actorId: string) {
     const actor = (
       await client.query<{ role: string }>(
         "SELECT role::text FROM users WHERE id=$1 AND role IN ('admin','super_admin') AND status='active' AND deleted_at IS NULL FOR SHARE",
@@ -440,6 +440,7 @@ export class PostgresProviderOperationsRepository {
       expectedUpdatedAt: string;
     },
     existingClient?: PoolClient,
+    validateScope?: (client: PoolClient) => Promise<void>,
   ) {
     const client = existingClient ?? (await this.pool.connect());
     try {
@@ -477,6 +478,7 @@ export class PostgresProviderOperationsRepository {
       ).rows[0];
       if (locked?.status !== 'PENDING')
         throw new AppError('APPROVAL_ALREADY_REVIEWED', 'Request is no longer pending', 409);
+      await validateScope?.(client);
       if (
         !(
           await client.query(

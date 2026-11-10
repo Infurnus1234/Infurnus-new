@@ -396,7 +396,8 @@ class RideNotifier extends StateNotifier<RideState> {
       case 'ride:completed':
         final rideData = event.data['ride'];
         if (rideData != null && rideData is Map<String, dynamic>) {
-          final rawUpdatedRide = model.RideModel.fromJson(rideData);
+          final rawUpdatedRide = model.RideModel.fromJson(rideData)
+              .preserveEarlierCancellationExpiry(state.currentRide);
           if (rawUpdatedRide.id == state.currentRide?.id) {
             final terminal =
                 state.status == RideStatus.completed ||
@@ -1166,8 +1167,11 @@ class RideNotifier extends StateNotifier<RideState> {
   Future<void> getRideDetails(String id) async {
     final generation = ++_rideReadGeneration;
     try {
-      final ride = await ref.read(getRideUseCaseProvider).execute(id);
+      final response = await ref.read(getRideUseCaseProvider).execute(id);
       if (!mounted || generation != _rideReadGeneration) return;
+      final ride = response.preserveEarlierCancellationExpiry(
+        state.currentRide,
+      );
       state = state.copyWith(
         status: _mapBackendStatus(ride.status),
         currentRide: ride,
@@ -1203,12 +1207,16 @@ class RideNotifier extends StateNotifier<RideState> {
           .read(cancelRideUseCaseProvider)
           .execute(rideId, 'Cancelled by user');
 
+      if (!mounted || state.currentRide?.id != rideId) return;
+      _rideReadGeneration++;
       ref.read(socketServiceProvider).leaveRide(rideId);
 
       state = state.copyWith(status: RideStatus.cancelled, currentRide: ride);
       fetchRideHistory();
     } catch (e) {
+      if (!mounted || state.currentRide?.id != rideId) return;
       state = state.copyWith(errorMessage: e.toString());
+      unawaited(getRideDetails(rideId));
     }
   }
 
