@@ -200,7 +200,12 @@ class AssignedDriverSummary extends StatelessWidget {
 
 class RidePickupPin extends StatelessWidget {
   final String pin;
-  const RidePickupPin({super.key, required this.pin});
+  final String label;
+  const RidePickupPin({
+    super.key,
+    required this.pin,
+    this.label = 'Pickup PIN (share with driver):',
+  });
   @override
   Widget build(BuildContext context) => Container(
     width: double.infinity,
@@ -212,10 +217,10 @@ class RidePickupPin extends StatelessWidget {
     ),
     child: Row(
       children: [
-        const Expanded(
+        Expanded(
           child: Text(
-            'Pickup PIN (share with driver):',
-            style: TextStyle(color: _muted, fontSize: 13),
+            label,
+            style: const TextStyle(color: _muted, fontSize: 13),
           ),
         ),
         const SizedBox(width: 12),
@@ -229,6 +234,53 @@ class RidePickupPin extends StatelessWidget {
             pin,
             style: const TextStyle(
               color: Colors.black,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              letterSpacing: 2,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class RideDeliveryPin extends StatelessWidget {
+  final String pin;
+  final String label;
+  const RideDeliveryPin({
+    super.key,
+    required this.pin,
+    this.label = 'Delivery/End OTP (share at delivery):',
+  });
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: const Color(0xFFE5E7EB)),
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(color: _muted, fontSize: 13),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+          decoration: BoxDecoration(
+            color: const Color(0xFF2563EB),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            pin,
+            style: const TextStyle(
+              color: Colors.white,
               fontWeight: FontWeight.bold,
               fontSize: 16,
               letterSpacing: 2,

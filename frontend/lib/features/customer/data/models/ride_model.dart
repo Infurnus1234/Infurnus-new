@@ -129,6 +129,8 @@ class RideModel {
   final Map<String, dynamic>? rentalDetails;
   final String? pin;
   final bool? pinVerified;
+  final String? endPin;
+  final bool? endPinVerified;
   final DriverDetails? driverDetails;
   final VehicleDetails? vehicleDetails;
   final RideStatus status;
@@ -195,6 +197,8 @@ class RideModel {
     this.rentalDetails,
     this.pin,
     this.pinVerified,
+    this.endPin,
+    this.endPinVerified,
     this.driverDetails,
     this.vehicleDetails,
     required this.status,
@@ -226,6 +230,8 @@ class RideModel {
     Map<String, dynamic>? rentalDetails,
     String? pin,
     bool? pinVerified,
+    String? endPin,
+    bool? endPinVerified,
     DriverDetails? driverDetails,
     VehicleDetails? vehicleDetails,
     RideStatus? status,
@@ -260,6 +266,8 @@ class RideModel {
       rentalDetails: rentalDetails ?? this.rentalDetails,
       pin: pin ?? this.pin,
       pinVerified: pinVerified ?? this.pinVerified,
+      endPin: endPin ?? this.endPin,
+      endPinVerified: endPinVerified ?? this.endPinVerified,
       driverDetails: driverDetails ?? this.driverDetails,
       vehicleDetails: vehicleDetails ?? this.vehicleDetails,
       status: status ?? this.status,
@@ -315,6 +323,8 @@ class RideModel {
           : null,
       pin: json['pin'] as String?,
       pinVerified: json['pinVerified'] as bool?,
+      endPin: json['endPin'] as String?,
+      endPinVerified: json['endPinVerified'] as bool?,
       driverDetails: json['driverDetails'] != null
           ? DriverDetails.fromJson(
               json['driverDetails'] as Map<String, dynamic>,

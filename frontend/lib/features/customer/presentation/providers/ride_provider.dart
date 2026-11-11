@@ -409,13 +409,18 @@ class RideNotifier extends StateNotifier<RideState> {
             }
             final preservedPin =
                 rawUpdatedRide.pin ??
-                (rawUpdatedRide.pinVerified == true
+                (rawUpdatedRide.pinVerified == true &&
+                        !rawUpdatedRide.isLogistics
                     ? null
                     : state.currentRide?.pin);
-            final updatedRide =
-                rawUpdatedRide.pin == null && preservedPin != null
+            final preservedEndPin =
+                rawUpdatedRide.endPin ?? state.currentRide?.endPin;
+            var updatedRide = rawUpdatedRide.pin == null && preservedPin != null
                 ? rawUpdatedRide.copyWith(pin: preservedPin)
                 : rawUpdatedRide;
+            if (updatedRide.endPin == null && preservedEndPin != null) {
+              updatedRide = updatedRide.copyWith(endPin: preservedEndPin);
+            }
 
             _rideReadGeneration++;
             state = state.copyWith(
