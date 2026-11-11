@@ -243,11 +243,13 @@ class DriverRideNotifier extends StateNotifier<DriverRideState> {
     }
   }
 
-  Future<void> completeRide(String rideId) async {
+  Future<void> completeRide(String rideId, {String? endPin}) async {
     state = state.copyWith(isUpdatingStatus: true, errorMessage: null);
 
     try {
-      final ride = await ref.read(completeRideUseCaseProvider).execute(rideId);
+      final ride = await ref
+          .read(completeRideUseCaseProvider)
+          .execute(rideId, endPin: endPin);
 
       state = state.copyWith(isUpdatingStatus: false, currentRide: ride);
 
