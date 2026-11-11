@@ -1,4 +1,5 @@
 import { beforeAll, describe, it, expect } from 'vitest';
+import { recordDestinationArrival } from './destination-arrival.fixture.js';
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import express from 'express';
@@ -318,6 +319,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           expect(verified.body.data.ride.rideInformation.fare.amount).toBe(amount);
           const fullMap = await api('get', '/rides/driver/rides/' + id + '/map');
           expect(fullMap.body.data.drop).toEqual({ latitude, longitude, address });
+          await recordDestinationArrival(pool, id, profile);
           const complete = await api('post', '/rides/' + id + '/complete');
           expect(complete.status, JSON.stringify(complete.body)).toBe(200);
           const final = await paymentService.initiate(id, customer, 'customer', {
