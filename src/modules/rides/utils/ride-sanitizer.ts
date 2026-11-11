@@ -15,6 +15,7 @@ export type DriverSafeRide = Omit<
   | 'actualFuelCost'
   | 'billing'
   | 'pin'
+  | 'endPin'
   | 'destination'
   | 'destinationAddress'
   | 'destinationDistrictLookup'
@@ -32,6 +33,7 @@ export function sanitizeRideForDriver(ride: Ride): DriverSafeRide {
     actualFuelCost: _actualFuelCost,
     billing: _billing,
     pin: _pin,
+    endPin: _endPin,
     destination,
     destinationAddress,
     destinationDistrictLookup: _districtLookup,

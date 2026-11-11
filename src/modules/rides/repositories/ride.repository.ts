@@ -25,11 +25,16 @@ import { driverEligibilitySql, driverOperationalEligibilitySql } from './driver-
 import { randomUUID } from 'node:crypto';
 import {
   evaluatePinAttempt,
+  evaluateEndPinAttempt,
   generateRidePin,
   pinVerifier,
+  endPinVerifier,
   sealRidePin,
+  sealRideEndPin,
   openRidePin,
+  openRideEndPin,
   matchesPinVerifier,
+  matchesEndPinVerifier,
   type PinAttemptResult,
 } from './ride-pin.js';
 import type { Pool, PoolClient } from 'pg';
@@ -155,6 +160,11 @@ export interface RideRepository {
 
   getRidePin(id: string): Promise<string | null>;
   verifyPinAttempt?(id: string, driverProfileId: string, pin: string): Promise<PinAttemptResult>;
+  verifyEndPinAttempt?(
+    id: string,
+    driverProfileId: string,
+    endPin: string,
+  ): Promise<PinAttemptResult>;
 
   markPinVerified(id: string): Promise<boolean>;
 
@@ -250,6 +260,8 @@ const detailedRideColumns = (tableAlias = 'r') => `
   ) AS "pin",
   ${tableAlias}.pin_ciphertext AS "pinCiphertext",
   ${tableAlias}.pin_verified AS "pinVerified",
+  ${tableAlias}.end_pin_ciphertext AS "endPinCiphertext",
+  ${tableAlias}.end_pin_verifier AS "endPinVerifier",
   CASE
     WHEN ${tableAlias}.assigned_driver_id IS NOT NULL THEN
       NULLIF(
@@ -429,6 +441,19 @@ function mapRide(row: Record<string, unknown>, forCustomer = false): Ride {
         : null,
 
     pinVerified: Boolean(row.pinVerified),
+
+    endPin:
+      forCustomer &&
+      ((row.sector as string | null) ?? 'passenger') === 'logistics' &&
+      row.status === 'in_progress'
+        ? row.endPinCiphertext
+          ? openRideEndPin(String(row.id), String(row.endPinCiphertext))
+          : row.endPin != null
+            ? String(row.endPin)
+            : null
+        : null,
+
+    endPinVerified: Boolean(row.endPinVerified),
 
     driverDetails:
       row.assignedDriverId && row.driverName
@@ -657,6 +682,7 @@ export class PostgresRideRepository implements RideRepository {
   ): Promise<Ride> {
     const id = randomUUID();
     const pin = generateRidePin();
+    const endPin = input.sector === 'logistics' ? generateRidePin() : null;
 
     const result = await queryable.query(
       `WITH inserted AS (
@@ -673,7 +699,8 @@ export class PostgresRideRepository implements RideRepository {
            vehicle_category,
            fare_estimate,
            pin,
-           route_metadata, client_request_id
+           route_metadata, client_request_id,
+           end_pin_ciphertext, end_pin_verifier
          )
          VALUES (
            $17::uuid, $18::text, $19::text,
@@ -717,7 +744,8 @@ export class PostgresRideRepository implements RideRepository {
              null,
              'route',
              null
-           ), $20::uuid
+           ), $20::uuid,
+           $22::text, $23::text
          )
          RETURNING *
        )
@@ -746,6 +774,8 @@ export class PostgresRideRepository implements RideRepository {
         pinVerifier(id, pin),
         input.clientRequestId ?? null,
         input.clientRequestId ? bookingRequestFingerprint(input) : null,
+        endPin ? sealRideEndPin(id, endPin) : null,
+        endPin ? endPinVerifier(id, endPin) : null,
       ],
     );
 
@@ -1718,6 +1748,67 @@ export class PostgresRideRepository implements RideRepository {
               ),
               result === 'verified',
             ],
+          );
+        }
+      }
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async verifyEndPinAttempt(
+    id: string,
+    driverProfileId: string,
+    endPin: string,
+  ): Promise<PinAttemptResult> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const eligible = (
+        await client.query(
+          `SELECT dp.id FROM driver_profiles dp JOIN users u ON u.id=dp.user_id JOIN vehicles v ON v.id=dp.active_vehicle_id WHERE dp.id=$1 AND ${driverOperationalEligibilitySql()} FOR SHARE OF dp,u,v`,
+          [driverProfileId],
+        )
+      ).rowCount;
+      const ride = (
+        await client.query(
+          `SELECT assigned_driver_id,status,
+           end_pin_ciphertext,end_pin_verifier,COALESCE(route_metadata,'{}'::jsonb) AS metadata,
+           COALESCE(sector,route_metadata->>'sector','passenger') AS sector,
+           extract(epoch FROM clock_timestamp())*1000 AS now_ms
+           FROM rides WHERE id=$1 FOR UPDATE`,
+          [id],
+        )
+      ).rows[0];
+      let result: PinAttemptResult;
+      if (!ride) result = 'not_found';
+      else if (ride.assigned_driver_id !== driverProfileId || !eligible) result = 'forbidden';
+      else if (ride.status !== 'in_progress') result = 'invalid_state';
+      else if (ride.sector !== 'logistics') result = 'not_found';
+      else if (!ride.end_pin_verifier && !ride.end_pin_ciphertext) result = 'not_found';
+      else {
+        const correct = ride.end_pin_verifier
+          ? matchesEndPinVerifier(id, endPin, ride.end_pin_verifier)
+          : false;
+        const attempt = evaluateEndPinAttempt(
+          'match',
+          correct ? 'match' : 'wrong',
+          ride.metadata,
+          Number(ride.now_ms),
+        );
+        result = attempt.result;
+        if (result !== 'locked' || attempt.metadata !== ride.metadata) {
+          await client.query(
+            `UPDATE rides SET route_metadata=$2::jsonb,
+              end_pin_ciphertext=CASE WHEN $3 THEN NULL ELSE end_pin_ciphertext END,
+              end_pin_verifier=CASE WHEN $3 THEN NULL ELSE end_pin_verifier END,
+              updated_at=NOW() WHERE id=$1`,
+            [id, JSON.stringify(attempt.metadata), result === 'verified'],
           );
         }
       }

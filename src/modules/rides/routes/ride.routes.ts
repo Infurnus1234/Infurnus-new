@@ -186,6 +186,8 @@ export function createRideRouter(controller: RideController, driverController?: 
     router.post('/:id/status', requireRoles('driver'), driverController.transition);
 
     router.post('/:id/verify-pin', requireRoles('driver'), driverController.verifyPin);
+
+    router.post('/:id/verify-end-pin', requireRoles('driver'), driverController.verifyEndPin);
   }
 
   // ==========================================================

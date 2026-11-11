@@ -97,6 +97,8 @@ export interface Ride {
   rentalDetails?: Record<string, unknown> | null;
   pin?: string | null;
   pinVerified?: boolean;
+  endPin?: string | null;
+  endPinVerified?: boolean;
   driverDetails?: RideDriverDetails | null;
   vehicleDetails?: RideVehicleDetails | null;
   cancellationReason: string | null;
