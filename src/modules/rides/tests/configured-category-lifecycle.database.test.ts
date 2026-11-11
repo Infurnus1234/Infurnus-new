@@ -446,6 +446,11 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
         await service.transitionRide(booked.id, 'driver_arriving', profile);
         await service.transitionRide(booked.id, 'driver_arrived', profile);
         await service.transitionRide(booked.id, 'in_progress', profile, booked.pin!);
+        let endPin: string | undefined;
+        if (sector === 'logistics') {
+          const customerRide = await rides.findByIdForCustomer(booked.id, customer);
+          endPin = customerRide?.endPin ?? undefined;
+        }
         const driverToken = await signAccessToken({ sub: user, role: 'driver', type: 'access' });
         const complete = () =>
           request(app)
@@ -473,6 +478,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           const response = await complete().send({
             latitude: booked.destination.latitude,
             longitude: booked.destination.longitude,
+            ...(endPin ? { endPin } : {}),
           });
           expect(response.status, response.text).toBe(409);
           expect(response.body.error.code).toBe('DESTINATION_NOT_REACHED');
@@ -491,11 +497,6 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           await fixes(80, 80, 8, 40);
           await expectBlocked();
           await fixes(80, 80, 8);
-        }
-        let endPin: string | undefined;
-        if (sector === 'logistics') {
-          const customerRide = await rides.findByIdForCustomer(booked.id, customer);
-          endPin = customerRide?.endPin ?? undefined;
         }
         const response = await (endPin ? complete().send({ endPin }) : complete());
         expect(response.status, response.text).toBe(200);

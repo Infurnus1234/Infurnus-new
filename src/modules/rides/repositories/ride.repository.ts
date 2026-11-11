@@ -1864,11 +1864,8 @@ export class PostgresRideRepository implements RideRepository {
         result = attempt.result;
         if (result !== 'locked' || attempt.metadata !== ride.metadata) {
           await client.query(
-            `UPDATE rides SET route_metadata=$2::jsonb,
-              end_pin_ciphertext=CASE WHEN $3 THEN NULL ELSE end_pin_ciphertext END,
-              end_pin_verifier=CASE WHEN $3 THEN NULL ELSE end_pin_verifier END,
-              updated_at=NOW() WHERE id=$1`,
-            [id, JSON.stringify(attempt.metadata), result === 'verified'],
+            `UPDATE rides SET route_metadata=$2::jsonb, updated_at=NOW() WHERE id=$1`,
+            [id, JSON.stringify(attempt.metadata)],
           );
         }
       }
