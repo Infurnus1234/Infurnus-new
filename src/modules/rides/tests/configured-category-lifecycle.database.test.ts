@@ -492,7 +492,12 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           await expectBlocked();
           await fixes(80, 80, 8);
         }
-        const response = await complete();
+        let endPin: string | undefined;
+        if (sector === 'logistics') {
+          const customerRide = await rides.findByIdForCustomer(booked.id, customer);
+          endPin = customerRide?.endPin ?? undefined;
+        }
+        const response = await (endPin ? complete().send({ endPin }) : complete());
         expect(response.status, response.text).toBe(200);
         expect(response.body.data.status).toBe('completed');
         const completed = (await rides.findById(booked.id))!;
