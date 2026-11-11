@@ -1135,6 +1135,16 @@ export class PostgresRideRepository implements RideRepository {
     client: PoolClient | Pool = this.pool,
   ): Promise<Ride | null> {
     const queryRunner = client && typeof client.query === 'function' ? client : this.pool;
+    const latest = await this.trackingCache?.latest(assignedDriverId);
+    const cachedPoint =
+      latest &&
+      Number.isFinite(latest.latitude) &&
+      Math.abs(latest.latitude) <= 90 &&
+      Number.isFinite(latest.longitude) &&
+      Math.abs(latest.longitude) <= 180 &&
+      Number.isFinite(Date.parse(latest.timestamp))
+        ? latest
+        : null;
 
     const result = await queryRunner.query(
       `WITH current_ride AS (
@@ -1144,8 +1154,41 @@ export class PostgresRideRepository implements RideRepository {
            r.actual_distance_meters,
            r.route_metadata,
            r.fare_estimate,
-           v.fuel_rate_per_km
+           v.fuel_rate_per_km,
+           (r.sector NOT IN ('logistics','premium','rental','service') OR (
+             SELECT count(*) = 2 AND bool_and(
+               COALESCE(
+                 sample.accuracy > 0 AND sample.accuracy <= 30
+                 AND sample.recorded_at BETWEEN clock_timestamp() - INTERVAL '30 seconds'
+                     AND clock_timestamp() + INTERVAL '2 seconds'
+                 AND NOT (ST_X(r.destination_location::geometry)=0 AND ST_Y(r.destination_location::geometry)=0)
+                 AND ST_DWithin(sample.location, r.destination_location,
+                   GREATEST(0, 100 - sample.accuracy), false)
+                 AND NOT (ST_X(sample.location::geometry)=0 AND ST_Y(sample.location::geometry)=0),
+                 false
+               ))
+             FROM (
+               SELECT DISTINCT ON (recorded_at) location, recorded_at, accuracy
+               FROM (VALUES
+                 (dp.last_location, dp.last_location_at, dp.location_accuracy::float8, 0),
+                 (previous.location, previous.recorded_at, previous.accuracy, 0),
+                 (ST_SetSRID(ST_MakePoint($4::float8,$3::float8),4326)::geography,
+                   $5::timestamptz, $6::float8, 1)
+               ) AS fixes(location, recorded_at, accuracy, priority)
+               WHERE recorded_at IS NOT NULL
+               ORDER BY recorded_at DESC, priority
+               LIMIT 2
+             ) sample
+           )) AS destination_reached
          FROM rides r
+         LEFT JOIN driver_profiles dp ON dp.id = r.assigned_driver_id
+         LEFT JOIN LATERAL (
+           SELECT location, recorded_at, accuracy
+           FROM provider_location_history
+           WHERE driver_profile_id = dp.id AND recorded_at < dp.last_location_at
+           ORDER BY recorded_at DESC
+           LIMIT 1
+         ) previous ON r.sector IN ('logistics','premium','rental','service')
          LEFT JOIN vehicles v
            ON v.id = r.assigned_vehicle_id
          WHERE r.id = $1
@@ -1234,14 +1277,30 @@ export class PostgresRideRepository implements RideRepository {
            updated_at = NOW()
          FROM current_ride cr
          WHERE r.id = cr.id
+           AND cr.destination_reached
          RETURNING r.*
        )
-       SELECT ${detailedRideColumns('u_r')}
-       FROM updated u_r
+       SELECT ${detailedRideColumns('u_r')}, NOT cr.destination_reached AS "destinationBlocked"
+       FROM current_ride cr
+       LEFT JOIN updated u_r ON u_r.id = cr.id
        ${detailedRideJoins('u_r')}`,
-      [id, assignedDriverId],
+      [
+        id,
+        assignedDriverId,
+        cachedPoint?.latitude ?? null,
+        cachedPoint?.longitude ?? null,
+        cachedPoint?.timestamp ?? null,
+        cachedPoint?.accuracy ?? null,
+      ],
     );
 
+    if (result.rows[0]?.destinationBlocked) {
+      throw new AppError(
+        'DESTINATION_NOT_REACHED',
+        'Reach the saved destination and wait for an accurate GPS fix before completing the trip.',
+        409,
+      );
+    }
     return result.rows[0] ? mapRide(result.rows[0], false) : null;
   }
 

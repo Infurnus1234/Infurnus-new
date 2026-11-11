@@ -1,3 +1,4 @@
+import { recordDestinationArrival } from '../../rides/tests/destination-arrival.fixture.js';
 import { LogisticsPaymentService } from '../../payments/services/logistics-payment.service.js';
 import { PostgresPaymentRepository } from '../../payments/repositories/payment.repository.js';
 import { readFileSync } from 'node:fs';
@@ -566,6 +567,7 @@ live(
                   }
                 : { baseFare: 120, expectedVersion: 1 },
         );
+        await recordDestinationArrival(pool, ride.id, profileId);
         const complete = await service.completeRide(ride.id, profileId);
         expect(complete.finalFare).toBe(expectedFare);
         expect(complete.billing).toEqual({ currency: 'INR', finalFare: expectedFare });

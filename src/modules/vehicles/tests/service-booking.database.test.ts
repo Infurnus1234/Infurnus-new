@@ -1,3 +1,4 @@
+import { recordDestinationArrival } from '../../rides/tests/destination-arrival.fixture.js';
 import express from 'express';
 import request from 'supertest';
 import { readFileSync } from 'node:fs';
@@ -476,6 +477,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       expect(
         (await service.transitionRide(ride.id, 'in_progress', profileId, ride.pin!)).status,
       ).toBe('in_progress');
+      await recordDestinationArrival(pool, ride.id, profileId);
       expect((await service.completeRide(ride.id, profileId)).status).toBe('completed');
       const row = (
         await pool.query('SELECT final_fare,assigned_driver_id,status FROM rides WHERE id=$1', [
