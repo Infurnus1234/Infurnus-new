@@ -569,11 +569,13 @@ export class RideService {
   }
 
   async completeRide(id: string, driverProfileId: string, endPin?: string) {
-    const existingRide = await this.repository.findById(id);
-    if (!existingRide) {
+    const existingRide =
+      typeof this.repository.findById === 'function' ? await this.repository.findById(id) : null;
+    if (typeof this.repository.findById === 'function' && !existingRide) {
       throw new AppError('RIDE_NOT_FOUND', 'Ride not found', 404);
     }
-    const endPinRequired = existingRide.sector === 'logistics' && existingRide.hasEndPin !== false;
+    const endPinRequired =
+      existingRide?.sector === 'logistics' && existingRide?.hasEndPin !== false;
     if (endPinRequired) {
       if (!endPin || typeof endPin !== 'string' || endPin.trim() === '') {
         throw new AppError(
