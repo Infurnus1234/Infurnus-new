@@ -7,6 +7,9 @@ import request from 'supertest';
 import { createRideRouter } from '../routes/ride.routes.js';
 import { RideController } from '../controllers/ride.controller.js';
 import { signAccessToken } from '../../auth/utils/jwt.js';
+import { DriverController } from '../controllers/driver.controller.js';
+import { DriverService } from '../services/driver.service.js';
+import type { DriverDocumentStorageService } from '../services/driver-document-storage.service.js';
 import { errorMiddleware } from '../../../common/middleware/error.middleware.js';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -106,7 +109,17 @@ const service = new RideService(
 );
 const app = express();
 app.use(express.json());
-app.use('/rides', createRideRouter(new RideController(service)));
+app.use(
+  '/rides',
+  createRideRouter(
+    new RideController(service),
+    new DriverController(
+      new DriverService(drivers, undefined, rides),
+      service,
+      {} as DriverDocumentStorageService,
+    ),
+  ),
+);
 app.post('/fares/estimate', new FareController(estimator).estimate);
 app.get(
   '/vehicles/catalog',
@@ -433,7 +446,56 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
         await service.transitionRide(booked.id, 'driver_arriving', profile);
         await service.transitionRide(booked.id, 'driver_arrived', profile);
         await service.transitionRide(booked.id, 'in_progress', profile, booked.pin!);
-        const completed = await service.completeRide(booked.id, profile);
+        const driverToken = await signAccessToken({ sub: user, role: 'driver', type: 'access' });
+        const complete = () =>
+          request(app)
+            .post('/rides/' + booked.id + '/complete')
+            .auth(driverToken, { type: 'bearer' });
+        const fixes = async (latest: number, previous: number, accuracy: number, age = 1) => {
+          await pool.query('DELETE FROM provider_location_history WHERE driver_profile_id=$1', [
+            profile,
+          ]);
+          for (const [distance, seconds] of [
+            [previous, age + 2],
+            [latest, age],
+          ]) {
+            await pool.query(
+              `UPDATE driver_profiles dp
+                 SET last_location=ST_Project(r.destination_location,$3::float8,0::float8),
+                     last_location_at=NOW()-($5::int * INTERVAL '1 second'),
+                     location_accuracy=$4
+                 FROM rides r WHERE dp.id=$1 AND r.id=$2`,
+              [profile, booked.id, distance, accuracy, seconds],
+            );
+          }
+        };
+        const expectBlocked = async () => {
+          const response = await complete().send({
+            latitude: booked.destination.latitude,
+            longitude: booked.destination.longitude,
+          });
+          expect(response.status, response.text).toBe(409);
+          expect(response.body.error.code).toBe('DESTINATION_NOT_REACHED');
+          expect((await rides.findById(booked.id))?.status).toBe('in_progress');
+        };
+        if (sector !== 'passenger') {
+          await expectBlocked();
+          for (const distance of [10000, 1000, 200]) {
+            await fixes(distance, distance, 8);
+            await expectBlocked();
+          }
+          await fixes(80, 200, 8);
+          await expectBlocked();
+          await fixes(80, 80, 35);
+          await expectBlocked();
+          await fixes(80, 80, 8, 40);
+          await expectBlocked();
+          await fixes(80, 80, 8);
+        }
+        const response = await complete();
+        expect(response.status, response.text).toBe(200);
+        expect(response.body.data.status).toBe('completed');
+        const completed = (await rides.findById(booked.id))!;
         expect(completed.status).toBe('completed');
         expect(completed.finalFare).toBe(booked.fareEstimate);
         if (sector === 'rental') {

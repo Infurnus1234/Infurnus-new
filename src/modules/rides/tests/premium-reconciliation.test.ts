@@ -1,3 +1,4 @@
+import { recordDestinationArrival } from './destination-arrival.fixture.js';
 import { syntheticDispatchCity, syntheticDispatchAreas } from './dispatch-test-city.js';
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
@@ -108,7 +109,7 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
 
       const result = await repo.complete('ride-uuid-1', 'driver-1');
 
-      expect(queryParams).toEqual(['ride-uuid-1', 'driver-1']);
+      expect(queryParams).toEqual(['ride-uuid-1', 'driver-1', null, null, null, null]);
 
       const normalizedSql = normalizeSql(executedSql);
 
@@ -777,6 +778,11 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
           expect(check1?.actualDistanceMeters).toBe(0);
 
           // 3. Driver accepts ride
+          await pool.query(
+            `UPDATE driver_profiles dp SET last_location=r.pickup_location, last_location_at=NOW()
+           FROM rides r WHERE r.id=$1 AND dp.id=$2`,
+            [ride.id, driverProfileId],
+          );
           expect(
             await repo.offerDispatch(ride.id, driverProfileId, 15000, syntheticDispatchCity),
           ).toBe(true);
@@ -910,6 +916,7 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
             [ride.id, distanceMeters],
           );
 
+          await recordDestinationArrival(pool, ride.id, driverProfileId);
           const completedRide = await rideService.completeRide(ride.id, driverProfileId);
 
           expect(completedRide.status).toBe('completed');
@@ -1088,6 +1095,7 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
           [ride.id],
         );
 
+        await recordDestinationArrival(pool, ride.id, driverProfileId2);
         const completed = await repo.complete(ride.id, driverProfileId2);
 
         // Hourly base: 2 * 1000 = 2000

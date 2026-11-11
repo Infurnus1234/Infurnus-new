@@ -1,3 +1,4 @@
+import { recordDestinationArrival } from '../../rides/tests/destination-arrival.fixture.js';
 import { PostgresDriverRepository } from '../../rides/repositories/driver.repository.js';
 import { randomUUID, createHmac } from 'node:crypto';
 import express from 'express';
@@ -141,8 +142,10 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
         [profile],
       );
       for (const row of previous.rows) {
-        if (row.status === 'in_progress') await rideService.completeRide(row.id, profile);
-        else
+        if (row.status === 'in_progress') {
+          await recordDestinationArrival(pool, row.id, profile);
+          await rideService.completeRide(row.id, profile);
+        } else
           await pool.query(
             "UPDATE rides SET status='cancelled',cancelled_at=NOW(),cancellation_reason='test fixture finished' WHERE id=$1",
             [row.id],
@@ -378,6 +381,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       await rides.transition(ride.id, 'driver_arrived', profile);
       const pin = (await rides.findByIdForCustomer(ride.id, customer))!.pin!;
       await rides.verifyPinAttempt(ride.id, profile, pin);
+      await recordDestinationArrival(pool, ride.id, profile);
       await rideService.completeRide(ride.id, profile);
       let summary = await logistics.summary(ride.id, customer, 'customer');
       expect(summary.deliveryStatus).toBe('completed');
