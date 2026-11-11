@@ -196,9 +196,9 @@ class DriverRepositoryImpl implements DriverRepository {
   }
 
   @override
-  Future<RideModel> completeRide(String rideId) async {
+  Future<RideModel> completeRide(String rideId, {String? endPin}) async {
     try {
-      return await remoteDataSource.completeRide(rideId);
+      return await remoteDataSource.completeRide(rideId, endPin: endPin);
     } on DioException catch (e) {
       throw _handleDioException(e);
     } catch (e) {

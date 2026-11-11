@@ -144,7 +144,8 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       for (const row of previous.rows) {
         if (row.status === 'in_progress') {
           await recordDestinationArrival(pool, row.id, profile);
-          await rideService.completeRide(row.id, profile);
+          const endPin = (await rides.findByIdForCustomer(row.id, customer))?.endPin ?? undefined;
+          await rideService.completeRide(row.id, profile, endPin);
         } else
           await pool.query(
             "UPDATE rides SET status='cancelled',cancelled_at=NOW(),cancellation_reason='test fixture finished' WHERE id=$1",
@@ -382,7 +383,8 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       const pin = (await rides.findByIdForCustomer(ride.id, customer))!.pin!;
       await rides.verifyPinAttempt(ride.id, profile, pin);
       await recordDestinationArrival(pool, ride.id, profile);
-      await rideService.completeRide(ride.id, profile);
+      const endPin = (await rides.findByIdForCustomer(ride.id, customer))?.endPin ?? undefined;
+      await rideService.completeRide(ride.id, profile, endPin);
       let summary = await logistics.summary(ride.id, customer, 'customer');
       expect(summary.deliveryStatus).toBe('completed');
       expect(summary.settlementStatus).toBe('outstanding');

@@ -320,7 +320,10 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           const fullMap = await api('get', '/rides/driver/rides/' + id + '/map');
           expect(fullMap.body.data.drop).toEqual({ latitude, longitude, address });
           await recordDestinationArrival(pool, id, profile);
-          const complete = await api('post', '/rides/' + id + '/complete');
+          const endPin =
+            (await api('get', '/rides/' + id, undefined, customerToken)).body.data.endPin ??
+            (await repo.findByIdForCustomer(id, customer))?.endPin;
+          const complete = await api('post', '/rides/' + id + '/complete', { endPin });
           expect(complete.status, JSON.stringify(complete.body)).toBe(200);
           const final = await paymentService.initiate(id, customer, 'customer', {
             provider: 'cash',

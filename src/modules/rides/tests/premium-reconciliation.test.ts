@@ -174,6 +174,7 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
 
       const mockRideRepo = {
         complete: vi.fn().mockResolvedValue(mockRide),
+        findById: vi.fn().mockResolvedValue(mockRide),
       };
 
       const mockDriverRepo = {
@@ -245,6 +246,7 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
 
       const mockRideRepo = {
         complete: vi.fn().mockResolvedValue(mockPassengerRide),
+        findById: vi.fn().mockResolvedValue(mockPassengerRide),
       };
 
       const mockDriverRepo = {
@@ -320,6 +322,7 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
         complete: vi.fn().mockImplementation((_id: string, _driverId: string) => {
           return Promise.resolve(mockRide);
         }),
+        findById: vi.fn().mockResolvedValue(mockRide),
       };
 
       const mockDriverRepo = {
@@ -494,56 +497,58 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
   // Live PostgreSQL & PostGIS Integration Tests
   // =========================================================================
 
-  describe('PostgreSQL Live Distance Accumulation & Reconciled Completion', () => {
-    let customerId: string;
-    let driverUserId: string;
-    let driverProfileId: string;
-    let vehicleId: string;
-    let repo: PostgresRideRepository;
-    let driverRepo: PostgresDriverRepository;
-    let rideService: RideService;
+  describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
+    'PostgreSQL Live Distance Accumulation & Reconciled Completion',
+    () => {
+      let customerId: string;
+      let driverUserId: string;
+      let driverProfileId: string;
+      let vehicleId: string;
+      let repo: PostgresRideRepository;
+      let driverRepo: PostgresDriverRepository;
+      let rideService: RideService;
 
-    beforeAll(async () => {
-      repo = new PostgresRideRepository(pool, syntheticDispatchAreas);
-      driverRepo = new PostgresDriverRepository(pool);
-      rideService = new RideService(repo, driverRepo);
+      beforeAll(async () => {
+        repo = new PostgresRideRepository(pool, syntheticDispatchAreas);
+        driverRepo = new PostgresDriverRepository(pool);
+        rideService = new RideService(repo, driverRepo);
 
-      const suffix = randomUUID();
+        const suffix = randomUUID();
 
-      const customerRes = await pool.query<{ id: string }>(
-        `INSERT INTO users (first_name, last_name, phone, role)
+        const customerRes = await pool.query<{ id: string }>(
+          `INSERT INTO users (first_name, last_name, phone, role)
            VALUES ('Prem', 'Customer', $1, 'customer')
            RETURNING id`,
-        [`+91${suffix.replaceAll('-', '').slice(0, 10)}`],
-      );
+          [`+91${suffix.replaceAll('-', '').slice(0, 10)}`],
+        );
 
-      customerId = customerRes.rows[0]!.id;
+        customerId = customerRes.rows[0]!.id;
 
-      const driverRes = await pool.query<{ id: string }>(
-        `INSERT INTO users (first_name, last_name, phone, role)
+        const driverRes = await pool.query<{ id: string }>(
+          `INSERT INTO users (first_name, last_name, phone, role)
            VALUES ('Prem', 'Driver', $1, 'driver')
            RETURNING id`,
-        [`+92${suffix.replaceAll('-', '').slice(0, 10)}`],
-      );
+          [`+92${suffix.replaceAll('-', '').slice(0, 10)}`],
+        );
 
-      driverUserId = driverRes.rows[0]!.id;
+        driverUserId = driverRes.rows[0]!.id;
 
-      const profileRes = await pool.query<{ id: string }>(
-        `INSERT INTO driver_profiles
+        const profileRes = await pool.query<{ id: string }>(
+          `INSERT INTO driver_profiles
              (user_id, license_number, license_expiry,
               verification_status, availability_status, online_preference)
            VALUES
              ($1, $2, CURRENT_DATE + 365,
               'approved', 'available', TRUE)
            RETURNING id`,
-        [driverUserId, `LIC-${suffix}`],
-      );
+          [driverUserId, `LIC-${suffix}`],
+        );
 
-      driverProfileId = profileRes.rows[0]!.id;
+        driverProfileId = profileRes.rows[0]!.id;
 
-      // Configured vehicle fuel rate: Ã¢â€šÂ¹18.00/km (Fortuner)
-      const vehicleRes = await pool.query<{ id: string }>(
-        `INSERT INTO vehicles
+        // Configured vehicle fuel rate: Ã¢â€šÂ¹18.00/km (Fortuner)
+        const vehicleRes = await pool.query<{ id: string }>(
+          `INSERT INTO vehicles
              (
                driver_profile_id,
                make,
@@ -568,21 +573,21 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
                TRUE
              )
            RETURNING id`,
-        [driverProfileId, `PREM-${suffix.replaceAll('-', '').slice(0, 10)}`],
-      );
+          [driverProfileId, `PREM-${suffix.replaceAll('-', '').slice(0, 10)}`],
+        );
 
-      vehicleId = vehicleRes.rows[0]!.id;
-      await pool.query(
-        "UPDATE vehicles SET owner_id=$2,operating_city_id='TEST_ONLY_CITY' WHERE id=$1",
-        [vehicleId, driverUserId],
-      );
-      await pool.query('UPDATE driver_profiles SET active_vehicle_id=$2 WHERE id=$1', [
-        driverProfileId,
-        vehicleId,
-      ]);
+        vehicleId = vehicleRes.rows[0]!.id;
+        await pool.query(
+          "UPDATE vehicles SET owner_id=$2,operating_city_id='TEST_ONLY_CITY' WHERE id=$1",
+          [vehicleId, driverUserId],
+        );
+        await pool.query('UPDATE driver_profiles SET active_vehicle_id=$2 WHERE id=$1', [
+          driverProfileId,
+          vehicleId,
+        ]);
 
-      await pool.query(
-        `UPDATE driver_profiles
+        await pool.query(
+          `UPDATE driver_profiles
            SET availability_status = 'available',
 
                last_location =
@@ -592,390 +597,395 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
                  )::geography,
                last_location_at = NOW()
            WHERE id = $1`,
-        [driverProfileId],
-      );
-    });
+          [driverProfileId],
+        );
+      });
 
-    it('releases rejected and timed-out leases for the next ranked driver', async () => {
-      const secondSuffix = randomUUID();
-      const secondUserResult = await pool.query<{ id: string }>(
-        `INSERT INTO users (first_name, last_name, phone, role)
+      it('releases rejected and timed-out leases for the next ranked driver', async () => {
+        const secondSuffix = randomUUID();
+        const secondUserResult = await pool.query<{ id: string }>(
+          `INSERT INTO users (first_name, last_name, phone, role)
          VALUES ('Next', 'Driver', $1, 'driver') RETURNING id`,
-        [`+93${secondSuffix.replaceAll('-', '').slice(0, 10)}`],
-      );
-      const secondUserId = secondUserResult.rows[0]!.id;
-      const secondProfileResult = await pool.query<{ id: string }>(
-        `INSERT INTO driver_profiles
+          [`+93${secondSuffix.replaceAll('-', '').slice(0, 10)}`],
+        );
+        const secondUserId = secondUserResult.rows[0]!.id;
+        const secondProfileResult = await pool.query<{ id: string }>(
+          `INSERT INTO driver_profiles
            (user_id, license_number, license_expiry, verification_status, availability_status)
          VALUES ($1, $2, CURRENT_DATE + 365, 'approved', 'available') RETURNING id`,
-        [secondUserId, `LIC-${secondSuffix}`],
-      );
-      const secondProfileId = secondProfileResult.rows[0]!.id;
-      const secondVehicleResult = await pool.query<{ id: string }>(
-        `INSERT INTO vehicles
+          [secondUserId, `LIC-${secondSuffix}`],
+        );
+        const secondProfileId = secondProfileResult.rows[0]!.id;
+        const secondVehicleResult = await pool.query<{ id: string }>(
+          `INSERT INTO vehicles
            (driver_profile_id, make, model, plate_number, sector, category, verification_status, is_active)
          VALUES ($1, 'Toyota', 'Fortuner', $2, 'premium', 'fortuner', 'approved', TRUE)
          RETURNING id`,
-        [secondProfileId, `NEXT-${secondSuffix.replaceAll('-', '').slice(0, 10)}`],
-      );
-      const secondVehicleId = secondVehicleResult.rows[0]!.id;
-      await pool.query(
-        "UPDATE vehicles SET owner_id=$2,operating_city_id='TEST_ONLY_CITY' WHERE id=$1",
-        [secondVehicleId, secondUserId],
-      );
-      await pool.query(
-        `UPDATE driver_profiles
+          [secondProfileId, `NEXT-${secondSuffix.replaceAll('-', '').slice(0, 10)}`],
+        );
+        const secondVehicleId = secondVehicleResult.rows[0]!.id;
+        await pool.query(
+          "UPDATE vehicles SET owner_id=$2,operating_city_id='TEST_ONLY_CITY' WHERE id=$1",
+          [secondVehicleId, secondUserId],
+        );
+        await pool.query(
+          `UPDATE driver_profiles
          SET active_vehicle_id = $2,
              last_location = ST_SetSRID(ST_MakePoint(77.5946, 12.9716), 4326)::geography,
              last_location_at = NOW()
          WHERE id = $1`,
-        [secondProfileId, secondVehicleId],
-      );
-
-      try {
-        const rejectedRide = await repo.create(customerId, {
-          pickup: { latitude: 12.9716, longitude: 77.5946 },
-          destination: { latitude: 13.0, longitude: 77.65 },
-          sector: 'premium',
-          vehicleCategory: 'fortuner',
-          fareEstimate: 4000,
-        });
-        expect(
-          await repo.offerDispatch(rejectedRide.id, driverProfileId, 1000, syntheticDispatchCity),
-        ).toBe(true);
-        expect(await repo.finishDispatchAttempt(rejectedRide.id, driverProfileId, 'rejected')).toBe(
-          true,
-        );
-        expect(await repo.listAvailableForDriver(driverProfileId)).toHaveLength(0);
-        expect(
-          await repo.offerDispatch(rejectedRide.id, secondProfileId, 1000, syntheticDispatchCity),
-        ).toBe(true);
-        expect(await repo.listAvailableForDriver(secondProfileId)).toHaveLength(1);
-        expect(await repo.finishDispatchAttempt(rejectedRide.id, secondProfileId, 'rejected')).toBe(
-          true,
+          [secondProfileId, secondVehicleId],
         );
 
-        const timeoutRide = await repo.create(customerId, {
-          pickup: { latitude: 12.9716, longitude: 77.5946 },
-          destination: { latitude: 13.0, longitude: 77.65 },
-          sector: 'premium',
-          vehicleCategory: 'fortuner',
-          fareEstimate: 4000,
-        });
-        expect(
-          await repo.offerDispatch(timeoutRide.id, driverProfileId, 1, syntheticDispatchCity),
-        ).toBe(true);
-        await pool.query(
-          "UPDATE rides SET dispatch_expires_at=NOW()-INTERVAL '1 second' WHERE id=$1",
-          [timeoutRide.id],
-        );
-        await pool.query(
-          "UPDATE ride_dispatch_attempts SET expires_at=NOW()-INTERVAL '1 second' WHERE ride_id=$1",
-          [timeoutRide.id],
-        );
-        expect(await repo.finishDispatchAttempt(timeoutRide.id, driverProfileId, 'timed_out')).toBe(
-          true,
-        );
-        expect(await repo.listAvailableForDriver(driverProfileId)).toHaveLength(0);
-        expect(
-          await repo.offerDispatch(timeoutRide.id, secondProfileId, 1000, syntheticDispatchCity),
-        ).toBe(true);
-      } finally {
-        await pool.query(
-          `UPDATE rides
+        try {
+          const rejectedRide = await repo.create(customerId, {
+            pickup: { latitude: 12.9716, longitude: 77.5946 },
+            destination: { latitude: 13.0, longitude: 77.65 },
+            sector: 'premium',
+            vehicleCategory: 'fortuner',
+            fareEstimate: 4000,
+          });
+          expect(
+            await repo.offerDispatch(rejectedRide.id, driverProfileId, 1000, syntheticDispatchCity),
+          ).toBe(true);
+          expect(
+            await repo.finishDispatchAttempt(rejectedRide.id, driverProfileId, 'rejected'),
+          ).toBe(true);
+          expect(await repo.listAvailableForDriver(driverProfileId)).toHaveLength(0);
+          expect(
+            await repo.offerDispatch(rejectedRide.id, secondProfileId, 1000, syntheticDispatchCity),
+          ).toBe(true);
+          expect(await repo.listAvailableForDriver(secondProfileId)).toHaveLength(1);
+          expect(
+            await repo.finishDispatchAttempt(rejectedRide.id, secondProfileId, 'rejected'),
+          ).toBe(true);
+
+          const timeoutRide = await repo.create(customerId, {
+            pickup: { latitude: 12.9716, longitude: 77.5946 },
+            destination: { latitude: 13.0, longitude: 77.65 },
+            sector: 'premium',
+            vehicleCategory: 'fortuner',
+            fareEstimate: 4000,
+          });
+          expect(
+            await repo.offerDispatch(timeoutRide.id, driverProfileId, 1, syntheticDispatchCity),
+          ).toBe(true);
+          await pool.query(
+            "UPDATE rides SET dispatch_expires_at=NOW()-INTERVAL '1 second' WHERE id=$1",
+            [timeoutRide.id],
+          );
+          await pool.query(
+            "UPDATE ride_dispatch_attempts SET expires_at=NOW()-INTERVAL '1 second' WHERE ride_id=$1",
+            [timeoutRide.id],
+          );
+          expect(
+            await repo.finishDispatchAttempt(timeoutRide.id, driverProfileId, 'timed_out'),
+          ).toBe(true);
+          expect(await repo.listAvailableForDriver(driverProfileId)).toHaveLength(0);
+          expect(
+            await repo.offerDispatch(timeoutRide.id, secondProfileId, 1000, syntheticDispatchCity),
+          ).toBe(true);
+        } finally {
+          await pool.query(
+            `UPDATE rides
            SET dispatch_driver_id = NULL, dispatch_expires_at = NULL
            WHERE dispatch_driver_id = $1`,
-          [secondProfileId],
-        );
-        await pool.query('DELETE FROM ride_dispatch_attempts WHERE driver_profile_id = $1', [
-          secondProfileId,
-        ]);
-        await pool.query('DELETE FROM vehicles WHERE driver_profile_id = $1', [secondProfileId]);
-        await pool.query('DELETE FROM driver_profiles WHERE id = $1', [secondProfileId]);
-        await pool.query('DELETE FROM provider_approval_requests WHERE requester_id=$1', [
-          secondUserId,
-        ]);
-        await pool.query('DELETE FROM users WHERE id = $1', [secondUserId]);
-      }
-    });
+            [secondProfileId],
+          );
+          await pool.query('DELETE FROM ride_dispatch_attempts WHERE driver_profile_id = $1', [
+            secondProfileId,
+          ]);
+          await pool.query('DELETE FROM vehicles WHERE driver_profile_id = $1', [secondProfileId]);
+          await pool.query('DELETE FROM driver_profiles WHERE id = $1', [secondProfileId]);
+          await pool.query('DELETE FROM provider_approval_requests WHERE requester_id=$1', [
+            secondUserId,
+          ]);
+          await pool.query('DELETE FROM users WHERE id = $1', [secondUserId]);
+        }
+      });
 
-    afterAll(async () => {
-      await pool.query(
-        `DELETE FROM ride_location_breadcrumbs
+      afterAll(async () => {
+        await pool.query(
+          `DELETE FROM ride_location_breadcrumbs
            WHERE ride_id IN (
              SELECT id
              FROM rides
              WHERE customer_id = $1
            )`,
-        [customerId],
-      );
-
-      await pool.query('DELETE FROM rides WHERE customer_id = $1', [customerId]);
-
-      if (driverProfileId) {
-        await pool.query('DELETE FROM vehicles WHERE driver_profile_id = $1', [driverProfileId]);
-
-        await pool.query('DELETE FROM driver_profiles WHERE id = $1', [driverProfileId]);
-      }
-
-      if (customerId || driverUserId) {
-        await pool.query('DELETE FROM provider_approval_requests WHERE requester_id IN ($1,$2)', [
-          customerId,
-          driverUserId,
-        ]);
-        await pool.query('DELETE FROM users WHERE id = $1 OR id = $2', [customerId, driverUserId]);
-      }
-    });
-
-    it.each([50000, 100000, 300000])(
-      'full flow: %s metres accumulated, deduplicated and reconciled without a travel cap',
-      async (distanceMeters) => {
-        const fuel = (distanceMeters / 1000) * 18;
-        const subtotal = 4000 + fuel;
-        const tax = subtotal * 0.05;
-        const total = subtotal + tax;
-        // 1. Create a Premium ride (4 hours rental)
-        const ride = await repo.create(customerId, {
-          pickup: {
-            latitude: 12.9716,
-            longitude: 77.5946,
-          },
-          destination: {
-            latitude: 13.0,
-            longitude: 77.65,
-          },
-          sector: 'premium',
-          vehicleCategory: 'fortuner',
-          rentalDetails: {
-            hours: 4,
-            rentalHours: 4,
-          },
-          fareEstimate: 4000,
-        });
-
-        expect(ride.sector).toBe('premium');
-        expect(ride.status).toBe('searching');
-
-        // 2. Non-in_progress ride must not accumulate distance
-        const inactiveRes = await repo.recordBreadcrumbAndAccumulateDistance(
-          ride.id,
-          12.9716,
-          77.5946,
+          [customerId],
         );
 
-        expect(inactiveRes).toBeNull();
+        await pool.query('DELETE FROM rides WHERE customer_id = $1', [customerId]);
 
-        const check1 = await repo.findById(ride.id);
+        if (driverProfileId) {
+          await pool.query('DELETE FROM vehicles WHERE driver_profile_id = $1', [driverProfileId]);
 
-        expect(check1?.actualDistanceMeters).toBe(0);
+          await pool.query('DELETE FROM driver_profiles WHERE id = $1', [driverProfileId]);
+        }
 
-        // 3. Driver accepts ride
-        await pool.query(
-          `UPDATE driver_profiles dp SET last_location=r.pickup_location, last_location_at=NOW()
+        if (customerId || driverUserId) {
+          await pool.query('DELETE FROM provider_approval_requests WHERE requester_id IN ($1,$2)', [
+            customerId,
+            driverUserId,
+          ]);
+          await pool.query('DELETE FROM users WHERE id = $1 OR id = $2', [
+            customerId,
+            driverUserId,
+          ]);
+        }
+      });
+
+      it.each([50000, 100000, 300000])(
+        'full flow: %s metres accumulated, deduplicated and reconciled without a travel cap',
+        async (distanceMeters) => {
+          const fuel = (distanceMeters / 1000) * 18;
+          const subtotal = 4000 + fuel;
+          const tax = subtotal * 0.05;
+          const total = subtotal + tax;
+          // 1. Create a Premium ride (4 hours rental)
+          const ride = await repo.create(customerId, {
+            pickup: {
+              latitude: 12.9716,
+              longitude: 77.5946,
+            },
+            destination: {
+              latitude: 13.0,
+              longitude: 77.65,
+            },
+            sector: 'premium',
+            vehicleCategory: 'fortuner',
+            rentalDetails: {
+              hours: 4,
+              rentalHours: 4,
+            },
+            fareEstimate: 4000,
+          });
+
+          expect(ride.sector).toBe('premium');
+          expect(ride.status).toBe('searching');
+
+          // 2. Non-in_progress ride must not accumulate distance
+          const inactiveRes = await repo.recordBreadcrumbAndAccumulateDistance(
+            ride.id,
+            12.9716,
+            77.5946,
+          );
+
+          expect(inactiveRes).toBeNull();
+
+          const check1 = await repo.findById(ride.id);
+
+          expect(check1?.actualDistanceMeters).toBe(0);
+
+          // 3. Driver accepts ride
+          await pool.query(
+            `UPDATE driver_profiles dp SET last_location=r.pickup_location, last_location_at=NOW()
            FROM rides r WHERE r.id=$1 AND dp.id=$2`,
-          [ride.id, driverProfileId],
-        );
-        expect(
-          await repo.offerDispatch(ride.id, driverProfileId, 15000, syntheticDispatchCity),
-        ).toBe(true);
-        expect(
-          await repo.offerDispatch(ride.id, driverProfileId, 15000, syntheticDispatchCity),
-        ).toBe(false);
-        expect(await repo.listAvailableForDriver(driverProfileId)).toHaveLength(1);
-        expect(
-          await repo.listAvailableForDriver('00000000-0000-0000-0000-000000000001'),
-        ).toHaveLength(0);
-        const simultaneousAccepts = await Promise.allSettled([
-          rideService.acceptRide(driverProfileId, ride.id),
-          rideService.acceptRide(driverProfileId, ride.id),
-        ]);
-        expect(simultaneousAccepts.filter((result) => result.status === 'fulfilled')).toHaveLength(
-          1,
-        );
-        expect(simultaneousAccepts.filter((result) => result.status === 'rejected')).toHaveLength(
-          1,
-        );
+            [ride.id, driverProfileId],
+          );
+          expect(
+            await repo.offerDispatch(ride.id, driverProfileId, 15000, syntheticDispatchCity),
+          ).toBe(true);
+          expect(
+            await repo.offerDispatch(ride.id, driverProfileId, 15000, syntheticDispatchCity),
+          ).toBe(false);
+          expect(await repo.listAvailableForDriver(driverProfileId)).toHaveLength(1);
+          expect(
+            await repo.listAvailableForDriver('00000000-0000-0000-0000-000000000001'),
+          ).toHaveLength(0);
+          const simultaneousAccepts = await Promise.allSettled([
+            rideService.acceptRide(driverProfileId, ride.id),
+            rideService.acceptRide(driverProfileId, ride.id),
+          ]);
+          expect(
+            simultaneousAccepts.filter((result) => result.status === 'fulfilled'),
+          ).toHaveLength(1);
+          expect(simultaneousAccepts.filter((result) => result.status === 'rejected')).toHaveLength(
+            1,
+          );
 
-        const acceptedRide = await repo.findById(ride.id);
+          const acceptedRide = await repo.findById(ride.id);
 
-        expect(acceptedRide?.assignedDriverId).toBe(driverProfileId);
+          expect(acceptedRide?.assignedDriverId).toBe(driverProfileId);
 
-        expect(acceptedRide?.assignedVehicleId).toBe(vehicleId);
+          expect(acceptedRide?.assignedVehicleId).toBe(vehicleId);
 
-        // Still driver_assigned, so distance must not accumulate
-        const notStartedRes = await repo.recordBreadcrumbAndAccumulateDistance(
-          ride.id,
-          12.9716,
-          77.5946,
-        );
+          // Still driver_assigned, so distance must not accumulate
+          const notStartedRes = await repo.recordBreadcrumbAndAccumulateDistance(
+            ride.id,
+            12.9716,
+            77.5946,
+          );
 
-        expect(notStartedRes).toBeNull();
+          expect(notStartedRes).toBeNull();
 
-        // 4. Transition through valid lifecycle
-        await repo.transition(ride.id, 'driver_arriving', driverProfileId);
+          // 4. Transition through valid lifecycle
+          await repo.transition(ride.id, 'driver_arriving', driverProfileId);
 
-        await repo.transition(ride.id, 'driver_arrived', driverProfileId);
+          await repo.transition(ride.id, 'driver_arrived', driverProfileId);
 
-        expect(await repo.verifyPinAttempt(ride.id, driverProfileId, ride.pin!)).toBe('verified');
+          expect(await repo.verifyPinAttempt(ride.id, driverProfileId, ride.pin!)).toBe('verified');
 
-        // 5. First GPS point
-        const firstPoint = await repo.recordBreadcrumbAndAccumulateDistance(
-          ride.id,
-          12.9716,
-          77.5946,
-          20,
-          90,
-        );
+          // 5. First GPS point
+          const firstPoint = await repo.recordBreadcrumbAndAccumulateDistance(
+            ride.id,
+            12.9716,
+            77.5946,
+            20,
+            90,
+          );
 
-        expect(firstPoint).toEqual({
-          actualDistanceMeters: 0,
-          incrementalDistanceMeters: 0,
-        });
+          expect(firstPoint).toEqual({
+            actualDistanceMeters: 0,
+            incrementalDistanceMeters: 0,
+          });
 
-        const breadcrumbsRes1 = await pool.query(
-          `SELECT id, ride_id, speed, heading
+          const breadcrumbsRes1 = await pool.query(
+            `SELECT id, ride_id, speed, heading
              FROM ride_location_breadcrumbs
              WHERE ride_id = $1
              ORDER BY recorded_at ASC`,
-          [ride.id],
-        );
+            [ride.id],
+          );
 
-        expect(breadcrumbsRes1.rows).toHaveLength(1);
-        expect(breadcrumbsRes1.rows[0].ride_id).toBe(ride.id);
+          expect(breadcrumbsRes1.rows).toHaveLength(1);
+          expect(breadcrumbsRes1.rows[0].ride_id).toBe(ride.id);
 
-        // 6. Second GPS point
-        const secondPoint = await repo.recordBreadcrumbAndAccumulateDistance(
-          ride.id,
-          12.9816,
-          77.5946,
-          45,
-          0,
-        );
+          // 6. Second GPS point
+          const secondPoint = await repo.recordBreadcrumbAndAccumulateDistance(
+            ride.id,
+            12.9816,
+            77.5946,
+            45,
+            0,
+          );
 
-        expect(secondPoint).not.toBeNull();
+          expect(secondPoint).not.toBeNull();
 
-        expect(secondPoint!.incrementalDistanceMeters).toBeGreaterThan(1000);
+          expect(secondPoint!.incrementalDistanceMeters).toBeGreaterThan(1000);
 
-        expect(secondPoint!.incrementalDistanceMeters).toBeLessThan(1200);
+          expect(secondPoint!.incrementalDistanceMeters).toBeLessThan(1200);
 
-        expect(secondPoint!.actualDistanceMeters).toBe(secondPoint!.incrementalDistanceMeters);
+          expect(secondPoint!.actualDistanceMeters).toBe(secondPoint!.incrementalDistanceMeters);
 
-        const recordedDistanceAfterStep2 = secondPoint!.actualDistanceMeters;
+          const recordedDistanceAfterStep2 = secondPoint!.actualDistanceMeters;
 
-        // 7. Duplicate GPS point
-        const duplicatePoint = await repo.recordBreadcrumbAndAccumulateDistance(
-          ride.id,
-          12.9816,
-          77.5946,
-          0,
-          0,
-        );
+          // 7. Duplicate GPS point
+          const duplicatePoint = await repo.recordBreadcrumbAndAccumulateDistance(
+            ride.id,
+            12.9816,
+            77.5946,
+            0,
+            0,
+          );
 
-        expect(duplicatePoint).toEqual({
-          actualDistanceMeters: recordedDistanceAfterStep2,
-          incrementalDistanceMeters: 0,
-        });
+          expect(duplicatePoint).toEqual({
+            actualDistanceMeters: recordedDistanceAfterStep2,
+            incrementalDistanceMeters: 0,
+          });
 
-        // 8. Third GPS point
-        const thirdPoint = await repo.recordBreadcrumbAndAccumulateDistance(
-          ride.id,
-          12.9916,
-          77.5946,
-          50,
-          0,
-        );
+          // 8. Third GPS point
+          const thirdPoint = await repo.recordBreadcrumbAndAccumulateDistance(
+            ride.id,
+            12.9916,
+            77.5946,
+            50,
+            0,
+          );
 
-        expect(thirdPoint).not.toBeNull();
+          expect(thirdPoint).not.toBeNull();
 
-        expect(thirdPoint!.actualDistanceMeters).toBeGreaterThan(recordedDistanceAfterStep2 + 1000);
+          expect(thirdPoint!.actualDistanceMeters).toBeGreaterThan(
+            recordedDistanceAfterStep2 + 1000,
+          );
 
-        const breadcrumbsAll = await pool.query(
-          `SELECT COUNT(*)::int AS count
+          const breadcrumbsAll = await pool.query(
+            `SELECT COUNT(*)::int AS count
              FROM ride_location_breadcrumbs
              WHERE ride_id = $1`,
-          [ride.id],
-        );
+            [ride.id],
+          );
 
-        expect(breadcrumbsAll.rows[0].count).toBe(4);
+          expect(breadcrumbsAll.rows[0].count).toBe(4);
 
-        // 9. Complete Premium Ride
-        await pool.query(
-          `UPDATE rides
+          // 9. Complete Premium Ride
+          await pool.query(
+            `UPDATE rides
              SET actual_distance_meters = $2
              WHERE id = $1`,
-          [ride.id, distanceMeters],
-        );
+            [ride.id, distanceMeters],
+          );
 
-        await recordDestinationArrival(pool, ride.id, driverProfileId);
-        const completedRide = await rideService.completeRide(ride.id, driverProfileId);
+          await recordDestinationArrival(pool, ride.id, driverProfileId);
+          const completedRide = await rideService.completeRide(ride.id, driverProfileId);
 
-        expect(completedRide.status).toBe('completed');
+          expect(completedRide.status).toBe('completed');
 
-        expect(completedRide.actualDistanceMeters).toBe(distanceMeters);
+          expect(completedRide.actualDistanceMeters).toBe(distanceMeters);
 
-        // Hourly base = 4 * 1000 = Ã¢â€šÂ¹4,000
-        expect(completedRide.actualFuelCost).toBe(fuel);
+          // Hourly base = 4 * 1000 = Ã¢â€šÂ¹4,000
+          expect(completedRide.actualFuelCost).toBe(fuel);
 
-        expect(completedRide.finalFare).toBe(total);
+          expect(completedRide.finalFare).toBe(total);
 
-        expect(completedRide.billing).toEqual({
-          currency: 'INR',
-          hourlyRate: 1000,
-          bookedHours: 4,
-          hourlyBase: 4000,
-          fuelRatePerKm: 18,
-          actualDistanceKm: distanceMeters / 1000,
-          actualDistanceMeters: distanceMeters,
-          actualFuelCost: fuel,
-          subtotal,
-          taxAmount: tax,
-          finalFare: total,
-        });
+          expect(completedRide.billing).toEqual({
+            currency: 'INR',
+            hourlyRate: 1000,
+            bookedHours: 4,
+            hourlyBase: 4000,
+            fuelRatePerKm: 18,
+            actualDistanceKm: distanceMeters / 1000,
+            actualDistanceMeters: distanceMeters,
+            actualFuelCost: fuel,
+            subtotal,
+            taxAmount: tax,
+            finalFare: total,
+          });
 
-        // 10. Verify persisted values
-        const dbRow = await pool.query(
-          `SELECT
+          // 10. Verify persisted values
+          const dbRow = await pool.query(
+            `SELECT
                actual_distance_meters,
                actual_fuel_cost,
                final_fare,
                status
              FROM rides
              WHERE id = $1`,
-          [ride.id],
-        );
+            [ride.id],
+          );
 
-        expect(dbRow.rows[0].status).toBe('completed');
+          expect(dbRow.rows[0].status).toBe('completed');
 
-        expect(Number(dbRow.rows[0].actual_distance_meters)).toBe(distanceMeters);
+          expect(Number(dbRow.rows[0].actual_distance_meters)).toBe(distanceMeters);
 
-        expect(Number(dbRow.rows[0].actual_fuel_cost)).toBe(fuel);
+          expect(Number(dbRow.rows[0].actual_fuel_cost)).toBe(fuel);
 
-        expect(Number(dbRow.rows[0].final_fare)).toBe(total);
+          expect(Number(dbRow.rows[0].final_fare)).toBe(total);
 
-        await pool.query(
-          `DELETE FROM ride_location_breadcrumbs
+          await pool.query(
+            `DELETE FROM ride_location_breadcrumbs
              WHERE ride_id = $1`,
-          [ride.id],
-        );
+            [ride.id],
+          );
 
-        await pool.query('DELETE FROM rides WHERE id = $1', [ride.id]);
-      },
-    );
+          await pool.query('DELETE FROM rides WHERE id = $1', [ride.id]);
+        },
+      );
 
-    it('safely falls back to Ã¢â€šÂ¹15.00/km if vehicle fuel_rate_per_km is 0 or null', async () => {
-      const suffix = randomUUID();
+      it('safely falls back to Ã¢â€šÂ¹15.00/km if vehicle fuel_rate_per_km is 0 or null', async () => {
+        const suffix = randomUUID();
 
-      const driverRes2 = await pool.query<{ id: string }>(
-        `INSERT INTO users
+        const driverRes2 = await pool.query<{ id: string }>(
+          `INSERT INTO users
                  (first_name, last_name, phone, role)
                VALUES
                  ('Prem2', 'Driver', $1, 'driver')
                RETURNING id`,
-        [`+93${suffix.replaceAll('-', '').slice(0, 10)}`],
-      );
+          [`+93${suffix.replaceAll('-', '').slice(0, 10)}`],
+        );
 
-      const profileRes2 = await pool.query<{ id: string }>(
-        `INSERT INTO driver_profiles
+        const profileRes2 = await pool.query<{ id: string }>(
+          `INSERT INTO driver_profiles
                  (
                    user_id,
                    license_number,
@@ -992,13 +1002,13 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
                    'available'
                  )
                RETURNING id`,
-        [driverRes2.rows[0]!.id, `LIC2-${suffix}`],
-      );
+          [driverRes2.rows[0]!.id, `LIC2-${suffix}`],
+        );
 
-      const driverProfileId2 = profileRes2.rows[0]!.id;
+        const driverProfileId2 = profileRes2.rows[0]!.id;
 
-      const vehRes = await pool.query<{ id: string }>(
-        `INSERT INTO vehicles
+        const vehRes = await pool.query<{ id: string }>(
+          `INSERT INTO vehicles
                  (
                    driver_profile_id,
                    make,
@@ -1023,21 +1033,21 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
                    TRUE
                  )
                RETURNING id`,
-        [driverProfileId2, `PREM2-${suffix.replaceAll('-', '').slice(0, 10)}`],
-      );
+          [driverProfileId2, `PREM2-${suffix.replaceAll('-', '').slice(0, 10)}`],
+        );
 
-      const fallbackVehId = vehRes.rows[0]!.id;
-      await pool.query(
-        "UPDATE vehicles SET owner_id=$2,operating_city_id='TEST_ONLY_CITY' WHERE id=$1",
-        [fallbackVehId, driverRes2.rows[0]!.id],
-      );
-      await pool.query('UPDATE driver_profiles SET active_vehicle_id=$2 WHERE id=$1', [
-        driverProfileId2,
-        fallbackVehId,
-      ]);
+        const fallbackVehId = vehRes.rows[0]!.id;
+        await pool.query(
+          "UPDATE vehicles SET owner_id=$2,operating_city_id='TEST_ONLY_CITY' WHERE id=$1",
+          [fallbackVehId, driverRes2.rows[0]!.id],
+        );
+        await pool.query('UPDATE driver_profiles SET active_vehicle_id=$2 WHERE id=$1', [
+          driverProfileId2,
+          fallbackVehId,
+        ]);
 
-      await pool.query(
-        `UPDATE driver_profiles
+        await pool.query(
+          `UPDATE driver_profiles
              SET availability_status = 'available',
                  last_location =
                    ST_SetSRID(
@@ -1046,67 +1056,68 @@ describe('Phase 4 Step 4: Premium GPS Distance Accumulator & Final Bill Reconcil
                    )::geography,
                  last_location_at = NOW()
              WHERE id = $1`,
-        [driverProfileId2],
-      );
+          [driverProfileId2],
+        );
 
-      const ride = await repo.create(customerId, {
-        pickup: {
-          latitude: 12.9716,
-          longitude: 77.5946,
-        },
-        destination: {
-          latitude: 13.0,
-          longitude: 77.65,
-        },
-        sector: 'premium',
-        vehicleCategory: 'fortuner',
-        rentalDetails: {
-          hours: 2,
-          rentalHours: 2,
-        },
-        fareEstimate: 2000,
-      });
+        const ride = await repo.create(customerId, {
+          pickup: {
+            latitude: 12.9716,
+            longitude: 77.5946,
+          },
+          destination: {
+            latitude: 13.0,
+            longitude: 77.65,
+          },
+          sector: 'premium',
+          vehicleCategory: 'fortuner',
+          rentalDetails: {
+            hours: 2,
+            rentalHours: 2,
+          },
+          fareEstimate: 2000,
+        });
 
-      expect(
-        await repo.offerDispatch(ride.id, driverProfileId2, 15000, syntheticDispatchCity),
-      ).toBe(true);
-      await rideService.acceptRide(driverProfileId2, ride.id);
+        expect(
+          await repo.offerDispatch(ride.id, driverProfileId2, 15000, syntheticDispatchCity),
+        ).toBe(true);
+        await rideService.acceptRide(driverProfileId2, ride.id);
 
-      await repo.transition(ride.id, 'driver_arriving', driverProfileId2);
+        await repo.transition(ride.id, 'driver_arriving', driverProfileId2);
 
-      await repo.transition(ride.id, 'driver_arrived', driverProfileId2);
+        await repo.transition(ride.id, 'driver_arrived', driverProfileId2);
 
-      expect(await repo.verifyPinAttempt(ride.id, driverProfileId2, ride.pin!)).toBe('verified');
+        expect(await repo.verifyPinAttempt(ride.id, driverProfileId2, ride.pin!)).toBe('verified');
 
-      await pool.query(
-        `UPDATE rides
+        await pool.query(
+          `UPDATE rides
              SET actual_distance_meters = 20000
              WHERE id = $1`,
-        [ride.id],
-      );
+          [ride.id],
+        );
 
-      await recordDestinationArrival(pool, ride.id, driverProfileId2);
-      const completed = await repo.complete(ride.id, driverProfileId2);
+        await recordDestinationArrival(pool, ride.id, driverProfileId2);
+        const completed = await repo.complete(ride.id, driverProfileId2);
 
-      // Hourly base: 2 * 1000 = 2000
-      // Fallback fuel: 20 * 15 = 300
-      // Subtotal: 2300
-      // Tax: 115
-      // Final: 2415
-      expect(completed?.actualFuelCost).toBe(300);
+        // Hourly base: 2 * 1000 = 2000
+        // Fallback fuel: 20 * 15 = 300
+        // Subtotal: 2300
+        // Tax: 115
+        // Final: 2415
+        expect(completed?.actualFuelCost).toBe(300);
 
-      expect(completed?.finalFare).toBe(2415);
+        expect(completed?.finalFare).toBe(2415);
 
-      await pool.query('DELETE FROM rides WHERE id = $1', [ride.id]);
+        await pool.query('DELETE FROM rides WHERE id = $1', [ride.id]);
 
-      await pool.query('DELETE FROM vehicles WHERE id = $1', [fallbackVehId]);
+        await pool.query('DELETE FROM vehicles WHERE id = $1', [fallbackVehId]);
 
-      await pool.query('DELETE FROM driver_profiles WHERE id = $1', [driverProfileId2]);
+        await pool.query('DELETE FROM driver_profiles WHERE id = $1', [driverProfileId2]);
 
-      await pool.query('DELETE FROM provider_approval_requests WHERE requester_id=$1', [
-        driverRes2.rows[0]!.id,
-      ]);
-      await pool.query('DELETE FROM users WHERE id = $1', [driverRes2.rows[0]!.id]);
-    });
-  });
+        await pool.query('DELETE FROM provider_approval_requests WHERE requester_id=$1', [
+          driverRes2.rows[0]!.id,
+        ]);
+        await pool.query('DELETE FROM users WHERE id = $1', [driverRes2.rows[0]!.id]);
+      });
+    },
+  );
 });

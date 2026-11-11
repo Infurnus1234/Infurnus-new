@@ -2404,7 +2404,23 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
           fallbackVehicle: state.vehicleInfo,
           onCall: () => callAssignedRideContact(context, ref),
         ),
-        if (ride?.pin != null && ride?.pinVerified != true) ...[
+        if (ride != null && ride.isLogistics) ...[
+          if (ride.pin != null) ...[
+            const SizedBox(height: 12),
+            RidePickupPin(
+              pin: ride.pin!,
+              label: 'Start OTP (share with driver):',
+            ),
+          ],
+          if (ride.status == model.RideStatus.inProgress &&
+              ride.endPin != null) ...[
+            const SizedBox(height: 12),
+            RideDeliveryPin(
+              pin: ride.endPin!,
+              label: 'Delivery/End OTP (share at delivery):',
+            ),
+          ],
+        ] else if (ride?.pin != null && ride?.pinVerified != true) ...[
           const SizedBox(height: 12),
           RidePickupPin(pin: ride!.pin!),
         ],

@@ -116,7 +116,14 @@ export class DriverController {
 
       const profileId = await this.driverService.profileForUser(req.auth!.userId);
 
-      const ride = await this.rideService.completeRide(id, profileId);
+      const endPin =
+        typeof req.body?.endPin === 'string'
+          ? req.body.endPin.trim()
+          : typeof req.body?.pin === 'string'
+            ? req.body.pin.trim()
+            : undefined;
+
+      const ride = await this.rideService.completeRide(id, profileId, endPin);
       rideEvents.emit('ride:lifecycle_updated', ride);
 
       res.json({
@@ -138,8 +145,9 @@ export class DriverController {
       const status = rideStatusSchema.parse(req.body.status);
 
       const pin = typeof req.body.pin === 'string' ? req.body.pin.trim() : undefined;
+      const endPin = typeof req.body.endPin === 'string' ? req.body.endPin.trim() : undefined;
 
-      const ride = await this.rideService.transitionRide(id, status, profileId, pin);
+      const ride = await this.rideService.transitionRide(id, status, profileId, pin, endPin);
       rideEvents.emit('ride:lifecycle_updated', ride);
 
       res.json({
@@ -171,6 +179,36 @@ export class DriverController {
         success: true,
         data: { verified: true, ride: sanitizeRideForDriver(ride) },
         message: 'PIN verified and trip started',
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  verifyEndPin = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = rideIdSchema.parse(req.params);
+
+      const profileId = await this.driverService.profileForUser(req.auth!.userId);
+
+      const pin =
+        typeof req.body.endPin === 'string'
+          ? req.body.endPin.trim()
+          : typeof req.body.pin === 'string'
+            ? req.body.pin.trim()
+            : '';
+
+      if (!/^\d{4}$/.test(pin)) {
+        throw new AppError('INVALID_PIN', 'Delivery PIN must be exactly 4 digits', 400);
+      }
+
+      const ride = await this.rideService.completeRide(id, profileId, pin);
+      rideEvents.emit('ride:lifecycle_updated', ride);
+
+      res.json({
+        success: true,
+        data: { verified: true, ride: sanitizeRideForDriver(ride) },
+        message: 'Delivery PIN verified and ride completed',
       });
     } catch (error) {
       next(error);

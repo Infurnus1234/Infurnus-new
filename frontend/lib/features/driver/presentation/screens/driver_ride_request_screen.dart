@@ -27,6 +27,7 @@ class _DriverRideRequestScreenState
     extends ConsumerState<DriverRideRequestScreen> {
   final _rideIdController = TextEditingController();
   final _pinController = TextEditingController();
+  final _deliveryPinController = TextEditingController();
   bool _showManualEntry = false;
 
   @override
@@ -44,6 +45,7 @@ class _DriverRideRequestScreenState
   void dispose() {
     _rideIdController.dispose();
     _pinController.dispose();
+    _deliveryPinController.dispose();
     super.dispose();
   }
 
@@ -749,6 +751,78 @@ class _DriverRideRequestScreenState
         );
 
       case RideStatus.inProgress:
+        if (ride.isLogistics) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue[300]!),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.local_shipping,
+                      color: Colors.blue[800],
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Ask the customer for their 4-digit Delivery PIN to complete the trip.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              InfurnusTextField(
+                label: 'Delivery PIN',
+                hintText: 'Enter 4-digit Delivery PIN',
+                controller: _deliveryPinController,
+                keyboardType: TextInputType.number,
+                prefixIcon: Icons.lock_outline,
+              ),
+              const SizedBox(height: 12),
+              InfurnusButton(
+                text: 'Verify Delivery PIN & Complete',
+                onPressed: (!isApproved || !isOnline)
+                    ? null
+                    : () {
+                        final pin = _deliveryPinController.text.trim();
+                        if (pin.length != 4) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Please enter a valid 4-digit Delivery PIN',
+                              ),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                          return;
+                        }
+                        notifier.completeRide(ride.id, endPin: pin);
+                      },
+              ),
+              if (state.errorMessage != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  state.errorMessage!,
+                  style: const TextStyle(color: Colors.red, fontSize: 13),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ],
+          );
+        }
         return InfurnusButton(
           text: 'Complete Ride',
           onPressed: (!isApproved || !isOnline)

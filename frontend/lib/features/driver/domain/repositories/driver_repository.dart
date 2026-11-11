@@ -31,7 +31,7 @@ abstract class DriverRepository {
   Future<List<RideModel>> getAvailableRides();
   Future<RideModel> acceptRide(String rideId);
   Future<void> declineRide(String rideId);
-  Future<RideModel> completeRide(String rideId);
+  Future<RideModel> completeRide(String rideId, {String? endPin});
   Future<RideModel> transitionRide(String rideId, String status, {String? pin});
   Future<bool> verifyPin(String rideId, String pin);
 

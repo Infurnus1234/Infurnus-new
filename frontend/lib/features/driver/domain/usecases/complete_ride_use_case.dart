@@ -6,7 +6,7 @@ class CompleteRideUseCase {
 
   CompleteRideUseCase(this.repository);
 
-  Future<RideModel> execute(String rideId) {
-    return repository.completeRide(rideId);
+  Future<RideModel> execute(String rideId, {String? endPin}) {
+    return repository.completeRide(rideId, endPin: endPin);
   }
 }

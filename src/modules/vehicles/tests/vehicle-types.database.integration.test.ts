@@ -568,7 +568,11 @@ live(
                 : { baseFare: 120, expectedVersion: 1 },
         );
         await recordDestinationArrival(pool, ride.id, profileId);
-        const complete = await service.completeRide(ride.id, profileId);
+        const endPin =
+          sector === 'logistics'
+            ? ((await rides.findByIdForCustomer(ride.id, customerId))?.endPin ?? undefined)
+            : undefined;
+        const complete = await service.completeRide(ride.id, profileId, endPin);
         expect(complete.finalFare).toBe(expectedFare);
         expect(complete.billing).toEqual({ currency: 'INR', finalFare: expectedFare });
       },

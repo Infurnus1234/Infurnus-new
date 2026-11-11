@@ -568,7 +568,25 @@ export class RideService {
     }
   }
 
-  async completeRide(id: string, driverProfileId: string) {
+  async completeRide(id: string, driverProfileId: string, endPin?: string) {
+    const existingRide =
+      typeof this.repository.findById === 'function' ? await this.repository.findById(id) : null;
+    if (typeof this.repository.findById === 'function' && !existingRide) {
+      throw new AppError('RIDE_NOT_FOUND', 'Ride not found', 404);
+    }
+    const endPinRequired =
+      existingRide?.sector === 'logistics' && existingRide?.hasEndPin !== false;
+    if (endPinRequired) {
+      if (!endPin || typeof endPin !== 'string' || endPin.trim() === '') {
+        throw new AppError(
+          'END_PIN_REQUIRED',
+          'Customer delivery PIN is required to complete this delivery. Update the app to complete this delivery.',
+          400,
+        );
+      }
+      await this.verifyRideEndPin(id, driverProfileId, endPin.trim());
+    }
+
     return this.transactionRunner(async (client) => {
       const ride = await this.repository.complete(id, driverProfileId, client);
 
@@ -692,7 +710,47 @@ export class RideService {
     throw new AppError(code, message, status);
   }
 
-  async transitionRide(id: string, status: RideStatus, assignedDriverId?: string, pin?: string) {
+  async verifyRideEndPin(
+    rideId: string,
+    driverProfileId: string,
+    inputPin: string,
+  ): Promise<{ verified: boolean }> {
+    if (typeof inputPin !== 'string' || !/^\d{4}$/.test(inputPin.trim())) {
+      throw new AppError('INVALID_PIN', 'Delivery PIN must be exactly 4 digits', 400);
+    }
+
+    if (!this.repository.verifyEndPinAttempt) {
+      throw new AppError('PIN_SERVICE_UNAVAILABLE', 'Secure ride completion is unavailable', 503);
+    }
+    const result = await this.repository.verifyEndPinAttempt(
+      rideId,
+      driverProfileId,
+      inputPin.trim(),
+    );
+    if (result === 'verified') return { verified: true };
+    const errors = {
+      invalid: ['INVALID_END_PIN', 'Invalid delivery confirmation PIN', 400],
+      locked: ['END_PIN_ATTEMPTS_EXCEEDED', 'Too many PIN attempts. Retry after 10 minutes.', 429],
+      not_found: ['RIDE_NOT_FOUND', 'Ride not found or delivery PIN not generated', 404],
+      forbidden: ['FORBIDDEN', 'Not assigned to this ride', 403],
+      invalid_state: ['INVALID_RIDE_STATE', 'Cannot verify delivery PIN in this ride state', 409],
+      upfront_payment_required: [
+        'UPFRONT_PAYMENT_REQUIRED',
+        'Logistics booking requires 40% upfront payment before completing the trip',
+        409,
+      ],
+    } as const;
+    const [code, message, status] = errors[result];
+    throw new AppError(code, message, status);
+  }
+
+  async transitionRide(
+    id: string,
+    status: RideStatus,
+    assignedDriverId?: string,
+    pin?: string,
+    endPin?: string,
+  ) {
     if (status === 'completed') {
       if (!assignedDriverId) {
         throw new AppError(
@@ -702,7 +760,7 @@ export class RideService {
         );
       }
 
-      return this.completeRide(id, assignedDriverId);
+      return this.completeRide(id, assignedDriverId, endPin);
     }
 
     if (status === 'in_progress') {
