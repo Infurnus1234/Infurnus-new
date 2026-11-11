@@ -47,7 +47,40 @@ describe('Logistics Two-OTP: End Delivery PIN Contract', () => {
     expect(blockedRes.result).toBe('locked');
   });
 
-  describe('RideService completion gating', () => {
+  describe('Post-migration 114 ride creation guarantees', () => {
+    it('proves every new logistics ride generates and stores an end PIN verifier and ciphertext', () => {
+      const rideId = 'new-logistics-ride-1';
+      const sector = 'logistics';
+      const endPin = sector === 'logistics' ? generateRidePin() : null;
+      expect(endPin).not.toBeNull();
+      expect(endPin).toMatch(/^\d{4}$/);
+
+      const endPinCiphertext = endPin ? sealRideEndPin(rideId, endPin) : null;
+      const endPinVerifierHash = endPin ? endPinVerifier(rideId, endPin) : null;
+      expect(endPinCiphertext).not.toBeNull();
+      expect(endPinVerifierHash).not.toBeNull();
+
+      const hasEndPin = Boolean(endPinVerifierHash || endPinCiphertext);
+      expect(hasEndPin).toBe(true);
+    });
+
+    it('proves non-logistics rides never generate an end PIN', () => {
+      const rideId = 'new-passenger-ride-1';
+      const sector: string = 'passenger';
+      const endPin = sector === 'logistics' ? generateRidePin() : null;
+      expect(endPin).toBeNull();
+
+      const endPinCiphertext = endPin ? sealRideEndPin(rideId, endPin) : null;
+      const endPinVerifierHash = endPin ? endPinVerifier(rideId, endPin) : null;
+      expect(endPinCiphertext).toBeNull();
+      expect(endPinVerifierHash).toBeNull();
+
+      const hasEndPin = Boolean(endPinVerifierHash || endPinCiphertext);
+      expect(hasEndPin).toBe(false);
+    });
+  });
+
+  describe('RideService completion gating & legacy fallback', () => {
     const mockDriverRepo = {
       releaseBusy: vi.fn().mockResolvedValue(true),
     } as unknown as DriverRepository;
@@ -58,12 +91,58 @@ describe('Logistics Two-OTP: End Delivery PIN Contract', () => {
       } as never),
     );
 
-    it('rejects logistics completion when endPin is missing', async () => {
+    it('allows a legacy logistics ride (created before migration 114 with hasEndPin=false) to complete without end PIN', async () => {
+      const completedLegacyRide: Ride = {
+        id: 'legacy-logistics-ride',
+        customerId: 'customer-1',
+        sector: 'logistics',
+        status: 'completed',
+        hasEndPin: false,
+        assignedDriverId: 'driver-1',
+        assignedVehicleId: 'veh-1',
+        pickup: { latitude: 12.9, longitude: 77.6 },
+        destination: { latitude: 12.95, longitude: 77.65 },
+        pickupAddress: null,
+        destinationAddress: null,
+        cancellationReason: null,
+        cancelledAt: null,
+        completedAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const mockRepo = {
+        findById: vi.fn().mockResolvedValue({
+          id: 'legacy-logistics-ride',
+          sector: 'logistics',
+          status: 'in_progress',
+          hasEndPin: false,
+          assignedDriverId: 'driver-1',
+        }),
+        verifyEndPinAttempt: vi.fn(),
+        complete: vi.fn().mockResolvedValue(completedLegacyRide),
+      } as unknown as RideRepository;
+
+      const service = new RideService(
+        mockRepo,
+        mockDriverRepo,
+        undefined,
+        undefined,
+        mockTransactionRunner,
+      );
+      const result = await service.completeRide('legacy-logistics-ride', 'driver-1');
+      expect(result.status).toBe('completed');
+      expect(mockRepo.verifyEndPinAttempt).not.toHaveBeenCalled();
+      expect(mockRepo.complete).toHaveBeenCalled();
+    });
+
+    it('rejects new logistics completion when endPin is missing with clear update message', async () => {
       const mockRepo = {
         findById: vi.fn().mockResolvedValue({
           id: 'logistics-ride-1',
           sector: 'logistics',
           status: 'in_progress',
+          hasEndPin: true,
           assignedDriverId: 'driver-1',
         }),
       } as unknown as RideRepository;
@@ -72,16 +151,19 @@ describe('Logistics Two-OTP: End Delivery PIN Contract', () => {
 
       await expect(service.completeRide('logistics-ride-1', 'driver-1')).rejects.toMatchObject({
         code: 'END_PIN_REQUIRED',
+        message:
+          'Customer delivery PIN is required to complete this delivery. Update the app to complete this delivery.',
         statusCode: 400,
       });
     });
 
-    it('rejects logistics completion when endPin is invalid format', async () => {
+    it('rejects new logistics completion when endPin is invalid format', async () => {
       const mockRepo = {
         findById: vi.fn().mockResolvedValue({
           id: 'logistics-ride-1',
           sector: 'logistics',
           status: 'in_progress',
+          hasEndPin: true,
           assignedDriverId: 'driver-1',
         }),
       } as unknown as RideRepository;
@@ -96,12 +178,13 @@ describe('Logistics Two-OTP: End Delivery PIN Contract', () => {
       });
     });
 
-    it('rejects logistics completion when wrong endPin is provided', async () => {
+    it('rejects new logistics completion when wrong endPin is provided', async () => {
       const mockRepo = {
         findById: vi.fn().mockResolvedValue({
           id: 'logistics-ride-1',
           sector: 'logistics',
           status: 'in_progress',
+          hasEndPin: true,
           assignedDriverId: 'driver-1',
         }),
         verifyEndPinAttempt: vi.fn().mockResolvedValue('invalid'),
@@ -117,12 +200,13 @@ describe('Logistics Two-OTP: End Delivery PIN Contract', () => {
       });
     });
 
-    it('rejects logistics completion when locked due to exceeded attempts', async () => {
+    it('rejects new logistics completion when locked due to exceeded attempts', async () => {
       const mockRepo = {
         findById: vi.fn().mockResolvedValue({
           id: 'logistics-ride-1',
           sector: 'logistics',
           status: 'in_progress',
+          hasEndPin: true,
           assignedDriverId: 'driver-1',
         }),
         verifyEndPinAttempt: vi.fn().mockResolvedValue('locked'),
@@ -138,12 +222,13 @@ describe('Logistics Two-OTP: End Delivery PIN Contract', () => {
       });
     });
 
-    it('completes logistics ride when correct endPin is provided', async () => {
+    it('completes new logistics ride when correct endPin is provided', async () => {
       const completedRide: Ride = {
         id: 'logistics-ride-1',
         customerId: 'customer-1',
         sector: 'logistics',
         status: 'completed',
+        hasEndPin: true,
         assignedDriverId: 'driver-1',
         assignedVehicleId: 'veh-1',
         pickup: { latitude: 12.9, longitude: 77.6 },
@@ -162,6 +247,7 @@ describe('Logistics Two-OTP: End Delivery PIN Contract', () => {
           id: 'logistics-ride-1',
           sector: 'logistics',
           status: 'in_progress',
+          hasEndPin: true,
           assignedDriverId: 'driver-1',
         }),
         verifyEndPinAttempt: vi.fn().mockResolvedValue('verified'),
@@ -209,6 +295,7 @@ describe('Logistics Two-OTP: End Delivery PIN Contract', () => {
           id: 'passenger-ride-1',
           sector: 'passenger',
           status: 'in_progress',
+          hasEndPin: false,
           assignedDriverId: 'driver-1',
         }),
         verifyEndPinAttempt: vi.fn(),
@@ -230,12 +317,13 @@ describe('Logistics Two-OTP: End Delivery PIN Contract', () => {
   });
 
   describe('Driver API response security', () => {
-    it('never contains pin or endPin in sanitizeRideForDriver', () => {
+    it('never contains pin or endPin in sanitizeRideForDriver, allows boolean hasEndPin', () => {
       const rideWithPins: Ride = {
         id: 'logistics-ride-1',
         customerId: 'customer-1',
         sector: 'logistics',
         status: 'in_progress',
+        hasEndPin: true,
         assignedDriverId: 'driver-1',
         assignedVehicleId: 'veh-1',
         pickup: { latitude: 12.9, longitude: 77.6 },
@@ -256,6 +344,8 @@ describe('Logistics Two-OTP: End Delivery PIN Contract', () => {
       expect((driverSafe as Record<string, unknown>).endPin).toBeUndefined();
       expect((driverSafe as Record<string, unknown>).endPinCiphertext).toBeUndefined();
       expect((driverSafe as Record<string, unknown>).endPinVerifier).toBeUndefined();
+      // hasEndPin is boolean only and reveals no secret data
+      expect(driverSafe.hasEndPin).toBe(true);
     });
   });
 });

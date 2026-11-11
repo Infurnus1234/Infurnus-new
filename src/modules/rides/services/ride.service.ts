@@ -573,11 +573,12 @@ export class RideService {
     if (!existingRide) {
       throw new AppError('RIDE_NOT_FOUND', 'Ride not found', 404);
     }
-    if (existingRide.sector === 'logistics') {
+    const endPinRequired = existingRide.sector === 'logistics' && existingRide.hasEndPin !== false;
+    if (endPinRequired) {
       if (!endPin || typeof endPin !== 'string' || endPin.trim() === '') {
         throw new AppError(
           'END_PIN_REQUIRED',
-          'Customer delivery PIN is required to complete logistics delivery',
+          'Customer delivery PIN is required to complete this delivery. Update the app to complete this delivery.',
           400,
         );
       }

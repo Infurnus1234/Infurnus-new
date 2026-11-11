@@ -99,6 +99,7 @@ export interface Ride {
   pinVerified?: boolean;
   endPin?: string | null;
   endPinVerified?: boolean;
+  hasEndPin?: boolean;
   driverDetails?: RideDriverDetails | null;
   vehicleDetails?: RideVehicleDetails | null;
   cancellationReason: string | null;

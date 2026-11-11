@@ -249,6 +249,28 @@ try {
             AND column_name = 'actual_fuel_cost'
         ) AS "ridesFuelCostColumn",
 
+        (
+          SELECT column_name
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'rides'
+            AND column_name = 'end_pin_ciphertext'
+        ) AS "ridesEndPinCiphertextColumn",
+
+        (
+          SELECT column_name
+          FROM information_schema.columns
+          WHERE table_schema = 'public'
+            AND table_name = 'rides'
+            AND column_name = 'end_pin_verifier'
+        ) AS "ridesEndPinVerifierColumn",
+
+        (
+          SELECT tgname
+          FROM pg_trigger
+          WHERE tgname = 'rides_clear_end_pin'
+        ) AS "ridesClearEndPinTrigger",
+
         to_regclass(
           'public.resend_otp_sessions'
         ) AS "resendOtpSessions",
@@ -314,6 +336,9 @@ try {
       !checksRow.paymentsRideForeignKey ||
       !checksRow.ridesSectorCheck ||
       !checksRow.ridesFuelCostColumn ||
+      !checksRow.ridesEndPinCiphertextColumn ||
+      !checksRow.ridesEndPinVerifierColumn ||
+      !checksRow.ridesClearEndPinTrigger ||
       !checksRow.resendOtpSessions ||
       !checksRow.resendOtpSessionTokenUniqueIndex ||
       !checksRow.resendOtpSessionEmailIndex ||

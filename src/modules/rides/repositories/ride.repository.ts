@@ -454,6 +454,7 @@ function mapRide(row: Record<string, unknown>, forCustomer = false): Ride {
         : null,
 
     endPinVerified: Boolean(row.endPinVerified),
+    hasEndPin: Boolean(row.endPinVerifier || row.endPinCiphertext),
 
     driverDetails:
       row.assignedDriverId && row.driverName
