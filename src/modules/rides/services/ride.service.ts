@@ -496,11 +496,7 @@ export class RideService {
         throw new AppError('RIDE_NOT_FOUND', 'Ride not found', 404);
       }
 
-      if (
-        existing.status === 'cancelled' &&
-        existing.cancelledByCustomer &&
-        ['logistics', 'rental', 'premium', 'service'].includes(existing.sector ?? '')
-      ) {
+      if (existing.status === 'cancelled' && existing.cancelledByCustomer) {
         return this.hydrateDriverPhoto(existing);
       }
 

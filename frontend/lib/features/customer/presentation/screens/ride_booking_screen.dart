@@ -2381,7 +2381,7 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
         ),
         const SizedBox(height: 24),
         InfurnusOutlinedButton(
-          text: 'Cancel Request',
+          text: 'Cancel Ride',
           onPressed: () => ref.read(rideProvider.notifier).cancelRide(),
         ),
       ],
@@ -2445,15 +2445,8 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
             Expanded(
               child: RideCancellationButton(
                 key: ValueKey(ride?.id),
-                remainingSeconds:
-                    const {
-                      'logistics',
-                      'rental',
-                      'premium',
-                      'service',
-                    }.contains(ride?.sector ?? state.selectedSector)
-                    ? () => ride?.cancellationWindow?.remainingSeconds ?? 0
-                    : null,
+                remaining: () =>
+                    ride?.cancellationWindow?.remaining ?? Duration.zero,
                 onPressed: () => ref.read(rideProvider.notifier).cancelRide(),
               ),
             ),

@@ -36,41 +36,52 @@ void main() {
     },
   );
 
-  testWidgets('counts down from 05:00 and disables cancellation at expiry', (
-    tester,
-  ) async {
-    var seconds = 300;
-    var cancellations = 0;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: RideCancellationButton(
-            remainingSeconds: () => seconds,
-            onPressed: () => cancellations++,
+  testWidgets(
+    'hides cancellation and leaves the active ride visible at the deadline',
+    (tester) async {
+      final deadline = tester.binding.clock.now().add(
+        const Duration(seconds: 300),
+      );
+      var cancellations = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                const Text('Driver assigned'),
+                RideCancellationButton(
+                  remaining: () =>
+                      deadline.difference(tester.binding.clock.now()),
+                  onPressed: () => cancellations++,
+                ),
+              ],
+            ),
           ),
         ),
-      ),
-    );
-    expect(find.text('05:00 left'), findsOneWidget);
-    seconds = 299;
-    await tester.pump(const Duration(seconds: 1));
-    expect(find.text('04:59 left'), findsOneWidget);
-    await tester.tap(find.text('Cancel Ride'));
-    expect(cancellations, 1);
+      );
+      expect(find.text('05:00 left'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('04:59 left'), findsOneWidget);
+      await tester.tap(find.text('Cancel Ride'));
+      expect(cancellations, 1);
 
-    seconds = 1;
-    await tester.pump(const Duration(seconds: 298));
-    expect(find.text('00:01 left'), findsOneWidget);
-    seconds = 0;
-    await tester.pump(const Duration(seconds: 1));
-    expect(find.text('Cancellation unavailable'), findsOneWidget);
-    expect(
-      tester.widget<OutlinedButton>(find.byType(OutlinedButton)).onPressed,
-      isNull,
-    );
-  });
+      await tester.pump(const Duration(seconds: 298, milliseconds: 999));
+      expect(find.text('00:01 left'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 1));
+      expect(find.text('Cancel Ride'), findsNothing);
+      expect(find.textContaining('left'), findsNothing);
+      expect(find.text('Driver assigned'), findsOneWidget);
+      expect(cancellations, 1);
+    },
+  );
 
-  for (final sector in ['logistics', 'rental', 'premium', 'service']) {
+  for (final sector in [
+    'passenger',
+    'logistics',
+    'rental',
+    'premium',
+    'service',
+  ]) {
     test(
       '$sector reconstructs the countdown from server time and deadline',
       () {

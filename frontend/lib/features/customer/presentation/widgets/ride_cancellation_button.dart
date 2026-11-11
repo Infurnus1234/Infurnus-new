@@ -5,12 +5,12 @@ import 'package:flutter/material.dart';
 import '../../../../shared/widgets/infurnus_outlined_button.dart';
 
 class RideCancellationButton extends StatefulWidget {
-  final int Function()? remainingSeconds;
+  final Duration Function() remaining;
   final VoidCallback onPressed;
 
   const RideCancellationButton({
     super.key,
-    required this.remainingSeconds,
+    required this.remaining,
     required this.onPressed,
   });
 
@@ -20,11 +20,13 @@ class RideCancellationButton extends StatefulWidget {
 
 class _RideCancellationButtonState extends State<RideCancellationButton> {
   Timer? _timer;
-  int? _seconds;
+  late final AppLifecycleListener _lifecycle;
+  int _seconds = 0;
 
   @override
   void initState() {
     super.initState();
+    _lifecycle = AppLifecycleListener(onResume: () => setState(_sync));
     _sync();
   }
 
@@ -35,40 +37,39 @@ class _RideCancellationButtonState extends State<RideCancellationButton> {
   }
 
   void _sync() {
-    _seconds = widget.remainingSeconds?.call();
-    if ((_seconds ?? 0) > 0) {
-      _timer ??= Timer.periodic(const Duration(seconds: 1), (_) {
-        final seconds = widget.remainingSeconds?.call();
-        if (seconds != _seconds) setState(_sync);
-      });
-    } else {
-      _timer?.cancel();
-      _timer = null;
-    }
+    _timer?.cancel();
+    final micros = widget.remaining().inMicroseconds;
+    const second = Duration.microsecondsPerSecond;
+    _seconds = micros > 0 ? (micros + second - 1) ~/ second : 0;
+    if (_seconds == 0) return;
+    final untilNextSecond = micros - (_seconds - 1) * second;
+    _timer = Timer(
+      Duration(microseconds: untilNextSecond),
+      () => setState(_sync),
+    );
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _lifecycle.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final seconds = _seconds;
+    if (seconds == 0) return const SizedBox.shrink();
     final button = InfurnusOutlinedButton(
       text: 'Cancel Ride',
-      onPressed: seconds == 0
-          ? null
-          : () {
-              if (widget.remainingSeconds?.call() == 0) {
-                setState(_sync);
-                return;
-              }
-              widget.onPressed();
-            },
+      onPressed: () {
+        if (widget.remaining() <= Duration.zero) {
+          setState(_sync);
+          return;
+        }
+        widget.onPressed();
+      },
     );
-    if (seconds == null) return button;
 
     final minutesText = (seconds ~/ 60).toString().padLeft(2, '0');
     final secondsText = (seconds % 60).toString().padLeft(2, '0');
@@ -78,9 +79,7 @@ class _RideCancellationButtonState extends State<RideCancellationButton> {
         button,
         const SizedBox(height: 4),
         Text(
-          seconds == 0
-              ? 'Cancellation unavailable'
-              : '$minutesText:$secondsText left',
+          '$minutesText:$secondsText left',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodySmall,
         ),

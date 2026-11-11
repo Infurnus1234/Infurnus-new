@@ -15,6 +15,9 @@ import 'package:infurnus/features/customer/presentation/providers/booking_catalo
 import 'package:infurnus/features/customer/presentation/providers/ride_provider.dart';
 import 'package:infurnus/features/customer/presentation/providers/ride_repository_provider.dart';
 import 'package:infurnus/features/customer/presentation/screens/customer_home_screen.dart';
+import 'package:infurnus/features/customer/presentation/screens/concierge_fleet_screen.dart';
+import 'package:infurnus/features/customer/presentation/screens/passenger_rides_screen.dart';
+import 'package:infurnus/features/customer/presentation/screens/rentals_screen.dart';
 import 'package:infurnus/features/customer/presentation/screens/ride_booking_screen.dart';
 import 'package:infurnus/features/customer/presentation/widgets/ride_contact_action.dart';
 import 'package:infurnus/shared/widgets/vehicle_visual_image.dart';
@@ -50,6 +53,87 @@ model.RideModel ride({
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+  testWidgets(
+    'Home Premium links open the same fleet and Rental opens Rental',
+    (tester) async {
+      final socket = ConnectedSocket();
+      final container = ProviderContainer(
+        overrides: [
+          rideRepositoryProvider.overrideWithValue(
+            ConfiguredCatalogRepository(),
+          ),
+          socketServiceProvider.overrideWithValue(socket),
+          locationServiceProvider.overrideWithValue(NoLocation()),
+          dioProvider.overrideWithValue(mapFixture()),
+        ],
+      );
+      final router = GoRouter(
+        routes: [
+          GoRoute(path: '/', builder: (_, _) => const CustomerHomeScreen()),
+          GoRoute(
+            path: '/concierge-fleet',
+            builder: (_, _) => const ConciergeFleetScreen(),
+          ),
+          GoRoute(
+            path: '/premium-showcase',
+            builder: (_, _) => const RentalsScreen(),
+          ),
+          GoRoute(
+            path: '/rentals',
+            builder: (_, _) => const PassengerRidesScreen(),
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final premium = find.text('Luxury & Chauffeur');
+      await tester.ensureVisible(premium);
+      await tester.pumpAndSettle();
+      await tester.tap(premium);
+      await tester.pumpAndSettle();
+      expect(find.byType(ConciergeFleetScreen), findsOneWidget);
+      expect(find.text('Mahindra Thar'), findsOneWidget);
+      router.pop();
+      await tester.pumpAndSettle();
+
+      final premiumHeader = find
+          .ancestor(
+            of: find.text('Experience the extraordinary'),
+            matching: find.byType(Row),
+          )
+          .first;
+      final seeAll = find.descendant(
+        of: premiumHeader,
+        matching: find.text('See all →'),
+      );
+      await tester.ensureVisible(seeAll);
+      await tester.pumpAndSettle();
+      await tester.tap(seeAll);
+      await tester.pumpAndSettle();
+      expect(find.byType(ConciergeFleetScreen), findsOneWidget);
+      expect(find.text('Mahindra Thar'), findsOneWidget);
+      router.pop();
+      await tester.pumpAndSettle();
+
+      final rental = find.text('Cab, Sedan & More');
+      await tester.ensureVisible(rental);
+      await tester.pumpAndSettle();
+      await tester.tap(rental);
+      await tester.pumpAndSettle();
+      expect(find.byType(PassengerRidesScreen), findsOneWidget);
+      expect(container.read(rideProvider).selectedSector, 'rental');
+      await tester.pumpWidget(const SizedBox.shrink());
+      container.dispose();
+      socket.dispose();
+      router.dispose();
+    },
+  );
   testWidgets(
     'Service booking uses the normal destination step before a fare',
     (tester) async {

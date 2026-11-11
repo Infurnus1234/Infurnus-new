@@ -581,7 +581,7 @@ describeDatabase('ride PostgreSQL integration', () => {
     await service.acceptRide(fixture.driverProfileId, fixture.rideIds[0]!);
   }
 
-  describe.each(['logistics', 'rental', 'premium', 'service'])(
+  describe.each(['passenger', 'logistics', 'rental', 'premium', 'service'])(
     '%s cancellation window',
     (sector) => {
       it.each([0, 60, 180, 299, 300, 301, 600])(
@@ -681,6 +681,25 @@ describeDatabase('ride PostgreSQL integration', () => {
     }
   });
 
+  it('can start after cancellation expires and rejects cancellation after ride start', async () => {
+    await prepareMap();
+    const id = fixture.rideIds[0]!;
+    await pool.query(
+      "UPDATE rides SET driver_accepted_at=clock_timestamp()-interval '6 minutes' WHERE id=$1",
+      [id],
+    );
+    await service.transitionRide(id, 'driver_arriving', fixture.driverProfileId);
+    await service.transitionRide(id, 'driver_arrived', fixture.driverProfileId);
+    await service.transitionRide(id, 'in_progress', fixture.driverProfileId, '7391');
+    await expect(
+      service.cancelRide(fixture.customerId, id, { reason: 'Trip started' }),
+    ).rejects.toMatchObject({ code: 'RIDE_CANCELLATION_CONFLICT' });
+    expect(await repository.findById(id)).toMatchObject({
+      status: 'in_progress',
+      pinVerified: true,
+    });
+  });
+
   it('fails closed without a legacy acceptance time and keeps an operational cancellation separate', async () => {
     await prepareMap('premium');
     const id = fixture.rideIds[0]!;
@@ -702,38 +721,53 @@ describeDatabase('ride PostgreSQL integration', () => {
     ).rejects.toMatchObject({ code: 'RIDE_CANCELLATION_CONFLICT' });
   });
 
-  it('backfills an active legacy ride without changing its arrival timestamp', async () => {
-    await prepareMap('service');
-    const id = fixture.rideIds[0]!;
-    await service.transitionRide(id, 'driver_arriving', fixture.driverProfileId);
-    await service.transitionRide(id, 'driver_arrived', fixture.driverProfileId);
-    const accepted = (await repository.findById(id))!;
-    const migration = await readFile(
-      new URL('../../../../migrations/111_customer_ride_cancellation_window.sql', import.meta.url),
-      'utf8',
-    );
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      await client.query(`
+  it.each(['passenger', 'service'])(
+    'backfills an active legacy %s ride without changing its arrival timestamp',
+    async (sector) => {
+      await prepareMap(sector);
+      const id = fixture.rideIds[0]!;
+      await service.transitionRide(id, 'driver_arriving', fixture.driverProfileId);
+      await service.transitionRide(id, 'driver_arrived', fixture.driverProfileId);
+      const accepted = (await repository.findById(id))!;
+      const migration = await readFile(
+        new URL(
+          '../../../../migrations/111_customer_ride_cancellation_window.sql',
+          import.meta.url,
+        ),
+        'utf8',
+      );
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(`
         DROP FUNCTION ride_customer_cancellation_allowed(text, ride_status, timestamptz, timestamptz);
         DROP FUNCTION ride_customer_cancellation_deadline(text, timestamptz);
         ALTER TABLE rides DROP COLUMN driver_accepted_at, DROP COLUMN cancelled_by_customer;
       `);
-      await client.query(migration);
-      const restored = await client.query(
-        'SELECT driver_accepted_at, updated_at FROM rides WHERE id=$1',
-        [id],
-      );
-      expect(restored.rows[0]).toMatchObject({
-        driver_accepted_at: accepted.driverAcceptedAt,
-        updated_at: accepted.updatedAt,
-      });
-    } finally {
-      await client.query('ROLLBACK');
-      client.release();
-    }
-  });
+        await client.query(migration);
+        await client.query(
+          await readFile(
+            new URL(
+              '../../../../migrations/113_apply_customer_cancellation_window_to_all_rides.sql',
+              import.meta.url,
+            ),
+            'utf8',
+          ),
+        );
+        const restored = await client.query(
+          'SELECT driver_accepted_at, updated_at FROM rides WHERE id=$1',
+          [id],
+        );
+        expect(restored.rows[0]).toMatchObject({
+          driver_accepted_at: accepted.driverAcceptedAt,
+          updated_at: accepted.updatedAt,
+        });
+      } finally {
+        await client.query('ROLLBACK');
+        client.release();
+      }
+    },
+  );
   it.each([
     ['passenger', 106, 8500],
     ['logistics', 1500, 42000],
@@ -1553,17 +1587,20 @@ describeDatabase('ride PostgreSQL integration', () => {
   });
 
   it('rejects acceptance after cancellation without accepting an offer', async () => {
+    await pool.query(
+      "UPDATE rides SET created_at=clock_timestamp()-interval '1 hour' WHERE id=$1",
+      [fixture.rideIds[0]],
+    );
     await service.cancelRide(fixture.customerId, fixture.rideIds[0]!, {
       reason: 'cancel before accept',
     });
     await expect(
       service.acceptRide(fixture.driverProfileId, fixture.rideIds[0]!),
     ).rejects.toMatchObject({ code: 'RIDE_ACCEPTANCE_CONFLICT' });
-    const accepted = await pool.query(
-      "SELECT count(*)::int AS count FROM ride_dispatch_attempts WHERE ride_id=$1 AND status='accepted'",
-      [fixture.rideIds[0]],
-    );
-    expect(accepted.rows[0].count).toBe(0);
+    const offer = await pool.query('SELECT status FROM ride_dispatch_attempts WHERE ride_id=$1', [
+      fixture.rideIds[0],
+    ]);
+    expect(offer.rows).toEqual([{ status: 'cancelled' }]);
   });
 
   it('allows one driver to win only one competing ride', async () => {
@@ -1584,12 +1621,13 @@ describeDatabase('ride PostgreSQL integration', () => {
   it('makes duplicate cancellation converge on one cancelled state', async () => {
     await cleanFixture(fixture);
     fixture = await createFixture();
-    const results = await Promise.allSettled(
+    const results = await Promise.all(
       Array.from({ length: 2 }, () =>
         service.cancelRide(fixture.customerId, fixture.rideIds[0]!, { reason: 'duplicate test' }),
       ),
     );
-    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.map((ride) => ride.status)).toEqual(['cancelled', 'cancelled']);
+    expect(results[0]!.cancelledAt).toEqual(results[1]!.cancelledAt);
     const final = await pool.query<{ status: string }>(`SELECT status FROM rides WHERE id = $1`, [
       fixture.rideIds[0],
     ]);

@@ -743,8 +743,8 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         'subtitle': 'Luxury & Chauffeur',
         'category': VehicleCategoryType.rental,
         'action': () {
-          ref.read(rideProvider.notifier).selectSector('premium');
-          context.push('/premium-showcase');
+          ref.invalidate(bookingCatalogProvider('premium'));
+          context.push('/concierge-fleet');
         },
       },
     ];

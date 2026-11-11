@@ -6,6 +6,7 @@ import 'package:infurnus/core/services/notification_service.dart';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:infurnus/core/network/dio_client.dart';
 import 'package:infurnus/core/services/socket_service.dart';
@@ -17,8 +18,11 @@ import 'package:infurnus/features/customer/presentation/providers/ride_repositor
 
 class _Socket extends SocketService {
   final events = StreamController<SocketServerEvent>.broadcast();
+  final connections = StreamController<SocketConnectionState>.broadcast();
   @override
   Stream<SocketServerEvent> get eventStream => events.stream;
+  @override
+  Stream<SocketConnectionState> get stateStream => connections.stream;
   @override
   SocketConnectionState get currentState => SocketConnectionState.connected;
   @override
@@ -28,6 +32,7 @@ class _Socket extends SocketService {
   @override
   void dispose() {
     events.close();
+    connections.close();
     super.dispose();
   }
 }
@@ -41,6 +46,10 @@ class _Repository implements RideRepository {
     reads++;
     return ride;
   }
+
+  @override
+  Future<List<model.RideModel>> listRides({String? status, int? limit}) async =>
+      [ride];
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -115,7 +124,7 @@ void main() {
     final repository = _Repository(
       model.RideModel.fromJson(trace['bookingRide']),
     );
-    final c = ProviderContainer(
+    ProviderContainer createContainer() => ProviderContainer(
       overrides: [
         dioProvider.overrideWithValue(dio),
         socketServiceProvider.overrideWithValue(socket),
@@ -123,24 +132,60 @@ void main() {
         notificationServiceProvider.overrideWithValue(notifications),
       ],
     );
+    final c = createContainer();
     addTearDown(() {
       c.dispose();
       socket.dispose();
       notifications.dispose();
     });
     await c.read(rideProvider.notifier).getRideDetails(repository.ride.id);
+    final accepted = {
+      ...Map<String, dynamic>.from(trace['customerRide']),
+      'customerCancellationDeadline': '2026-11-10T10:05:00.000Z',
+      'cancellationServerTime': '2026-11-10T10:00:00.000Z',
+    };
     socket.events.add(
-      SocketServerEvent(
-        name: 'ride:driver_assigned',
-        data: {'ride': trace['customerRide']},
-      ),
+      SocketServerEvent(name: 'ride:driver_assigned', data: {'ride': accepted}),
     );
     await Future<void>.delayed(Duration.zero);
     expect(c.read(rideProvider).status, RideStatus.matched);
     expect(
+      c.read(rideProvider).currentRide!.cancellationWindow!.remainingSeconds,
+      300,
+    );
+    expect(
       c.read(rideProvider).currentRide!.assignedDriverId,
       trace['customerRide']['assignedDriverId'],
     );
+    repository.ride = model.RideModel.fromJson({
+      ...accepted,
+      'cancellationServerTime': '2026-11-10T10:03:00.000Z',
+    });
+    socket.connections.add(SocketConnectionState.disconnected);
+    socket.connections.add(SocketConnectionState.connected);
+    await Future<void>.delayed(Duration.zero);
+    expect(
+      c.read(rideProvider).currentRide!.cancellationWindow!.remainingSeconds,
+      120,
+    );
+
+    FlutterSecureStorage.setMockInitialValues({'auth_token': 'test-token'});
+    final reopened = createContainer();
+    try {
+      await reopened.read(rideProvider.notifier).restoreActiveRide();
+      expect(reopened.read(rideProvider).status, RideStatus.matched);
+      expect(
+        reopened
+            .read(rideProvider)
+            .currentRide!
+            .cancellationWindow!
+            .remainingSeconds,
+        120,
+      );
+    } finally {
+      reopened.dispose();
+      FlutterSecureStorage.setMockInitialValues({});
+    }
     repository.ride = model.RideModel.fromJson({
       ...Map<String, dynamic>.from(trace['customerRide']),
       'status': 'cancelled',
