@@ -167,6 +167,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Keep Flutter packages on the workspace drive
+        shell: pwsh
+        run: |
+          "PUB_CACHE=$(Join-Path $env:GITHUB_WORKSPACE '.pub-cache')" >> $env:GITHUB_ENV
       - name: Setup Flutter
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
@@ -235,6 +239,7 @@ jobs:
           Add-Content -LiteralPath $wrapper -Value "distributionSha256Sum=$checksum" -Encoding ascii
       - name: Android test build
         env:
+          JAVA_TOOL_OPTIONS: '-Dfile.encoding=UTF-8'
           INFURNUS_TEST_RELEASE_SIGNING: 'true'
           MAPS_API_KEY: ${{ secrets.CUSTOMER_MAPS_API_KEY || 'non-secret-ci-fixture-key' }}
         run: flutter build apk --release --no-pub
