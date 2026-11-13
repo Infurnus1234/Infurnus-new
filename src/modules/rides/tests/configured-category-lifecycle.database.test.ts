@@ -562,7 +562,20 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
         expect(await rides.finishDispatchAttempt(expiring.id, profile, 'timed_out')).toBe(true);
         expect(await rides.finishDispatchAttempt(expiring.id, profile, 'timed_out')).toBe(false);
         await dispatch.dispatch(expiring);
-        expect((await rides.findById(expiring.id))?.status).toBe('cancelled');
+        const afterTimeout = await rides.findById(expiring.id);
+        if (sector === 'logistics') {
+          expect(afterTimeout?.status).toBe('searching');
+          const recovery = await pool.query(
+            'SELECT logistics_escalation_reason, logistics_retry_at > NOW() AS deferred FROM rides WHERE id=$1',
+            [expiring.id],
+          );
+          expect(recovery.rows).toEqual([
+            { logistics_escalation_reason: 'search_exhausted', deferred: true },
+          ]);
+          await service.cancelRide(customer, expiring.id, { reason: 'Test fixture finished' });
+        } else {
+          expect(afterTimeout?.status).toBe('cancelled');
+        }
         await pool.query(
           "UPDATE driver_profiles SET availability_status='unavailable' WHERE id=$1",
           [profile],
