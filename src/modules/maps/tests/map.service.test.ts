@@ -399,8 +399,12 @@ describe('local route geometry', () => {
       status: 'live',
     });
     expect(remainingRoadDistance(trip, { ...location, latitude: 0.002 }, route)).toEqual({
-      meters: null,
-      status: 'updating',
+      meters: 599,
+      status: 'approximate',
+    });
+    expect(remainingRoadDistance(trip, location, null)).toEqual({
+      meters: 556,
+      status: 'approximate',
     });
     expect(remainingRoadDistance(trip, null, route)).toEqual({ meters: null, status: 'updating' });
     expect(remainingRoadDistance(trip, { ...location, longitude: 0.01 }, route)).toEqual({

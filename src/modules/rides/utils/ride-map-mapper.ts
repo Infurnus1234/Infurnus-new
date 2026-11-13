@@ -26,22 +26,31 @@ export function remainingRoadDistance(
   progress?: ReturnType<typeof routeProgress> | null,
 ): RemainingRoadDistance {
   const unavailable: RemainingRoadDistance = { meters: null, status: 'updating' };
-  if (!location || (location.latitude === 0 && location.longitude === 0)) return unavailable;
+  if (
+    !location ||
+    (location.latitude === 0 && location.longitude === 0) ||
+    (ride.destination.latitude === 0 && ride.destination.longitude === 0)
+  )
+    return unavailable;
+  const direct = geographicDistance(location, ride.destination);
   if (
     typeof location.accuracy === 'number' &&
     location.accuracy > 0 &&
-    location.accuracy <= 30 &&
-    (ride.destination.latitude !== 0 || ride.destination.longitude !== 0) &&
-    geographicDistance(location, ride.destination) <= Math.min(10, location.accuracy)
+    location.accuracy <= 100 &&
+    direct <= Math.min(10, location.accuracy)
   )
     return { meters: 0, status: 'arrived' };
-  if (!route?.encodedPolyline || route.distanceMeters <= 0) return unavailable;
+  const approximate: RemainingRoadDistance = {
+    meters: Math.max(1, Math.round(direct)),
+    status: 'approximate',
+  };
+  if (!route?.encodedPolyline || route.distanceMeters <= 0) return approximate;
   const projected = progress ?? routeProgress(location, decodePolyline(route.encodedPolyline));
   if (
     projected.deviationMeters > env.MAP_OFF_ROUTE_ENTER_METERS ||
     projected.remainingFraction <= 0
   )
-    return unavailable;
+    return approximate;
   return {
     meters: Math.max(1, Math.round(route.distanceMeters * projected.remainingFraction)),
     status: 'live',

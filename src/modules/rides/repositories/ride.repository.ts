@@ -1280,11 +1280,11 @@ export class PostgresRideRepository implements RideRepository {
            v.fuel_rate_per_km,
            (r.sector NOT IN ('logistics','premium','rental','service') OR (
              SELECT COALESCE((
-               SELECT sample.accuracy > 0 AND sample.accuracy <= 30
+               SELECT sample.accuracy > 0 AND sample.accuracy <= 100
                  AND sample.recorded_at BETWEEN clock_timestamp() - INTERVAL '30 seconds'
                      AND clock_timestamp() + INTERVAL '2 seconds'
                  AND NOT (ST_X(r.destination_location::geometry)=0 AND ST_Y(r.destination_location::geometry)=0)
-                 AND ST_DWithin(sample.location, r.destination_location, 100, false)
+                 AND ST_DWithin(sample.location, r.destination_location, 200, false)
                  AND NOT (ST_X(sample.location::geometry)=0 AND ST_Y(sample.location::geometry)=0)
                FROM (VALUES
                  (dp.last_location, dp.last_location_at, dp.location_accuracy::float8, 0),

@@ -459,7 +459,8 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
         const fix = async (distance: number, accuracy: number, age = 1) => {
           await pool.query(
             `UPDATE driver_profiles dp
-               SET last_location=ST_Project(r.destination_location,$3::float8,0::float8),
+               SET last_location=ST_SetSRID(ST_MakePoint(ST_X(r.destination_location::geometry),
+                     ST_Y(r.destination_location::geometry)+degrees($3::float8/6371008.7714)),4326)::geography,
                    last_location_at=NOW()-($5::int * INTERVAL '1 second'),
                    location_accuracy=$4
                FROM rides r WHERE dp.id=$1 AND r.id=$2`,
@@ -478,15 +479,15 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
         };
         if (sector !== 'passenger') {
           await expectBlocked();
-          for (const distance of [10000, 1000, 500, 101]) {
+          for (const distance of [10000, 1000, 500, 201]) {
             await fix(distance, 8);
             await expectBlocked();
           }
-          await fix(50, 35);
+          await fix(50, 101);
           await expectBlocked();
           await fix(50, 8, 40);
           await expectBlocked();
-          await fix(99, 8);
+          await fix(199, 65);
         }
         const response = await (endPin ? complete().send({ endPin }) : complete());
         expect(response.status, response.text).toBe(200);

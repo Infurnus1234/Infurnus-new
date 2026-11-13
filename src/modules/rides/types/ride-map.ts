@@ -34,7 +34,7 @@ export interface RideInformation {
 }
 export type RemainingRoadDistance = {
   meters: number | null;
-  status: 'updating' | 'live' | 'arrived';
+  status: 'updating' | 'live' | 'approximate' | 'arrived';
 };
 
 export interface RideMapData extends RideInformation {
