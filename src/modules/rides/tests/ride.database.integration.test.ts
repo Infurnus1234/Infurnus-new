@@ -1061,6 +1061,10 @@ describeDatabase('ride PostgreSQL integration', () => {
     const active = await m.service.getUserMap(fixture.customerId, id, true);
     expect(active.segment).toBe('destination');
     expect(active.pickupEta).toBeNull();
+    const assignedDriver = await m.service.getDriverMap(fixture.driverUserId, id);
+    expect(active.remainingRoadDistance).not.toBeNull();
+    expect(assignedDriver.remainingRoadDistance).toEqual(active.remainingRoadDistance);
+
     expect(m.calls[1]).toEqual({
       origin: {
         latitude: active.driverLocation!.latitude,

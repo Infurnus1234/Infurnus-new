@@ -1,3 +1,4 @@
+import { remainingRoadDistance } from '../../rides/utils/ride-map-mapper.js';
 import { describe, expect, it, vi } from 'vitest';
 import { CommonMapService, normalizeText, rankPlaces } from '../map.service.js';
 import { mapConfig } from '../map.config.js';
@@ -379,6 +380,32 @@ describe('local route geometry', () => {
     expect(routeProgress({ latitude: 0, longitude: 0.005 }, points)).toMatchObject({
       deviationMeters: 0,
       remainingFraction: 0.5,
+    });
+  });
+  it('reports the projected road distance and distinguishes deviation from arrival', () => {
+    const trip = { destination: { latitude: 0, longitude: 0.01 } } as Parameters<
+      typeof remainingRoadDistance
+    >[0];
+    const location = {
+      latitude: 0,
+      longitude: 0.005,
+      accuracy: 8,
+      timestamp: new Date().toISOString(),
+    };
+    const route = { encodedPolyline: '???o}@', distanceMeters: 5000, durationSeconds: 300 };
+    expect(remainingRoadDistance(trip, location, route)).toEqual({ meters: 2500, status: 'live' });
+    expect(remainingRoadDistance(trip, { ...location, longitude: 0.0083 }, route)).toEqual({
+      meters: 850,
+      status: 'live',
+    });
+    expect(remainingRoadDistance(trip, { ...location, latitude: 0.002 }, route)).toEqual({
+      meters: null,
+      status: 'updating',
+    });
+    expect(remainingRoadDistance(trip, null, route)).toEqual({ meters: null, status: 'updating' });
+    expect(remainingRoadDistance(trip, { ...location, longitude: 0.01 }, route)).toEqual({
+      meters: 0,
+      status: 'arrived',
     });
   });
   it('rejects malformed route geometry', () => {

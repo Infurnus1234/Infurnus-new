@@ -9,6 +9,7 @@ import type { RideMapData, UserRideMapData, DriverRideMapData } from '../types/r
 import {
   activeMapStatuses,
   freshRideLocation,
+  remainingRoadDistance,
   rideInformation,
   driverDestinationAllowed,
   driverDestinationMarkerAllowed,
@@ -413,6 +414,10 @@ export class RideService {
       driverLocation,
       userLocation,
       driverLocationFresh: !!driverLocation,
+      remainingRoadDistance:
+        segment === 'destination'
+          ? remainingRoadDistance(ride, driverLocation, route, progress)
+          : null,
       pickupDistance:
         segment === 'pickup' && driverLocation
           ? {
@@ -437,6 +442,7 @@ export class RideService {
       driverLocation: null,
       userLocation: null,
       driverLocationFresh: false,
+      remainingRoadDistance: null,
       pickupDistance: null,
       pickupEta: null,
       route: null,

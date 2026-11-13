@@ -32,6 +32,11 @@ export interface RideInformation {
   vehicleCategory: string | null;
   rideStatus: Ride['status'];
 }
+export type RemainingRoadDistance = {
+  meters: number | null;
+  status: 'updating' | 'live' | 'arrived';
+};
+
 export interface RideMapData extends RideInformation {
   rideId: string;
   driverLocation: LiveRideLocation | null;
@@ -46,6 +51,7 @@ export interface RideMapData extends RideInformation {
   routeVersion: number;
   updatedAt: string;
   driverLocationFresh: boolean;
+  remainingRoadDistance: RemainingRoadDistance | null;
 }
 export interface UserRideMapData extends RideMapData {
   view: 'user';

@@ -1,6 +1,16 @@
+import type { RouteResult } from '../providers/map.provider.js';
 import type { Ride } from '../types/ride.js';
-import type { RideInformation, LiveRideLocation } from '../types/ride-map.js';
-import { geographicDistance, validateCoordinates } from '../../maps/geometry.js';
+import type {
+  RideInformation,
+  LiveRideLocation,
+  RemainingRoadDistance,
+} from '../types/ride-map.js';
+import {
+  decodePolyline,
+  geographicDistance,
+  routeProgress,
+  validateCoordinates,
+} from '../../maps/geometry.js';
 import { env } from '../../../config/env.js';
 
 export const activeMapStatuses = [
@@ -9,6 +19,35 @@ export const activeMapStatuses = [
   'driver_arrived',
   'in_progress',
 ];
+export function remainingRoadDistance(
+  ride: Ride,
+  location: LiveRideLocation | null,
+  route: RouteResult | null | undefined,
+  progress?: ReturnType<typeof routeProgress> | null,
+): RemainingRoadDistance {
+  const unavailable: RemainingRoadDistance = { meters: null, status: 'updating' };
+  if (!location || (location.latitude === 0 && location.longitude === 0)) return unavailable;
+  if (
+    typeof location.accuracy === 'number' &&
+    location.accuracy > 0 &&
+    location.accuracy <= 30 &&
+    (ride.destination.latitude !== 0 || ride.destination.longitude !== 0) &&
+    geographicDistance(location, ride.destination) <= Math.min(10, location.accuracy)
+  )
+    return { meters: 0, status: 'arrived' };
+  if (!route?.encodedPolyline || route.distanceMeters <= 0) return unavailable;
+  const projected = progress ?? routeProgress(location, decodePolyline(route.encodedPolyline));
+  if (
+    projected.deviationMeters > env.MAP_OFF_ROUTE_ENTER_METERS ||
+    projected.remainingFraction <= 0
+  )
+    return unavailable;
+  return {
+    meters: Math.max(1, Math.round(route.distanceMeters * projected.remainingFraction)),
+    status: 'live',
+  };
+}
+
 export function freshRideLocation(location: LiveRideLocation | null, now = Date.now()) {
   if (!location) return null;
   try {

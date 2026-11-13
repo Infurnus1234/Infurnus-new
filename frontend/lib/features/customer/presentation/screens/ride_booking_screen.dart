@@ -778,9 +778,32 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
               driverLocation: rideState.lastDriverLocation,
               route: rideState.currentRoute,
             ),
+            if (rideState.status == RideStatus.active)
+              Positioned(
+                top: MediaQuery.paddingOf(context).top + 58,
+                left: 16,
+                right: 16,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      child: Text(
+                        rideState.remainingDistanceLabel ??
+                            'Remaining distance unavailable',
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             if (rideState.mapError != null)
               Positioned(
-                top: 120,
+                top: rideState.status == RideStatus.active
+                    ? MediaQuery.paddingOf(context).top + 115
+                    : 120,
                 left: 8,
                 right: 8,
                 child: Material(

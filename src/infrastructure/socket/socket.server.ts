@@ -21,6 +21,10 @@ import type { RideService } from '../../modules/rides/services/ride.service.js';
 import type { RouteRecalculationService } from '../../modules/rides/services/route-recalculation.service.js';
 import type { Ride } from '../../modules/rides/types/ride.js';
 import { privateBookingPayload } from '../../modules/rides/utils/booking-contact.js';
+import {
+  remainingRoadDistance,
+  freshRideLocation,
+} from '../../modules/rides/utils/ride-map-mapper.js';
 import { sanitizeRideForDriver } from '../../modules/rides/utils/ride-sanitizer.js';
 import type { MatchingService } from '../../modules/rides/services/matching.service.js';
 import { RideDispatchService } from '../../modules/rides/services/ride-dispatch.service.js';
@@ -417,6 +421,22 @@ export function createSocketServer(
             current.status !== active.status
           )
             return;
+          if (segment === 'destination') {
+            const navigation = next ?? previous;
+            const route = navigation?.segment === segment ? navigation.route : null;
+            io.to(rideRoom(ride.id)).emit('ride:remaining_distance_updated', {
+              rideId: ride.id,
+              timestamp: event.location.timestamp,
+              ...remainingRoadDistance(
+                current,
+                freshRideLocation({
+                  ...event.location,
+                  timestamp: event.location.timestamp.toISOString(),
+                }),
+                route,
+              ),
+            });
+          }
           if (next && (next.routeVersion ?? 0) !== (previous?.routeVersion ?? 0))
             emitRide('ride:route_updated', current, {
               rideId: ride.id,

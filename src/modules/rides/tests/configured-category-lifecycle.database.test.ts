@@ -456,23 +456,15 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           request(app)
             .post('/rides/' + booked.id + '/complete')
             .auth(driverToken, { type: 'bearer' });
-        const fixes = async (latest: number, previous: number, accuracy: number, age = 1) => {
-          await pool.query('DELETE FROM provider_location_history WHERE driver_profile_id=$1', [
-            profile,
-          ]);
-          for (const [distance, seconds] of [
-            [previous, age + 2],
-            [latest, age],
-          ]) {
-            await pool.query(
-              `UPDATE driver_profiles dp
-                 SET last_location=ST_Project(r.destination_location,$3::float8,0::float8),
-                     last_location_at=NOW()-($5::int * INTERVAL '1 second'),
-                     location_accuracy=$4
-                 FROM rides r WHERE dp.id=$1 AND r.id=$2`,
-              [profile, booked.id, distance, accuracy, seconds],
-            );
-          }
+        const fix = async (distance: number, accuracy: number, age = 1) => {
+          await pool.query(
+            `UPDATE driver_profiles dp
+               SET last_location=ST_Project(r.destination_location,$3::float8,0::float8),
+                   last_location_at=NOW()-($5::int * INTERVAL '1 second'),
+                   location_accuracy=$4
+               FROM rides r WHERE dp.id=$1 AND r.id=$2`,
+            [profile, booked.id, distance, accuracy, age],
+          );
         };
         const expectBlocked = async () => {
           const response = await complete().send({
@@ -486,17 +478,15 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
         };
         if (sector !== 'passenger') {
           await expectBlocked();
-          for (const distance of [10000, 1000, 200]) {
-            await fixes(distance, distance, 8);
+          for (const distance of [10000, 1000, 500, 101]) {
+            await fix(distance, 8);
             await expectBlocked();
           }
-          await fixes(80, 200, 8);
+          await fix(50, 35);
           await expectBlocked();
-          await fixes(80, 80, 35);
+          await fix(50, 8, 40);
           await expectBlocked();
-          await fixes(80, 80, 8, 40);
-          await expectBlocked();
-          await fixes(80, 80, 8);
+          await fix(99, 8);
         }
         const response = await (endPin ? complete().send({ endPin }) : complete());
         expect(response.status, response.text).toBe(200);

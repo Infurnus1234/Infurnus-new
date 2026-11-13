@@ -72,6 +72,7 @@ class SocketService {
       'ride:lifecycle_updated',
       'ride:completed',
       'ride:route_updated',
+      'ride:remaining_distance_updated',
       'ride:incoming',
       'ride:taken',
       'ride:cancelled',

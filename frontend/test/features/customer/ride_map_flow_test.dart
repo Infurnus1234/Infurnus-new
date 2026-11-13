@@ -264,6 +264,84 @@ void main() {
     expect(c.read(rideProvider).currentRoute, isNull);
     expect(c.read(rideProvider).lastDriverLocation, isNull);
   });
+  test(
+    'active trip keeps the last road distance while routing updates',
+    () async {
+      final socket = _Socket();
+      final now = DateTime.now().toUtc();
+      final ride = model.RideModel(
+        id: 'active-trip',
+        customerId: 'customer',
+        assignedDriverId: 'driver',
+        pickup: model.RideLocation(latitude: 25, longitude: 85),
+        destination: model.RideLocation(latitude: 26, longitude: 86),
+        status: model.RideStatus.inProgress,
+        createdAt: now,
+        updatedAt: now,
+      );
+      final dio = Dio()
+        ..interceptors.add(
+          InterceptorsWrapper(
+            onRequest: (request, handler) => handler.resolve(
+              Response(
+                requestOptions: request,
+                data: {
+                  'data': {
+                    'driverLocation': {
+                      'latitude': 25.5,
+                      'longitude': 85.5,
+                      'timestamp': now.toIso8601String(),
+                    },
+                    'remainingRoadDistance': {'status': 'live', 'meters': 2500},
+                  },
+                },
+              ),
+            ),
+          ),
+        );
+      final container = ProviderContainer(
+        overrides: [
+          dioProvider.overrideWithValue(dio),
+          socketServiceProvider.overrideWithValue(socket),
+          rideRepositoryProvider.overrideWithValue(_Repository(ride)),
+        ],
+      );
+      addTearDown(() {
+        container.dispose();
+        socket.dispose();
+      });
+      final notifier = container.read(rideProvider.notifier);
+      await notifier.getRideDetails(ride.id);
+      await notifier.refreshRideMap();
+      String? label() => container.read(rideProvider).remainingDistanceLabel;
+      expect(label(), '2.5 km remaining');
+      Future<void> update(String status, int? meters, int offset) async {
+        socket.events.add(
+          SocketServerEvent(
+            name: 'ride:remaining_distance_updated',
+            data: {
+              'rideId': ride.id,
+              'timestamp': now
+                  .add(Duration(milliseconds: offset))
+                  .toIso8601String(),
+              'status': status,
+              'meters': meters,
+            },
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+      }
+
+      await update('live', 850, 100);
+      expect(label(), '850 m remaining');
+      await update('live', 5000, 50);
+      expect(label(), '850 m remaining');
+      await update('updating', null, 200);
+      expect(label(), '850 m remaining · Updating');
+      await update('arrived', 0, 300);
+      expect(label(), 'Destination reached');
+    },
+  );
   test('map controller services are isolated per widget owner', () {
     final c = ProviderContainer();
     addTearDown(c.dispose);

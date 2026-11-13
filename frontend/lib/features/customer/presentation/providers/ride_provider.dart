@@ -75,6 +75,7 @@ class RideState {
   final String? mapError;
   final DriverLocation? lastDriverLocation;
   final RouteModel? currentRoute;
+  final String? remainingDistanceLabel;
   final int? userRating;
   final String? userReview;
   final bool isReviewSubmitted;
@@ -111,6 +112,7 @@ class RideState {
     this.mapError,
     this.lastDriverLocation,
     this.currentRoute,
+    this.remainingDistanceLabel,
     this.userRating,
     this.userReview,
     this.isReviewSubmitted = false,
@@ -154,6 +156,8 @@ class RideState {
     bool clearRide = false,
     DriverLocation? lastDriverLocation,
     RouteModel? currentRoute,
+    String? remainingDistanceLabel,
+    bool clearRemainingDistance = false,
     int? userRating,
     String? userReview,
     bool? isReviewSubmitted,
@@ -199,6 +203,12 @@ class RideState {
           ? null
           : lastDriverLocation ?? this.lastDriverLocation,
       currentRoute: clearMapData ? null : currentRoute ?? this.currentRoute,
+      remainingDistanceLabel:
+          clearRemainingDistance ||
+              clearRide ||
+              (currentRide != null && currentRide.id != this.currentRide?.id)
+          ? null
+          : remainingDistanceLabel ?? this.remainingDistanceLabel,
       userRating: userRating ?? this.userRating,
       userReview: userReview ?? this.userReview,
       isReviewSubmitted: isReviewSubmitted ?? this.isReviewSubmitted,
@@ -221,6 +231,72 @@ class RideNotifier extends StateNotifier<RideState> {
   StreamSubscription<String>? _pushSubscription;
   int _fareEstimateGeneration = 0;
   int _mapGeneration = 0;
+  String? _distanceRideId;
+  DateTime? _distanceTimestamp;
+  String? _lastDistance;
+  Timer? _distanceExpiry;
+
+  void _updateRemainingDistance(Map? update, {DateTime? timestamp}) {
+    final id = state.currentRide?.id;
+    if (id == null || state.status != RideStatus.active) return;
+    if (_distanceRideId != id) {
+      _distanceRideId = id;
+      _distanceTimestamp = null;
+      _lastDistance = null;
+    }
+    final latest = _distanceTimestamp;
+    if (latest != null && (timestamp == null || timestamp.isBefore(latest))) {
+      if (timestamp != null ||
+          DateTime.now().difference(latest).inSeconds < 30) {
+        return;
+      }
+    }
+    _distanceTimestamp = timestamp ?? latest;
+    _distanceExpiry?.cancel();
+    final meters = update?['meters'];
+    final fresh =
+        timestamp != null &&
+        !timestamp.isAfter(DateTime.now().add(const Duration(seconds: 2))) &&
+        DateTime.now().difference(timestamp) < const Duration(seconds: 30);
+    String? label;
+    if (fresh && update?['status'] == 'arrived') {
+      label = 'Destination reached';
+    } else if (fresh &&
+        update?['status'] == 'live' &&
+        meters is num &&
+        meters > 0) {
+      label = meters >= 1000
+          ? '${(meters / 1000).toStringAsFixed(1)} km remaining'
+          : '${meters.round()} m remaining';
+      _lastDistance = label;
+    }
+    final displayed = label ?? _updatingDistance;
+    if (state.remainingDistanceLabel != displayed) {
+      state = state.copyWith(
+        remainingDistanceLabel: displayed,
+        mapError: state.mapError,
+      );
+    }
+    if (fresh && label != null) {
+      _distanceExpiry = Timer(
+        const Duration(seconds: 30) - DateTime.now().difference(timestamp),
+        () {
+          if (mounted &&
+              state.currentRide?.id == id &&
+              state.status == RideStatus.active) {
+            state = state.copyWith(
+              remainingDistanceLabel: _updatingDistance,
+              mapError: state.mapError,
+            );
+          }
+        },
+      );
+    }
+  }
+
+  String get _updatingDistance => _lastDistance == null
+      ? 'Remaining distance unavailable'
+      : '$_lastDistance · Updating';
   int _locationGeneration = 0;
   int _pickupSelectionGeneration = 0;
   int _destinationSelectionGeneration = 0;
@@ -312,6 +388,15 @@ class RideNotifier extends StateNotifier<RideState> {
       final data = response.data['data'] as Map<String, dynamic>;
       final route = id == null ? data : data['route'];
       final location = id == null ? null : data['driverLocation'];
+      if (id != null && locationGeneration == _locationGeneration) {
+        final distance = data['remainingRoadDistance'];
+        _updateRemainingDistance(
+          distance is Map ? distance : null,
+          timestamp: location is Map
+              ? DateTime.tryParse('${location['timestamp']}')
+              : null,
+        );
+      }
       final currentLocation = locationGeneration != _locationGeneration
           ? state.lastDriverLocation
           : _parseDriverLocation(location);
@@ -455,6 +540,14 @@ class RideNotifier extends StateNotifier<RideState> {
         }
         break;
 
+      case 'ride:remaining_distance_updated':
+        if (event.data['rideId'] == state.currentRide?.id) {
+          _updateRemainingDistance(
+            event.data,
+            timestamp: DateTime.tryParse('${event.data['timestamp']}'),
+          );
+        }
+        break;
       case 'ride:route_updated':
         final rideId = event.data['rideId'];
         if (rideId == state.currentRide?.id) {
@@ -1597,6 +1690,7 @@ class RideNotifier extends StateNotifier<RideState> {
 
   @override
   void dispose() {
+    _distanceExpiry?.cancel();
     _rideReconciliation?.cancel();
     _socketStateSubscription?.cancel();
     _eventSubscription?.cancel();
