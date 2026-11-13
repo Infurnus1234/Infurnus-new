@@ -133,12 +133,13 @@ export class LogisticsTargetedDispatch {
     driverId: string,
     vehicleId: string,
     kind: 'driver' | 'fleet' = 'driver',
+    requireEscalation = false,
   ) {
     const client = await this.pool.connect();
     let offer: { id: string; recipientId: string; expiresAt: Date };
     try {
       await client.query('BEGIN');
-      await this.lockSearchingBooking(client, rideId);
+      await this.lockSearchingBooking(client, rideId, requireEscalation);
       await client.query(
         `UPDATE logistics_dispatch_offers SET status='expired', responded_at=expires_at
          WHERE ride_id=$1 AND status IN ('pending','coordinating','forwarded') AND expires_at<=clock_timestamp()`,
@@ -294,10 +295,15 @@ export class LogisticsTargetedDispatch {
     return offer;
   }
 
-  private async lockSearchingBooking(client: PoolClient, rideId: string) {
+  private async lockSearchingBooking(
+    client: PoolClient,
+    rideId: string,
+    requireEscalation: boolean,
+  ) {
     const { rowCount } = await client.query(
-      "SELECT id FROM rides WHERE id=$1 AND sector='logistics' AND status='searching' FOR UPDATE",
-      [rideId],
+      `SELECT id FROM rides WHERE id=$1 AND sector='logistics' AND status='searching'
+       AND (NOT $2::boolean OR logistics_escalated_at IS NOT NULL) FOR UPDATE`,
+      [rideId, requireEscalation],
     );
     if (!rowCount)
       throw new AppError(

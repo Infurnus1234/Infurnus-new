@@ -140,7 +140,7 @@ export interface RideRepository {
   isAssignedDriverProfile(id: string, driverProfileId: string): Promise<boolean>;
 
   listRecoverableDispatch?(limit?: number, excludeRideIds?: string[]): Promise<Ride[]>;
-  deferExhaustedLogisticsDispatch?(rideId: string): Promise<void>;
+  deferExhaustedLogisticsDispatch?(rideId: string, noEligibleDrivers: boolean): Promise<void>;
   escalateOverdueLogisticsDispatch?(): Promise<void>;
   rejectTargetedDispatch?(rideId: string, driverProfileId: string): Promise<boolean>;
   verifyLogisticsPickup?(
@@ -1577,7 +1577,7 @@ export class PostgresRideRepository implements RideRepository {
   async withDispatchLock<T>(id: string, work: () => Promise<T>): Promise<T | null> {
     return this.withRouteLock('dispatch:' + id, work);
   }
-  async deferExhaustedLogisticsDispatch(rideId: string): Promise<void> {
+  async deferExhaustedLogisticsDispatch(rideId: string, noEligibleDrivers: boolean): Promise<void> {
     await this.pool.query(
       `WITH dispatch_history AS (
          SELECT EXISTS (
@@ -1586,14 +1586,17 @@ export class PostgresRideRepository implements RideRepository {
          ) AS attempted
        )
        UPDATE rides
-       SET logistics_escalated_at = COALESCE(logistics_escalated_at, CASE WHEN NOT attempted THEN NOW() END),
-           logistics_escalation_reason = COALESCE(logistics_escalation_reason, CASE WHEN NOT attempted THEN 'search_exhausted' END),
-           logistics_retry_at = NOW() + INTERVAL '30 seconds'
+       SET logistics_escalated_at = COALESCE(logistics_escalated_at, CASE WHEN logistics_retry_at IS NULL AND $2::boolean AND NOT attempted THEN NOW() END),
+           logistics_escalation_reason = COALESCE(logistics_escalation_reason, CASE WHEN logistics_retry_at IS NULL AND $2::boolean AND NOT attempted THEN 'search_exhausted' END),
+           logistics_retry_at = LEAST(NOW() + INTERVAL '30 seconds', CASE
+             WHEN NOW() < created_at + INTERVAL '2 minutes' THEN created_at + INTERVAL '2 minutes'
+             WHEN NOW() < created_at + INTERVAL '4 minutes' THEN created_at + INTERVAL '4 minutes'
+             ELSE NOW() + INTERVAL '30 seconds' END)
        FROM dispatch_history
        WHERE id = $1 AND sector = 'logistics' AND status = 'searching'
          AND assigned_driver_id IS NULL AND dispatch_driver_id IS NULL
          AND (logistics_retry_at IS NULL OR logistics_retry_at <= NOW())`,
-      [rideId],
+      [rideId, noEligibleDrivers],
     );
   }
   async rejectTargetedDispatch(rideId: string, driverProfileId: string): Promise<boolean> {

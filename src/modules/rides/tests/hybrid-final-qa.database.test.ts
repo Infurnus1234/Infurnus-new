@@ -515,6 +515,29 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
       });
     },
   );
+  it('holds manual dispatch before five minutes when supply exists', async () => {
+    const r = await ride(await customer(), 'logistics', 'mini_truck');
+    await pool.query("UPDATE rides SET created_at = NOW() - INTERVAL '4 minutes' WHERE id = $1", [
+      r.id,
+    ]);
+    await repo.deferExhaustedLogisticsDispatch(r.id, false);
+    await repo.escalateOverdueLogisticsDispatch();
+    const status = () =>
+      pool.query('SELECT logistics_escalation_reason FROM rides WHERE id = $1', [r.id]);
+    expect((await status()).rows[0].logistics_escalation_reason).toBeNull();
+
+    await pool.query("UPDATE rides SET created_at = NOW() - INTERVAL '301 seconds' WHERE id = $1", [
+      r.id,
+    ]);
+    const original = await repo.findById(r.id);
+    await repo.escalateOverdueLogisticsDispatch();
+    expect((await status()).rows[0].logistics_escalation_reason).toBe('acceptance_timeout');
+    expect(await repo.findById(r.id)).toMatchObject({
+      status: 'searching',
+      logisticsFulfillmentDeadline: original?.logisticsFulfillmentDeadline,
+    });
+  });
+
   it('escalates an overdue Logistics search without moving the fulfillment deadline', async () => {
     const r = await ride(await customer(), 'logistics', 'mini_truck');
     await pool.query("UPDATE rides SET created_at = NOW() - INTERVAL '31 minutes' WHERE id = $1", [
@@ -909,6 +932,17 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
       );
       controllers.push(controller);
       await controller.dispatch(r);
+      if (sector === 'logistics') {
+        expect(offers).toEqual([ds[0]!.profileId]);
+        for (const wave of [1, 2]) {
+          await pool.query(
+            "UPDATE rides SET created_at = NOW() - ($2::int * INTERVAL '1 second') WHERE id=$1",
+            [r.id, wave * 120],
+          );
+          await controller.dispatch((await repo.findById(r.id))!);
+          expect(offers).toEqual(ds.slice(0, wave + 1).map((d) => d.profileId));
+        }
+      }
       expect(offers).toEqual(ds.map((d) => d.profileId));
       expect(new Set(offers).size).toBe(radii.length);
       const finalState = sector === 'logistics' ? 'searching' : 'cancelled';

@@ -90,6 +90,7 @@ export function createLogisticsAdminRouter(pool: Pool, maps?: MapProvider) {
       driverId,
       vehicleId,
       kind,
+      true,
     );
     res.status(201).json({ success: true, data: offer });
   });

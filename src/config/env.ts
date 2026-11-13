@@ -192,7 +192,7 @@ export const envSchema = z
     MAX_DRIVER_MATCH_CANDIDATES: z.coerce.number().int().positive().max(25).default(20),
 
     DRIVER_DISPATCH_RESPONSE_TIMEOUT_MS: z.coerce.number().int().positive().default(15000),
-    LOGISTICS_DISPATCH_ESCALATION_SECONDS: z.coerce.number().int().min(1).max(1799).default(330),
+    LOGISTICS_DISPATCH_ESCALATION_SECONDS: z.coerce.number().int().min(1).max(1799).default(300),
     LOGISTICS_DIRECT_OFFER_SECONDS: z.coerce.number().int().min(15).max(600).default(120),
     LOGISTICS_PICKUP_RADIUS_METERS: z.coerce.number().int().min(25).max(300).default(100),
     LOGISTICS_URGENT_MINUTES: z.coerce.number().int().min(1).max(29).default(10),

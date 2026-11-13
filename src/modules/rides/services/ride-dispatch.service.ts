@@ -132,7 +132,11 @@ export class RideDispatchService {
         : [null];
     const attempted = new Set<string>();
     let declinedOffer = false;
-    for (const radius of radii) {
+    let foundCandidate = false;
+    let latestRide = ride;
+    let searchedRadius: number | null = null;
+    let loggedRadius: number | null = null;
+    for (const configuredRadius of policy.kind === 'logistics' ? [null] : radii) {
       while (!this.disposed) {
         const existing = await this.rides.pendingDispatch?.(ride.id);
         if (existing) {
@@ -152,6 +156,14 @@ export class RideDispatchService {
           ? await this.rides.reconcileDispatch(ride.id)
           : ride;
         if (!current) return;
+        latestRide = current;
+        let radius = configuredRadius;
+        if (policy.kind === 'logistics') {
+          const ageMs = Math.max(0, Date.now() - current.createdAt.getTime());
+          const wave = Math.min(Math.floor(ageMs / policy.responseMs), radii.length - 1);
+          radius = radii[wave]!;
+          searchedRadius = radius;
+        }
         const candidates = this.matching.findDispatchDrivers
           ? await this.matching.findDispatchDrivers(current, radius)
           : await this.matching.findRankedDrivers(
@@ -159,6 +171,18 @@ export class RideDispatchService {
               bookingInventorySector(ride.sector ?? 'passenger'),
               ride.vehicleCategory ?? undefined,
             );
+        if (policy.kind === 'logistics' && radius !== loggedRadius) {
+          loggedRadius = radius;
+          console.info(
+            JSON.stringify({
+              event: 'logistics_dispatch_wave',
+              rideId: current.id,
+              radiusMeters: radius,
+              eligibleCandidates: candidates.length,
+            }),
+          );
+        }
+        foundCandidate ||= candidates.length > 0;
         let offeredAny = false;
         for (const candidate of candidates) {
           if (this.disposed) return;
@@ -202,7 +226,16 @@ export class RideDispatchService {
 
     if (this.disposed || declinedOffer) return; // A competing dispatcher or changed eligibility must be reconciled, never cancelled by a losing snapshot.
     if (ride.sector === 'logistics') {
-      await this.rides.deferExhaustedLogisticsDispatch?.(ride.id);
+      // Look across the complete Logistics area before classifying zero supply.
+      // Candidates beyond the current wave are eligible for a later offer.
+      if (!foundCandidate && this.matching.findDispatchDrivers && radii.length > 1) {
+        const outerRadius = radii[radii.length - 1]!;
+        if (searchedRadius !== outerRadius) {
+          foundCandidate =
+            (await this.matching.findDispatchDrivers(latestRide, outerRadius)).length > 0;
+        }
+      }
+      await this.rides.deferExhaustedLogisticsDispatch?.(ride.id, !foundCandidate);
       return;
     }
     const failedRide = await this.rides.failDispatch(

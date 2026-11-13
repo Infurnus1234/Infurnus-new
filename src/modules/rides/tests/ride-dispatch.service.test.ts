@@ -79,7 +79,6 @@ afterEach(() => {
 describe('RideDispatchService', () => {
   it.each([
     ['passenger', 'sedan', [2000, 5000, 10000]],
-    ['logistics', 'mini_truck', [7000, 15000, 20000]],
     ['service', 'towing', [25000]],
   ])(
     'exhausts each %s wave without re-offering a rejected driver',
@@ -104,14 +103,63 @@ describe('RideDispatchService', () => {
       );
       await dispatcher.dispatch({ ...ride, sector, vehicleCategory });
       expect(offered).toEqual(radii.map((radius) => `driver-${radius}`));
-      expect(repo.failDispatch).toHaveBeenCalledTimes(sector === 'logistics' ? 0 : 1);
-      expect(repo.deferExhaustedLogisticsDispatch).toHaveBeenCalledTimes(
-        sector === 'logistics' ? 1 : 0,
-      );
+      expect(repo.failDispatch).toHaveBeenCalledTimes(1);
+      expect(repo.deferExhaustedLogisticsDispatch).not.toHaveBeenCalled();
       dispatcher.dispose();
     },
   );
-  it('escalates Logistics immediately when no eligible driver can receive an offer', async () => {
+  it.each([
+    [0, 7000],
+    [120000, 15000],
+    [240000, 20000],
+  ])('offers only within the Logistics radius for booking age %i ms', async (age, radius) => {
+    const repo = fakeRideRepository();
+    const driver = candidate('nearby');
+    const matching = { findDispatchDrivers: vi.fn().mockResolvedValue([driver]) };
+    const notify = vi.fn(async () => {
+      rideEvents.emit('ride:accepted', ride);
+    });
+    const dispatcher = new RideDispatchService(repo as never, matching as never, notify);
+    try {
+      const booking = {
+        ...ride,
+        sector: 'logistics' as const,
+        createdAt: new Date(Date.now() - age),
+      };
+      await dispatcher.dispatch(booking);
+      expect(matching.findDispatchDrivers).toHaveBeenCalledExactlyOnceWith(booking, radius);
+      expect(notify).toHaveBeenCalledTimes(1);
+      expect(repo.deferExhaustedLogisticsDispatch).not.toHaveBeenCalled();
+    } finally {
+      dispatcher.dispose();
+    }
+  });
+
+  it.each([true, false])(
+    'checks outer Logistics supply before escalation (supply: %s)',
+    async (supply) => {
+      const repo = fakeRideRepository();
+      const notify = vi.fn();
+      const findDispatchDrivers = vi.fn(async (_ride: Ride, radius: number) =>
+        supply && radius === 20000 ? [candidate('outside-first-wave')] : [],
+      );
+      const dispatcher = new RideDispatchService(
+        repo as never,
+        { findDispatchDrivers } as never,
+        notify,
+      );
+      try {
+        await dispatcher.dispatch({ ...ride, sector: 'logistics', createdAt: new Date() });
+        expect(findDispatchDrivers.mock.calls.map(([, radius]) => radius)).toEqual([7000, 20000]);
+        expect(notify).not.toHaveBeenCalled();
+        expect(repo.deferExhaustedLogisticsDispatch).toHaveBeenCalledWith(ride.id, !supply);
+      } finally {
+        dispatcher.dispose();
+      }
+    },
+  );
+
+  it('does not classify a failed delivery as zero Logistics supply', async () => {
     const repo = fakeRideRepository();
     const dispatcher = new RideDispatchService(
       repo as never,
@@ -123,7 +171,7 @@ describe('RideDispatchService', () => {
     try {
       await dispatcher.dispatch({ ...ride, sector: 'logistics', vehicleCategory: 'mini_truck' });
       expect(repo.attempts).toEqual([{ driver: 'unreachable', status: 'rejected' }]);
-      expect(repo.deferExhaustedLogisticsDispatch).toHaveBeenCalledWith(ride.id);
+      expect(repo.deferExhaustedLogisticsDispatch).toHaveBeenCalledWith(ride.id, false);
       expect(repo.failDispatch).not.toHaveBeenCalled();
     } finally {
       dispatcher.dispose();
