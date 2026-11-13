@@ -118,6 +118,15 @@ export interface NotificationRepository {
 }
 
 export class PostgresNotificationRepository implements NotificationRepository {
+  async logisticsOfferOpen(offerId: string, userId: string): Promise<boolean> {
+    const result = await pool.query(
+      `SELECT 1 FROM logistics_dispatch_offers o JOIN rides r ON r.id=o.ride_id
+       WHERE o.id=$1 AND o.recipient_id=$2 AND o.status='pending'
+         AND o.expires_at>clock_timestamp() AND r.sector='logistics' AND r.status='searching'`,
+      [offerId, userId],
+    );
+    return result.rowCount === 1;
+  }
   async pushAllowed(userId: string): Promise<boolean> {
     const result = await pool.query<{ allowed: boolean }>(
       `SELECT COALESCE(p.push_notifications_enabled,TRUE) AS allowed

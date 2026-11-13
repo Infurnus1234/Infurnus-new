@@ -140,6 +140,25 @@ export interface RideRepository {
   isAssignedDriverProfile(id: string, driverProfileId: string): Promise<boolean>;
 
   listRecoverableDispatch?(limit?: number, excludeRideIds?: string[]): Promise<Ride[]>;
+  deferExhaustedLogisticsDispatch?(rideId: string): Promise<void>;
+  escalateOverdueLogisticsDispatch?(): Promise<void>;
+  rejectTargetedDispatch?(rideId: string, driverProfileId: string): Promise<boolean>;
+  verifyLogisticsPickup?(
+    rideId: string,
+    driverId: string,
+    location: {
+      latitude: number;
+      longitude: number;
+      accuracy?: number | undefined;
+      timestamp: Date;
+    },
+  ): Promise<boolean>;
+  recordLogisticsPickupEta?(
+    rideId: string,
+    driverId: string,
+    recordedAt: Date,
+    etaSeconds: number,
+  ): Promise<void>;
   pendingDispatch?(id: string): Promise<{ driverProfileId: string; expiresAt: Date } | null>;
   reconcileDispatch?(id: string): Promise<Ride | null>;
   withDispatchLock?<T>(id: string, work: () => Promise<T>): Promise<T | null>;
@@ -289,6 +308,25 @@ const detailedRideColumns = (tableAlias = 'r') => `
   ${tableAlias}.cancellation_reason AS "cancellationReason",
   ${tableAlias}.cancelled_by_customer AS "cancelledByCustomer",
   ${tableAlias}.driver_accepted_at AS "driverAcceptedAt",
+  CASE WHEN ${tableAlias}.sector = 'logistics'
+    THEN ${tableAlias}.created_at + INTERVAL '30 minutes'
+  END AS "logisticsFulfillmentDeadline",
+  CASE WHEN ${tableAlias}.sector = 'logistics' AND ${tableAlias}.status = 'searching'
+    THEN CASE
+      WHEN statement_timestamp() >= ${tableAlias}.created_at + INTERVAL '30 minutes' THEN 'delayed'
+      WHEN ${tableAlias}.logistics_escalated_at IS NOT NULL THEN 'arranging'
+      ELSE 'searching'
+    END
+  END AS "logisticsSearchStatus",
+  CASE WHEN ${tableAlias}.sector='logistics'
+    AND ${tableAlias}.status IN ('driver_assigned','driver_arriving','driver_arrived')
+    THEN (SELECT CASE
+      WHEN fulfillment.pickup_arrived_at IS NOT NULL THEN NULL
+      WHEN statement_timestamp()>=${tableAlias}.created_at+INTERVAL '30 minutes' THEN 'delayed'
+      WHEN fulfillment.pickup_eta_at>${tableAlias}.created_at+INTERVAL '30 minutes' THEN 'at_risk'
+      END FROM (SELECT 1) row LEFT JOIN logistics_pickup_fulfillment fulfillment
+        ON fulfillment.ride_id=${tableAlias}.id)
+  END AS "logisticsPickupStatus",
   ride_customer_cancellation_deadline(${tableAlias}.sector::text, ${tableAlias}.driver_accepted_at)
     AS "customerCancellationDeadline",
   clock_timestamp() AS "cancellationServerTime",
@@ -483,6 +521,15 @@ function mapRide(row: Record<string, unknown>, forCustomer = false): Ride {
     cancellationReason: (row.cancellationReason as string) || null,
     cancelledByCustomer: row.cancelledByCustomer === true,
     driverAcceptedAt: (row.driverAcceptedAt as Date | null) ?? null,
+    ...(row.logisticsFulfillmentDeadline
+      ? {
+          logisticsFulfillmentDeadline: row.logisticsFulfillmentDeadline as Date,
+          logisticsSearchStatus:
+            (row.logisticsSearchStatus as Ride['logisticsSearchStatus']) ?? null,
+          logisticsPickupStatus:
+            (row.logisticsPickupStatus as Ride['logisticsPickupStatus']) ?? null,
+        }
+      : {}),
     customerCancellationDeadline: (row.customerCancellationDeadline as Date | null) ?? null,
     cancellationServerTime: row.cancellationServerTime as Date,
     customerCancellationAllowed: row.customerCancellationAllowed === true,
@@ -890,13 +937,23 @@ export class PostgresRideRepository implements RideRepository {
   ): Promise<Ride | null> {
     const result = await client.query(
       `WITH locked AS MATERIALIZED (
-         SELECT id,status,dispatch_driver_id,dispatch_expires_at FROM rides WHERE id=$1 FOR UPDATE
+         SELECT id,status,sector,dispatch_driver_id,dispatch_expires_at FROM rides WHERE id=$1 FOR UPDATE
        ), eligible AS MATERIALIZED (
-         SELECT locked.id FROM locked WHERE locked.status='searching'
-           AND locked.dispatch_driver_id=$2 AND locked.dispatch_expires_at>clock_timestamp()
+         SELECT locked.id, target.id AS target_id, target.vehicle_id, target.parent_offer_id FROM locked
+         LEFT JOIN LATERAL (
+           SELECT o.id, o.vehicle_id, o.parent_offer_id FROM logistics_dispatch_offers o
+           JOIN driver_profiles profile ON profile.id=o.driver_profile_id AND profile.active_vehicle_id=o.vehicle_id
+           JOIN vehicles selected_vehicle ON selected_vehicle.id=o.vehicle_id
+           LEFT JOIN logistics_dispatch_offers parent ON parent.id=o.parent_offer_id
+           WHERE locked.sector='logistics' AND o.ride_id=locked.id AND o.driver_profile_id=$2
+             AND o.kind='driver' AND o.status='pending' AND o.expires_at>clock_timestamp()
+             AND (o.parent_offer_id IS NULL OR selected_vehicle.owner_id=parent.recipient_id)
+         ) target ON true
+         WHERE locked.status='searching' AND (target.id IS NOT NULL OR (
+           locked.dispatch_driver_id=$2 AND locked.dispatch_expires_at>clock_timestamp()
            AND EXISTS(SELECT 1 FROM ride_dispatch_attempts live_offer
              WHERE live_offer.ride_id=locked.id AND live_offer.driver_profile_id=$2
-               AND live_offer.status='offered' AND live_offer.expires_at>clock_timestamp())
+               AND live_offer.status='offered' AND live_offer.expires_at>clock_timestamp())))
        ), updated AS (
          UPDATE rides r
          SET
@@ -926,19 +983,15 @@ export class PostgresRideRepository implements RideRepository {
            ),
            status = 'driver_assigned',
            driver_accepted_at = clock_timestamp(),
+           logistics_dispatch_source = CASE WHEN r.sector='logistics'
+             THEN CASE WHEN eligible.target_id IS NULL THEN 'automatic'
+               WHEN eligible.parent_offer_id IS NOT NULL THEN 'fleet' ELSE 'admin' END END,
            dispatch_driver_id = NULL,
            dispatch_expires_at = NULL
+         FROM eligible
          WHERE r.id = $1
-           AND r.id IN(SELECT id FROM eligible)
+           AND r.id = eligible.id
            AND r.status = 'searching'
-              AND EXISTS (
-                SELECT 1
-                FROM ride_dispatch_attempts offered
-                WHERE offered.ride_id = r.id
-                  AND offered.driver_profile_id = $2
-                  AND offered.status = 'offered'
-                  AND offered.expires_at > clock_timestamp()
-              )
            AND EXISTS (
              SELECT 1 FROM driver_profiles dp JOIN users u ON u.id=dp.user_id
              JOIN vehicles v ON v.driver_profile_id=dp.id
@@ -947,8 +1000,9 @@ export class PostgresRideRepository implements RideRepository {
                  WHEN r.sector='service' THEN ${serviceEligibilitySql(undefined, this.serviceCities)}
                  ELSE ST_DWithin(dp.last_location,r.pickup_location,(CASE WHEN r.sector IN ('passenger','rental') THEN 10000 WHEN r.sector='logistics' OR (r.sector='service' AND r.vehicle_category IN ('towing','towing_van')) THEN 20000 ELSE $4 END)+0.000001) END)
                AND v.sector=(CASE WHEN r.sector='rental' THEN 'passenger' ELSE r.sector END) AND v.category=r.vehicle_category
+               AND (eligible.vehicle_id IS NULL OR v.id=eligible.vehicle_id)
            )
-         RETURNING *
+         RETURNING r.*, eligible.target_id
        ), accepted_attempt AS (
          UPDATE ride_dispatch_attempts attempt
          SET status = 'accepted', responded_at = updated.driver_accepted_at
@@ -956,14 +1010,33 @@ export class PostgresRideRepository implements RideRepository {
          WHERE attempt.ride_id = updated.id
            AND attempt.driver_profile_id = $2
            AND attempt.status = 'offered'
+           AND updated.target_id IS NULL
            AND attempt.attempt = (SELECT MAX(offered.attempt) FROM ride_dispatch_attempts offered
              WHERE offered.ride_id=updated.id AND offered.driver_profile_id=$2
                AND offered.status='offered' AND offered.expires_at>clock_timestamp())
          RETURNING attempt.ride_id AS id
+       ), closed_targeted AS (
+         UPDATE logistics_dispatch_offers o
+         SET status = CASE
+               WHEN o.id=updated.target_id AND o.expires_at>updated.driver_accepted_at THEN 'accepted'
+               WHEN o.id=(SELECT parent_offer_id FROM eligible) THEN 'accepted'
+               WHEN o.expires_at<=updated.driver_accepted_at THEN 'expired'
+               ELSE 'revoked' END,
+             responded_at=updated.driver_accepted_at
+         FROM updated
+         WHERE o.ride_id=updated.id AND o.status IN ('pending','coordinating','forwarded')
+         RETURNING o.id, o.ride_id, o.status
+       ), superseded_auto AS (
+         UPDATE ride_dispatch_attempts attempt
+         SET status='cancelled', responded_at=updated.driver_accepted_at
+         FROM updated
+         WHERE updated.target_id IS NOT NULL AND attempt.ride_id=updated.id
+           AND attempt.driver_profile_id=$2 AND attempt.status='offered'
        ), accepted AS (
          SELECT updated.*
          FROM updated
-         JOIN accepted_attempt USING (id)
+         WHERE EXISTS(SELECT 1 FROM accepted_attempt WHERE accepted_attempt.id=updated.id)
+            OR EXISTS(SELECT 1 FROM closed_targeted WHERE id=updated.target_id AND status='accepted')
        )
        SELECT ${detailedRideColumns('u_r')}
        FROM accepted u_r
@@ -971,6 +1044,17 @@ export class PostgresRideRepository implements RideRepository {
       [id, driverProfileId, env.DRIVER_LOCATION_STALE_SECONDS, env.MAP_DRIVER_RADII_METERS.at(-1)!],
     );
 
+    if (result.rows[0]?.sector === 'logistics') {
+      // Offer creation locks the ride first. This fresh statement can also close
+      // offers committed while the acceptance statement waited for that lock.
+      await client.query(
+        `UPDATE logistics_dispatch_offers
+         SET status=CASE WHEN expires_at<=clock_timestamp() THEN 'expired' ELSE 'revoked' END,
+             responded_at=clock_timestamp()
+         WHERE ride_id=$1 AND status IN ('pending','coordinating','forwarded')`,
+        [id],
+      );
+    }
     return result.rows[0] ? mapRide(result.rows[0], false) : null;
   }
 
@@ -1097,13 +1181,20 @@ export class PostgresRideRepository implements RideRepository {
 
   async listAvailableForDriver(driverProfileId: string, limit = 20): Promise<Ride[]> {
     const result = await this.pool.query(
-      `SELECT ${detailedRideColumns('r')}
+      `SELECT ${detailedRideColumns('r')}, GREATEST(
+         CASE WHEN r.dispatch_driver_id=$1 THEN r.dispatch_expires_at END,
+         targeted.expires_at) AS "dispatchExpiresAt"
        FROM rides r
        ${detailedRideJoins('r')}
+       LEFT JOIN LATERAL (
+         SELECT max(o.expires_at) AS expires_at FROM logistics_dispatch_offers o
+         JOIN driver_profiles dp ON dp.id=o.driver_profile_id AND dp.active_vehicle_id=o.vehicle_id
+         WHERE o.ride_id=r.id AND o.driver_profile_id=$1 AND o.kind='driver' AND o.status='pending'
+           AND o.expires_at>clock_timestamp()
+       ) targeted ON r.sector='logistics'
        WHERE r.status = 'searching'
          AND r.assigned_driver_id IS NULL
-         AND r.dispatch_driver_id = $1
-         AND r.dispatch_expires_at > NOW()
+         AND ((r.dispatch_driver_id=$1 AND r.dispatch_expires_at>NOW()) OR targeted.expires_at IS NOT NULL)
        ORDER BY r.created_at DESC, r.id DESC
        LIMIT $2`,
       [driverProfileId, limit],
@@ -1122,6 +1213,7 @@ export class PostgresRideRepository implements RideRepository {
              dispatch_expires_at = NULL
          WHERE r.id = $1
            AND r.status = 'searching'
+           AND r.sector <> 'logistics'
            AND r.assigned_driver_id IS NULL
            AND r.dispatch_driver_id IS NULL
          RETURNING r.*
@@ -1499,14 +1591,128 @@ export class PostgresRideRepository implements RideRepository {
   async withDispatchLock<T>(id: string, work: () => Promise<T>): Promise<T | null> {
     return this.withRouteLock('dispatch:' + id, work);
   }
+  async deferExhaustedLogisticsDispatch(rideId: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE rides
+       SET logistics_escalated_at = COALESCE(logistics_escalated_at, NOW()),
+           logistics_escalation_reason = COALESCE(logistics_escalation_reason, 'search_exhausted'),
+           logistics_retry_at = NOW() + INTERVAL '30 seconds'
+       WHERE id = $1 AND sector = 'logistics' AND status = 'searching'
+         AND assigned_driver_id IS NULL AND dispatch_driver_id IS NULL
+         AND (logistics_retry_at IS NULL OR logistics_retry_at <= NOW())`,
+      [rideId],
+    );
+  }
+  async rejectTargetedDispatch(rideId: string, driverProfileId: string): Promise<boolean> {
+    return withTransaction(async (client) => {
+      const locked = await client.query(
+        "SELECT id FROM rides WHERE id=$1 AND sector='logistics' AND status='searching' FOR UPDATE",
+        [rideId],
+      );
+      if (!locked.rowCount) return false;
+      const result = await client.query(
+        `UPDATE logistics_dispatch_offers SET status='rejected', responded_at=clock_timestamp()
+         WHERE ride_id=$1 AND driver_profile_id=$2 AND kind='driver' AND status='pending'
+           AND expires_at>clock_timestamp()`,
+        [rideId, driverProfileId],
+      );
+      return result.rowCount === 1;
+    });
+  }
+  async verifyLogisticsPickup(
+    rideId: string,
+    driverId: string,
+    location: {
+      latitude: number;
+      longitude: number;
+      accuracy?: number | undefined;
+      timestamp: Date;
+    },
+  ): Promise<boolean> {
+    if (location.accuracy === undefined || location.accuracy <= 0 || location.accuracy > 30)
+      return false;
+    const result = await this.pool.query(
+      `WITH assigned AS MATERIALIZED (
+         SELECT id, pickup_location, driver_accepted_at FROM rides
+         WHERE id=$1 AND sector='logistics' AND assigned_driver_id=$2
+           AND status IN ('driver_assigned','driver_arriving','driver_arrived')
+           AND assigned_vehicle_id IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM logistics_pickup_fulfillment f
+             WHERE f.ride_id=rides.id AND f.pickup_arrived_at IS NOT NULL)
+         FOR UPDATE
+       )
+       INSERT INTO logistics_pickup_fulfillment (ride_id, pickup_arrived_at)
+       SELECT id, GREATEST(driver_accepted_at,LEAST($3::timestamptz,clock_timestamp())) FROM assigned
+       WHERE $3::timestamptz BETWEEN GREATEST(driver_accepted_at-INTERVAL '2 seconds',
+         clock_timestamp()-($4::int * INTERVAL '1 second')) AND clock_timestamp()+INTERVAL '2 seconds'
+         AND ST_DWithin(pickup_location, ST_SetSRID(ST_MakePoint($5,$6),4326)::geography,
+           GREATEST(0,$7::float8-$8::float8))
+       ON CONFLICT (ride_id) DO UPDATE SET pickup_arrived_at=excluded.pickup_arrived_at
+       WHERE logistics_pickup_fulfillment.pickup_arrived_at IS NULL
+       RETURNING ride_id`,
+      [
+        rideId,
+        driverId,
+        location.timestamp,
+        env.DRIVER_LOCATION_STALE_SECONDS,
+        location.longitude,
+        location.latitude,
+        env.LOGISTICS_PICKUP_RADIUS_METERS,
+        location.accuracy,
+      ],
+    );
+    return result.rowCount === 1;
+  }
+  async recordLogisticsPickupEta(
+    rideId: string,
+    driverId: string,
+    recordedAt: Date,
+    etaSeconds: number,
+  ): Promise<void> {
+    if (!Number.isFinite(etaSeconds) || etaSeconds < 0) return;
+    await this.pool.query(
+      `INSERT INTO logistics_pickup_fulfillment (ride_id, pickup_eta_at, eta_recorded_at)
+       SELECT id, $3::timestamptz+($4::float8 * INTERVAL '1 second'), $3
+       FROM rides WHERE id=$1 AND sector='logistics' AND assigned_driver_id=$2
+         AND status IN ('driver_assigned','driver_arriving','driver_arrived')
+       ON CONFLICT (ride_id) DO UPDATE SET pickup_eta_at=excluded.pickup_eta_at,
+         eta_recorded_at=excluded.eta_recorded_at
+       WHERE logistics_pickup_fulfillment.pickup_arrived_at IS NULL
+         AND (logistics_pickup_fulfillment.eta_recorded_at IS NULL
+           OR logistics_pickup_fulfillment.eta_recorded_at < excluded.eta_recorded_at)`,
+      [rideId, driverId, recordedAt, etaSeconds],
+    );
+  }
+  async escalateOverdueLogisticsDispatch(): Promise<void> {
+    await this.pool.query(
+      `UPDATE rides
+       SET logistics_escalated_at = NOW(), logistics_escalation_reason = 'acceptance_timeout'
+       WHERE sector = 'logistics' AND status = 'searching'
+         AND assigned_driver_id IS NULL AND logistics_escalated_at IS NULL
+         AND created_at <= NOW() - ($1::int * INTERVAL '1 second')`,
+      [env.LOGISTICS_DISPATCH_ESCALATION_SECONDS],
+    );
+    await this.pool.query(
+      `WITH expired_bookings AS MATERIALIZED (
+         SELECT r.id FROM rides r WHERE r.sector='logistics' AND r.status='searching'
+           AND EXISTS(SELECT 1 FROM logistics_dispatch_offers o WHERE o.ride_id=r.id
+             AND o.status IN ('pending','coordinating','forwarded') AND o.expires_at<=clock_timestamp())
+         ORDER BY r.id LIMIT 50 FOR UPDATE SKIP LOCKED
+       )
+       UPDATE logistics_dispatch_offers o SET status='expired', responded_at=o.expires_at
+       FROM expired_bookings b WHERE b.id=o.ride_id
+         AND o.status IN ('pending','coordinating','forwarded') AND o.expires_at<=clock_timestamp()`,
+    );
+  }
   async listRecoverableDispatch(limit = 20, excludeRideIds: string[] = []): Promise<Ride[]> {
     const result = await this.pool.query(
       `SELECT ${detailedRideColumns('r')} FROM rides r ${detailedRideJoins('r')}
        WHERE r.status='searching' AND r.assigned_driver_id IS NULL
        AND NOT(r.id=ANY($2::uuid[]))
        AND (r.dispatch_driver_id IS NOT NULL OR
-         (r.dispatch_driver_id IS NULL AND r.created_at <= NOW() - INTERVAL '5 seconds'))
-       ORDER BY r.created_at ASC, r.id ASC LIMIT $1`,
+         (r.dispatch_driver_id IS NULL AND r.created_at <= NOW() - INTERVAL '5 seconds'
+          AND (r.logistics_retry_at IS NULL OR r.logistics_retry_at <= NOW())))
+       ORDER BY COALESCE(r.logistics_retry_at, r.created_at) ASC, r.id ASC LIMIT $1`,
       [limit, excludeRideIds],
     );
     return result.rows.map((row) => mapRide(row, false));

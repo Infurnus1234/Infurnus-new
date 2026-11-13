@@ -75,6 +75,7 @@ import type { DriverRepository } from './modules/rides/repositories/driver.repos
 import { PostgresDriverDocumentRepository } from './modules/rides/repositories/driver-document.repository.js';
 import type { RideRepository } from './modules/rides/repositories/ride.repository.js';
 import { createRideRouter } from './modules/rides/routes/ride.routes.js';
+import { createLogisticsFleetDispatchRouter } from './modules/rides/routes/logistics-fleet-dispatch.routes.js';
 import { DriverDocumentStorageService } from './modules/rides/services/driver-document-storage.service.js';
 import { DriverService } from './modules/rides/services/driver.service.js';
 import { RideService } from './modules/rides/services/ride.service.js';
@@ -443,7 +444,7 @@ export function createApp(
   // ==========================================================
 
   if (adminRepository) {
-    app.use('/admin/logistics', createLogisticsAdminRouter(pool));
+    app.use('/admin/logistics', createLogisticsAdminRouter(pool, maps));
     app.use('/admin/operations', createAdminOperationsRouter(new AdminOperationsRepository(pool)));
     app.use(
       '/admin',
@@ -498,6 +499,7 @@ export function createApp(
       : undefined;
 
     app.use('/rides', createRideRouter(new RideController(rideService), driverController));
+    app.use('/provider/logistics-dispatch', createLogisticsFleetDispatchRouter(pool));
   }
 
   // ==========================================================

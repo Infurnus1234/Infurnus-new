@@ -1,4 +1,3 @@
-BEGIN;
 -- Add end-OTP columns for logistics delivery confirmation.
 -- Only logistics rides use these; all other sectors leave them NULL.
 ALTER TABLE rides
@@ -26,5 +25,3 @@ DROP TRIGGER IF EXISTS rides_clear_end_pin ON rides;
 CREATE TRIGGER rides_clear_end_pin
   BEFORE UPDATE ON rides
   FOR EACH ROW EXECUTE FUNCTION enforce_ride_end_pin();
-
-COMMIT;

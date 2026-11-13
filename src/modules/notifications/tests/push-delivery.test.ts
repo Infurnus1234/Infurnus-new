@@ -14,6 +14,7 @@ function fixture(
     })),
     acceptedDeviceIds: vi.fn(async (): Promise<string[]> => []),
     pushAllowed: vi.fn(async () => true),
+    logisticsOfferOpen: vi.fn(async () => true),
     recordDeviceAcceptance: vi.fn(),
     markProcessing: vi.fn(),
     markFailed: vi.fn(),
@@ -50,6 +51,14 @@ function fixture(
   return { service, sender, devices, notifications, job };
 }
 describe('push provider acceptance semantics', () => {
+  it('suppresses a queued targeted offer after the booking is assigned or cancelled', async () => {
+    const f = fixture();
+    f.notifications.logisticsOfferOpen.mockResolvedValue(false);
+    await f.service.deliver({ ...f.job, data: { dispatchOfferId: 'targeted-offer' } });
+    expect(f.notifications.logisticsOfferOpen).toHaveBeenCalledWith('targeted-offer', 'owner');
+    expect(f.sender.send).not.toHaveBeenCalled();
+    expect(f.notifications.markFailed).toHaveBeenCalledWith('notification', 'OFFER_REVOKED');
+  });
   it('respects disabled push preference without contacting FCM', async () => {
     const f = fixture();
     f.notifications.pushAllowed.mockResolvedValue(false);

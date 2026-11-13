@@ -460,8 +460,9 @@ export class RideService {
   }
 
   async rejectRide(driverProfileId: string, id: string): Promise<void> {
+    const rejectedTarget = await this.repository.rejectTargetedDispatch?.(id, driverProfileId);
     const released = await this.repository.finishDispatchAttempt(id, driverProfileId, 'rejected');
-    if (!released) {
+    if (!released && !rejectedTarget) {
       throw new AppError(
         'RIDE_DISPATCH_OFFER_EXPIRED',
         'This ride request is no longer assigned to you',

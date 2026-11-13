@@ -62,6 +62,7 @@ function fakeRideRepository() {
       },
     ),
     failDispatch: vi.fn(async () => ({ ...ride, status: 'cancelled' as const })),
+    deferExhaustedLogisticsDispatch: vi.fn(async () => {}),
   };
 }
 
@@ -103,10 +104,31 @@ describe('RideDispatchService', () => {
       );
       await dispatcher.dispatch({ ...ride, sector, vehicleCategory });
       expect(offered).toEqual(radii.map((radius) => `driver-${radius}`));
-      expect(repo.failDispatch).toHaveBeenCalledTimes(1);
+      expect(repo.failDispatch).toHaveBeenCalledTimes(sector === 'logistics' ? 0 : 1);
+      expect(repo.deferExhaustedLogisticsDispatch).toHaveBeenCalledTimes(
+        sector === 'logistics' ? 1 : 0,
+      );
       dispatcher.dispose();
     },
   );
+  it('escalates Logistics immediately when no eligible driver can receive an offer', async () => {
+    const repo = fakeRideRepository();
+    const dispatcher = new RideDispatchService(
+      repo as never,
+      matching(candidate('unreachable')) as never,
+      async () => {
+        throw new Error('No delivery destination');
+      },
+    );
+    try {
+      await dispatcher.dispatch({ ...ride, sector: 'logistics', vehicleCategory: 'mini_truck' });
+      expect(repo.attempts).toEqual([{ driver: 'unreachable', status: 'rejected' }]);
+      expect(repo.deferExhaustedLogisticsDispatch).toHaveBeenCalledWith(ride.id);
+      expect(repo.failDispatch).not.toHaveBeenCalled();
+    } finally {
+      dispatcher.dispose();
+    }
+  });
   it('recovers a pending deadline without notifying again or expanding waves', async () => {
     const deadline = new Date(Date.now() + 60000),
       notify = vi.fn(),

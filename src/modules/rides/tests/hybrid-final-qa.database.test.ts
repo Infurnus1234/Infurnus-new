@@ -28,6 +28,9 @@ import { PostgresDriverRepository } from '../repositories/driver.repository.js';
 import { RideService } from '../services/ride.service.js';
 import { MatchingService } from '../services/matching.service.js';
 import { RideDispatchService } from '../services/ride-dispatch.service.js';
+import { LogisticsTargetedDispatch } from '../services/logistics-targeted-dispatch.js';
+import { logisticsDeadlineMonitor } from '../services/logistics-deadline-monitor.js';
+import { logisticsDispatchStream } from '../../admin/services/logistics-dispatch-stream.js';
 import { rideEvents } from '../events/ride.events.js';
 import { syntheticDispatchCity, syntheticDispatchAreas } from './dispatch-test-city.js';
 import { requireDisposableAdministrativeDatabase } from '../../admin/tests/administrative-test-database.js';
@@ -152,6 +155,222 @@ const policies = [
   ['service', 'ambulance', 30000],
 ] as const;
 describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA', () => {
+  it('publishes durable Logistics changes to Admin subscribers on a separate database connection', async () => {
+    const c = await customer();
+    const invalidate = vi.fn();
+    const unsubscribe = logisticsDispatchStream(pool)(invalidate);
+    try {
+      await vi.waitFor(() => expect(invalidate).toHaveBeenCalledTimes(1));
+      await ride(c, 'passenger', 'sedan');
+      expect(invalidate).toHaveBeenCalledTimes(1);
+      await ride(c, 'logistics', 'mini_truck');
+      await vi.waitFor(() => expect(invalidate).toHaveBeenCalledTimes(2));
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it('deduplicates at-risk and missed-pickup customer alerts while keeping the Logistics booking active', async () => {
+    const r = await ride(await customer(), 'logistics', 'mini_truck');
+    const d = await driver('logistics', 'mini_truck');
+    await new LogisticsTargetedDispatch(pool).offer(r.id, r.customerId, d.profileId, d.vehicleId);
+    await service.acceptRide(d.profileId, r.id);
+    await repo.recordLogisticsPickupEta(r.id, d.profileId, new Date(), 2400);
+    const send = vi.fn().mockResolvedValue('notification');
+    const monitor = logisticsDeadlineMonitor(pool, { send });
+    await monitor();
+    await monitor();
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({ resourceId: r.id, eventVersion: 1 }),
+    );
+    await pool.query("UPDATE rides SET created_at=NOW()-INTERVAL '31 minutes' WHERE id=$1", [r.id]);
+    await monitor();
+    await monitor();
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ resourceId: r.id, eventVersion: 2 }),
+    );
+    expect(await repo.findById(r.id)).toMatchObject({
+      status: 'driver_assigned',
+      logisticsPickupStatus: 'delayed',
+    });
+  });
+  it('serializes competing automatic and targeted Logistics acceptances', async () => {
+    const r = await ride(await customer(), 'logistics', 'mini_truck');
+    const automatic = await driver('logistics', 'mini_truck', 100);
+    const direct = await driver('logistics', 'mini_truck', 200);
+    const dispatch = new LogisticsTargetedDispatch(pool);
+    expect(await repo.offerDispatch(r.id, automatic.profileId, 120000)).toBe(true);
+    const duplicate = await Promise.allSettled([
+      dispatch.offer(r.id, r.customerId, direct.profileId, direct.vehicleId),
+      dispatch.offer(r.id, r.customerId, direct.profileId, direct.vehicleId),
+    ]);
+    expect(duplicate.filter((entry) => entry.status === 'fulfilled')).toHaveLength(1);
+    expect((await repo.listAvailableForDriver(direct.profileId))[0]?.id).toBe(r.id);
+    const acceptance = await Promise.allSettled([
+      service.acceptRide(automatic.profileId, r.id),
+      service.acceptRide(direct.profileId, r.id),
+    ]);
+    expect(acceptance.filter((entry) => entry.status === 'fulfilled')).toHaveLength(1);
+    const winner = await repo.findById(r.id);
+    expect(winner?.status).toBe('driver_assigned');
+    expect(winner?.assignedVehicleId).toBe(
+      winner?.assignedDriverId === direct.profileId ? direct.vehicleId : automatic.vehicleId,
+    );
+    expect((await dispatch.history(r.id))[0]?.status).toBe(
+      winner?.assignedDriverId === direct.profileId ? 'accepted' : 'revoked',
+    );
+    expect(await repo.listAvailableForDriver(direct.profileId)).toEqual([]);
+  });
+
+  it('revokes a targeted Logistics offer committed while automatic acceptance waits for the booking lock', async () => {
+    const r = await ride(await customer(), 'logistics', 'mini_truck');
+    const automatic = await driver('logistics', 'mini_truck', 100);
+    const direct = await driver('logistics', 'mini_truck', 200);
+    expect(await repo.offerDispatch(r.id, automatic.profileId, 120000)).toBe(true);
+    const locker = await pool.connect();
+    let committed = false;
+    let accepting: ReturnType<typeof service.acceptRide> | undefined;
+    try {
+      await locker.query('BEGIN');
+      await locker.query('SELECT id FROM rides WHERE id=$1 FOR UPDATE', [r.id]);
+      accepting = service.acceptRide(automatic.profileId, r.id);
+      await vi.waitFor(async () => {
+        const { rows } = await pool.query(
+          `SELECT count(*)::int AS blocked FROM pg_stat_activity
+           WHERE datname=current_database() AND wait_event_type='Lock'
+             AND query LIKE '%WITH locked AS MATERIALIZED%'`,
+        );
+        expect(rows[0].blocked).toBe(1);
+      });
+      await locker.query(
+        `INSERT INTO logistics_dispatch_offers (ride_id,recipient_id,driver_profile_id,vehicle_id,expires_at)
+         VALUES ($1,$2,$3,$4,NOW()+INTERVAL '2 minutes')`,
+        [r.id, direct.userId, direct.profileId, direct.vehicleId],
+      );
+      await locker.query('COMMIT');
+      committed = true;
+      await accepting;
+      expect((await new LogisticsTargetedDispatch(pool).history(r.id))[0]?.status).toBe('revoked');
+    } finally {
+      if (!committed) await locker.query('ROLLBACK');
+      locker.release();
+      await accepting?.catch(() => undefined);
+    }
+  });
+
+  it('verifies Logistics pickup only for an accurate fresh fix from the assigned driver', async () => {
+    const r = await ride(await customer(), 'logistics', 'mini_truck');
+    const d = await driver('logistics', 'mini_truck');
+    const dispatch = new LogisticsTargetedDispatch(pool);
+    await dispatch.offer(r.id, r.customerId, d.profileId, d.vehicleId);
+    await service.acceptRide(d.profileId, r.id);
+    const fix = { ...r.pickup, timestamp: new Date(), accuracy: 5 };
+    expect(await repo.verifyLogisticsPickup(r.id, randomUUID(), fix)).toBe(false);
+    expect(await repo.verifyLogisticsPickup(r.id, d.profileId, { ...fix, accuracy: 60 })).toBe(
+      false,
+    );
+    expect(await repo.verifyLogisticsPickup(r.id, d.profileId, { ...fix, longitude: 77.55 })).toBe(
+      false,
+    );
+    expect(
+      await repo.verifyLogisticsPickup(r.id, d.profileId, { ...fix, timestamp: new Date(0) }),
+    ).toBe(false);
+    expect(await repo.verifyLogisticsPickup(r.id, d.profileId, fix)).toBe(true);
+    expect(await repo.verifyLogisticsPickup(r.id, d.profileId, fix)).toBe(false);
+  });
+
+  it('lets an eligible fleet owner coordinate a request without assigning until the driver accepts', async () => {
+    const r = await ride(await customer(), 'logistics', 'mini_truck');
+    const d = await driver('logistics', 'mini_truck');
+    const owner = randomUUID();
+    const admin = randomUUID();
+    await pool.query(
+      "INSERT INTO users(id,first_name,last_name,role) VALUES($1,'Fleet','QA','fleet_owner'),($2,'Admin','QA','super_admin')",
+      [owner, admin],
+    );
+    users.push(owner, admin);
+    const {
+      rows: [partner],
+    } = await pool.query(
+      "INSERT INTO partners(user_id,business_name) VALUES($1,'Dispatch QA Fleet') RETURNING id",
+      [owner],
+    );
+    try {
+      await pool.query(
+        "UPDATE partners SET approval_status='under_review',reviewed_by=$2,reviewed_at=NOW() WHERE id=$1",
+        [partner.id, admin],
+      );
+      await pool.query(
+        "UPDATE partners SET approval_status='approved',approved_by=$2,approved_at=NOW() WHERE id=$1",
+        [partner.id, admin],
+      );
+      await pool.query(
+        "INSERT INTO partner_drivers(partner_id,driver_profile_id,status) VALUES($1,$2,'ACTIVE')",
+        [partner.id, d.profileId],
+      );
+      await pool.query('UPDATE vehicles SET owner_id=$2 WHERE id=$1', [d.vehicleId, owner]);
+      const dispatch = new LogisticsTargetedDispatch(pool);
+      const fleetOffer = await dispatch.offer(r.id, admin, d.profileId, d.vehicleId, 'fleet');
+      expect(fleetOffer.recipientId).toBe(owner);
+      await expect(dispatch.fleetRespond(r.customerId, fleetOffer.id, true)).rejects.toMatchObject({
+        statusCode: 409,
+      });
+      await dispatch.fleetRespond(owner, fleetOffer.id, true);
+      expect((await repo.findById(r.id))?.assignedDriverId).toBeNull();
+      expect(await dispatch.fleetCandidates(owner, fleetOffer.id)).toEqual([
+        expect.objectContaining({ driverId: d.profileId, vehicleId: d.vehicleId }),
+      ]);
+      await dispatch.fleetForward(owner, fleetOffer.id, d.profileId, d.vehicleId);
+      expect((await repo.findById(r.id))?.status).toBe('searching');
+      await service.acceptRide(d.profileId, r.id);
+      expect((await dispatch.fleetOffers(owner))[0]).toMatchObject({
+        status: 'accepted',
+        driverResponse: 'accepted',
+      });
+    } finally {
+      await pool.query('DELETE FROM provider_approval_requests WHERE fleet_id=$1', [partner.id]);
+      await pool.query('DELETE FROM partner_drivers WHERE partner_id=$1', [partner.id]);
+      await pool.query('DELETE FROM partners WHERE id=$1', [partner.id]);
+    }
+  });
+
+  it('rate limits rings and lets a rejected or expired targeted Logistics offer be resent', async () => {
+    const r = await ride(await customer(), 'logistics', 'mini_truck');
+    const d = await driver('logistics', 'mini_truck');
+    const dispatch = new LogisticsTargetedDispatch(pool);
+    const first = await dispatch.offer(r.id, r.customerId, d.profileId, d.vehicleId);
+    await expect(dispatch.ring(r.id, r.customerId, first.id)).rejects.toMatchObject({
+      statusCode: 409,
+    });
+    await pool.query(
+      "UPDATE logistics_dispatch_offers SET created_at=NOW()-INTERVAL '31 seconds' WHERE id=$1",
+      [first.id],
+    );
+    const rings = await Promise.allSettled([
+      dispatch.ring(r.id, r.customerId, first.id),
+      dispatch.ring(r.id, r.customerId, first.id),
+    ]);
+    expect(rings.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    await service.rejectRide(d.profileId, r.id);
+    expect((await dispatch.history(r.id))[0]?.status).toBe('rejected');
+    const second = await dispatch.offer(r.id, r.customerId, d.profileId, d.vehicleId);
+    await pool.query(
+      "UPDATE logistics_dispatch_offers SET created_at=NOW()-INTERVAL '2 minutes', expires_at=NOW()-INTERVAL '1 minute' WHERE id=$1",
+      [second.id],
+    );
+    expect(await repo.listAvailableForDriver(d.profileId)).toEqual([]);
+    expect(
+      (await dispatch.history(r.id)).some(
+        (offer) => offer.id === second.id && offer.status === 'expired',
+      ),
+    ).toBe(true);
+    expect((await dispatch.offer(r.id, r.customerId, d.profileId, d.vehicleId)).id).not.toBe(
+      second.id,
+    );
+    expect((await repo.findById(r.id))?.status).toBe('searching');
+  });
   it('HD-LOCK-DEADLINE: acceptance waiting on a row lock cannot win after expiry', async () => {
     const c = await customer(),
       d = await driver(),
@@ -266,7 +485,7 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
     });
   }, 30000);
   it.each(policies)(
-    'HD-EMPTY-%s-%s: exhausted search cancels without inventing an assignment',
+    'HD-EMPTY-%s-%s: exhausted search applies the sector policy without inventing an assignment',
     async (sector, category) => {
       const c = await customer(),
         r = await ride(c, sector, category),
@@ -274,15 +493,80 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
       const controller = new RideDispatchService(repo, new MatchingService(drivers), notify);
       controllers.push(controller);
       await controller.dispatch(r);
-      expect((await repo.findById(r.id))?.status).toBe('cancelled');
+      const finalState = sector === 'logistics' ? 'searching' : 'cancelled';
+      expect((await repo.findById(r.id))?.status).toBe(finalState);
+      if (sector === 'logistics') {
+        const { rows } = await pool.query(
+          `SELECT logistics_escalation_reason, logistics_retry_at > NOW() AS deferred
+           FROM rides WHERE id = $1`,
+          [r.id],
+        );
+        expect(rows[0]).toMatchObject({
+          logistics_escalation_reason: 'search_exhausted',
+          deferred: true,
+        });
+        expect(await repo.failDispatch(r.id, 'No drivers')).toBeNull();
+      }
       expect(notify).not.toHaveBeenCalled();
       record(`HD-EMPTY-${sector}-${category}`, {
-        finalState: 'cancelled',
+        finalState,
         offers: 0,
         assignments: 0,
       });
     },
   );
+  it('escalates an overdue Logistics search without moving the fulfillment deadline', async () => {
+    const r = await ride(await customer(), 'logistics', 'mini_truck');
+    await pool.query("UPDATE rides SET created_at = NOW() - INTERVAL '31 minutes' WHERE id = $1", [
+      r.id,
+    ]);
+    const original = await repo.findById(r.id);
+    await repo.escalateOverdueLogisticsDispatch();
+    const { rows } = await pool.query(
+      'SELECT logistics_escalation_reason FROM rides WHERE id = $1',
+      [r.id],
+    );
+    expect(rows[0].logistics_escalation_reason).toBe('acceptance_timeout');
+    expect(await repo.findById(r.id)).toMatchObject({
+      status: 'searching',
+      logisticsSearchStatus: 'delayed',
+      logisticsFulfillmentDeadline: original?.logisticsFulfillmentDeadline,
+    });
+  });
+
+  it('recovers a deferred Logistics booking when an eligible driver becomes available', async () => {
+    const r = await ride(await customer(), 'logistics', 'mini_truck');
+    await pool.query("UPDATE rides SET created_at = NOW() - INTERVAL '1 minute' WHERE id = $1", [
+      r.id,
+    ]);
+    const matching = new MatchingService(drivers);
+    const initial = new RideDispatchService(repo, matching, vi.fn());
+    controllers.push(initial);
+    await initial.dispatch(r);
+    const deferred = await repo.findById(r.id);
+    expect(deferred?.logisticsSearchStatus).toBe('arranging');
+    expect((await repo.listRecoverableDispatch()).some((row) => row.id === r.id)).toBe(false);
+    initial.dispose();
+
+    const available = await driver('logistics', 'mini_truck');
+    await pool.query(
+      "UPDATE rides SET logistics_retry_at = NOW() - INTERVAL '1 second' WHERE id = $1",
+      [r.id],
+    );
+    const restarted = new RideDispatchService(repo, matching, async (candidate) => {
+      await service.acceptRide(candidate.driverProfileId, r.id);
+    });
+    controllers.push(restarted);
+    await restarted.recover();
+    await vi.waitFor(async () => {
+      expect(await repo.findById(r.id)).toMatchObject({
+        status: 'driver_assigned',
+        assignedDriverId: available.profileId,
+        logisticsFulfillmentDeadline: deferred?.logisticsFulfillmentDeadline,
+      });
+    });
+  });
+
   it('HD-AMBULANCE-REJECT: next nearest is offered immediately without repeating the rejector', async () => {
     const c = await customer(),
       a = await driver('service', 'ambulance', 100),
@@ -627,13 +911,14 @@ describe.skipIf(process.env.RIDE_DB_TESTS !== 'true')('Hybrid dispatch final QA'
       await controller.dispatch(r);
       expect(offers).toEqual(ds.map((d) => d.profileId));
       expect(new Set(offers).size).toBe(radii.length);
-      expect((await repo.findById(r.id))?.status).toBe('cancelled');
+      const finalState = sector === 'logistics' ? 'searching' : 'cancelled';
+      expect((await repo.findById(r.id))?.status).toBe(finalState);
       expect(times.at(-1)!).toBeLessThan(5000);
       record(`HD-WAVES-${sector}-${category}`, {
         radii,
         offerDrivers: offers,
         offerElapsedMs: times,
-        finalState: 'cancelled',
+        finalState,
       });
     },
   );

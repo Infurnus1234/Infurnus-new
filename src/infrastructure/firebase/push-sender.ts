@@ -45,7 +45,10 @@ export function createFirebasePushSender(
                 notification: {
                   tag: job.notificationId,
                   channelId,
-                  sound: 'infurnus_alert',
+                  sound:
+                    job.data?.logisticsTargeted === 'true'
+                      ? 'ride_request_alert'
+                      : 'infurnus_alert',
                   defaultSound: false,
                 },
               }),

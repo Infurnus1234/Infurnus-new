@@ -142,6 +142,8 @@ class RideModel {
   logisticsPayment; // {upfrontAmount, remainingAmount, status, ...}
   final String? cancellationReason;
   final RideCancellationWindow? cancellationWindow;
+  final String? logisticsSearchStatus;
+  final String? logisticsPickupStatus;
   final DateTime? cancelledAt;
   final DateTime? completedAt;
   final DateTime createdAt;
@@ -204,6 +206,8 @@ class RideModel {
     required this.status,
     this.cancellationReason,
     this.cancellationWindow,
+    this.logisticsSearchStatus,
+    this.logisticsPickupStatus,
     this.cancelledAt,
     this.completedAt,
     required this.createdAt,
@@ -245,6 +249,8 @@ class RideModel {
     DateTime? updatedAt,
   }) {
     return RideModel(
+      logisticsSearchStatus: logisticsSearchStatus,
+      logisticsPickupStatus: logisticsPickupStatus,
       id: id ?? this.id,
       bookingId: bookingId,
       callingNumber: callingNumber,
@@ -284,6 +290,8 @@ class RideModel {
 
   factory RideModel.fromJson(Map<String, dynamic> json) {
     return RideModel(
+      logisticsSearchStatus: json['logisticsSearchStatus'] as String?,
+      logisticsPickupStatus: json['logisticsPickupStatus'] as String?,
       id: json['id'] as String,
       bookingId: json['bookingId'] as String?,
       callingNumber: json['callingNumber'] as String?,

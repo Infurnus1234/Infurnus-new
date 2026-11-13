@@ -38,6 +38,7 @@ export interface RideSocketDependencies {
   notifyRideOffer?: (userId: string, ride: Ride, expiresAt: Date) => Promise<void>;
   canPushRideOffer?: (userId: string) => Promise<boolean>;
   notifyRideUpdate?: (ride: Ride, type: NotificationType) => Promise<void>;
+  monitorLogisticsDeadlines?: () => Promise<void>;
 }
 
 interface SocketAck {
@@ -219,6 +220,8 @@ export function createSocketServer(
         ? startRideDispatchQueue(env.REDIS_URL, rideDependencies.rideRepository, dispatchService)
         : null;
     if (dispatchQueue) dispatchService!.setDeadlineScheduler(dispatchQueue.schedule);
+    if (rideDependencies.monitorLogisticsDeadlines)
+      dispatchService?.setLogisticsMonitor(rideDependencies.monitorLogisticsDeadlines);
     dispatchService?.startRecovery();
 
     const onRideCreated = (ride: unknown) => {
@@ -355,6 +358,12 @@ export function createSocketServer(
           rideId: ride.id,
           location: event.location,
         });
+        if (ride.sector === 'logistics')
+          await rideDependencies.rideRepository.verifyLogisticsPickup?.(
+            ride.id,
+            event.profileId,
+            event.location,
+          );
         if (ride.status === 'in_progress' && ride.sector === 'premium')
           await rideDependencies.rideRepository.recordBreadcrumbAndAccumulateDistance?.(
             ride.id,
@@ -415,7 +424,14 @@ export function createSocketServer(
               segment,
               routeVersion: next.routeVersion,
             });
-          if (next?.segment === segment && next.etaSeconds !== undefined)
+          if (next?.segment === segment && next.etaSeconds !== undefined) {
+            if (segment === 'pickup' && current.sector === 'logistics')
+              await rideDependencies.rideRepository.recordLogisticsPickupEta?.(
+                ride.id,
+                event.profileId,
+                new Date(timestamp),
+                next.etaSeconds,
+              );
             emitRide('ride:eta_updated', current, {
               rideId: ride.id,
               etaSeconds: next.etaSeconds,
@@ -423,6 +439,7 @@ export function createSocketServer(
               routeState: next.routeState,
               segment,
             });
+          }
         };
         if (rideDependencies.rideRepository.withRouteLock)
           await rideDependencies.rideRepository.withRouteLock(ride.id, work);
@@ -489,6 +506,36 @@ export function createSocketServer(
           else userLocations.delete(event.rideId);
         });
     };
+    const onTargetedOffer = (offer: {
+      id: string;
+      rideId: string;
+      recipientId: string;
+      expiresAt: Date;
+      kind?: 'driver' | 'fleet';
+    }) => {
+      void rideDependencies
+        .monitorLogisticsDeadlines?.()
+        .catch(() => console.warn('Logistics notification processing failed'));
+      void (async () => {
+        const ride = await rideDependencies.rideRepository.findById(offer.rideId);
+        if (
+          ride?.sector !== 'logistics' ||
+          ride.status !== 'searching' ||
+          offer.expiresAt.getTime() <= Date.now()
+        )
+          return;
+        if (offer.kind !== 'fleet') {
+          const visible = await rideDependencies.rideService.prepareDriverRide(ride);
+          io.to(driverUserRoom(offer.recipientId)).emit('ride:incoming', {
+            ride: sanitizeRideForDriver({ ...visible, dispatchExpiresAt: offer.expiresAt }),
+            expiresAt: offer.expiresAt.toISOString(),
+          });
+        }
+      })().catch(() =>
+        console.warn('Targeted Logistics offer could not be delivered over Socket.IO'),
+      );
+    };
+    rideEvents.on('logistics:offer_created', onTargetedOffer);
     rideEvents.on('ride:user_location_updated', onUserLocation);
     rideEvents.on('driver:location_updated', onDriverLocation);
     rideEvents.on('ride:created', onRideCreated);
@@ -497,6 +544,7 @@ export function createSocketServer(
     rideEvents.on('ride:cancelled', onRideCancelled);
 
     httpServer.once('close', () => {
+      rideEvents.off('logistics:offer_created', onTargetedOffer);
       rideEvents.off('ride:user_location_updated', onUserLocation);
       dispatchService?.dispose();
       void dispatchQueue

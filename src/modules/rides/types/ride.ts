@@ -106,6 +106,9 @@ export interface Ride {
   cancelledByCustomer?: boolean;
   driverAcceptedAt?: Date | null;
   customerCancellationDeadline?: Date | null;
+  logisticsFulfillmentDeadline?: Date;
+  logisticsSearchStatus?: 'searching' | 'arranging' | 'delayed' | null;
+  logisticsPickupStatus?: 'at_risk' | 'delayed' | null;
   cancellationServerTime?: Date;
   customerCancellationAllowed?: boolean;
   cancelledAt: Date | null;

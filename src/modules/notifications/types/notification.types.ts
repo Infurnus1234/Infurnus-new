@@ -5,6 +5,8 @@ export const NOTIFICATION_TYPES = {
   RIDE_STARTED: 'ride.started',
   RIDE_COMPLETED: 'ride.completed',
   RIDE_CANCELLED: 'ride.cancelled',
+  LOGISTICS_FLEET_OFFER: 'logistics.fleet_offer',
+  LOGISTICS_DELAY: 'logistics.delay',
 } as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[keyof typeof NOTIFICATION_TYPES];

@@ -31,6 +31,13 @@ export class PushDeliveryService {
       await this.notifications.markFailed(job.notificationId, 'OFFER_EXPIRED');
       return;
     }
+    if (
+      job.data?.dispatchOfferId &&
+      !(await this.notifications.logisticsOfferOpen(job.data.dispatchOfferId, job.userId))
+    ) {
+      await this.notifications.markFailed(job.notificationId, 'OFFER_REVOKED');
+      return;
+    }
     const acceptedDevices = new Set(await this.notifications.acceptedDeviceIds(job.notificationId));
     const devices = (await this.devices.findActiveByUserId(job.userId)).filter(
       (device) => !acceptedDevices.has(device.id),

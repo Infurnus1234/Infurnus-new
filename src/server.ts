@@ -294,6 +294,19 @@ async function startServer() {
   }
 
   await loadDeletedSubjects(pool);
+  const runLogisticsMonitors = env.REDIS_URL
+    ? await (async () => {
+        const { logisticsDeadlineMonitor } =
+          await import('./modules/rides/services/logistics-deadline-monitor.js');
+        const { logisticsOfferNotifications } =
+          await import('./modules/rides/services/logistics-offer-notifications.js');
+        const deadlines = logisticsDeadlineMonitor(pool);
+        const offers = logisticsOfferNotifications(pool);
+        return async () => {
+          await Promise.all([deadlines(), offers()]);
+        };
+      })()
+    : undefined;
   const io = createSocketServer(server, {
     canPushRideOffer: async (userId) => {
       if (!notifications) return false;
@@ -303,6 +316,7 @@ async function startServer() {
     },
     ...(env.REDIS_URL
       ? {
+          ...(runLogisticsMonitors ? { monitorLogisticsDeadlines: runLogisticsMonitors } : {}),
           notifyRideOffer: async (
             userId: string,
             ride: import('./modules/rides/types/ride.js').Ride,
@@ -340,10 +354,12 @@ async function startServer() {
                 .query<{ user_id: string }>(
                   `SELECT DISTINCT dp.user_id FROM ride_dispatch_attempts attempt
                  JOIN driver_profiles dp ON dp.id=attempt.driver_profile_id
-                 WHERE $3='ride.cancelled' AND attempt.ride_id=$1 AND attempt.status='cancelled'
+                 WHERE ($3='ride.cancelled' OR $4='logistics') AND attempt.ride_id=$1 AND attempt.status='cancelled'
                    AND attempt.expires_at>clock_timestamp()
+                 UNION SELECT recipient_id FROM logistics_dispatch_offers
+                   WHERE ride_id=$1 AND status='revoked' AND expires_at>clock_timestamp()
                  UNION SELECT user_id FROM driver_profiles WHERE id=$2`,
-                  [ride.id, ride.assignedDriverId, type],
+                  [ride.id, ride.assignedDriverId, type, ride.sector ?? null],
                 )
                 .catch(() => {
                   console.warn('Could not resolve cancelled offer recipients');

@@ -33,6 +33,11 @@ export class RideDispatchService {
   private disposed = false;
   private recoveryTimer?: ReturnType<typeof setInterval>;
   private recovering = false;
+  private logisticsMonitor?: () => Promise<void>;
+
+  setLogisticsMonitor(monitor: () => Promise<void>) {
+    this.logisticsMonitor = monitor;
+  }
 
   startRecovery(intervalMs = 5000): void {
     if (this.disposed || this.recoveryTimer || !this.rides.listRecoverableDispatch) return;
@@ -49,6 +54,12 @@ export class RideDispatchService {
     if (this.disposed || this.recovering || !this.rides.listRecoverableDispatch) return;
     this.recovering = true;
     try {
+      await this.rides.escalateOverdueLogisticsDispatch?.();
+      if (this.logisticsMonitor) {
+        void this.logisticsMonitor().catch(() =>
+          console.warn(JSON.stringify({ event: 'logistics_deadline_monitor_failed' })),
+        );
+      }
       const rides = await this.rides.listRecoverableDispatch(20, [...this.inFlight.keys()]);
       // A premium request can remain pending for an hour. Recovery starts work
       // without waiting for that response or monopolizing the recovery sweep.
@@ -190,6 +201,10 @@ export class RideDispatchService {
     }
 
     if (this.disposed || declinedOffer) return; // A competing dispatcher or changed eligibility must be reconciled, never cancelled by a losing snapshot.
+    if (ride.sector === 'logistics') {
+      await this.rides.deferExhaustedLogisticsDispatch?.(ride.id);
+      return;
+    }
     const failedRide = await this.rides.failDispatch(
       ride.id,
       'No eligible drivers accepted the ride',

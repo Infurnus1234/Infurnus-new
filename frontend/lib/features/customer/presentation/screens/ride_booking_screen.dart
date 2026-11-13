@@ -2343,6 +2343,13 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
 
   // --- Step 2: Searching Radar Sheet ---
   Widget _buildSearchingPanel(RideState state) {
+    final title = state.currentRide?.isLogistics == true
+        ? switch (state.currentRide?.logisticsSearchStatus) {
+            'delayed' => 'Vehicle arrangement is taking longer than expected.',
+            'arranging' => 'We are arranging a vehicle for your booking.',
+            _ => 'Searching for a nearby Logistics vehicle.',
+          }
+        : 'Connecting to nearby drivers...';
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -2366,9 +2373,10 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
           ),
         ),
         const SizedBox(height: 16),
-        const Text(
-          'Connecting to nearby drivers...',
-          style: TextStyle(
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
             color: textWhite,
@@ -2397,6 +2405,15 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         DriverMatchedHeader(title: title),
+        if (ride?.logisticsPickupStatus case 'at_risk' || 'delayed')
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              ride?.logisticsPickupStatus == 'delayed'
+                  ? 'Your vehicle is taking longer than expected.'
+                  : 'Your vehicle may take longer than expected.',
+            ),
+          ),
         const SizedBox(height: 16),
         AssignedDriverSummary(
           ride: ride,

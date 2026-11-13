@@ -40,6 +40,7 @@ export const permissionCatalog = [
   'approvals.delete',
   'rides.read',
   'logistics.read',
+  'logistics.dispatch',
   'rentals.read',
   'payments.read',
   'wallets.read',
@@ -86,6 +87,23 @@ export function requiredPermissions(
     return [];
   if (path === '/admin/logistics/payments')
     return method === 'GET' ? ['logistics.read', 'payments.read'] : null;
+  if (path === '/admin/logistics/dispatch' || path === '/admin/logistics/dispatch-events')
+    return method === 'GET' ? ['logistics.read', 'rides.read'] : null;
+  if (method === 'GET' && /^\/admin\/logistics\/dispatch\/[\da-f-]{36}\/tracking$/i.test(path))
+    return ['logistics.read', 'rides.read', 'logistics.dispatch'];
+  if (method === 'POST' && /^\/admin\/logistics\/dispatch\/[\da-f-]{36}\/escalate$/i.test(path))
+    return ['logistics.read', 'rides.read', 'logistics.dispatch'];
+  if (/^\/admin\/logistics\/dispatch\/[\da-f-]{36}\/(candidates|offers|history)$/i.test(path)) {
+    if (method === 'GET') return ['logistics.read', 'rides.read', 'logistics.dispatch'];
+    if (method === 'POST' && path.endsWith('/offers'))
+      return ['logistics.read', 'rides.read', 'logistics.dispatch'];
+    return null;
+  }
+  if (
+    method === 'POST' &&
+    /^\/admin\/logistics\/dispatch\/[\da-f-]{36}\/offers\/[\da-f-]{36}\/ring$/i.test(path)
+  )
+    return ['logistics.read', 'rides.read', 'logistics.dispatch'];
   if (path === '/admin/dashboard') return method === 'GET' ? ['dashboard.read'] : null;
   if (/^\/admin\/operations\/booking-reference\/[0-9]{7}$/.test(path))
     return method === 'GET' ? ['rides.read', 'users.sensitive', 'drivers.sensitive'] : null;

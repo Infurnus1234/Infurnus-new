@@ -497,6 +497,47 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       }
       expect((await logistics.summary(ride.id, customer, 'customer')).confirmedPaise).toBe(12900);
     });
+    it('shows a new Logistics booking in the permission-protected dispatch queue', async () => {
+      const r = await booking();
+      const endpoint = '/admin/logistics/dispatch';
+      const query = (token: string) =>
+        request(app).get(endpoint).query({ search: r.bookingId }).auth(token, { type: 'bearer' });
+      expect((await query(customerToken)).status).toBe(403);
+      expect((await query(limitedToken)).status).toBe(403);
+      const response = await query(superToken);
+      expect(response.status, response.text).toBe(200);
+      expect(response.body.data.total).toBe(1);
+      expect(response.body.data.items[0]).toMatchObject({
+        id: r.id,
+        bookingId: r.bookingId,
+        driverId: profile,
+      });
+      expect(Date.parse(response.body.data.items[0].deadline)).toBe(
+        r.createdAt.getTime() + 30 * 60 * 1000,
+      );
+      const detail = endpoint + '/' + r.id;
+      expect(
+        (
+          await request(app)
+            .get(detail + '/history')
+            .auth(limitedToken, { type: 'bearer' })
+        ).status,
+      ).toBe(403);
+      const escalation = await request(app)
+        .post(detail + '/escalate')
+        .auth(superToken, { type: 'bearer' });
+      expect(escalation.status, escalation.text).toBe(200);
+      const history = await request(app)
+        .get(detail + '/history')
+        .auth(superToken, { type: 'bearer' });
+      expect(history.status, history.text).toBe(200);
+      expect(history.body.data).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ event: 'Urgent escalation', actor: superId }),
+        ]),
+      );
+    });
+
     it('returns only real Logistics plans in the permission-protected Admin ledger and applies filters', async () => {
       const admin = await request(app)
         .get('/admin/logistics/payments?method=cash&deliveryStatus=completed&settlement=settled')
