@@ -4,6 +4,7 @@ import { AppError } from '../../common/errors/app-error.js';
 
 export const pool = new Pool({
   connectionString: env.DATABASE_URL,
+  application_name: process.env.K_REVISION,
   max: 20,
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 5_000,

@@ -487,7 +487,7 @@ export class PostgresDriverRepository implements DriverRepository {
            last_location_at <= $4::timestamptz - INTERVAL '0.5 seconds'
            AND (last_location IS NULL OR ST_Distance(last_location,
              ST_SetSRID(ST_MakePoint($2,$3),4326)::geography) <=
-             EXTRACT(EPOCH FROM ($4::timestamptz-last_location_at))*75 + COALESCE($7,0) + COALESCE(location_accuracy,0) + 50)
+             EXTRACT(EPOCH FROM ($4::timestamptz-last_location_at))*75 + COALESCE($7::double precision,0) + COALESCE(location_accuracy,0) + 50)
          ))
        RETURNING id`,
         [

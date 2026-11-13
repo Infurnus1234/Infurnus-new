@@ -1694,6 +1694,30 @@ describeDatabase('ride PostgreSQL integration', () => {
       ).rows[0].availability_status,
     ).toBe('stale');
   });
+  it('persists fractional GPS accuracy and restores eligible driver availability', async () => {
+    const id = fixture.driverProfileId;
+    await pool.query(
+      `UPDATE driver_profiles SET availability_status='stale',online_preference=true,
+        last_location_at=NOW()-INTERVAL '1 minute' WHERE id=$1`,
+      [id],
+    );
+    expect(
+      await driverRepository.updateLocation(id, {
+        latitude: 12.9716,
+        longitude: 77.5946,
+        recordedAt: new Date(),
+        accuracy: 41.972,
+      }),
+    ).toBe(true);
+    const result = await pool.query(
+      'SELECT availability_status,location_accuracy FROM driver_profiles WHERE id=$1',
+      [id],
+    );
+    expect(result.rows[0]).toMatchObject({
+      availability_status: 'available',
+      location_accuracy: 41.972,
+    });
+  });
   it('excludes drivers with active rides from nearby eligibility', async () => {
     await service.acceptRide(fixture.driverProfileId, fixture.rideIds[0]!);
 
