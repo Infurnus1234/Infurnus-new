@@ -184,7 +184,8 @@ export class RideService {
     // A saved price is not evidence of live vehicle supply. Check the same
     // sector/category/city/eligibility policy as dispatch before creating a ride.
     // Dispatch still revalidates and leases atomically if availability changes.
-    if (this.matching) {
+    // Logistics persists a fulfillment request even when there is no immediate supply.
+    if (this.matching && input.sector !== 'logistics') {
       const policy = dispatchPolicy(input.sector, input.vehicleCategory);
       const now = new Date();
       const probe: Ride = {

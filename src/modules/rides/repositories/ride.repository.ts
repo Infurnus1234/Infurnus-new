@@ -1579,10 +1579,17 @@ export class PostgresRideRepository implements RideRepository {
   }
   async deferExhaustedLogisticsDispatch(rideId: string): Promise<void> {
     await this.pool.query(
-      `UPDATE rides
-       SET logistics_escalated_at = COALESCE(logistics_escalated_at, NOW()),
-           logistics_escalation_reason = COALESCE(logistics_escalation_reason, 'search_exhausted'),
+      `WITH dispatch_history AS (
+         SELECT EXISTS (
+           SELECT 1 FROM ride_dispatch_attempts
+           WHERE ride_id=$1 AND status IN ('offered','rejected','timed_out')
+         ) AS attempted
+       )
+       UPDATE rides
+       SET logistics_escalated_at = COALESCE(logistics_escalated_at, CASE WHEN NOT attempted THEN NOW() END),
+           logistics_escalation_reason = COALESCE(logistics_escalation_reason, CASE WHEN NOT attempted THEN 'search_exhausted' END),
            logistics_retry_at = NOW() + INTERVAL '30 seconds'
+       FROM dispatch_history
        WHERE id = $1 AND sector = 'logistics' AND status = 'searching'
          AND assigned_driver_id IS NULL AND dispatch_driver_id IS NULL
          AND (logistics_retry_at IS NULL OR logistics_retry_at <= NOW())`,

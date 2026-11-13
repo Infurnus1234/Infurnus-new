@@ -262,12 +262,16 @@ class RideNotifier extends StateNotifier<RideState> {
     if (fresh && update?['status'] == 'arrived') {
       label = 'Destination reached';
     } else if (fresh &&
-        update?['status'] == 'live' &&
+        (update?['status'] == 'live' || update?['status'] == 'approximate') &&
         meters is num &&
+        meters.isFinite &&
         meters > 0) {
-      label = meters >= 1000
+      final distance = meters >= 1000
           ? '${(meters / 1000).toStringAsFixed(1)} km remaining'
           : '${meters.round()} m remaining';
+      label = update?['status'] == 'approximate'
+          ? 'Approx. $distance'
+          : distance;
       _lastDistance = label;
     }
     final displayed = label ?? _updatingDistance;

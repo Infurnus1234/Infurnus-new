@@ -143,6 +143,7 @@ class RideModel {
   final String? cancellationReason;
   final RideCancellationWindow? cancellationWindow;
   final String? logisticsSearchStatus;
+  final DateTime? logisticsFulfillmentDeadline;
   final String? logisticsPickupStatus;
   final DateTime? cancelledAt;
   final DateTime? completedAt;
@@ -207,6 +208,7 @@ class RideModel {
     this.cancellationReason,
     this.cancellationWindow,
     this.logisticsSearchStatus,
+    this.logisticsFulfillmentDeadline,
     this.logisticsPickupStatus,
     this.cancelledAt,
     this.completedAt,
@@ -250,6 +252,7 @@ class RideModel {
   }) {
     return RideModel(
       logisticsSearchStatus: logisticsSearchStatus,
+      logisticsFulfillmentDeadline: logisticsFulfillmentDeadline,
       logisticsPickupStatus: logisticsPickupStatus,
       id: id ?? this.id,
       bookingId: bookingId,
@@ -291,6 +294,9 @@ class RideModel {
   factory RideModel.fromJson(Map<String, dynamic> json) {
     return RideModel(
       logisticsSearchStatus: json['logisticsSearchStatus'] as String?,
+      logisticsFulfillmentDeadline: DateTime.tryParse(
+        json['logisticsFulfillmentDeadline'] as String? ?? '',
+      ),
       logisticsPickupStatus: json['logisticsPickupStatus'] as String?,
       id: json['id'] as String,
       bookingId: json['bookingId'] as String?,

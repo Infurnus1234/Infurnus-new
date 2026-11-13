@@ -2366,7 +2366,8 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
 
   // --- Step 2: Searching Radar Sheet ---
   Widget _buildSearchingPanel(RideState state) {
-    final title = state.currentRide?.isLogistics == true
+    final ride = state.currentRide;
+    final title = ride?.isLogistics == true
         ? switch (state.currentRide?.logisticsSearchStatus) {
             'delayed' => 'Vehicle arrangement is taking longer than expected.',
             'arranging' => 'We are arranging a vehicle for your booking.',
@@ -2410,6 +2411,15 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
           'Matching in ${state.selectedSector.toUpperCase()} sector • Fare ₹${state.fare?.rupeeText ?? "---"}',
           style: const TextStyle(color: textGray, fontSize: 13),
         ),
+        if (ride != null && ride.isLogistics) ...[
+          const SizedBox(height: 8),
+          if (ride.bookingId case final booking?) Text('Booking #$booking'),
+          if (ride.vehicleCategory case final category?)
+            Text(category.replaceAll('_', ' ')),
+          if (ride.pickupAddress case final pickup?) Text(pickup),
+          if (ride.logisticsFulfillmentDeadline case final deadline?)
+            _LogisticsFulfillmentCountdown(deadline: deadline),
+        ],
         const SizedBox(height: 24),
         InfurnusOutlinedButton(
           text: 'Cancel Ride',
@@ -3518,6 +3528,42 @@ class _LogisticsUpfrontCardState extends ConsumerState<_LogisticsUpfrontCard> {
           ],
         ],
       ),
+    );
+  }
+}
+
+class _LogisticsFulfillmentCountdown extends StatefulWidget {
+  const _LogisticsFulfillmentCountdown({required this.deadline});
+  final DateTime deadline;
+
+  @override
+  State<_LogisticsFulfillmentCountdown> createState() =>
+      _LogisticsFulfillmentCountdownState();
+}
+
+class _LogisticsFulfillmentCountdownState
+    extends State<_LogisticsFulfillmentCountdown> {
+  late final Timer _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final remaining = widget.deadline.difference(DateTime.now());
+    if (remaining <= Duration.zero) return const Text('Pickup target passed');
+    final seconds = (remaining.inMilliseconds / 1000).ceil();
+    return Text(
+      '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')} remaining',
     );
   }
 }

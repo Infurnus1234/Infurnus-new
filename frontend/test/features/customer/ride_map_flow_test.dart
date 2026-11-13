@@ -338,7 +338,9 @@ void main() {
       expect(label(), '850 m remaining');
       await update('updating', null, 200);
       expect(label(), '850 m remaining · Updating');
-      await update('arrived', 0, 300);
+      await update('approximate', 150, 300);
+      expect(label(), 'Approx. 150 m remaining');
+      await update('arrived', 0, 400);
       expect(label(), 'Destination reached');
     },
   );

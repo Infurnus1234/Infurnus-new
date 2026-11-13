@@ -1,3 +1,4 @@
+import { createLogisticsAdminRouter } from '../../admin/routes/logistics.routes.js';
 import { VehicleService } from '../../vehicles/services/vehicle.service.js';
 import { VehicleController } from '../../vehicles/controllers/vehicle.controller.js';
 import { FareController } from '../../fares/controllers/fare.controller.js';
@@ -125,6 +126,7 @@ app.get(
   '/vehicles/catalog',
   new VehicleController(new VehicleService(new PostgresVehicleRepository(pool))).catalog,
 );
+app.use('/admin/logistics', createLogisticsAdminRouter(pool));
 app.use(errorMiddleware);
 const payments = new PostgresPaymentRepository(pool);
 const logistics = new LogisticsPaymentService(pool, payments);
@@ -310,29 +312,92 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           .post('/rides')
           .auth(token, { type: 'bearer' })
           .send(input);
-        expect(unavailable.status, unavailable.text).toBe(409);
-        expect(unavailable.body.error.code).toBe('NO_ELIGIBLE_DRIVERS');
-        await expect(service.createRide(customer, input)).rejects.toMatchObject({
-          code: 'NO_ELIGIBLE_DRIVERS',
-        });
-        expect(
-          (await pool.query('SELECT count(*)::int n FROM rides WHERE customer_id=$1', [customer]))
-            .rows[0].n,
-        ).toBe(before);
-        await pool.query(
-          "UPDATE driver_profiles SET availability_status='available',last_location_at=NOW()-INTERVAL '1 day' WHERE id=$1",
-          [profile],
-        );
-        await expect(service.createRide(customer, input)).rejects.toMatchObject({
-          code: 'NO_ELIGIBLE_DRIVERS',
-        });
-        await pool.query(
-          'UPDATE driver_profiles SET last_location=NULL,last_location_at=NULL WHERE id=$1',
-          [profile],
-        );
-        await expect(service.createRide(customer, input)).rejects.toMatchObject({
-          code: 'NO_ELIGIBLE_DRIVERS',
-        });
+        if (sector === 'logistics') {
+          expect(unavailable.status, unavailable.text).toBe(201);
+          const waiting = unavailable.body.data as Ride;
+          expect(waiting).toMatchObject({ status: 'searching', vehicleCategory: code });
+          expect(waiting.bookingId).toBeTruthy();
+          expect(
+            Date.parse(String(waiting.logisticsFulfillmentDeadline)) -
+              Date.parse(String(waiting.createdAt)),
+          ).toBe(30 * 60 * 1000);
+          const emptyDispatch = new RideDispatchService(rides, matching, vi.fn(), undefined, area);
+          try {
+            await emptyDispatch.dispatch(waiting);
+            const persisted = await rides.findById(waiting.id);
+            expect(persisted).toMatchObject({
+              status: 'searching',
+              logisticsSearchStatus: 'arranging',
+            });
+            const { rows } = await pool.query(
+              'SELECT logistics_escalation_reason FROM rides WHERE id=$1',
+              [waiting.id],
+            );
+            expect(rows[0]?.logistics_escalation_reason).toBe('search_exhausted');
+          } finally {
+            emptyDispatch.dispose();
+          }
+          const admin = randomUUID();
+          await pool.query(
+            "INSERT INTO users(id,first_name,last_name,email,role) VALUES($1,'Logistics','Fixture',$2,'super_admin')",
+            [admin, `${admin}@example.test`],
+          );
+          try {
+            const adminToken = await signAccessToken({
+              sub: admin,
+              role: 'super_admin',
+              type: 'access',
+            });
+            const dashboard = await request(app)
+              .get('/admin/logistics/dispatch')
+              .query({ search: waiting.bookingId, filter: 'escalated' })
+              .auth(adminToken, { type: 'bearer' });
+            expect(dashboard.status, dashboard.text).toBe(200);
+            const row = dashboard.body.data.items.find(
+              (item: { id: string }) => item.id === waiting.id,
+            );
+            expect(row).toMatchObject({
+              escalationReason: 'search_exhausted',
+              status: 'searching',
+            });
+            expect(Date.parse(row.deadline)).toBe(
+              Date.parse(String(waiting.logisticsFulfillmentDeadline)),
+            );
+          } finally {
+            await pool.query('DELETE FROM users WHERE id=$1', [admin]);
+          }
+          await service.cancelRide(customer, waiting.id, {
+            reason: 'Zero-supply test fixture finished',
+          });
+          await pool.query(
+            "UPDATE driver_profiles SET availability_status='available' WHERE id=$1",
+            [profile],
+          );
+        } else {
+          expect(unavailable.status, unavailable.text).toBe(409);
+          expect(unavailable.body.error.code).toBe('NO_ELIGIBLE_DRIVERS');
+          await expect(service.createRide(customer, input)).rejects.toMatchObject({
+            code: 'NO_ELIGIBLE_DRIVERS',
+          });
+          expect(
+            (await pool.query('SELECT count(*)::int n FROM rides WHERE customer_id=$1', [customer]))
+              .rows[0].n,
+          ).toBe(before);
+          await pool.query(
+            "UPDATE driver_profiles SET availability_status='available',last_location_at=NOW()-INTERVAL '1 day' WHERE id=$1",
+            [profile],
+          );
+          await expect(service.createRide(customer, input)).rejects.toMatchObject({
+            code: 'NO_ELIGIBLE_DRIVERS',
+          });
+          await pool.query(
+            'UPDATE driver_profiles SET last_location=NULL,last_location_at=NULL WHERE id=$1',
+            [profile],
+          );
+          await expect(service.createRide(customer, input)).rejects.toMatchObject({
+            code: 'NO_ELIGIBLE_DRIVERS',
+          });
+        }
         await pool.query(
           'UPDATE driver_profiles SET last_location=ST_SetSRID(ST_MakePoint(77.5,13),4326)::geography,last_location_at=NOW() WHERE id=$1',
           [profile],
@@ -560,9 +625,7 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
             'SELECT logistics_escalation_reason, logistics_retry_at > NOW() AS deferred FROM rides WHERE id=$1',
             [expiring.id],
           );
-          expect(recovery.rows).toEqual([
-            { logistics_escalation_reason: 'search_exhausted', deferred: true },
-          ]);
+          expect(recovery.rows).toEqual([{ logistics_escalation_reason: null, deferred: true }]);
           await service.cancelRide(customer, expiring.id, { reason: 'Test fixture finished' });
         } else {
           expect(afterTimeout?.status).toBe('cancelled');
