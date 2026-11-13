@@ -82,6 +82,10 @@ describe('booking coordinates are independent of customer GPS', () => {
           bookingHours: 2,
         });
         expect(create.mock.calls[0]?.[1]).toMatchObject({ pickup, destination, sector });
+        if (sector === 'logistics') {
+          expect(nearby).not.toHaveBeenCalled();
+          await matching.findDispatchDrivers(ride, 20000);
+        }
         expect(nearby.mock.calls[0]?.slice(0, 2)).toEqual([pickup.latitude, pickup.longitude]);
         const snapshot = { ...ride, status: 'driver_assigned' } as Ride;
         const result = await service.updateUserLocation('customer', 'ride', {
