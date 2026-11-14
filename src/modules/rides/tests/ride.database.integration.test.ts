@@ -1694,6 +1694,20 @@ describeDatabase('ride PostgreSQL integration', () => {
       ).rows[0].availability_status,
     ).toBe('stale');
   });
+  it('remembers the online preference without marking a driver with no fix available', async () => {
+    const id = fixture.driverProfileId;
+    await pool.query(
+      'UPDATE driver_profiles SET last_location=NULL,last_location_at=NULL WHERE id=$1',
+      [id],
+    );
+    expect(await driverRepository.updateAvailability(id, 'available')).toBe(true);
+    const { rows } = await pool.query(
+      'SELECT online_preference,availability_status FROM driver_profiles WHERE id=$1',
+      [id],
+    );
+    expect(rows[0]).toMatchObject({ online_preference: true, availability_status: 'stale' });
+  });
+
   it('persists fractional GPS accuracy and restores eligible driver availability', async () => {
     const id = fixture.driverProfileId;
     await pool.query(

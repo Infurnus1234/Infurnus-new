@@ -352,6 +352,10 @@ export class PostgresDriverRepository implements DriverRepository {
            availability_status = CASE
              WHEN $2::text = 'unavailable' AND availability_status = 'busy'
                THEN availability_status
+             WHEN $2::text = 'available' AND (
+               last_location IS NULL OR last_location_at IS NULL OR
+               last_location_at < NOW() - ($3::int * INTERVAL '1 second')
+             ) THEN 'stale'::driver_availability_status
              ELSE $2::driver_availability_status
            END
        WHERE id = $1
@@ -365,7 +369,7 @@ export class PostgresDriverRepository implements DriverRepository {
            SELECT 1 FROM rides WHERE assigned_driver_id=driver_profiles.id AND status NOT IN ('completed','cancelled')
          ))
        RETURNING id`,
-      [profileId, status],
+      [profileId, status, env.DRIVER_LOCATION_STALE_SECONDS],
     );
 
     return result.rowCount === 1;
