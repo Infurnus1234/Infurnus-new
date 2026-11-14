@@ -1,3 +1,4 @@
+import { pool } from '../../../infrastructure/database/postgres.js';
 import { env } from '../../../config/env.js';
 import { verifyMockLocationProof } from '../services/mock-location-proof.js';
 import { driverDocumentMetadataSchema } from '../schemas/driver.schemas.js';
@@ -84,6 +85,21 @@ export class DriverController {
           !proof ||
           !verifyMockLocationProof(grant, req.auth!, location.timestamp, proof)
         ) {
+          throw new AppError(
+            'MOCK_LOCATION_NOT_AUTHORIZED',
+            'Simulated GPS is not authorized',
+            403,
+          );
+        }
+      }
+      if (proof && grant) {
+        const pair = await pool.query(
+          `SELECT 1 FROM dispatch_isolation_pair p JOIN driver_profiles dp ON dp.id=p.driver_profile_id
+           WHERE p.customer_id=$1 AND dp.user_id=$2 AND p.expires_at=$3::timestamptz
+             AND p.expires_at>clock_timestamp()`,
+          [grant.customerId, grant.driverId, grant.expiresAt],
+        );
+        if (pair.rowCount !== 1) {
           throw new AppError(
             'MOCK_LOCATION_NOT_AUTHORIZED',
             'Simulated GPS is not authorized',

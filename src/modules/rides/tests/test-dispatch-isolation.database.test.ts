@@ -95,6 +95,51 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
       expect(dispatchTestScopeSql('$1')).toBe('FALSE');
       env.DISPATCH_TEST_DRIVER_USER_ID = drivers[0];
     });
+    it('blocks cross-pair offer writes even without worker configuration', async () => {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          "INSERT INTO dispatch_isolation_pair (customer_id, driver_profile_id, expires_at) VALUES ($1,$2,NOW()+INTERVAL '5 minutes')",
+          [customers[0], profiles[0]],
+        );
+        const create = async (customer: string) =>
+          (
+            await client.query(
+              `INSERT INTO rides(customer_id,sector,vehicle_category,status,pickup_location,destination_location) VALUES($1,'logistics','tata_407','searching',ST_SetSRID(ST_MakePoint(85.13,25.60),4326)::geography,ST_SetSRID(ST_MakePoint(85.14,25.61),4326)::geography) RETURNING id`,
+              [customer],
+            )
+          ).rows[0].id;
+        const paired = await create(customers[0]!);
+        const ordinary = await create(customers[1]!);
+        const offer = (ride: string, profile: string) =>
+          client.query(
+            "INSERT INTO ride_dispatch_attempts(ride_id,attempt,driver_profile_id,status,expires_at) VALUES($1,1,$2,'offered',NOW()+INTERVAL '1 minute')",
+            [ride, profile],
+          );
+        for (const [ride, profile] of [
+          [paired, profiles[1]!],
+          [ordinary, profiles[0]!],
+        ]) {
+          await client.query('SAVEPOINT rejected_offer');
+          await expect(offer(ride, profile)).rejects.toMatchObject({ code: '23514' });
+          await client.query('ROLLBACK TO SAVEPOINT rejected_offer');
+        }
+        await expect(offer(paired, profiles[0]!)).resolves.toMatchObject({ rowCount: 1 });
+        await client.query(
+          "UPDATE dispatch_isolation_pair SET expires_at=NOW()-INTERVAL '1 second'",
+        );
+        await expect(
+          client.query(
+            "UPDATE rides SET dispatch_driver_id=$2,dispatch_expires_at=NOW()+INTERVAL '1 minute' WHERE id=$1",
+            [paired, profiles[0]],
+          ),
+        ).rejects.toMatchObject({ code: '23514' });
+      } finally {
+        await client.query('ROLLBACK');
+        client.release();
+      }
+    });
     it('configuration rejects partial or identical account pairs', () => {
       const base = {
         ...process.env,
