@@ -2462,14 +2462,6 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
               label: 'Start OTP (share with driver):',
             ),
           ],
-          if (ride.status == model.RideStatus.inProgress &&
-              ride.endPin != null) ...[
-            const SizedBox(height: 12),
-            RideDeliveryPin(
-              pin: ride.endPin!,
-              label: 'Delivery/End OTP (share at delivery):',
-            ),
-          ],
         ] else if (ride?.pin != null && ride?.pinVerified != true) ...[
           const SizedBox(height: 12),
           RidePickupPin(pin: ride!.pin!),
@@ -2686,6 +2678,11 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
         ),
         const SizedBox(height: 16),
 
+        if (state.currentRide?.endPin case final String pin
+            when state.currentRide?.isLogistics == true) ...[
+          RideDeliveryPin(pin: pin),
+          const SizedBox(height: 16),
+        ],
         Row(
           children: [
             Expanded(
