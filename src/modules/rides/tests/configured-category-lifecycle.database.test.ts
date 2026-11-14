@@ -532,7 +532,15 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
             [profile, booked.id, distance, accuracy, age],
           );
         };
+        const expectEligibility = async (allowed: boolean) => {
+          const response = await request(app)
+            .get('/rides/driver/current-trip')
+            .auth(driverToken, { type: 'bearer' });
+          expect(response.status, response.text).toBe(200);
+          expect(response.body.data).toMatchObject({ id: booked.id, canCompleteRide: allowed });
+        };
         const expectBlocked = async () => {
+          await expectEligibility(false);
           const response = await complete().send({
             latitude: booked.destination.latitude,
             longitude: booked.destination.longitude,
@@ -552,7 +560,10 @@ describe.runIf(process.env.RIDE_DB_TESTS === 'true')(
           await expectBlocked();
           await fix(50, 8, 40);
           await expectBlocked();
-          await fix(199, 65);
+          for (const distance of [150, 100, 50, 0, 200]) {
+            await fix(distance, 8);
+            await expectEligibility(true);
+          }
         }
         const response = await (endPin ? complete().send({ endPin }) : complete());
         expect(response.status, response.text).toBe(200);

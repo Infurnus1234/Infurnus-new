@@ -34,5 +34,36 @@ describe('mock location device proof', () => {
       false,
     );
     expect(verifyMockLocationProof(grant, identity, new Date(+now + 1), proof, +now)).toBe(false);
+
+    const destinationRide = { bookingId: '4457753', latitude: 25.603916, longitude: 85.136024 };
+    const scoped = mockLocationGrantSchema.parse({ ...grant, destinationRide });
+    const scopedProof = sign(
+      'sha256',
+      Buffer.from(
+        [
+          'infurnus:patna-mock-location:v2',
+          grant.driverId,
+          grant.sessionId,
+          now.toISOString(),
+          '4457753',
+          '25.603916',
+          '85.136024',
+        ].join('\n'),
+      ),
+      privateKey,
+    ).toString('base64');
+    expect(verifyMockLocationProof(scoped, identity, now, scopedProof, +now)).toBe(true);
+    expect(verifyMockLocationProof(scoped, identity, now, proof, +now)).toBe(false);
+    for (const changed of [{ bookingId: '4457754' }, { latitude: 25.603917 }]) {
+      expect(
+        verifyMockLocationProof(
+          { ...scoped, destinationRide: { ...destinationRide, ...changed } },
+          identity,
+          now,
+          scopedProof,
+          +now,
+        ),
+      ).toBe(false);
+    }
   });
 });

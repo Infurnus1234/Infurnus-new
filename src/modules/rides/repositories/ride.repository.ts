@@ -71,6 +71,27 @@ export interface RouteMetadata {
   pinVerifiedAt?: string;
 }
 
+// One micrometer accounts for floating-point error at the inclusive boundary.
+const destinationCompletionRadiusMeters = 200 + 0.000001;
+const destinationCompletionPredicate = `(r.sector NOT IN ('logistics','premium','rental','service') OR (
+    SELECT COALESCE((
+      SELECT sample.accuracy > 0 AND sample.accuracy <= 100
+        AND sample.recorded_at BETWEEN clock_timestamp() - INTERVAL '30 seconds'
+            AND clock_timestamp() + INTERVAL '2 seconds'
+        AND NOT (ST_X(r.destination_location::geometry)=0 AND ST_Y(r.destination_location::geometry)=0)
+        AND ST_DWithin(sample.location, r.destination_location, ${destinationCompletionRadiusMeters}, false)
+        AND NOT (ST_X(sample.location::geometry)=0 AND ST_Y(sample.location::geometry)=0)
+      FROM (VALUES
+        (dp.last_location, dp.last_location_at, dp.location_accuracy::float8, 0),
+        (ST_SetSRID(ST_MakePoint($4::float8,$3::float8),4326)::geography,
+          $5::timestamptz, $6::float8, 1)
+      ) AS sample(location, recorded_at, accuracy, priority)
+      WHERE recorded_at IS NOT NULL
+      ORDER BY recorded_at DESC, priority
+      LIMIT 1
+    ), false)
+  ))`;
+
 export interface RideRepository {
   saveDestinationDistrict?(
     id: string,
@@ -96,6 +117,7 @@ export interface RideRepository {
     },
   ): Promise<Ride>;
 
+  canCompleteAtDestination?(id: string, assignedDriverId: string): Promise<boolean>;
   findActiveForDriver?(profileId: string): Promise<Ride | null>;
   findById(id: string): Promise<Ride | null>;
 
@@ -1252,12 +1274,7 @@ export class PostgresRideRepository implements RideRepository {
     return result.rows[0] ? mapRide(result.rows[0], false) : null;
   }
 
-  async complete(
-    id: string,
-    assignedDriverId: string,
-    client: PoolClient | Pool = this.pool,
-  ): Promise<Ride | null> {
-    const queryRunner = client && typeof client.query === 'function' ? client : this.pool;
+  private async completionParameters(id: string, assignedDriverId: string) {
     const latest = await this.trackingCache?.latest(assignedDriverId);
     const cachedPoint =
       latest &&
@@ -1268,7 +1285,33 @@ export class PostgresRideRepository implements RideRepository {
       Number.isFinite(Date.parse(latest.timestamp))
         ? latest
         : null;
+    return [
+      id,
+      assignedDriverId,
+      cachedPoint?.latitude ?? null,
+      cachedPoint?.longitude ?? null,
+      cachedPoint?.timestamp ?? null,
+      cachedPoint?.accuracy ?? null,
+    ];
+  }
 
+  async canCompleteAtDestination(id: string, assignedDriverId: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `SELECT ${destinationCompletionPredicate} AS allowed
+       FROM rides r
+       LEFT JOIN driver_profiles dp ON dp.id = r.assigned_driver_id
+       WHERE r.id = $1 AND r.assigned_driver_id = $2 AND r.status = 'in_progress'`,
+      await this.completionParameters(id, assignedDriverId),
+    );
+    return result.rows[0]?.allowed === true;
+  }
+
+  async complete(
+    id: string,
+    assignedDriverId: string,
+    client: PoolClient | Pool = this.pool,
+  ): Promise<Ride | null> {
+    const queryRunner = client && typeof client.query === 'function' ? client : this.pool;
     const result = await queryRunner.query(
       `WITH current_ride AS (
          SELECT
@@ -1278,24 +1321,7 @@ export class PostgresRideRepository implements RideRepository {
            r.route_metadata,
            r.fare_estimate,
            v.fuel_rate_per_km,
-           (r.sector NOT IN ('logistics','premium','rental','service') OR (
-             SELECT COALESCE((
-               SELECT sample.accuracy > 0 AND sample.accuracy <= 100
-                 AND sample.recorded_at BETWEEN clock_timestamp() - INTERVAL '30 seconds'
-                     AND clock_timestamp() + INTERVAL '2 seconds'
-                 AND NOT (ST_X(r.destination_location::geometry)=0 AND ST_Y(r.destination_location::geometry)=0)
-                 AND ST_DWithin(sample.location, r.destination_location, 200, false)
-                 AND NOT (ST_X(sample.location::geometry)=0 AND ST_Y(sample.location::geometry)=0)
-               FROM (VALUES
-                 (dp.last_location, dp.last_location_at, dp.location_accuracy::float8, 0),
-                 (ST_SetSRID(ST_MakePoint($4::float8,$3::float8),4326)::geography,
-                   $5::timestamptz, $6::float8, 1)
-               ) AS sample(location, recorded_at, accuracy, priority)
-               WHERE recorded_at IS NOT NULL
-               ORDER BY recorded_at DESC, priority
-               LIMIT 1
-             ), false)
-           )) AS destination_reached
+           ${destinationCompletionPredicate} AS destination_reached
          FROM rides r
          LEFT JOIN driver_profiles dp ON dp.id = r.assigned_driver_id
          LEFT JOIN vehicles v
@@ -1393,14 +1419,7 @@ export class PostgresRideRepository implements RideRepository {
        FROM current_ride cr
        LEFT JOIN updated u_r ON u_r.id = cr.id
        ${detailedRideJoins('u_r')}`,
-      [
-        id,
-        assignedDriverId,
-        cachedPoint?.latitude ?? null,
-        cachedPoint?.longitude ?? null,
-        cachedPoint?.timestamp ?? null,
-        cachedPoint?.accuracy ?? null,
-      ],
+      await this.completionParameters(id, assignedDriverId),
     );
 
     if (result.rows[0]?.destinationBlocked) {

@@ -73,12 +73,13 @@ export class DriverController {
       const proof = req.get('X-Infurnus-Mock-Location-Proof');
       const location = driverLocationSchema.parse(req.body);
       const grant = env.PATNA_MOCK_LOCATION_GRANT;
+      const destinationRide = grant?.destinationRide;
       if (proof !== undefined || grant?.driverId === req.auth!.userId) {
         if (
           !grant ||
           (proof?.length ?? 0) > 128 ||
-          location.latitude !== 25.620337 ||
-          location.longitude !== 85.139448 ||
+          location.latitude !== (destinationRide?.latitude ?? 25.620337) ||
+          location.longitude !== (destinationRide?.longitude ?? 85.139448) ||
           location.accuracy !== 5 ||
           location.speed !== undefined ||
           location.heading !== undefined ||
@@ -96,8 +97,23 @@ export class DriverController {
         const pair = await pool.query(
           `SELECT 1 FROM dispatch_isolation_pair p JOIN driver_profiles dp ON dp.id=p.driver_profile_id
            WHERE p.customer_id=$1 AND dp.user_id=$2 AND p.expires_at=$3::timestamptz
-             AND p.expires_at>clock_timestamp()`,
-          [grant.customerId, grant.driverId, grant.expiresAt],
+             AND p.expires_at>clock_timestamp()
+             AND ($4::text IS NULL OR EXISTS (
+               SELECT 1 FROM rides r
+               WHERE r.booking_id::text=$4 AND r.customer_id=p.customer_id
+                 AND r.assigned_driver_id=dp.id AND r.status='in_progress'
+                 AND r.sector='logistics' AND r.vehicle_category='tata_407'
+                 AND ST_DWithin(r.destination_location,
+                   ST_SetSRID(ST_MakePoint($6::float8,$5::float8),4326)::geography, 200, false)
+             ))`,
+          [
+            grant.customerId,
+            grant.driverId,
+            grant.expiresAt,
+            destinationRide?.bookingId ?? null,
+            location.latitude,
+            location.longitude,
+          ],
         );
         if (pair.rowCount !== 1) {
           throw new AppError(
@@ -347,7 +363,9 @@ export class DriverController {
 
       res.json({
         success: true,
-        data: activeTrip ? sanitizeRideForDriver(activeTrip) : null,
+        data: activeTrip
+          ? { ...sanitizeRideForDriver(activeTrip), canCompleteRide: activeTrip.canCompleteRide }
+          : null,
         message: 'Current trip retrieved',
       });
     } catch (error) {

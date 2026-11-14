@@ -7,6 +7,14 @@ export const mockLocationGrantSchema = z
     customerId: z.string().uuid(),
     sessionId: z.string().uuid(),
     publicKey: z.string().min(1).max(1024),
+    destinationRide: z
+      .object({
+        bookingId: z.string().regex(/^\d+$/),
+        latitude: z.number().min(-90).max(90),
+        longitude: z.number().min(-180).max(180),
+      })
+      .strict()
+      .optional(),
     startsAt: z.string().datetime(),
     expiresAt: z.string().datetime(),
   })
@@ -52,10 +60,17 @@ export function verifyMockLocationProof(
   )
     return false;
   const message = [
-    'infurnus:patna-mock-location:v1',
+    grant.destinationRide ? 'infurnus:patna-mock-location:v2' : 'infurnus:patna-mock-location:v1',
     grant.driverId,
     grant.sessionId,
     timestamp.toISOString(),
+    ...(grant.destinationRide
+      ? [
+          grant.destinationRide.bookingId,
+          grant.destinationRide.latitude.toFixed(6),
+          grant.destinationRide.longitude.toFixed(6),
+        ]
+      : []),
   ].join('\n');
   return verify(
     'sha256',

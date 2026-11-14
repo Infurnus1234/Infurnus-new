@@ -246,7 +246,12 @@ export class RideService {
       throw new AppError('RIDE_MAP_UNAVAILABLE', 'Ride map is unavailable', 503);
     const profile = await this.driverRepository.findProfileIdByUserId(userId);
     const ride = profile ? await this.repository.findActiveForDriver(profile) : null;
-    return ride ? this.prepareDriverRide(ride) : null;
+    if (!ride || !profile) return null;
+    const prepared = await this.prepareDriverRide(ride);
+    const canCompleteRide =
+      prepared.status === 'in_progress' &&
+      (await this.repository.canCompleteAtDestination?.(prepared.id, profile)) === true;
+    return { ...prepared, canCompleteRide };
   }
   async updateUserLocation(userId: string, id: string, input: unknown) {
     const pending = this.userLocationPending.get(userId) ?? 0;
