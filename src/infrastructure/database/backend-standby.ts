@@ -44,7 +44,11 @@ export async function waitForBackendInstance(
       }
       return release;
     } catch (error) {
-      if (!(error instanceof AppError) || error.code !== 'BACKEND_SINGLE_INSTANCE_REQUIRED') {
+      if (
+        !(error instanceof AppError) ||
+        (error.code !== 'BACKEND_SINGLE_INSTANCE_REQUIRED' &&
+          error.code !== 'BACKEND_REVISION_INACTIVE')
+      ) {
         throw error;
       }
       await delay(2000, undefined, { signal });

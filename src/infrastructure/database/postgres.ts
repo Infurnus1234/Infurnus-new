@@ -21,7 +21,11 @@ export async function checkDatabaseConnection(): Promise<void> {
 }
 
 /** Current sockets/events/presence are process-local: one serving process per database. */
-export async function acquireBackendInstance(onLost: () => void): Promise<() => Promise<void>> {
+export async function acquireBackendInstance(
+  onLost: () => void,
+  revision?: string,
+  onRetired: () => void = onLost,
+): Promise<() => Promise<void>> {
   const client = await pool.connect();
   const key = 874011;
   const boundedQuery = async <T>(work: () => Promise<T>): Promise<T> => {
@@ -37,6 +41,15 @@ export async function acquireBackendInstance(onLost: () => void): Promise<() => 
       clearTimeout(timeout);
     }
   };
+  const checkRevision = async () => {
+    if (!revision) return;
+    const result = await client.query<{ authorized: boolean }>(
+      'SELECT EXISTS (SELECT 1 FROM backend_worker_revision WHERE revision = $1) AS authorized',
+      [revision],
+    );
+    if (!result.rows[0]?.authorized)
+      throw new AppError('BACKEND_REVISION_INACTIVE', 'Backend revision is not authorized', 503);
+  };
   let released = false;
   const heartbeat: { timer?: ReturnType<typeof setInterval> } = {};
   let checking = false;
@@ -49,6 +62,7 @@ export async function acquireBackendInstance(onLost: () => void): Promise<() => 
   };
   client.on('error', lose);
   try {
+    await boundedQuery(checkRevision);
     const result = await boundedQuery(() =>
       client.query<{ locked: boolean }>('SELECT pg_try_advisory_lock($1) AS locked', [key]),
     );
@@ -58,6 +72,14 @@ export async function acquireBackendInstance(onLost: () => void): Promise<() => 
         'Another backend instance is already serving this database',
         503,
       );
+    if (revision) {
+      try {
+        await boundedQuery(checkRevision);
+      } catch (error) {
+        await boundedQuery(() => client.query('SELECT pg_advisory_unlock($1)', [key]));
+        throw error;
+      }
+    }
   } catch (error) {
     client.off('error', lose);
     if (!released)
@@ -71,12 +93,19 @@ export async function acquireBackendInstance(onLost: () => void): Promise<() => 
     checking = true;
     let timeout: ReturnType<typeof setTimeout> | undefined;
     void Promise.race([
-      client.query('SELECT 1'),
+      revision ? checkRevision() : client.query('SELECT 1'),
       new Promise<never>((_, reject) => {
         timeout = setTimeout(() => reject(new Error('Instance heartbeat timeout')), 1500);
       }),
     ])
-      .catch(lose)
+      .catch((error: unknown) => {
+        if (error instanceof AppError && error.code === 'BACKEND_REVISION_INACTIVE') {
+          clearInterval(heartbeat.timer);
+          onRetired();
+        } else {
+          lose();
+        }
+      })
       .finally(() => {
         clearTimeout(timeout);
         checking = false;

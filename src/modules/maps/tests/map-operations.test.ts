@@ -46,6 +46,37 @@ describe('operator safeguards', () => {
       const restarted = await acquireBackendInstance(() => {});
       await restarted();
     });
+    it('hands ownership to the authorized revision only after the old worker drains', async () => {
+      const retired = vi.fn();
+      const lost = vi.fn();
+      const selectRevision = (revision: string) =>
+        pool.query(
+          'INSERT INTO backend_worker_revision (revision) VALUES ($1) ON CONFLICT (singleton) DO UPDATE SET revision = EXCLUDED.revision',
+          [revision],
+        );
+      await selectRevision('api-old');
+      const release = await acquireBackendInstance(lost, 'api-old', retired);
+      try {
+        await selectRevision('api-next');
+        await vi.waitFor(() => expect(retired).toHaveBeenCalledTimes(1), { timeout: 3000 });
+        expect(lost).not.toHaveBeenCalled();
+        await expect(acquireBackendInstance(lost, 'api-next')).rejects.toMatchObject({
+          code: 'BACKEND_SINGLE_INSTANCE_REQUIRED',
+        });
+        await release();
+        const next = await acquireBackendInstance(lost, 'api-next');
+        try {
+          await expect(acquireBackendInstance(lost, 'api-old')).rejects.toMatchObject({
+            code: 'BACKEND_REVISION_INACTIVE',
+          });
+        } finally {
+          await next();
+        }
+      } finally {
+        await release();
+        await pool.query('DELETE FROM backend_worker_revision');
+      }
+    });
     it('detects termination of its owning session and allows reconstructed ownership', async () => {
       const lost = vi.fn();
       const release = await acquireBackendInstance(lost);

@@ -66,13 +66,6 @@ async function startServer() {
   await checkDatabaseConnection();
   await loadServiceCities();
 
-  // Push delivery is optional for the API. Loading the worker eagerly requires
-  // Redis and Firebase even when neither service is configured locally.
-  const notifications =
-    env.REDIS_URL && env.FIREBASE_PROJECT_ID
-      ? await import('./infrastructure/queue/index.js')
-      : undefined;
-
   if (env.NODE_ENV === 'production' || env.NODE_ENV === 'staging') {
     await serviceArea.assertSupported([]);
 
@@ -284,14 +277,28 @@ async function startServer() {
   // ==========================================================
 
   let onInstanceLost = () => process.exit(1);
+  let onRevisionRetired = () => ownershipWait.abort();
 
   if (env.NODE_ENV === 'production' || env.NODE_ENV === 'staging') {
     releaseInstance = await waitForBackendInstance(
-      () => acquireBackendInstance(() => onInstanceLost()),
+      () =>
+        acquireBackendInstance(
+          () => onInstanceLost(),
+          process.env.K_REVISION,
+          () => onRevisionRetired(),
+        ),
       ownershipWait.signal,
       env.BACKEND_STANDBY,
     );
   }
+
+  ownershipWait.signal.throwIfAborted();
+  // Push delivery is optional for the API. Loading the worker eagerly requires
+  // Redis and Firebase even when neither service is configured locally.
+  const notifications =
+    env.REDIS_URL && env.FIREBASE_PROJECT_ID
+      ? await import('./infrastructure/queue/index.js')
+      : undefined;
 
   await loadDeletedSubjects(pool);
   const runLogisticsMonitors = env.REDIS_URL
@@ -520,14 +527,21 @@ async function startServer() {
   // Graceful shutdown
   // ==========================================================
 
+  let shuttingDown = false;
   const shutdown = async (signal: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    active = false;
+    const deadline = setTimeout(() => process.exit(1), 8500);
+    deadline.unref();
     clearInterval(bookingReleaseTimer);
     console.log(`${signal} received. Shutting down gracefully...`);
 
     io.disconnectSockets(true);
 
     io.close(async () => {
-      await releaseInstance?.();
+      await notifications?.notificationWorker.close().catch(() => {});
+      await notifications?.closeNotificationQueue().catch(() => {});
 
       if (env.REDIS_URL) {
         const { disconnectRedis } = await import('./infrastructure/redis/index.js');
@@ -535,9 +549,7 @@ async function startServer() {
         await disconnectRedis().catch(() => {});
       }
 
-      await notifications?.notificationWorker.close().catch(() => {});
-      await notifications?.closeNotificationQueue().catch(() => {});
-
+      await releaseInstance?.();
       await pool.end();
 
       console.log('INFURNUS API shut down.');
@@ -545,6 +557,9 @@ async function startServer() {
       process.exit(0);
     });
   };
+
+  onRevisionRetired = () => void shutdown('Revision authorization revoked');
+  if (ownershipWait.signal.aborted) onRevisionRetired();
 
   process.on('SIGINT', () => {
     void shutdown('SIGINT');
