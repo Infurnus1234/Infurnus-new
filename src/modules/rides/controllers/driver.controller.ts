@@ -1,3 +1,5 @@
+import { env } from '../../../config/env.js';
+import { verifyMockLocationProof } from '../services/mock-location-proof.js';
 import { driverDocumentMetadataSchema } from '../schemas/driver.schemas.js';
 import type { NextFunction, Request, Response } from 'express';
 import { AppError } from '../../../common/errors/app-error.js';
@@ -67,10 +69,29 @@ export class DriverController {
 
   location = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      await this.driverService.updateLocation(
-        req.auth!.userId,
-        driverLocationSchema.parse(req.body),
-      );
+      const proof = req.get('X-Infurnus-Mock-Location-Proof');
+      const location = driverLocationSchema.parse(req.body);
+      const grant = env.PATNA_MOCK_LOCATION_GRANT;
+      if (proof !== undefined || grant?.driverId === req.auth!.userId) {
+        if (
+          !grant ||
+          (proof?.length ?? 0) > 128 ||
+          location.latitude !== 25.620337 ||
+          location.longitude !== 85.139448 ||
+          location.accuracy !== 5 ||
+          location.speed !== undefined ||
+          location.heading !== undefined ||
+          !proof ||
+          !verifyMockLocationProof(grant, req.auth!, location.timestamp, proof)
+        ) {
+          throw new AppError(
+            'MOCK_LOCATION_NOT_AUTHORIZED',
+            'Simulated GPS is not authorized',
+            403,
+          );
+        }
+      }
+      await this.driverService.updateLocation(req.auth!.userId, location);
 
       res.json({
         success: true,

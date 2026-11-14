@@ -28,8 +28,14 @@ export function dispatchTestScopeSql(customerExpression?: string): string {
   const driver = env.DISPATCH_TEST_DRIVER_USER_ID;
   if (!customer && !driver) return 'TRUE';
   if (!customer || !driver) return 'FALSE';
+  const grant = env.PATNA_MOCK_LOCATION_GRANT;
+  const withinGrant = grant
+    ? `AND clock_timestamp() >= '${grant.startsAt}'::timestamptz
+       AND clock_timestamp() < '${grant.expiresAt}'::timestamptz
+       AND v.sector='logistics' AND v.category='tata_407'`
+    : '';
   if (!customerExpression) return `dp.user_id <> '${driver}'::uuid`;
-  return `((dp.user_id = '${driver}'::uuid AND ${customerExpression} = '${customer}'::uuid)
+  return `((dp.user_id = '${driver}'::uuid AND ${customerExpression} = '${customer}'::uuid ${withinGrant})
     OR (dp.user_id <> '${driver}'::uuid AND ${customerExpression} <> '${customer}'::uuid))`;
 }
 

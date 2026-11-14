@@ -1,3 +1,4 @@
+import { mockLocationGrantSchema } from '../modules/rides/services/mock-location-proof.js';
 import 'dotenv/config';
 import { z } from 'zod';
 
@@ -32,6 +33,17 @@ export const envSchema = z
     // Optional paired live-device test isolation; never an authentication bypass.
     DISPATCH_TEST_CUSTOMER_ID: z.string().uuid().optional(),
     DISPATCH_TEST_DRIVER_USER_ID: z.string().uuid().optional(),
+    PATNA_MOCK_LOCATION_GRANT: z
+      .string()
+      .transform((value, ctx) => {
+        try {
+          return mockLocationGrantSchema.parse(JSON.parse(value));
+        } catch {
+          ctx.addIssue({ code: 'custom', message: 'Invalid Patna mock GPS grant' });
+          return z.NEVER;
+        }
+      })
+      .optional(),
     FLEET_REPORT_TIME_ZONE: z
       .string()
       .default('Asia/Kolkata')
@@ -367,6 +379,19 @@ export const envSchema = z
       ),
   })
   .superRefine((config, ctx) => {
+    const mockGrant = config.PATNA_MOCK_LOCATION_GRANT;
+    if (
+      mockGrant &&
+      (mockGrant.driverId !== config.DISPATCH_TEST_DRIVER_USER_ID ||
+        mockGrant.customerId !== config.DISPATCH_TEST_CUSTOMER_ID)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['PATNA_MOCK_LOCATION_GRANT'],
+        message: 'Mock GPS requires the exact configured dispatch pair',
+      });
+    }
+
     if (
       Boolean(config.DISPATCH_TEST_CUSTOMER_ID) !== Boolean(config.DISPATCH_TEST_DRIVER_USER_ID) ||
       (config.DISPATCH_TEST_CUSTOMER_ID &&

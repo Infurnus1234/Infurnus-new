@@ -685,6 +685,10 @@ export function createSocketServer(
             throw new Error('Driver authorization failed');
           }
 
+          if (env.PATNA_MOCK_LOCATION_GRANT?.driverId === userId) {
+            throw new Error('Enrolled test driver must use the signed location endpoint');
+          }
+
           const { rideId, ...locationPayload } = payload as Record<string, unknown>;
 
           if (
