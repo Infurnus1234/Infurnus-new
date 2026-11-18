@@ -248,12 +248,12 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                         _buildQuickServicesGrid(context),
                         const SizedBox(height: 28),
 
-                        // Popular Rides / Passenger Fleet
-                        _buildPassengerSection(context),
-                        const SizedBox(height: 28),
-
                         // Logistics Section
                         _buildLogisticsSection(context),
+                        const SizedBox(height: 28),
+
+                        // Rental Fleet Section
+                        _buildPassengerSection(context),
                         const SizedBox(height: 28),
 
                         // Service Fleet Section
@@ -283,10 +283,12 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
   Widget _buildHeader(BuildContext context, dynamic user) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
                 'NAMASTE',
@@ -299,19 +301,22 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
               ),
               const SizedBox(height: 2),
               Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
                 spacing: 8,
-                runSpacing: 8,
+                runSpacing: 4,
                 children: [
-                  const Text(
-                    'INFURNUS',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.5,
-                      color: textBlack,
+                  const FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'INFURNUS',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.5,
+                        color: textBlack,
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 8),
                   Text(
                     '👋 ${user?.firstName ?? "User"}',
                     style: const TextStyle(
@@ -335,6 +340,8 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
           ),
         ),
         Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             _buildHeaderIcon(
               icon: Icons.chat_bubble_outline_rounded,
@@ -429,6 +436,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
           ],
         ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             const Icon(Icons.search_rounded, color: textBlack, size: 22),
             const SizedBox(width: 12),
@@ -581,11 +589,13 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
             ],
           ),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
+                flex: 5,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -653,19 +663,21 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                   ],
                 ),
               ),
-              const SizedBox(width: 10),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Image.asset(
-                  'assets/images/infurnus_banner_brand.png',
-                  width: 120,
-                  height: 105,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => Image.asset(
-                    'assets/images/infurnus_splash_logo.png',
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 4,
+                child: Center(
+                  child: Image.asset(
+                    'assets/images/infurnus_banner_brand.png',
                     width: 120,
                     height: 105,
                     fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => Image.asset(
+                      'assets/images/infurnus_splash_logo.png',
+                      width: 120,
+                      height: 105,
+                      fit: BoxFit.contain,
+                    ),
                   ),
                 ),
               ),
@@ -715,6 +727,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
         'title': 'Rental',
         'subtitle': 'Cab, Sedan & More',
         'category': VehicleCategoryType.rides,
+        'assetImagePath': 'assets/vehicles/rental_card_hatchback.png',
         'action': () {
           ref.read(rideProvider.notifier).selectSector('rental');
           context.push('/rentals');
@@ -788,6 +801,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
                 children: [
                   VehicleCategoryVisual(
                     category: category,
+                    customAssetPath: item['assetImagePath'] as String?,
                     size: 38,
                     borderRadius: 10,
                   ),

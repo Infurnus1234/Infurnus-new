@@ -237,7 +237,7 @@ void main() {
     );
     expect(
       VehicleVisualImage.getAssetPath('Mini Cab', 'hatchback'),
-      'assets/images/hatchback_clean.jpg',
+      'assets/vehicles/mini_cab.png',
     );
     expect(
       VehicleVisualImage.getAssetPath('407 Cargo', 'cargo_407'),

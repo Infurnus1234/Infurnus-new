@@ -23,6 +23,6 @@ const passengerVehicles = <Map<String, String>>[
     'category': 'mini',
     'name': 'Minicab',
     'capacity': '4 seater',
-    'image': 'assets/images/hatchback_clean.jpg',
+    'image': 'assets/vehicles/mini_cab.png',
   },
 ];

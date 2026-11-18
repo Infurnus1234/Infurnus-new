@@ -37,6 +37,14 @@ void main() {
         VehicleVisualImage.getAssetPath('Bike', 'bike'),
         'assets/images/bike_motorcycle.png',
       );
+      expect(
+        VehicleVisualImage.getAssetPath('Mini Cab', 'hatchback'),
+        'assets/vehicles/mini_cab.png',
+      );
+      expect(
+        VehicleVisualImage.getAssetPath('Mini Cab', 'rides'),
+        'assets/vehicles/mini_cab.png',
+      );
     });
 
     test('Logistics exact mappings', () {

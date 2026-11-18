@@ -112,7 +112,7 @@ const vehicleDisplayMetadata = <String, Map<String, Map<String, String>>>{
     "mini": {
       "name": "Mini Cab",
       "capacity": "4 seater",
-      "image": "assets/images/hatchback_clean.jpg",
+      "image": "assets/vehicles/mini_cab.png",
     },
   },
   "premium": {

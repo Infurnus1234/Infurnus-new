@@ -2302,12 +2302,16 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
         name.contains('three_wheeler')) {
       return 'assets/images/piaggio_ape_yellow.png';
     }
-    if (cat.contains('hatchback') ||
-        name.contains('hatchback') ||
-        cat.contains('mini cab') ||
+    if (cat.contains('mini cab') ||
         name.contains('mini cab') ||
         cat.contains('mini_cab') ||
-        name.contains('mini_cab')) {
+        name.contains('mini_cab') ||
+        cat.contains('minicab') ||
+        name.contains('minicab') ||
+        cat == 'mini') {
+      return 'assets/vehicles/mini_cab.png';
+    }
+    if (cat.contains('hatchback') || name.contains('hatchback')) {
       return 'assets/images/hatchback_clean.jpg';
     }
     return 'assets/images/sedan.jpg';
