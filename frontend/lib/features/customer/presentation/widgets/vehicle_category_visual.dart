@@ -84,6 +84,7 @@ class VehicleCategoryConfig {
 
 class VehicleCategoryVisual extends StatelessWidget {
   final VehicleCategoryType category;
+  final String? customAssetPath;
   final double size;
   final double borderRadius;
   final BoxFit fit;
@@ -91,6 +92,7 @@ class VehicleCategoryVisual extends StatelessWidget {
   const VehicleCategoryVisual({
     super.key,
     required this.category,
+    this.customAssetPath,
     this.size = 48,
     this.borderRadius = 12,
     this.fit = BoxFit.contain,
@@ -99,6 +101,7 @@ class VehicleCategoryVisual extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final config = VehicleCategoryConfig.getConfig(category);
+    final imagePath = customAssetPath ?? config.assetImagePath;
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
@@ -109,9 +112,9 @@ class VehicleCategoryVisual extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(borderRadius),
         ),
-        child: config.assetImagePath != null
+        child: imagePath != null
             ? Image.asset(
-                config.assetImagePath!,
+                imagePath,
                 width: size,
                 height: size,
                 fit: fit,

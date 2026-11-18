@@ -28,7 +28,9 @@ class VehicleVisualImage extends StatelessWidget {
     final category = cat?.trim().toLowerCase();
     final label = name?.trim().toLowerCase();
     if (label == 'hatchback' ||
-        (category == 'hatchback' && label != 'mini cab')) {
+        (category == 'hatchback' &&
+            label != 'mini cab' &&
+            label != 'minicab')) {
       return 'assets/images/rental_hatchback.webp';
     }
     if (category == 'tata_407' ||
@@ -145,7 +147,13 @@ class VehicleVisualImage extends StatelessWidget {
     }
     if (key.contains('mini cab') ||
         key.contains('mini_cab') ||
-        key.contains('hatchback') ||
+        key.contains('minicab') ||
+        label == 'mini cab' ||
+        label == 'minicab' ||
+        category == 'mini') {
+      return 'assets/vehicles/mini_cab.png';
+    }
+    if (key.contains('hatchback') ||
         key.contains('compact') ||
         key.contains('baleno')) {
       return 'assets/images/hatchback_clean.jpg';
