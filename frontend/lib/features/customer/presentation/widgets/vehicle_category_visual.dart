@@ -98,10 +98,16 @@ class VehicleCategoryVisual extends StatelessWidget {
     this.fit = BoxFit.contain,
   });
 
+  /// Returns true when the asset path is a black-background vehicle PNG
+  /// (assets/vehicles/ folder) so we can adapt the container colour.
+  static bool _hasBlackBg(String? path) =>
+      path != null && path.startsWith('assets/vehicles/');
+
   @override
   Widget build(BuildContext context) {
     final config = VehicleCategoryConfig.getConfig(category);
     final imagePath = customAssetPath ?? config.assetImagePath;
+    final blackBg = _hasBlackBg(imagePath);
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
@@ -109,7 +115,7 @@ class VehicleCategoryVisual extends StatelessWidget {
         width: size,
         height: size,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: blackBg ? Colors.black : Colors.white,
           borderRadius: BorderRadius.circular(borderRadius),
         ),
         child: imagePath != null
@@ -117,7 +123,7 @@ class VehicleCategoryVisual extends StatelessWidget {
                 imagePath,
                 width: size,
                 height: size,
-                fit: fit,
+                fit: blackBg ? BoxFit.cover : fit,
                 errorBuilder: (_, __, ___) => _buildFallback(config),
               )
             : _buildFallback(config),

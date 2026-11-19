@@ -200,43 +200,48 @@ class VehicleVisualImage extends StatelessWidget {
     return Icons.directions_car_rounded;
   }
 
+  /// Returns true when the asset lives in assets/vehicles/ (black-BG PNGs).
+  static bool _hasBlackBg(String? path) =>
+      path != null && path.startsWith('assets/vehicles/');
+
   @override
   Widget build(BuildContext context) {
     final resolvedAsset =
         customAssetPath ?? getAssetPath(vehicleName, category);
+    final blackBg = _hasBlackBg(resolvedAsset);
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
       child: Container(
         width: width,
         height: height,
-        color: const Color(0xFFF3F4F6),
-        child: _buildImageWidget(resolvedAsset),
+        color: blackBg ? Colors.black : const Color(0xFFF3F4F6),
+        child: _buildImageWidget(resolvedAsset, blackBg),
       ),
     );
   }
 
-  Widget _buildImageWidget(String? assetPath) {
+  Widget _buildImageWidget(String? assetPath, [bool blackBg = false]) {
     if (imageUrl != null && imageUrl!.isNotEmpty) {
       return Image.network(
         imageUrl!,
         width: width,
         height: height,
         fit: fit,
-        errorBuilder: (_, __, ___) => _buildAssetOrFallback(assetPath),
+        errorBuilder: (_, __, ___) => _buildAssetOrFallback(assetPath, blackBg),
       );
     }
 
-    return _buildAssetOrFallback(assetPath);
+    return _buildAssetOrFallback(assetPath, blackBg);
   }
 
-  Widget _buildAssetOrFallback(String? assetPath) {
+  Widget _buildAssetOrFallback(String? assetPath, [bool blackBg = false]) {
     if (assetPath != null && assetPath.isNotEmpty) {
       return Image.asset(
         assetPath,
         width: width,
         height: height,
-        fit: fit,
+        fit: blackBg ? BoxFit.cover : fit,
         errorBuilder: (_, __, ___) => _buildFallbackIconWidget(),
       );
     }
