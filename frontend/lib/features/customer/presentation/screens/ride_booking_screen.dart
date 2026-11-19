@@ -672,6 +672,55 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
                   ),
                 ],
               ),
+              if (isLogistics && estimate != null) ...[
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0FDF4),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF86EFAC)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(
+                            Icons.payments_outlined,
+                            size: 16,
+                            color: brandGreen,
+                          ),
+                          SizedBox(width: 6),
+                          Text(
+                            'Logistics Split Payment (40% / 60%)',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              color: textWhite,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      _buildBreakdownRow(
+                        'Pay Now (40% Advance)',
+                        '₹${((estimate.bookingAmount ?? estimate.grossAmount) * 0.4).round().rupeeText}',
+                      ),
+                      const SizedBox(height: 6),
+                      _buildBreakdownRow(
+                        'Pay After Delivery (60% Balance)',
+                        '₹${((estimate.bookingAmount ?? estimate.grossAmount) - ((estimate.bookingAmount ?? estimate.grossAmount) * 0.4).round()).rupeeText}',
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Pay 40% advance to confirm booking. Remaining 60% can be paid online or in cash directly to the driver after delivery.',
+                        style: TextStyle(fontSize: 11, color: textGray),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 20),
             ],
           ),
@@ -1454,6 +1503,10 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
             ),
           ],
         ),
+        if (state.selectedSector == 'logistics') ...[
+          const SizedBox(height: 14),
+          _buildLogisticsSplitBookingCard(state),
+        ],
         const SizedBox(height: 16),
 
         // Confirm CTA Button (Handles All Dynamic Route/Fare/Debounce States)
@@ -2016,6 +2069,86 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
     );
   }
 
+  Widget _buildLogisticsSplitBookingCard(RideState state) {
+    final fare =
+        state.fareEstimate?.bookingAmount ??
+        state.fareEstimate?.grossAmount ??
+        state.fare ??
+        0.0;
+    if (fare <= 0) return const SizedBox.shrink();
+    final advance = (fare * 0.4).round();
+    final balance = fare.round() - advance;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0FDF4),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF86EFAC)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.payments_outlined, color: Color(0xFF16A34A), size: 16),
+              SizedBox(width: 6),
+              Text(
+                'Logistics Payment Plan (40% / 60%)',
+                style: TextStyle(
+                  color: Color(0xFF111827),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Pay Now (40% Advance)',
+                style: TextStyle(fontSize: 12, color: Color(0xFF4B5563)),
+              ),
+              Text(
+                '₹${advance.rupeeText}',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF16A34A),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Pay After Delivery (60% Balance)',
+                style: TextStyle(fontSize: 12, color: Color(0xFF4B5563)),
+              ),
+              Text(
+                '₹${balance.rupeeText}',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF111827),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Pay 40% advance to confirm booking. Remaining 60% can be paid online or in cash after delivery.',
+            style: TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildConfirmButton(RideState state) {
     if (_isLoadingFleet) {
       return const SizedBox(
@@ -2142,12 +2275,21 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
       );
     }
 
+    final isLogistics = state.selectedSector == 'logistics';
+    final fareNum =
+        state.fareEstimate?.bookingAmount ??
+        state.fareEstimate?.grossAmount ??
+        state.fare;
+    final advanceNum = fareNum != null ? (fareNum * 0.4).round() : null;
+
     final fareText =
         state.fareEstimate?.displayFare ??
         (state.fare != null ? '₹${state.fare!.rupeeText}' : '');
-    final buttonTitle = fareText.isNotEmpty
-        ? 'Book $vehicleName • $fareText'
-        : 'Book $vehicleName';
+    final buttonTitle = isLogistics && advanceNum != null
+        ? 'Book $vehicleName • Pay ₹${advanceNum.rupeeText} (40% Advance)'
+        : (fareText.isNotEmpty
+              ? 'Book $vehicleName • $fareText'
+              : 'Book $vehicleName');
 
     return SizedBox(
       width: double.infinity,
