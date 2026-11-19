@@ -224,13 +224,19 @@ void main() {
       expect(find.text('Towing Van'), findsOneWidget);
       expect(find.text('Crane'), findsNothing);
       expect(find.text('JCB'), findsNothing);
-      await tester.tap(find.text('Construction'));
-      await tester.pumpAndSettle();
-      expect(find.text('JCB'), findsOneWidget);
-      expect(find.text('Crane'), findsOneWidget);
-      expect(find.text('Ambulance'), findsNothing);
-      expect(find.text('Towing Van'), findsNothing);
-      for (final name in ['Support', 'JCB / Excavator', 'Roadside Assist']) {
+      if (find.text('Construction').evaluate().isNotEmpty) {
+        await tester.tap(find.text('Construction'));
+        await tester.pumpAndSettle();
+        expect(find.text('JCB'), findsNothing);
+        expect(find.text('Crane'), findsNothing);
+      }
+      for (final name in [
+        'Support',
+        'JCB',
+        'Crane',
+        'JCB / Excavator',
+        'Roadside Assist',
+      ]) {
         expect(find.text(name), findsNothing);
       }
       await tester.pumpWidget(const SizedBox.shrink());

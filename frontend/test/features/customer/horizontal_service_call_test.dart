@@ -282,7 +282,7 @@ void main() {
           )
           .first;
       for (final entry in [
-        ('service', 'Towing Van', 4),
+        ('service', 'Towing Van', 2),
         ('premium', 'Helicopter', 6),
       ]) {
         final row = find.byKey(ValueKey('vehicle-row:${entry.$1}'));
@@ -322,9 +322,11 @@ void main() {
       await tester.tap(seeAll);
       await tester.pumpAndSettle();
       expect(find.text('Specialty & Emergency'), findsOneWidget);
-      for (final name in ['Ambulance', 'Crane', 'JCB', 'Towing Van']) {
+      for (final name in ['Ambulance', 'Towing Van']) {
         expect(find.text(name), findsOneWidget);
       }
+      expect(find.text('Crane'), findsNothing);
+      expect(find.text('JCB'), findsNothing);
       await tester.pumpWidget(const SizedBox.shrink());
       container.dispose();
       socket.dispose();

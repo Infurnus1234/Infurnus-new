@@ -154,12 +154,6 @@ const vehicleDisplayMetadata = <String, Map<String, Map<String, String>>>{
     },
   },
   "service": {
-    "crane": {
-      "title": "Crane",
-      "filter": "Construction",
-      "subtitle": "Heavy lifting assistance",
-      "image": "assets/images/crane_truck.png",
-    },
     "ambulance": {
       "title": "Ambulance",
       "filter": "Emergency",
@@ -171,12 +165,6 @@ const vehicleDisplayMetadata = <String, Map<String, Map<String, String>>>{
       "filter": "Emergency",
       "subtitle": "Breakdown Assistance",
       "image": "assets/images/flatbed_towing_truck.png",
-    },
-    "jcb": {
-      "title": "JCB",
-      "filter": "Construction",
-      "subtitle": "Excavation Assistance",
-      "image": "assets/images/jcb_excavator.jpg",
     },
   },
 };
