@@ -132,7 +132,7 @@ void main() {
       expect(
         VehicleCategoryConfig.getConfig(VehicleCategoryType.rides)
             .assetImagePath,
-        'assets/images/hatchback_clean.jpg',
+        'assets/vehicles/rental_card_hatchback.png',
       );
       expect(
         VehicleCategoryConfig.getConfig(VehicleCategoryType.logistics)

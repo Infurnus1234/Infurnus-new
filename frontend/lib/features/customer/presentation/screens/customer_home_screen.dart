@@ -1025,27 +1025,24 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen>
           crossAxisAlignment: CrossAxisAlignment.center,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
+            SizedBox(
               height: 64,
               width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
+              child: Center(
+                child: item.assetImagePath != null
+                    ? Image.asset(
+                        item.assetImagePath!,
+                        height: 60,
+                        width: double.infinity,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => VehicleCategoryVisual(
+                          category: item.category,
+                          size: 44,
+                          borderRadius: 0,
+                        ),
+                      )
+                    : Icon(item.icon, size: 44),
               ),
-              alignment: Alignment.center,
-              child: item.assetImagePath != null
-                  ? Image.asset(
-                      item.assetImagePath!,
-                      height: 60,
-                      width: double.infinity,
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => VehicleCategoryVisual(
-                        category: item.category,
-                        size: 44,
-                        borderRadius: 10,
-                      ),
-                    )
-                  : Icon(item.icon, size: 44),
             ),
             const SizedBox(height: 6),
             Text(

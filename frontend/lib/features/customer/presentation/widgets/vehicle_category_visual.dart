@@ -30,7 +30,7 @@ class VehicleCategoryConfig {
       category: VehicleCategoryType.rides,
       title: 'Rides & Cabs',
       subtitle: 'Daily city rides',
-      assetImagePath: 'assets/images/hatchback_clean.jpg',
+      assetImagePath: 'assets/vehicles/rental_card_hatchback.png',
       fallbackIcon: Icons.directions_car_rounded,
     ),
     VehicleCategoryType.logistics: VehicleCategoryConfig(
@@ -103,21 +103,16 @@ class VehicleCategoryVisual extends StatelessWidget {
     final config = VehicleCategoryConfig.getConfig(category);
     final imagePath = customAssetPath ?? config.assetImagePath;
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(borderRadius),
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(borderRadius),
-        ),
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Center(
         child: imagePath != null
             ? Image.asset(
                 imagePath,
                 width: size,
                 height: size,
-                fit: fit,
+                fit: BoxFit.contain,
                 errorBuilder: (_, __, ___) => _buildFallback(config),
               )
             : _buildFallback(config),
