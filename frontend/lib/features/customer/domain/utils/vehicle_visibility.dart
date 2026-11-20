@@ -8,4 +8,3 @@ bool isCustomerVehicleVisible(String sector, String code, [String? name]) =>
       'service',
     }.contains(sector) &&
     code.trim().isNotEmpty;
-
