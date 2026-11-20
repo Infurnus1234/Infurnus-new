@@ -2359,6 +2359,15 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
   String _getVehicleImagePath(FleetVehicleModel vehicle) {
     final cat = vehicle.category.toLowerCase();
     final name = vehicle.displayName.toLowerCase();
+    if (cat.contains('jcb') ||
+        name.contains('jcb') ||
+        cat.contains('excavator') ||
+        name.contains('excavator')) {
+      return 'assets/images/jcb_excavator.jpg';
+    }
+    if (cat.contains('crane') || name.contains('crane')) {
+      return 'assets/images/crane_truck.png';
+    }
     if (cat.contains('garbage') ||
         name.contains('garbage') ||
         cat.contains('dump') ||
@@ -2469,7 +2478,10 @@ class _RideBookingScreenState extends ConsumerState<RideBookingScreen>
     if (cat.contains('towing') || name.contains('towing')) {
       return Icons.car_repair_rounded;
     }
-    if (cat.contains('roller') || name.contains('roller')) {
+    if (cat.contains('jcb') ||
+        name.contains('jcb') ||
+        cat.contains('roller') ||
+        name.contains('roller')) {
       return Icons.construction_rounded;
     }
     if (cat.contains('thar') || name.contains('thar')) {
