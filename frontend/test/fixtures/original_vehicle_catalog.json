@@ -8,12 +8,22 @@
         "code": "ambulance"
       },
       {
+        "name": "Crane",
+        "code": "crane"
+      },
+      {
+        "name": "JCB",
+        "code": "jcb"
+      },
+      {
         "name": "Towing Van",
         "code": "towing"
       }
     ],
     "assets": [
       "assets/images/ambulance_clean.jpg",
+      "assets/images/crane_truck.png",
+      "assets/images/jcb_excavator.jpg",
       "assets/images/flatbed_towing_truck.png"
     ]
   },

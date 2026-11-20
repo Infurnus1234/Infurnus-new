@@ -11,7 +11,9 @@ void main() {
     () {
       const descriptions = {
         'ambulance': 'Patient + Medical Triage',
+        'jcb': 'Excavation Assistance',
         'towing': 'Breakdown Assistance',
+        'crane': 'Heavy lifting assistance',
       };
       for (var refresh = 0; refresh < 2; refresh++) {
         final cards = customerVehiclePresentation('service', [

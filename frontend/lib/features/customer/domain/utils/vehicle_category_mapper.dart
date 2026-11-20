@@ -18,6 +18,7 @@ String normalizeVehicleCategoryForBackend(String sector, String? category) {
     '407 cargo': 'cargo_407',
     'towing van': 'towing',
     'towing_van': 'towing',
+    'jcb / excavator': 'jcb',
     'roadside assist': 'roadside_assist',
     'toyota fortuner': 'fortuner',
     'mahindra thar': 'thar',
